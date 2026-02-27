@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Myplacar pro</title>
+    
+    <!-- Pwa primary meta tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Myplacar" />
+    <meta name="application-name" content="Myplacar" />
+    <meta name="theme-color" content="#ffffff" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='6' width='28' height='20' rx='4' fill='%231e293b'/%3E%3Cpath d='M2 10c0-2.209 1.791-4 4-4h20c2.209 0 4 1.791 4 4v1H2v-1z' fill='%23334155'/%3E%3Crect x='8' y='4' width='2' height='4' rx='1' fill='%2394a3b8'/%3E%3Crect x='22' y='4' width='2' height='4' rx='1' fill='%2394a3b8'/%3E%3Crect x='5' y='13' width='10' height='10' rx='1' fill='%23ef4444'/%3E%3Crect x='9' y='15' width='2' height='6' rx='1' stroke='white' stroke-width='1.5' fill='none'/%3E%3Crect x='17' y='13' width='10' height='10' rx='1' fill='%233b82f6'/%3E%3Cpath d='M21 16h2l-2 4h2' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    
+    <link rel="manifest" href="manifest.json" />
+
+	<script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+	
+</head>
+  <body>
+    <div id="brightness-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; pointer-events: none; z-index: 9999; opacity: 0;"></div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
