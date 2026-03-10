@@ -1,11 +1,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, ShieldCheck, Save, Loader2, LogOut, Settings, Smartphone, CheckCircle2, AlertCircle, Mic, MapPin, Camera, Wifi, RotateCw, Zap, Crown, Star, ArrowRight, HelpCircle, Eye, EyeOff, Hash } from 'lucide-react';
+import { User, ShieldCheck, Save, Loader2, LogOut, Settings, Smartphone, CheckCircle2, AlertCircle, Mic, MapPin, Camera, Wifi, RotateCw, Zap, Crown, Star, ArrowRight, HelpCircle, Eye, EyeOff, Hash, Lock, Check as CheckIcon, Shield, Fingerprint } from 'lucide-react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { UserProfile, MatchSettings } from '../types';
 import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
 import { APP_VERSION } from '../constants';
+import { getAuthInstance, getDb } from '../firebase';
+import { createUserWithEmailAndPassword, updatePassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, updateDoc, Firestore } from 'firebase/firestore';
 
 interface Props {
   profile: UserProfile;
@@ -45,6 +48,7 @@ const guessGender = (name: string): 'M' | 'F' | undefined => {
 
 export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, onLogout, onGoAdmin, onCheckUpdate, setIsUpdatingVersion, settings, setSettings }) => {
   const [isSaving, setIsSaving] = useState(false);
+  const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
   const [isTestingLat, setIsTestingLat] = useState(false);
   const [latency, setLatency] = useState<number | null>(null);
@@ -64,7 +68,121 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
     return localStorage.getItem('myPlacar_LocalDeviceLabel') || '';
   });
 
+  const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationError, setMigrationError] = useState<string | null>(null);
+
   const isPremium = profile.planType === 'premium';
+
+  useEffect(() => {
+    const auth = getAuthInstance();
+    if (!auth) return;
+
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        const hasPassword = user.providerData.some(p => p.providerId === 'password');
+        if (hasPassword && (profile.authMethod === 'pin' || !profile.authMethod)) {
+          const updated: UserProfile = { ...profile, authMethod: 'password' };
+          setProfile(updated);
+          try {
+            localStorage.setItem('myPlacarUserProfile', JSON.stringify(updated));
+          } catch (e) {}
+          setIsMigrationModalOpen(false);
+          return;
+        }
+      }
+      
+      if (profile.authMethod === 'pin' || !profile.authMethod) {
+        setIsMigrationModalOpen(true);
+      } else {
+        setIsMigrationModalOpen(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [profile.authMethod, profile.email]);
+
+  const validatePassword = (pass: string) => {
+    const hasMinLength = pass.length >= 6;
+    const hasUpper = /[A-Z]/.test(pass);
+    const hasLower = /[a-z]/.test(pass);
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
+    return {
+      hasMinLength,
+      hasUpper,
+      hasLower,
+      hasSpecial,
+      isValid: hasMinLength && hasUpper && hasLower && hasSpecial
+    };
+  };
+
+  const passwordValidation = validatePassword(newPassword);
+
+  const handleCreatePassword = async () => {
+    if (!passwordValidation.isValid) return;
+    
+    setIsMigrating(true);
+    setMigrationError(null);
+    try {
+      const auth = getAuthInstance();
+      const db = getDb();
+      if (!auth || !db) throw new Error("Erro de conexão com o servidor.");
+
+      const cleanEmail = profile.email.toLowerCase().trim();
+
+      try {
+        await createUserWithEmailAndPassword(auth, cleanEmail, newPassword);
+      } catch (e: any) {
+        console.log("Firebase Auth Error Details:", { code: e.code, message: e.message, full: e });
+        if (e.code === 'auth/email-already-in-use') {
+          try {
+            await signInWithEmailAndPassword(auth, cleanEmail, newPassword);
+          } catch (signInError: any) {
+            if (signInError.code === 'auth/wrong-password' || signInError.code === 'auth/invalid-credential') {
+              throw new Error("Este e-mail já possui uma senha cadastrada diferente da digitada.");
+            }
+            throw signInError;
+          }
+        } else if (e.code === 'auth/invalid-email') {
+          throw new Error("O formato do e-mail é inválido.");
+        } else if (e.code === 'auth/network-request-failed') {
+          throw new Error("Falha na conexão com a internet. Verifique seu sinal.");
+        } else if (e.code === 'auth/weak-password') {
+          throw new Error("A senha escolhida é muito fraca para o sistema.");
+        } else if (e.message?.includes('signup-are-blocked') || e.code === 'auth/operation-not-allowed') {
+          throw new Error(`O cadastro de novas senhas está temporariamente desativado pelo administrador. (Erro: ${e.code})`);
+        } else {
+          throw new Error(`${e.message} (Código: ${e.code})`);
+        }
+      }
+
+      // Pequena pausa para garantir que a sessão do Firebase Auth seja propagada
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const updatedProfile: UserProfile = { ...profile, authMethod: 'password' };
+      setProfile(updatedProfile);
+      
+      // Persistência imediata no localStorage e Firestore
+      try {
+        localStorage.setItem('myPlacarUserProfile', JSON.stringify(updatedProfile));
+        const userDocRef = doc(db as Firestore, "users", cleanEmail);
+        await updateDoc(userDocRef, {
+          authMethod: 'password'
+        });
+      } catch (e) {
+        console.error("Erro ao persistir migração:", e);
+      }
+      
+      setIsMigrationModalOpen(false);
+    } catch (e: any) {
+      console.error("Erro na migração:", e);
+      setMigrationError(e.message || "Erro ao processar sua nova senha. Tente novamente.");
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   useEffect(() => {
     const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
@@ -224,8 +342,65 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   const permissionItems = [
     { id: 'mic', label: 'Microfone', sublabel: 'Para comandos de voz', icon: <Mic size={22} />, color: 'bg-indigo-50 text-indigo-500' },
     { id: 'loc', label: 'Localização', sublabel: 'Para mapa das partidas', icon: <MapPin size={22} />, color: 'bg-green-50 text-green-500' },
-    { id: 'cam', label: 'Câmera', sublabel: 'Para escanear parceiros', icon: <Camera size={22} />, color: 'bg-emerald-50 text-emerald-500' }
+    { id: 'cam', label: 'Câmera', sublabel: 'Para escanear parceiros', icon: <Camera size={22} />, color: 'bg-emerald-50 text-emerald-500' },
+    { id: 'passkey', label: 'Biometria', sublabel: 'Login sem senha', icon: <Fingerprint size={22} />, color: 'bg-blue-50 text-blue-500' }
   ];
+
+  const handleRegisterPasskey = async () => {
+    if (!window.PublicKeyCredential) {
+      alert("Seu navegador ou dispositivo não suporta biometria.");
+      return;
+    }
+    
+    setIsRegisteringPasskey(true);
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      
+      const userId = profile.email || 'user';
+      const userHandle = new TextEncoder().encode(userId);
+
+      const publicKeyCredentialCreationOptions: any = {
+        challenge,
+        rp: {
+          name: "MyPlacar",
+          id: window.location.hostname,
+        },
+        user: {
+          id: userHandle,
+          name: userId,
+          displayName: profile.nickname || profile.name || userId,
+        },
+        pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+          residentKey: "required",
+        },
+        timeout: 60000,
+        attestation: "none",
+      };
+
+      const credential = await navigator.credentials.create({
+        publicKey: publicKeyCredentialCreationOptions,
+      }) as any;
+
+      if (credential) {
+        const rawId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+        setProfile({
+          ...profile,
+          passkeyCredentialId: rawId,
+          passkeyPublicKey: "registered" 
+        });
+        alert("Biometria cadastrada com sucesso! Clique em 'Salvar perfil' para concluir.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Não foi possível habilitar a biometria neste dispositivo.");
+    } finally {
+      setIsRegisteringPasskey(false);
+    }
+  };
 
   const handleNameChange = (val: string) => {
     const formatted = formatPortugueseName(val);
@@ -254,7 +429,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
                 </div>
               )}
             </div>
-            <p className="text-[10px] font-bold text-black truncate lowercase">{profile.email}</p>
+            <p className="text-xs font-bold text-black truncate lowercase">{profile.email}</p>
           </div>
         </div>
 
@@ -339,29 +514,46 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
                   <span className="text-[10px] font-bold text-black mt-1 leading-tight">{item.sublabel}</span>
                 </div>
                 <div className="flex justify-end">
-                  {status === 'granted' ? (
-                    <div className="flex items-center gap-1 text-green-500">
-                       <CheckCircle2 size={20} />
-                       <span className="text-[10px] font-black uppercase">Ativo</span>
-                    </div>
-                  ) : status === 'unavailable' ? (
-                    <div className="flex items-center gap-1 text-slate-400">
-                       <AlertCircle size={20} />
-                       <span className="text-[10px] font-black uppercase">Inat.</span>
-                    </div>
-                  ) : status === 'denied' ? (
-                    <div className="flex items-center gap-1 text-red-500">
-                       <AlertCircle size={20} />
-                       <span className="text-[10px] font-black uppercase">Negado</span>
-                    </div>
+                  {item.id === 'passkey' ? (
+                    profile.passkeyCredentialId ? (
+                      <div className="flex items-center gap-1 text-blue-500">
+                        <CheckCircle2 size={20} />
+                        <span className="text-[10px] font-black uppercase">Ativo</span>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={handleRegisterPasskey} 
+                        disabled={isRegisteringPasskey} 
+                        className="text-[10px] font-black text-white px-4 py-2 bg-blue-600 rounded-xl active:scale-95 shadow-sm transition-all"
+                      >
+                        {isRegisteringPasskey ? <Loader2 size={12} className="animate-spin" /> : 'Habilitar'}
+                      </button>
+                    )
                   ) : (
-                    <button 
-                      onClick={() => requestPermission(item.id as any)} 
-                      disabled={requesting === item.id} 
-                      className="text-[10px] font-black text-white px-4 py-2 bg-blue-600 rounded-xl active:scale-95 shadow-sm transition-all"
-                    >
-                      {requesting === item.id ? <Loader2 size={12} className="animate-spin" /> : 'Permitir'}
-                    </button>
+                    status === 'granted' ? (
+                      <div className="flex items-center gap-1 text-green-500">
+                         <CheckCircle2 size={20} />
+                         <span className="text-[10px] font-black uppercase">Ativo</span>
+                      </div>
+                    ) : status === 'unavailable' ? (
+                      <div className="flex items-center gap-1 text-slate-400">
+                         <AlertCircle size={20} />
+                         <span className="text-[10px] font-black uppercase">Inat.</span>
+                      </div>
+                    ) : status === 'denied' ? (
+                      <div className="flex items-center gap-1 text-red-500">
+                         <AlertCircle size={20} />
+                         <span className="text-[10px] font-black uppercase">Negado</span>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => requestPermission(item.id as any)} 
+                        disabled={requesting === item.id} 
+                        className="text-[10px] font-black text-white px-4 py-2 bg-blue-600 rounded-xl active:scale-95 shadow-sm transition-all"
+                      >
+                        {requesting === item.id ? <Loader2 size={12} className="animate-spin" /> : 'Permitir'}
+                      </button>
+                    )
                   )}
                 </div>
               </div>
@@ -370,24 +562,143 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         </div>
       </section>
 
-      <div className="flex justify-center mb-2">
-        <button 
+      <div className="flex flex-col gap-4 mt-2">
+        {/* Modal de Migração */}
+        {isMigrationModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center shadow-inner">
+                  <ShieldCheck size={40} strokeWidth={2.5} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-black tracking-tight">Segurança reforçada</h3>
+                  <p className="text-sm font-bold text-slate-500 leading-relaxed">
+                    Estamos melhorando a segurança do MyPlacar. Agora você precisa criar uma senha forte para acessar sua conta.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 ml-1">
+                    <Lock size={16} className="text-blue-600" />
+                    <label className="text-[13px] font-bold text-black leading-tight">Crie sua nova senha</label>
+                  </div>
+                  <Input 
+                    type={showNewPassword ? "text" : "password"} 
+                    value={newPassword} 
+                    onChange={e => setNewPassword(e.target.value)}
+                    className="h-16 text-lg font-bold rounded-3xl"
+                    placeholder="Sua senha forte"
+                    rightAction={<button onClick={() => setShowNewPassword(!showNewPassword)} className="p-3 text-slate-400">{showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button>}
+                  />
+                  
+                  {/* Indicador de força da senha */}
+                  <div className="flex gap-1.5 px-1 mt-2">
+                    {[1, 2, 3, 4].map((step) => {
+                      const strength = [
+                        passwordValidation.hasMinLength,
+                        passwordValidation.hasUpper,
+                        passwordValidation.hasLower,
+                        passwordValidation.hasSpecial
+                      ].filter(Boolean).length;
+                      
+                      let colorClass = "bg-slate-100";
+                      if (step <= strength) {
+                        if (strength <= 1) colorClass = "bg-red-500";
+                        else if (strength <= 2) colorClass = "bg-amber-500";
+                        else if (strength <= 3) colorClass = "bg-blue-500";
+                        else colorClass = "bg-emerald-500";
+                      }
+                      
+                      return (
+                        <div 
+                          key={step} 
+                          className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${colorClass}`}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-3xl p-5 space-y-3 border border-slate-100">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Requisitos obrigatórios</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasMinLength ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasMinLength ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                        {passwordValidation.hasMinLength && <CheckIcon size={10} />}
+                      </div>
+                      6+ caracteres
+                    </div>
+                    <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasUpper ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasUpper ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                        {passwordValidation.hasUpper && <CheckIcon size={10} />}
+                      </div>
+                      1 Maiúscula
+                    </div>
+                    <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasLower ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasLower ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                        {passwordValidation.hasLower && <CheckIcon size={10} />}
+                      </div>
+                      1 Minúscula
+                    </div>
+                    <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasSpecial ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasSpecial ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                        {passwordValidation.hasSpecial && <CheckIcon size={10} />}
+                      </div>
+                      1 Especial
+                    </div>
+                  </div>
+                </div>
+
+                {migrationError && (
+                  <div className="p-4 bg-red-50 text-red-500 rounded-2xl text-[11px] font-bold border border-red-100 flex items-center gap-2">
+                    <AlertCircle size={14} /> {migrationError}
+                  </div>
+                )}
+
+                <Button 
+                  onClick={handleCreatePassword}
+                  disabled={!passwordValidation.isValid || isMigrating}
+                  className="w-full py-6 rounded-4xl font-black shadow-xl text-lg bg-blue-600 text-white flex items-center justify-center gap-3"
+                >
+                  {isMigrating ? <Loader2 className="animate-spin" /> : <><Shield size={20} /> Ativar nova senha</>}
+                </Button>
+                
+                <p className="text-[10px] font-bold text-slate-400 text-center px-4">
+                  Seu PIN atual continuará funcionando apenas para identificação rápida entre parceiros.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Button 
+          onClick={async () => { setIsSaving(true); await onSave(); setIsSaving(false); }} 
+          disabled={isSaving} 
+          className="w-full py-6 rounded-[2rem] shadow-xl font-black bg-blue-600 tracking-tight text-lg text-white flex items-center justify-center gap-4"
+        >
+          {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={24} /> Salvar perfil</>}
+        </Button>
+
+        <Button 
+          variant="secondary"
           onClick={handleManualUpdateCheck}
           disabled={isCheckingUpdate}
-          className={`flex items-center gap-2 text-[13px] font-black transition-all duration-300 ${remoteVersionFound ? 'text-amber-500 scale-110 animate-bounce' : updateFeedback ? 'text-emerald-500' : 'text-emerald-500 opacity-60'}`}
+          className={`w-full py-4 rounded-3xl font-black border-2 text-sm gap-3 transition-all duration-300 ${remoteVersionFound ? 'border-amber-200 text-amber-600 animate-bounce' : 'border-emerald-100 text-emerald-600'}`}
         >
-           {isCheckingUpdate ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
+           {isCheckingUpdate ? <Loader2 size={18} className="animate-spin" /> : <RotateCw size={18} />}
            {updateFeedback || (remoteVersionFound ? `Atualizar para ${remoteVersionFound}` : `Versão ${APP_VERSION}`)}
-        </button>
-      </div>
-
-      <div className="flex flex-col gap-4 mt-2">
-        <Button onClick={async () => { setIsSaving(true); await onSave(); setIsSaving(false); }} disabled={isSaving} className="w-full py-6 rounded-[2rem] shadow-xl font-bold bg-[#3b82f6] tracking-tight text-lg text-white">
-          {isSaving ? <Loader2 className="animate-spin" /> : 'Salvar perfil'}
         </Button>
-        <button onClick={onLogout} className="flex items-center justify-center gap-2 text-sm font-bold text-black hover:text-blue-600 mt-2 active:scale-95 transition-all">
+
+        <Button 
+          variant="secondary"
+          onClick={onLogout} 
+          className="w-full py-4 rounded-3xl font-black border-2 border-slate-100 text-black text-sm gap-3"
+        >
           <LogOut size={18} /> Sair da conta
-        </button>
+        </Button>
       </div>
     </div>
   );

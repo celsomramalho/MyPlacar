@@ -22,8 +22,4 @@ export const Button: React.FC<ButtonProps> = ({ variant = 'primary', className =
       {children}
     </button>
   );
-<<<<<<< HEAD
 };
-=======
-};
->>>>>>> 88b71e0 (Initial commit)

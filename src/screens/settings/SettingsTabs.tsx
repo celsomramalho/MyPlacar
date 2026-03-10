@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Clock, Settings, User, HelpCircle, Check } from 'lucide-react';
+import { Clock, Settings, User, Menu, Check } from 'lucide-react';
 import { ScoreboardIcon } from '../../components/ScoreboardIcon';
 
 interface Props {
@@ -11,9 +11,11 @@ interface Props {
   isSettingsRegrasSaved?: boolean;
   isProfileSaved?: boolean;
   isMirroringActive?: boolean;
+  onOpenMenu: () => void;
+  isOfflineMode?: boolean;
 }
 
-export const SettingsTabs: React.FC<Props> = ({ activeTab, setActiveTab, onOpenRules, isSettingsInicialSaved = true, isSettingsRegrasSaved = true, isProfileSaved = true, isMirroringActive = false }) => {
+export const SettingsTabs: React.FC<Props> = ({ activeTab, setActiveTab, onOpenRules, isSettingsInicialSaved = true, isSettingsRegrasSaved = true, isProfileSaved = true, isMirroringActive = false, onOpenMenu, isOfflineMode = false }) => {
   const getBtnClass = (isActive: boolean) => 
     `flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] ${isActive ? 'opacity-100 scale-110' : 'opacity-40'}`;
   
@@ -58,12 +60,14 @@ export const SettingsTabs: React.FC<Props> = ({ activeTab, setActiveTab, onOpenR
         </div>
         <span className="text-[10px] font-black text-black">Perfil</span>
       </button>
-      <button onClick={() => setActiveTab('help')} className={getBtnClass(activeTab === 'help')}>
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 ${activeTab === 'help' ? 'bg-emerald-500 shadow-md' : 'bg-transparent'}`}>
-          <HelpCircle size={22} className={activeTab === 'help' ? 'text-white' : 'text-black'} />
-        </div>
-        <span className="text-[10px] font-black text-black">Ajuda</span>
-      </button>
+      {!isOfflineMode && (
+        <button onClick={onOpenMenu} className={getBtnClass(false)}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-black transition-colors duration-500 bg-transparent">
+            <Menu size={22} />
+          </div>
+          <span className="text-[10px] font-black text-black">Menu</span>
+        </button>
+      )}
     </nav>
   );
 };

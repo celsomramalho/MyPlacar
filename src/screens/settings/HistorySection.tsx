@@ -335,8 +335,4 @@ export const HistorySection: React.FC<Props> = ({
       )}
     </div>
   );
-<<<<<<< HEAD
 };
-=======
-};
->>>>>>> 88b71e0 (Initial commit)

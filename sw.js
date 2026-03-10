@@ -1,7 +1,16 @@
-const CACHE_NAME = 'myplacar-v2.3.02';
+const CACHE_NAME = 'myplacar-v2.4.01';
+const PRECACHE_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json'
+];
 
 self.addEventListener('install', (e) => {
-  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(PRECACHE_ASSETS))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -18,23 +27,32 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Estratégia de rede resiliente
+// Estratégia de rede resiliente com suporte offline aprimorado
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   
+  // Ignora chamadas de API externas para não quebrar o app
+  const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) return;
+
   e.respondWith(
-    fetch(e.request)
-      .then(response => {
-        // Se a resposta for válida, clonar e salvar no cache para fallback futuro
-        if (response.ok) {
-          const copy = response.clone();
+    caches.match(e.request).then(cachedResponse => {
+      // Se tiver no cache, retorna o cache e tenta atualizar em background
+      // Se não tiver no cache, busca na rede
+      const fetchPromise = fetch(e.request).then(networkResponse => {
+        if (networkResponse.ok) {
+          const copy = networkResponse.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, copy));
         }
-        return response;
-      })
-      .catch(() => {
-        // Fallback para cache se a rede falhar
-        return caches.match(e.request);
-      })
+        return networkResponse;
+      });
+
+      return cachedResponse || fetchPromise;
+    }).catch(() => {
+      // Fallback total se tudo falhar (rede e cache)
+      if (e.request.mode === 'navigate') {
+        return caches.match('/index.html');
+      }
+    })
   );
 });

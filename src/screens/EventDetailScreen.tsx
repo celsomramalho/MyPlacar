@@ -55,7 +55,7 @@ interface DesfazerTimeIconProps {
 const DesfazerTimeIcon: React.FC<DesfazerTimeIconProps> = ({ size = 16 }) => (
   <div className="relative flex items-center justify-center">
     <Users size={size} className="text-slate-400" />
-    <div className="absolute w-[130%] h-[2px] bg-red-500 rotate-[-45deg] rounded-full shadow-sm" />
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-[2px] bg-red-600 -rotate-45 rounded-full shadow-sm pointer-events-none" />
   </div>
 );
 
@@ -90,7 +90,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
            coAdmins.includes(userProfile.pin.toUpperCase());
   }, [userProfile, event.coAdminPins]);
 
-  const baseUrl = "https://myplacar-244305581318.us-west1.run.app";
+  const baseUrl = window.location.origin;
 
   useEffect(() => {
     const db = getDb();

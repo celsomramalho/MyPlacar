@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Loader2, CheckCircle2, AlertCircle, Sparkles, Plus, Trash2, ChevronDown, Save, Clock, User, Settings as SettingsIcon, ArrowLeft, Edit2, Database, Wand2, X, ShieldCheck, LayoutGrid, Trophy, Mic, Type, HelpCircle, ChevronUp, Volume2, Info, Search, Star, Crown, Edit3, Download, HardDrive, Copy, ExternalLink, FileText, RotateCw, Check, Wifi, Ticket, Image as ImageIcon } from 'lucide-react';
-import { getDb, getStorageInstance } from '../firebase';
+import { Upload, Loader2, CheckCircle2, AlertCircle, Sparkles, Plus, Trash2, ChevronDown, Save, Clock, User, Settings as SettingsIcon, ArrowLeft, Edit2, Database, Wand2, X, ShieldCheck, LayoutGrid, Trophy, Mic, Type, HelpCircle, ChevronUp, Volume2, Info, Search, Star, Crown, Edit3, Download, HardDrive, Copy, ExternalLink, FileText, RotateCw, Check, Wifi, Ticket, Image as ImageIcon, Send, Menu } from 'lucide-react';
+import { getDb, getStorageInstance, clearFirestoreCache } from '../firebase';
 import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, writeBatch, query, where, serverTimestamp } from 'firebase/firestore';
 import { ref, listAll, uploadBytes, getDownloadURL, deleteObject, StorageReference, getStorage, getMetadata } from 'firebase/storage';
 import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../constants';
@@ -11,6 +11,8 @@ import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { VoiceCommands, ErrorSoundType, UserProfile, TournamentEvent } from '../types';
 import { playErrorBeep, unlockAudio } from '../hooks/useScoreAnnouncer';
 
+import { CommunicationsPanel } from '../components/CommunicationsPanel';
+
 interface Props {
   onBack: () => void;
   onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile') => void;
@@ -18,6 +20,8 @@ interface Props {
   onExportData?: () => void;
   onImportData?: (jsonStr: string) => void;
   onClearAllHistory?: () => void;
+  initialTab?: 'configs' | 'users' | 'icons' | 'events' | 'comms';
+  onOpenMenu?: () => void;
 }
 
 interface StorageFile {
@@ -29,8 +33,8 @@ interface StorageFile {
   contentType: string;
 }
 
-export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory }) => {
-  const [adminTab, setAdminTab] = useState<'configs' | 'users' | 'icons' | 'files' | 'events'>('configs');
+export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory, initialTab, onOpenMenu }) => {
+  const [adminTab, setAdminTab] = useState<'configs' | 'users' | 'icons' | 'events' | 'comms'>(initialTab || 'configs');
   const [loading, setLoading] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
   const [showConfirmFix, setShowConfirmFix] = useState(false);
@@ -76,6 +80,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TournamentEvent | null>(null);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
+  const [showConfirmClearCache, setShowConfirmClearCache] = useState(false);
 
   const mainStorage = getStorageInstance();
   const defaultBucketName = mainStorage?.app.options.storageBucket || "";
@@ -97,9 +102,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   }, []);
 
   useEffect(() => {
-    if (adminTab === 'files') {
-      fetchStorageFiles();
-    }
     if (adminTab === 'events') {
       fetchEvents();
     }
@@ -580,6 +582,19 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
   return (
     <div className="min-h-screen bg-[#f3f4f6] flex flex-col animate-in fade-in">
+      {showConfirmClearCache && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
+           <div className="bg-white rounded-[2.5rem] p-8 max-sm w-full shadow-2xl space-y-6">
+              <h3 className="text-xl font-black text-black">Limpar cache técnico?</h3>
+              <p className="text-black font-bold text-sm">Isso removerá dados temporários do banco de dados local e reiniciará o app. Útil para resolver erros de armazenamento (QuotaExceeded).</p>
+              <div className="flex gap-3">
+                 <button onClick={() => setShowConfirmClearCache(false)} className="flex-1 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs">Cancelar</button>
+                 <button onClick={clearFirestoreCache} className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black text-xs">Limpar e reiniciar</button>
+              </div>
+           </div>
+        </div>
+      )}
+
       {showConfirmFix && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
            <div className="bg-white rounded-[2.5rem] p-8 max-sm w-full shadow-2xl space-y-6">
@@ -629,8 +644,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             { id: 'configs', label: 'Configs', icon: <SettingsIcon size={14} /> },
             { id: 'users', label: 'Usuários', icon: <User size={14} /> },
             { id: 'icons', label: 'Ícones', icon: <LayoutGrid size={14} /> },
-            { id: 'files', label: 'Arquivos', icon: <HardDrive size={14} /> },
-            { id: 'events', label: 'Eventos', icon: <Ticket size={14} /> }
+            { id: 'events', label: 'Eventos', icon: <Ticket size={14} /> },
+            { id: 'comms', label: 'Avisos', icon: <Send size={14} /> }
           ].map(tab => (
             <button 
               key={tab.id}
@@ -648,12 +663,22 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
         {adminTab === 'configs' && (
           <>
-            <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-amber-400 rounded-2xl flex items-center justify-center text-white shadow-md"><Sparkles size={24} /></div>
-                <div className="text-left"><p className="text-base font-black text-black leading-tight">Regra de ouro</p><p className="text-[11px] font-bold text-black">Sentence case global</p></div>
+            <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-amber-400 rounded-2xl flex items-center justify-center text-white shadow-md"><Sparkles size={24} /></div>
+                  <div className="text-left"><p className="text-base font-black text-black leading-tight">Regra de ouro</p><p className="text-[11px] font-bold text-black">Sentence case global</p></div>
+                </div>
+                <Toggle id="toggle-golden-rule" checked={goldenRule} onChange={toggleGoldenRule} />
               </div>
-              <Toggle id="toggle-golden-rule" checked={goldenRule} onChange={toggleGoldenRule} />
+              <div className="pt-2 border-t border-gray-100">
+                <button 
+                  onClick={() => setShowConfirmClearCache(true)}
+                  className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] flex items-center justify-center gap-2"
+                >
+                  <RotateCw size={14} /> Limpar cache do banco de dados
+                </button>
+              </div>
             </section>
 
             <div className="space-y-3">
@@ -668,48 +693,15 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                     </div>
                     <input type="text" value={remoteAppVersion} onChange={(e) => { setRemoteAppVersion(e.target.value); setIsVoiceSaved(false); }} className="w-full h-[52px] bg-white border rounded-xl px-4 font-black text-lg text-black outline-none" />
                 </div>
+                <div className="px-2">
+                  <Button onClick={handleSaveVoiceConfigs} disabled={isSavingVoice} className={`w-full !py-4 rounded-2xl font-black text-white shadow-xl flex gap-2 ${isVoiceSaved ? '!bg-[#3b82f6]' : '!bg-amber-500'}`}>{isSavingVoice ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar alterações</Button>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Button onClick={onExportData} className="w-full !bg-blue-600 !py-3 rounded-xl font-black flex gap-2 text-white text-xs">
                     <Download size={16} /> Exportar
                   </Button>
                   <Button onClick={() => fileInputRefImport.current?.click()} className="w-full !bg-emerald-600 !py-3 rounded-xl font-black flex gap-2 text-white text-xs">
                     <Upload size={16} /> Importar
-                  </Button>
-                </div>
-                <Button onClick={onClearAllHistory} className="w-full !bg-red-50 !text-red-500 !py-3 rounded-xl font-black flex gap-2 border border-red-100 text-xs">
-                  <Trash2 size={16} /> Limpar histórico cloud/local
-                </Button>
-                <Button onClick={() => setShowConfirmFix(true)} disabled={isFixing} className="w-full !bg-black !py-4 rounded-xl font-black flex gap-2 text-white">
-                  {isFixing ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />} Vincular partidas órfãs
-                </Button>
-
-                <div className="p-4 bg-slate-50 rounded-2xl space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Wifi size={16} className="text-blue-500" />
-                      <span className="text-[11px] font-black text-black">Gestão de transmissões</span>
-                    </div>
-                    <button onClick={fetchLiveMatchesStats} className="p-1 text-blue-500 active:rotate-180 transition-transform">
-                      <RotateCw size={14} />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-4">
-                     <div className="flex-1 text-center bg-white p-3 rounded-xl border border-slate-100">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase">Total</p>
-                        <p className="text-lg font-black text-black">{liveStats.total}</p>
-                     </div>
-                     <div className="flex-1 text-center bg-white p-3 rounded-xl border border-slate-100">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase">Antigas (d-1)</p>
-                        <p className="text-lg font-black text-red-500">{liveStats.expired}</p>
-                     </div>
-                  </div>
-                  <Button 
-                    onClick={() => setDeleteConfirm({ type: 'expired_lives', id: 'all' })} 
-                    disabled={liveStats.expired === 0 || isCleaningLives}
-                    className={`w-full !py-3 rounded-xl font-black text-xs transition-all ${liveStats.expired > 0 ? '!bg-red-500 text-white' : '!bg-gray-100 text-gray-400'}`}
-                  >
-                    {isCleaningLives ? <Loader2 className="animate-spin mr-2" size={14} /> : <Trash2 className="mr-2" size={14} />}
-                    Limpar transmissões expiradas
                   </Button>
                 </div>
               </section>
@@ -773,10 +765,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                       {renderCmdItem('cvd1', 'Parceiro', 'partnerTerm', null, 'usado na tela inicial para informar os nomes do time num só comando de voz', 'diga: [nome1] mais [nome2], ou [nome1] com [nome2]')}
                     </div>
                   )}
-                </div>
-
-                <div className="px-2">
-                  <Button onClick={handleSaveVoiceConfigs} disabled={isSavingVoice} className={`w-full !py-4 rounded-2xl font-black text-white shadow-xl flex gap-2 ${isVoiceSaved ? '!bg-[#3b82f6]' : '!bg-amber-500'}`}>{isSavingVoice ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar alterações</Button>
                 </div>
               </section>
             </div>
@@ -949,138 +937,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
           </div>
         )}
 
-        {adminTab === 'files' && (
-          <div className="space-y-6 animate-in fade-in">
-             <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-6">
-                <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center">
-                        <HardDrive size={22} />
-                      </div>
-                      <h3 className="font-black text-black tracking-tight leading-none">Arquivos e armazenamento</h3>
-                   </div>
-                   <button onClick={fetchStorageFiles} className="p-2 text-sky-600 active:scale-90 transition-transform">
-                      <RotateCw size={18} className={isLoadingFiles ? 'animate-spin' : ''} />
-                   </button>
-                </div>
-
-                <div className="space-y-4">
-                   <div className="flex items-center justify-between px-1">
-                      <div className="flex items-center gap-2">
-                        <Database size={16} className="text-slate-400" />
-                        <span className="text-[13px] font-black text-black">Gerenciar buckets</span>
-                      </div>
-                      <button onClick={() => setIsAddingBucket(!isAddingBucket)} className="p-1.5 bg-sky-600 text-white rounded-lg active:scale-90 transition-all">
-                        <Plus size={16} />
-                      </button>
-                   </div>
-
-                   {isAddingBucket && (
-                     <div className="p-4 bg-slate-50 rounded-2xl space-y-3 animate-in slide-in-from-top-2">
-                        <p className="text-[10px] font-black text-slate-400 tracking-tight">Adicionar novo bucket:</p>
-                        <div className="flex gap-2">
-                           <input 
-                              type="text" 
-                              value={newBucketName} 
-                              onChange={(e) => setNewBucketName(e.target.value)}
-                              placeholder="ex: meu-bucket-firestore"
-                              className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 text-xs font-bold outline-none text-black focus:ring-1 focus:ring-sky-500"
-                           />
-                           <button onClick={handleAddBucket} className="bg-sky-600 text-white px-5 rounded-xl text-xs font-black">Salvar</button>
-                        </div>
-                     </div>
-                   )}
-
-                   <div className="space-y-2">
-                      {buckets.map(b => (
-                        <div key={b} className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${activeBucket === b ? 'bg-sky-50 border-sky-200 shadow-sm' : 'bg-white border-slate-100'}`}>
-                           <div className="flex-1 min-w-0 pr-4">
-                              <div className="flex items-center gap-2">
-                                <p className={`text-[11px] font-black truncate ${activeBucket === b ? 'text-sky-700' : 'text-slate-600'}`}>{b}</p>
-                                {b === defaultBucketName && <span className="text-[8px] font-black bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">Padrão</span>}
-                              </div>
-                           </div>
-                           <div className="flex gap-1">
-                              {activeBucket !== b ? (
-                                <button onClick={() => setActiveBucket(b)} className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-[9px] font-black">Conectar</button>
-                              ) : (
-                                <div className="flex items-center gap-1 text-sky-600 px-3 py-1.5">
-                                  <Check size={14} strokeWidth={3} />
-                                  <span className="text-[9px] font-black">Ativo</span>
-                                </div>
-                              )}
-                              {b !== defaultBucketName && (
-                                <button onClick={() => setDeleteConfirm({ type: 'bucket', id: b })} className="p-2 text-red-500 hover:bg-red-50 rounded-lg active:scale-90 transition-all">
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                           </div>
-                        </div>
-                      ))}
-                   </div>
-                </div>
-
-                <div className="pt-2">
-                   <Button onClick={() => genericFileInputRef.current?.click()} disabled={isUploadingFile} className="w-full !bg-sky-600 !text-white !py-5 rounded-2xl font-black text-sm flex gap-2 shadow-lg shadow-sky-100">
-                      {isUploadingFile ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />} Selecionar arquivo para upload
-                   </Button>
-                   <input type="file" ref={genericFileInputRef} className="hidden" onChange={handleUploadGenericFile} />
-                </div>
-             </section>
-
-             <div className="space-y-3">
-                <div className="flex items-center gap-2 px-2 text-slate-400">
-                   <FileText size={18} />
-                   <h2 className="text-[13px] font-black tracking-tight">Lista de arquivos</h2>
-                </div>
-
-                {storageError && (
-                   <div className="p-6 bg-red-50 border border-red-100 rounded-[2.5rem] flex items-center gap-4 text-red-600">
-                      <AlertCircle size={24} className="shrink-0" />
-                      <p className="text-xs font-bold leading-tight">{storageError}</p>
-                   </div>
-                )}
-
-                {isLoadingFiles ? (
-                   <div className="py-12 flex flex-col items-center gap-3 text-slate-300">
-                      <Loader2 className="animate-spin" size={32} />
-                      <span className="text-xs font-bold tracking-tight">Sincronizando arquivos...</span>
-                   </div>
-                ) : storageFiles.length === 0 && !storageError ? (
-                   <div className="bg-white rounded-[2.5rem] p-10 text-center border border-dashed border-slate-200">
-                      <p className="text-slate-400 font-bold text-sm">Nenhum arquivo encontrado no bucket.</p>
-                   </div>
-                ) : (
-                   <div className="space-y-3">
-                      {storageFiles.map((file) => (
-                         <div key={file.fullPath} className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-between group">
-                            <div className="flex-1 min-w-0 pr-4">
-                               <p className="font-black text-black text-sm truncate">{file.name}</p>
-                               <div className="flex items-center gap-2 mt-0.5">
-                                  <p className="text-[8px] font-bold text-slate-400 tracking-tight truncate max-w-[120px]">{file.fullPath}</p>
-                                  <span className="text-[8px] font-black text-slate-300">•</span>
-                                  <p className="text-[8px] font-bold text-slate-400">{(file.size / 1024).toFixed(1)} KB</p>
-                               </div>
-                            </div>
-                            <div className="flex gap-1 shrink-0">
-                               <button onClick={() => { navigator.clipboard.writeText(file.url); setStatus({ type: 'success', msg: "Link copiado!" }); setTimeout(() => setStatus(null), 2000); }} className="p-3 bg-slate-50 text-slate-600 rounded-xl hover:bg-sky-50 hover:text-sky-600 active:scale-90 transition-all border border-slate-100">
-                                  <Copy size={16} />
-                               </button>
-                               <button onClick={() => window.open(file.url, '_blank')} className="p-3 bg-slate-50 text-slate-600 rounded-xl hover:bg-sky-50 hover:text-sky-600 active:scale-90 transition-all border border-slate-100">
-                                  <ExternalLink size={16} />
-                               </button>
-                               <button onClick={() => setDeleteConfirm({ type: 'file', id: file.name, path: file.fullPath })} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 active:scale-90 transition-all border border-red-100">
-                                  <Trash2 size={16} />
-                               </button>
-                            </div>
-                         </div>
-                      ))}
-                   </div>
-                )}
-             </div>
-          </div>
-        )}
-
         {adminTab === 'events' && (
           <div className="space-y-6 animate-in fade-in">
              <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-6">
@@ -1189,6 +1045,11 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
              </section>
           </div>
         )}
+        {adminTab === 'comms' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <CommunicationsPanel adminProfile={{ name: 'Admin', nickname: 'Administrador', email: 'admin@myplacar.pro', phone: '', pin: 'admin', isProfileComplete: true, isAdmin: true }} />
+          </div>
+        )}
       </main>
 
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
@@ -1242,9 +1103,9 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
            <User size={22} className="text-black" />
            <span className="text-[10px] font-black text-black">Perfil</span>
         </button>
-        <button onClick={() => onNavigateToTab?.('help')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40">
-           <HelpCircle size={22} className="text-black" />
-           <span className="text-[10px] font-black text-black">Ajuda</span>
+        <button onClick={onOpenMenu} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40">
+           <Menu size={22} className="text-black" />
+           <span className="text-[10px] font-black text-black">Menu</span>
         </button>
       </nav>
     </div>

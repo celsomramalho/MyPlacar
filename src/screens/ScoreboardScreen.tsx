@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna } from 'lucide-react';
+import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu } from 'lucide-react';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { GameState, PointType, PointEvent, UserProfile } from '../types';
@@ -46,7 +46,7 @@ interface Props {
   isSettingsRegrasSaved: boolean;
   onToggleMirroring: (active: boolean) => void;
   onToggleLiveCollapse?: (isCollapsed: boolean) => void;
-  onCorrectScore?: (type: 'game' | 'set', value: string) => void;
+  onCorrectScore?: (type: 'game' | 'gameSet' | 'matchSet', value: string) => void;
   isAdmin?: boolean;
   onConfirmMatch?: () => void;
   userProfile?: UserProfile;
@@ -54,6 +54,10 @@ interface Props {
   currentDeviceId?: string;
   currentDeviceFullLabel?: string;
   onOpenLiveControl?: () => void;
+  onResetMatch?: () => void;
+  onOpenMenu?: () => void;
+  isOfflineMode?: boolean;
+  onExitOffline?: () => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -149,20 +153,25 @@ const ScorePickerModal: React.FC<{
           </div>
         </div>
         <div className="p-6 grid grid-cols-2 gap-4 border-t border-white/5 bg-black/20">
-          <button onClick={onClose} className="py-4 bg-white/5 text-gray-400 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all">Cancelar</button>
-          <button onClick={() => onConfirm(options[selectedIndex])} className="py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all">Ok</button>
+          <button onClick={onClose} className="py-4 bg-white/5 text-gray-400 rounded-2xl font-black text-xs tracking-widest active:scale-95 transition-all">Cancelar</button>
+          <button onClick={() => onConfirm(options[selectedIndex])} className="py-4 bg-orange-600 text-white rounded-2xl font-black text-xs tracking-widest shadow-lg active:scale-95 transition-all">Ok</button>
         </div>
       </div>
     </div>
   );
 };
 
-export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number, p1Sets: number[], p2Sets: number[] }> = ({ history, currentSet, p1Sets, p2Sets }) => {
+export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number, p1Sets: number[], p2Sets: number[], isMatchOver?: boolean }> = ({ history, currentSet, p1Sets, p2Sets, isMatchOver }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (scrollRef.current) { scrollRef.current.scrollLeft = scrollRef.current.scrollWidth; } }, [history]);
   const timelineElements = useMemo(() => {
     const elements: any[] = [];
     if (!history) return elements;
+    
+    // Initial set marker and start score
+    elements.push({ type: 'set-marker', setNumber: 1 });
+    elements.push({ type: 'score-start' });
+
     const setsP1 = p1Sets || [];
     const setsP2 = p2Sets || [];
     let setCounter = 0;
@@ -175,29 +184,40 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
           if (Number(g1) === setsP1[setCounter] && Number(g2) === setsP2[setCounter]) {
             setCounter++;
             elements.push({ type: 'set-score', winner: event.winner, s1: setsP1.slice(0, setCounter).filter((s, i) => s > setsP2[i]).length, s2: setsP2.slice(0, setCounter).filter((s, i) => s > p1Sets[i]).length });
+            
+            // Add next set marker if match is not over
+            if (!isMatchOver) {
+              elements.push({ type: 'set-marker', setNumber: setCounter + 1 });
+              elements.push({ type: 'score-start' });
+            }
           }
         }
       }
     });
     return elements;
-  }, [history, p1Sets, p2Sets]);
+  }, [history, p1Sets, p2Sets, isMatchOver]);
 
   return (
     <div className="bg-white rounded-5xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 w-full overflow-hidden">
-       <div className="flex items-center justify-between mb-5">
-         <div className="flex items-center gap-2.5"><Activity size={18} className="text-brand-500" /><span className="text-black font-extrabold text-sm tracking-tight">Cronologia da partida</span></div>
-         <span className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black text-black">Set {currentSet + 1}</span>
-       </div>
        <div ref={scrollRef} className="flex-1 overflow-x-auto py-2 timeline-scrollbar scroll-smooth no-scrollbar">
            <div className="flex items-start gap-1 min-w-max px-2 relative h-20 pt-4">
              <div className="absolute top-1/2 left-0 right-0 h-[1.5px] bg-gray-50 -translate-y-1/2" />
-             <div className="relative flex flex-col items-center justify-start shrink-0 mx-2 z-10">
-                <div className="flex flex-col items-center justify-center min-w-[24px] h-[38px] rounded-lg border border-blue-100 bg-blue-50/30 shadow-xs">
-                   <span className="text-[10px] font-black text-blue-600">0</span>
-                   <span className="text-[10px] font-black text-gray-400">0</span>
-                </div>
-             </div>
              {timelineElements.map((el, idx) => {
+               if (el.type === 'set-marker') return (
+                 <div key={idx} className="relative flex flex-col items-center justify-center px-2 shrink-0 z-20">
+                   <div className="bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                     <span className="text-[9px] font-black text-slate-600 whitespace-nowrap">Set {el.setNumber}</span>
+                   </div>
+                 </div>
+               );
+               if (el.type === 'score-start') return (
+                 <div key={idx} className="relative flex flex-col items-center justify-start shrink-0 mx-2 z-10">
+                    <div className="flex flex-col items-center justify-center min-w-[24px] h-[38px] rounded-lg border border-blue-100 bg-blue-50/30 shadow-xs">
+                       <span className="text-[10px] font-black text-blue-600">0</span>
+                       <span className="text-[10px] font-black text-gray-400">0</span>
+                    </div>
+                 </div>
+               );
                if (el.type === 'point') return (
                 <div key={idx} className="relative flex flex-col items-center justify-center w-6 shrink-0 z-10 pt-2.5">
                   <div className={`transition-transform ${el.winner === 1 ? '-translate-y-4' : 'translate-y-4'}`}>
@@ -218,13 +238,51 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline } = props;
 
+  if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">
+        <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+        <p className="text-slate-500 font-bold">Sincronizando partida...</p>
+      </div>
+    );
+  }
+
+  const [resetPressProgress, setResetPressProgress] = useState(0);
+  const resetPressTimerRef = useRef<any>(null);
+  const resetProgressIntervalRef = useRef<any>(null);
+
+  const startResetPress = () => {
+    if (!onResetMatch) return;
+    setResetPressProgress(0);
+    const startTime = Date.now();
+    resetProgressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      setResetPressProgress(Math.min((elapsed / 3000) * 100, 100));
+    }, 50);
+    resetPressTimerRef.current = setTimeout(() => {
+      stopResetPress();
+      onResetMatch();
+    }, 3000);
+  };
+
+  const stopResetPress = () => {
+    if (resetPressTimerRef.current) clearTimeout(resetPressTimerRef.current);
+    if (resetProgressIntervalRef.current) clearInterval(resetProgressIntervalRef.current);
+    setResetPressProgress(0);
+  };
+
+  const [scorePressProgress, setScorePressProgress] = useState<{ player: 1 | 2; type: 'game' | 'gameSet' | 'matchSet'; progress: number } | null>(null);
+  const scoreProgressIntervalRef = useRef<any>(null);
+
+  const [isLogsOpen, setIsLogsOpen] = useState(gameState.matchConfig.isHistoryEnabled);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(gameState.matchConfig.isHistoryEnabled);
   const [isAudioLocked, setIsAudioLocked] = useState(false);
   const [voiceLogs, setVoiceLogs] = useState<CommandLogEntry[]>([]);
   const [remoteActionFeedback, setRemoteActionFeedback] = useState<string | null>(null);
   const [isWaitingAck, setIsWaitingAck] = useState(false);
-  const [correctionMode, setCorrectionMode] = useState<'none' | 'game' | 'set'>('none');
+  const [correctionMode, setCorrectionMode] = useState<'none' | 'game' | 'gameSet' | 'matchSet'>('none');
   const [correctionPlayer, setCorrectionPlayer] = useState<1 | 2 | null>(null);
   const [voiceWasManuallyStopped, setVoiceWasManuallyStopped] = useState(false);
   const longPressTimer = useRef<any>(null);
@@ -375,7 +433,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const [customBaseUrl, setCustomBaseUrl] = useState(() => {
     const saved = localStorage.getItem('myPlacar_CustomHost');
     if (saved) return saved;
-    return 'https://myplacar-244305581318.us-west1.run.app/';
+    return window.location.origin + '/';
   });
   const [isEditingUrl, setIsEditingUrl] = useState(false);
   const mirrorLink = useMemo(() => {
@@ -466,7 +524,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const handleCopyWatchLink = () => navigator.clipboard.writeText(watchLink).then(() => (window as any).alert("Link para relógio copiado com sucesso."));
   const handleShareWhatsApp = () => {
     const currentSportDef = SPORT_LIST.find(s => s.id === gameState.matchConfig.sportType) || SPORT_LIST[0];
-    const text = `Acompanhe meu jogo de ${currentSportDef.name} ao vivo no MyPlacar. 🎾\n\n${mirrorLink}`;
+    const text = `Acompanhe meu jogo de ${currentSportDef.name} ao vivo no my placar. 🎾\n\n${mirrorLink}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -474,27 +532,62 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   useWakeLock(true);
   useEffect(() => { const interval = setInterval(() => setIsAudioLocked(getSharedAudioContext()?.state !== 'running'), 1500); return () => clearInterval(interval); }, []);
 
-  const openCorrection = (type: 'game' | 'set', player: 1 | 2) => { if (!gameState.isConfirmedFinished && !gameState.isMatchOver && !isRecoveryFromMatchOver && !gameState.isLiveClosed && isCommandOwner) { if (isListening) stop(); setCorrectionMode(type); setCorrectionPlayer(player); } };
+  const openCorrection = (type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => { if (!gameState.isConfirmedFinished && !gameState.isMatchOver && !isRecoveryFromMatchOver && !gameState.isLiveClosed && isCommandOwner) { if (isListening) stop(); setCorrectionMode(type); setCorrectionPlayer(player); } };
   const closeCorrection = () => { setCorrectionMode('none'); setCorrectionPlayer(null); if (gameState.matchConfig.voiceEnabled && !gameState.isLiveClosed && isCommandOwner) setTimeout(start, 300); };
   const handleApplyPickerCorrection = (selectedVal: string) => {
     if (onCorrectScore && correctionPlayer && correctionMode !== 'none') {
-      const otherVal = correctionMode === 'game' ? (correctionPlayer === 1 ? gameState.p2.score : gameState.p1.score) : (correctionPlayer === 1 ? gameState.p2.games : gameState.p1.games);
-      onCorrectScore(correctionMode, correctionPlayer === 1 ? `${selectedVal} a ${otherVal}` : `${otherVal} a ${selectedVal}`); closeCorrection();
+      let otherVal = "";
+      if (correctionMode === 'game') {
+        otherVal = correctionPlayer === 1 ? gameState.p2.score : gameState.p1.score;
+      } else if (correctionMode === 'gameSet') {
+        otherVal = (correctionPlayer === 1 ? gameState.p2.games : gameState.p1.games).toString();
+      } else if (correctionMode === 'matchSet') {
+        otherVal = (correctionPlayer === 1 ? p2WonSets : p1WonSets).toString();
+      }
+      onCorrectScore(correctionMode as any, correctionPlayer === 1 ? `${selectedVal} a ${otherVal}` : `${otherVal} a ${selectedVal}`); closeCorrection();
     }
   };
 
-  const handleScoreCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, type: 'game' | 'set', player: 1 | 2) => {
+  const handleScoreCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => {
     if (gameState.isConfirmedFinished || gameState.isMatchOver || isWaitingAck || isRecoveryFromMatchOver || gameState.isLiveClosed || !isCommandOwner) return;
     isLongPressActive.current = false; touchStartPos.current = { x: e.clientX, y: e.clientY };
-    longPressTimer.current = setTimeout(() => { isLongPressActive.current = true; openCorrection(type, player); }, gameState.matchConfig.isWatchMode ? 4000 : 3000);
+    
+    const duration = gameState.matchConfig.isWatchMode ? 4000 : 3000;
+    const startTime = Date.now();
+    setScorePressProgress({ player, type, progress: 0 });
+    
+    if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
+    scoreProgressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      setScorePressProgress({ player, type, progress: Math.min((elapsed / duration) * 100, 100) });
+    }, 50);
+
+    longPressTimer.current = setTimeout(() => { 
+      isLongPressActive.current = true; 
+      if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
+      setScorePressProgress(null);
+      openCorrection(type, player); 
+    }, duration);
   };
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (longPressTimer.current && Math.sqrt(Math.pow(e.clientX - touchStartPos.current.x, 2) + Math.pow(e.clientY - touchStartPos.current.y, 2)) > 10) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    if (longPressTimer.current && Math.sqrt(Math.pow(e.clientX - touchStartPos.current.x, 2) + Math.pow(e.clientY - touchStartPos.current.y, 2)) > 10) { 
+      clearTimeout(longPressTimer.current); 
+      longPressTimer.current = null; 
+      if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
+      setScorePressProgress(null);
+    }
   };
-  const handleScoreCardPointerUp = (player: 1 | 2) => {
+  const handleScoreCardPointerUp = (type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
+    setScorePressProgress(null);
+    
     if (!isLongPressActive.current && correctionMode === 'none' && !gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) {
       if (gameState.isMirroringActive && gameState.commandOwnerId !== currentDeviceId) return;
+      
+      // Item 8: Retirar incremento do placar do game nos botões de set (matchSet) e gameSet
+      if (type === 'matchSet' || type === 'gameSet') return;
+
       createCommandLog(`Ponto ${player === 1 ? currentGameStateRef.current.p1.name : currentGameStateRef.current.p2.name}`, 'cb', false, player);
       onScoreUpdate(player, 'rally', 'cb');
     }
@@ -503,7 +596,16 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const p1WonSets = useMemo(() => gameState.p1.sets.filter((s, i) => s > gameState.p2.sets[i]).length, [gameState.p1.sets, gameState.p2.sets]);
   const p2WonSets = useMemo(() => gameState.p2.sets.filter((s, i) => s > gameState.p1.sets[i]).length, [gameState.p1.sets, gameState.p2.sets]);
   const currentSportDef = SPORT_LIST.find(s => s.id === gameState.matchConfig.sportType) || SPORT_LIST[0];
-  const pickerOptions = useMemo(() => correctionMode === 'set' ? Array.from({ length: 13 }, (_, i) => i.toString()) : (currentSportDef.engine === 'tennis' && !isTieBreak ? ['0', '15', '30', '40', 'Ad'] : Array.from({ length: 31 }, (_, i) => i.toString())), [correctionMode, currentSportDef, isTieBreak]);
+  const pickerOptions = useMemo(() => {
+    if (correctionMode === 'matchSet') {
+      return Array.from({ length: 4 }, (_, i) => i.toString());
+    }
+    if (correctionMode === 'gameSet') {
+      const maxGames = gameState.matchConfig.gamesPerSet || 6;
+      return Array.from({ length: maxGames + 2 }, (_, i) => i.toString());
+    }
+    return (currentSportDef.engine === 'tennis' && !isTieBreak ? ['0', '15', '30', '40', 'Ad'] : Array.from({ length: 31 }, (_, i) => i.toString()));
+  }, [correctionMode, currentSportDef, isTieBreak, gameState.matchConfig.gamesPerSet]);
   
   if (gameState.matchConfig.isWatchMode) {
     return (
@@ -513,7 +615,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
         isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
         handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} 
-        isCommandOwner={isCommandOwner} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+        isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+        isOfflineMode={isOfflineMode}
         correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
         pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
         handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
@@ -544,160 +647,264 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
          </div>
        )}
        {isAudioLocked && <div onClick={async () => { await unlockAudio(); announceFullScore(); setIsAudioLocked(false); }} className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl bg-orange-600 text-white flex items-center gap-3 animate-bounce cursor-pointer"><VolumeX size={20} /><span className="text-sm font-bold">Ativar som</span></div>}
-       <ScorePickerModal isOpen={correctionMode !== 'none'} onClose={closeCorrection} onConfirm={handleApplyPickerCorrection} title={`Corrigir ${correctionMode === 'game' ? 'game' : 'set'}: ${correctionPlayer === 1 ? gameState.p1.name : gameState.p2.name}`} options={pickerOptions} initialValue={correctionPlayer === 1 ? (correctionMode === 'game' ? gameState.p1.score : gameState.p1.games.toString()) : (correctionMode === 'game' ? gameState.p2.score : gameState.p2.games.toString())} />
+       <ScorePickerModal 
+         isOpen={correctionMode !== 'none'} 
+         onClose={closeCorrection} 
+         onConfirm={handleApplyPickerCorrection} 
+         title={`Corrigir ${correctionMode === 'game' ? 'game' : correctionMode === 'gameSet' ? 'games no set' : 'sets vencidos'}: ${correctionPlayer === 1 ? gameState.p1.name : gameState.p2.name}`} 
+         options={pickerOptions} 
+         initialValue={correctionPlayer === 1 ? (correctionMode === 'game' ? gameState.p1.score : correctionMode === 'gameSet' ? gameState.p1.games.toString() : p1WonSets.toString()) : (correctionMode === 'game' ? gameState.p2.score : correctionMode === 'gameSet' ? gameState.p2.games.toString() : p2WonSets.toString())} 
+       />
        <header className="px-4 py-3 flex items-center justify-between bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <button onClick={onHome} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-            <ScoreboardIcon className="w-6 h-6" />
-            {isSettingsInicialSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
+          {!isOfflineMode && (
+            <button onClick={onHome} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
+              <ScoreboardIcon className="w-6 h-6" />
+              {isSettingsInicialSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
+            </button>
+          )}
+          {isOfflineMode && (
+            <button 
+              onPointerDown={startResetPress}
+              onPointerUp={stopResetPress}
+              onPointerLeave={stopResetPress}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-black bg-yellow-500 shadow-md border-2 border-white relative overflow-hidden active:scale-95 transition-transform"
+            >
+              {resetPressProgress > 0 && (
+                <div 
+                  className="absolute inset-0 bg-black/10 origin-left transition-all duration-75" 
+                  style={{ transform: `scaleX(${resetPressProgress / 100})` }} 
+                />
+              )}
+              <WifiOff size={22} className="relative z-10" />
+            </button>
+          )}
+        </div>
+        <div className="flex-1 flex items-center justify-center gap-2">
+          <button onClick={() => announceFullScore()} className="flex items-center gap-3 active:scale-95 transition-transform">
+            <LazySportIcon sportId={gameState.matchConfig.sportType} defaultIcon={currentSportDef.defaultIcon} className="w-10 h-10 rounded-full shadow-sm" />
+            <span className="text-xl font-black tracking-tighter text-gray-900 flex items-center gap-1">
+              {currentSportDef.name} 
+              {isTieBreak && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ml-1">Tb</span>}
+            </span>
           </button>
+          {isLiveActive && (
+            <LiveIndicator 
+              role={isCommandOwner ? 'owner' : 'observer'} 
+              onClick={onOpenLiveControl} 
+              onPointerDown={startResetPress}
+              onPointerUp={stopResetPress}
+              onPointerLeave={stopResetPress}
+              progress={resetPressProgress}
+            />
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {isWatchConnected && <div className="p-2 bg-sky-100 text-sky-600 rounded-xl animate-pulse flex items-center gap-2 px-3 border border-sky-200" title="Relógio conectado"><Watch size={18} /><span className="text-[9px] font-black tracking-tight hidden md:inline">Relógio conectado</span></div>}
           <button onClick={onBack} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
             <Settings size={22} />
             {isSettingsRegrasSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
           </button>
         </div>
-        <div className="flex-1 flex items-center justify-center gap-2">
-          <button onClick={() => announceFullScore()} className="flex items-center gap-3 active:scale-95 transition-transform">
-            <LazySportIcon sportId={gameState.matchConfig.sportType} defaultIcon={currentSportDef.defaultIcon} className="w-10 h-10 rounded-full shadow-sm" />
-            <span className="text-xl font-black tracking-tighter text-gray-900">{currentSportDef.name} {isTieBreak && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ml-1">Tb</span>}</span>
-          </button>
-          {isLiveActive && <LiveIndicator role={isCommandOwner ? 'owner' : 'observer'} onClick={onOpenLiveControl} />}
-        </div>
-        <div className="flex items-center gap-2">{isWatchConnected && <div className="p-2 bg-sky-100 text-sky-600 rounded-xl animate-pulse flex items-center gap-2 px-3 border border-sky-200" title="Relógio conectado"><Watch size={18} /><span className="text-[9px] font-black tracking-tight hidden md:inline">Relógio conectado</span></div>}</div>
       </header>
       <main className={`flex-1 p-4 max-w-2xl mx-auto w-full pb-36 overflow-y-auto no-scrollbar transition-all duration-700 ${gameState.isLiveClosed ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
-        <div className={`bg-white rounded-[3.5rem] shadow-sm border ${gameState.isConfirmedFinished ? 'border-emerald-400 ring-4 ring-emerald-50' : isTieBreak ? 'border-amber-300 ring-4 ring-amber-100' : 'border-gray-100'} p-4 md:p-8 flex flex-col items-center gap-4 relative`}>
-           <div className="flex items-center justify-between w-full mb-2 px-2">
-             <div className="flex items-center gap-2"><span className="text-2xl font-black text-gray-900">Set {gameState.currentSet + 1}</span></div>
-             <div className="flex flex-col items-center justify-center -mt-12 md:-mt-16">
-               <button onClick={handleVoiceToggle} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed || !isCommandOwner || gameState.isMatchOver} className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-2 ${isVoiceActive ? 'bg-blue-600 border-blue-600' : 'bg-white border-blue-600'}`}>
-                 <div className="relative flex items-center justify-center">
-                   <Mic size={32} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-white' : 'text-blue-600'} />
-                   {(voiceWasManuallyStopped || !gameState.matchConfig.voiceEnabled || gameState.isLiveClosed || !isCommandOwner || gameState.isMatchOver) && <div className="absolute w-[140%] h-[2.5px] bg-red-600 rotate-[-45deg] rounded-full shadow-sm" />}
-                 </div>
-               </button>
+        <div className={`bg-white rounded-[2rem] shadow-sm border ${gameState.isConfirmedFinished ? 'border-emerald-400 ring-4 ring-emerald-50' : isTieBreak ? 'border-amber-300 ring-4 ring-amber-100' : 'border-gray-100'} p-4 md:p-8 flex flex-col items-center gap-4 relative`}>
+           <div className="flex flex-col w-full mb-4">
+             <div className="flex items-center justify-between w-full mb-2 px-2">
+               <div className="flex items-center gap-2"></div>
+               <div className="flex flex-col items-center justify-center -mt-12 md:-mt-16">
+                 {!isOfflineMode && (
+                   <button onClick={handleVoiceToggle} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed || !isCommandOwner || gameState.isMatchOver} className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-2 ${isVoiceActive ? 'bg-blue-600 border-blue-600' : 'bg-white border-blue-600'}`}>
+                     <div className="relative flex items-center justify-center">
+                       <Mic size={32} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-white' : 'text-blue-600'} />
+                       {(voiceWasManuallyStopped || !gameState.matchConfig.voiceEnabled || gameState.isLiveClosed || !isCommandOwner || gameState.isMatchOver) && (
+                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-[2.5px] bg-red-600 -rotate-45 rounded-full shadow-sm pointer-events-none z-20" />
+                       )}
+                     </div>
+                   </button>
+                 )}
+               </div>
+               <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${gameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(gameState.matchDuration)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${gameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{gameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
              </div>
-             <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${gameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(gameState.matchDuration)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${gameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{gameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
-           </div>
-           <div className={`flex items-start justify-between w-full gap-1 md:gap-4 mt-2 transition-all duration-500 ${!isCommandOwner ? 'opacity-70' : ''}`}>
-              <div className="flex flex-col items-center flex-1 min-w-0">
-                <div onClick={() => onSwitchServer(1, false)} className="text-center w-full mb-3 min-h-[6rem] flex flex-col justify-center px-1 cursor-pointer active:scale-95 transition-transform">
-                    <div className="flex items-center justify-center gap-2"><span className="text-xl md:text-2xl font-black text-gray-900 truncate uppercase">{gameState.p1.name}</span>{(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 0 && <span className="text-3xl animate-bounce">🎾</span>}</div>
-                </div>
-                {gameState.p1.partnerName && (
-                  <div onClick={() => onSwitchServer(1, true)} className="text-center w-full min-h-[3rem] mb-3 flex flex-col justify-center px-1 cursor-pointer active:scale-95 transition-transform">
-                    <div className="flex items-center justify-center gap-2 mt-1"><span className="text-xl md:text-2xl font-black text-gray-900 truncate uppercase">{gameState.p1.partnerName}</span>{(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 2 && <span className="text-2xl animate-bounce">🎾</span>}</div>
-                  </div>
-                )}
-                <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'set', 1)} onPointerMove={handlePointerMove} onPointerUp={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }} className={`mb-6 bg-transparent border-2 ${BORDER_COLORS[gameState.p1.color || 'azul']} rounded-[2.5rem] flex items-center justify-center transition-all active:scale-95`} style={{ width: '115px', height: '90px' }}><span className={`text-6xl font-black tabular-nums ${TEXT_COLORS[gameState.p1.color || 'azul']}`}>{gameState.p1.games}</span></div>
-                <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', 1)} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp(1)} className={`${SOLID_COLORS[gameState.p1.color || 'azul']} ${gameState.server === 1 ? '!text-[#bef264]' : ''} shrink-0 overflow-hidden shadow-xl active:brightness-110 transition-all`} style={{borderRadius: '3rem', width: '135px', height: '170px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><span className="text-[110px] md:text-[130px] font-black leading-none tabular-nums pointer-events-none">{gameState.p1.score}</span></div>
-              </div>
-              <div className="flex flex-col items-center w-12 shrink-0 px-0.5 justify-start gap-1">
-                <div className="h-[calc(6rem+12px)] w-full" /> 
-                <div className="flex flex-col items-center gap-2">
-                  {gameState.p1.sets.map((s1, i) => (
-                    <div key={i} className="flex flex-col items-center gap-1 px-3 py-2 animate-in zoom-in w-11 shrink-0">
-                      <span className={`text-[13px] font-black leading-none tabular-nums ${TEXT_COLORS[gameState.p1.color || 'azul']}`}>{s1}</span>
-                      <div className="h-px w-4 bg-gray-200" />
-                      <span className={`text-[13px] font-black leading-none tabular-nums ${TEXT_COLORS[gameState.p2.color || 'vermelho']}`}>{gameState.p2.sets[i]}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col items-center flex-1 min-w-0">
-                <div onClick={() => onSwitchServer(2, false)} className="text-center w-full mb-3 min-h-[6rem] flex flex-col justify-center px-1 cursor-pointer active:scale-95 transition-transform">
-                    <div className="flex items-center justify-center gap-2"><span className="text-xl md:text-2xl font-black text-gray-900 truncate uppercase">{gameState.p2.name}</span>{(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 1 && <span className="text-xl md:text-3xl animate-bounce">🎾</span>}</div>
-                </div>
-                {gameState.p2.partnerName && (
-                  <div onClick={() => onSwitchServer(2, true)} className="text-center w-full min-h-[3rem] mb-3 flex flex-col justify-center px-1 cursor-pointer active:scale-95 transition-transform">
-                    <div className="flex items-center justify-center gap-2 mt-1"><span className="text-xl md:text-2xl font-black text-gray-900 truncate uppercase">{gameState.p2.partnerName}</span>{(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 3 && <span className="text-lg md:text-2xl animate-bounce">🎾</span>}</div>
-                  </div>
-                )}
-                <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'set', 2)} onPointerMove={handlePointerMove} onPointerUp={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }} className={`mb-6 bg-transparent border-2 ${BORDER_COLORS[gameState.p2.color || 'vermelho']} rounded-[2.5rem] flex items-center justify-center transition-all active:scale-95`} style={{ width: '115px', height: '90px' }}><span className={`text-6xl font-black tabular-nums ${TEXT_COLORS[gameState.p2.color || 'vermelho']}`}>{gameState.p2.games}</span></div>
-                <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', 2)} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp(2)} className={`${SOLID_COLORS[gameState.p2.color || 'vermelho']} ${gameState.server === 2 ? '!text-[#bef264]' : ''} shrink-0 overflow-hidden shadow-xl active:brightness-110 transition-all`} style={{borderRadius: '3rem', width: '135px', height: '170px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><span className="text-[110px] md:text-[130px] font-black leading-none tabular-nums pointer-events-none">{gameState.p2.score}</span></div>
-              </div>
-           </div>
-        </div>
-        <div className="flex flex-row items-center justify-between gap-4 px-2 mt-8">
-           <button onClick={handleUndoWithLog} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed || !isCommandOwner} className="flex-1 h-24 bg-[#0f172a] text-white rounded-[2rem] flex items-center justify-center shadow-xl active:scale-95 transition-all"><RotateCcw size={36} strokeWidth={3} /></button>
-           <button disabled={gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner} onClick={() => onScoreUpdate(gameState.server, 'ace', 'cb')} className={`flex-1 h-24 rounded-[2rem] flex items-center justify-center shadow-xl ${SOLID_COLORS[gameState.server === 1 ? (gameState.p1.color || 'azul') : (gameState.p2.color || 'vermelho')]} active:scale-95 transition-all`}><Zap size={36} fill="currentColor" /></button>
-           <button disabled={gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner} onClick={() => onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb')} className={`flex-1 h-24 rounded-[2rem] flex items-center justify-center shadow-xl ${SOLID_COLORS[gameState.server === 1 ? (gameState.p2.color || 'vermelho') : (gameState.p1.color || 'azul')]} active:scale-95 transition-all`}><X size={44} strokeWidth={4} /></button>
-        </div>
-        <div className="flex flex-col gap-5 mt-8">
-           <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">
-              <div className="flex items-center justify-between mb-4 border-b border-gray-50 pb-3"><div className="flex items-center gap-2"><div className="p-1.5 bg-blue-50 rounded-lg"><ListTodo size={18} className="text-blue-500" /></div><span className="text-gray-900 font-black text-sm tracking-tight">Log de comandos</span></div></div>
-              <div className="flex flex-col gap-3 font-mono max-h-[420px] overflow-y-auto pr-2 no-scrollbar">
-                 {voiceLogs.length === 0 ? <div className="py-10 flex items-center justify-center text-gray-300 text-[11px] font-bold italic text-center">Aguardando comandos...</div> : voiceLogs.map((log) => {
-                      const [b1, b2] = log.before.split('-'); 
-                      const [a1, a2] = log.after.split('-'); 
-                      const cmdColor = log.winner === 1 ? TEXT_COLORS[gameState.p1.color || 'azul'] : log.winner === 2 ? TEXT_COLORS[gameState.p2.color || 'vermelho'] : log.isError ? 'text-red-600' : 'text-slate-500';
-                      return (
-                        <div key={log.id} className={`flex items-start gap-2.5 p-2.5 rounded-2xl border shadow-xs transition-all animate-in fade-in slide-in-from-left-2 duration-300 ${log.isError ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${log.isError ? 'bg-red-600 text-white' : (log.isRemote ? 'bg-sky-500 text-white' : 'bg-green-500 text-white')}`}>{log.isError ? <X size={14} className="stroke-[4]" /> : (log.source?.toLowerCase().includes('w') ? <Watch size={14} className="text-white" strokeWidth={3} /> : <CheckCircle size={14} className="text-white" strokeWidth={4} />)}</div>
-                          <div className="flex-1 font-mono text-[11px] overflow-hidden leading-tight">
-                            <div className="flex items-center flex-wrap gap-x-1.5 text-slate-500">
-                              <span className="font-black text-blue-600">{log.source?.toUpperCase() || (log.isRemote ? 'WB' : 'CB')}#</span>
-                              {!log.isError && <span className="text-blue-500 font-bold">[{log.liveSequence}]</span>}
-                              {!log.isError && <>
-                                  <span className="opacity-30">|</span>
-                                  <span className="font-bold"><span className="text-black">I: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{b1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{b2}</span></span>
-                                  <span className="font-black text-orange-500"><span className="text-black ml-1 mr-0.5">&gt; F: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{a1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{a2}</span></span>
-                                </>}
-                            </div>
-                            <div className={`font-black mt-0.5 truncate ${cmdColor}`}>[ {log.text} ]</div>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-black font-bold text-[10px]"><span>{log.startTime}</span>{!log.isError && <><span className="opacity-30">|</span><span>{log.latency}ms</span></>}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-              </div>
-           </div>
-           <MatchTimeline history={gameState.pointHistory ?? []} currentSet={gameState.currentSet} p1Sets={gameState.p1.sets} p2Sets={gameState.p2.sets} />
-           <div className={`bg-[#0f172a] rounded-[3rem] p-4 pl-6 pr-6 shadow-2xl border border-white/50 w-full animate-in fade-in duration-700 flex flex-col gap-4 overflow-hidden transition-all duration-500 ${gameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
-              <div className="flex items-center justify-between">
-                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <div className={`w-12 h-12 rounded-2xl transition-all duration-500 flex items-center justify-center shadow-lg ${gameState.isMirroringActive && !gameState.isLiveClosed ? 'bg-sky-500' : 'bg-slate-800'}`}><QrCode size={24} className="text-white" /></div>
-                    <div className="flex flex-col min-w-0"><h3 className="text-white font-black text-lg tracking-tight leading-none mb-1">Espelhar partida</h3><p className="text-[10px] font-bold text-slate-400 truncate tracking-tight">O PIN serve tanto para torcida quanto para seu controle.</p></div>
+             
+             <div className="flex items-center justify-between w-full px-4 mt-4">
+               <div className="flex flex-col items-center flex-1 min-w-0">
+                 <div onClick={() => onSwitchServer(1, false)} className="text-center w-full cursor-pointer active:scale-95 transition-transform">
+                   <div className="flex items-center justify-center gap-2">
+                     <span className="text-xl md:text-2xl font-black text-gray-900 truncate">{gameState.p1.name}</span>
+                     {(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 0 && <span className="text-3xl animate-bounce">🎾</span>}
+                   </div>
                  </div>
-                 <div className="flex items-center gap-3 shrink-0">
-                    {isLiveActive && <button onClick={() => setIsMirrorExpanded(!isMirrorExpanded)} className="w-10 h-10 bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-90 transition-all border border-white/5">{isMirrorExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>}
-                    <div className="flex items-center h-7 px-0.5">
-                      <div className="relative inline-block w-12 h-7 align-middle select-none transition duration-200 ease-in">
-                        <input type="checkbox" id="toggle-mirroring" checked={isLiveActive || false} onChange={(e) => handleToggleMirroringLocal(e.target.checked)} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out shadow-sm top-[2px] left-[2px] checked:translate-x-full" />
-                        <label htmlFor="toggle-mirroring" className={`toggle-label block overflow-hidden h-7 rounded-full cursor-pointer transition-colors duration-300 ease-in-out ${isLiveActive ? 'bg-[#22c55e]' : 'bg-slate-800'}`}></label>
-                      </div>
-                    </div>
+                 {gameState.p1.partnerName && (
+                   <div onClick={() => onSwitchServer(1, true)} className="text-center w-full cursor-pointer active:scale-95 transition-transform mt-1">
+                     <div className="flex items-center justify-center gap-2">
+                       <span className="text-lg md:text-xl font-black text-gray-900 truncate">{gameState.p1.partnerName}</span>
+                       {(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 2 && <span className="text-2xl animate-bounce">🎾</span>}
+                     </div>
+                   </div>
+                 )}
+               </div>
+               <div className="w-8" />
+               <div className="flex flex-col items-center flex-1 min-w-0">
+                 <div onClick={() => onSwitchServer(2, false)} className="text-center w-full cursor-pointer active:scale-95 transition-transform">
+                   <div className="flex items-center justify-center gap-2">
+                     <span className="text-xl md:text-2xl font-black text-gray-900 truncate">{gameState.p2.name}</span>
+                     {(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 1 && <span className="text-xl md:text-3xl animate-bounce">🎾</span>}
+                   </div>
                  </div>
-              </div>
-              {isLiveActive && isMirrorExpanded && (
-                <div className="mt-4 space-y-6 animate-in zoom-in duration-500 border-t border-white/5 pt-6">
-                   {isAdmin && <div className="bg-white/5 border border-white/10 rounded-3xl p-5 space-y-3"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Globe size={14} className="text-blue-400" /><span className="text-[10px] font-black text-blue-400 tracking-tight">Endereço público do app</span></div><button onClick={() => setIsEditingUrl(!isEditingUrl)} className="text-gray-400 p-1 active:scale-90 transition-all"><Edit3 size={14} /></button></div>{isEditingUrl ? <div className="flex gap-2 animate-in slide-in-from-top-1"><input type="text" value={customBaseUrl} onChange={(e) => setCustomBaseUrl(e.target.value)} placeholder="https://seu-link-real.app/" className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-xs text-white outline-none" /><button onClick={handleSaveBaseUrl} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black">Ok</button></div> : <p className="text-[11px] font-bold text-gray-400 truncate bg-black/20 p-2 rounded-xl border border-white/5">{customBaseUrl}</p>}</div>}
-                   <div className="flex flex-col items-center gap-8 w-full"><div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeUrl} alt="QR code" className="w-full h-full object-contain" /></div><div className="w-full space-y-3"><button onClick={handleShareWhatsApp} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Share2 size={18} /> WhatsApp</button><button onClick={handleCopyLink} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all"><Copy size={18} /> Copiar link</button><button onClick={handleCopyWatchLink} className="w-full bg-indigo-600 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Watch size={18} /> Link para relógio</button></div></div>
-                </div>
-              )}
+                 {gameState.p2.partnerName && (
+                   <div onClick={() => onSwitchServer(2, true)} className="text-center w-full cursor-pointer active:scale-95 transition-transform mt-1">
+                     <div className="flex items-center justify-center gap-2">
+                       <span className="text-lg md:text-xl font-black text-gray-900 truncate">{gameState.p2.partnerName}</span>
+                       {(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 3 && <span className="text-lg md:text-2xl animate-bounce">🎾</span>}
+                     </div>
+                   </div>
+                 )}
+               </div>
+             </div>
            </div>
-           {(gameState.isMirroringActive || isMirrorExpanded) && (
-           <div className={`bg-white rounded-[2.5rem] p-4 pl-7 pr-7 shadow-sm border border-gray-100 w-full animate-in fade-in transition-all duration-500 ${gameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
-              <div className="flex items-center justify-between mb-4">
-                 <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner"><Wifi size={22} /></div><h3 className="text-gray-900 font-black text-lg tracking-tight leading-none">Live</h3></div>
-                 <button onClick={() => setIsLiveExpanded(!isLiveExpanded)} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center active:scale-90 transition-all border border-gray-100">{isLiveExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
-              </div>
-              {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
-                  <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ name, count }) => { const isPrimary = gameState.commandOwner === name; return <div key={name} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${isPrimary && !gameState.isLiveClosed ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : 'bg-white border-gray-100 text-gray-400 opacity-60'}`}>{isPrimary && !gameState.isLiveClosed ? <ShieldCheck size={14} className="text-blue-600" fill="white" /> : <Eye size={12} className="text-[#40E0D0]" />}<span className="text-[10px] font-black">{name}{count > 1 ? ` (${count})` : ''}</span></div>; })}</div></div>
-                  <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex items-center gap-2.5"><CheckCircle size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Sincronização confirmada</span></div><div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-colors ${gameState.isLiveClosed ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{gameState.isLiveClosed ? <X size={12} strokeWidth={4} /> : <Check size={12} strokeWidth={4} />}<span className="text-[10px] font-black uppercase">{gameState.isLiveClosed ? 'Encerrado' : 'Ativo'}</span></div></div>
-                  {isCommandOwner && <Button onClick={handlePingTest} disabled={isPinging || gameState.isLiveClosed} className="w-full !bg-blue-600 !text-white !py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">{isPinging ? <Loader2 size={18} className="animate-spin" /> : <Wifi size={18} />} Testar conexão (ping)</Button>}
-                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 mt-3 space-y-3"><div className="flex items-center gap-2 px-1"><Activity size={14} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Tipo de link ativo</span></div><div className="flex items-center gap-3"><div className="w-10 h-10 bg-white rounded-xl border border-gray-100 flex items-center justify-center shadow-sm">{connType === 'bluetooth' ? <Bluetooth size={20} className="text-blue-500" /> : connType === 'wifi' ? <Wifi size={20} className="text-emerald-500" /> : connType === 'cellular' ? <Smartphone size={20} className="text-orange-500" /> : <Globe size={20} className="text-slate-400" />}</div><div className="flex-1 min-w-0"><p className="text-xs font-black text-gray-900 leading-tight">{connType === 'bluetooth' ? 'Conectado via bluetooth' : connType === 'wifi' ? 'Conectado via wi-fi' : connType === 'cellular' ? 'Conectado via rede móvel' : !connType ? 'Meio físico de conexão oculto' : 'Conectado via cabo'}</p>{downlink && <p className="text-[10px] font-bold text-slate-400 mt-1">Velocidade estimada: {downlink} Mbps</p>}</div></div></div>
-                </div>}
-           </div>
-		   )}
+
+           <WatchBoard 
+             gameState={gameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
+             onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
+             isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
+             handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} 
+             isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+             isOfflineMode={isOfflineMode}
+             correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
+             pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
+             handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
+             isEmbedded={true}
+             scorePressProgress={scorePressProgress}
+           />
         </div>
+        {!isOfflineMode && (
+          <div className="flex flex-col gap-5 mt-8">
+            <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">
+               <div 
+                 className="flex items-center justify-between mb-0 border-b border-gray-50 pb-3 cursor-pointer select-none"
+                 onClick={() => setIsLogsOpen(!isLogsOpen)}
+               >
+                 <div className="flex items-center gap-2">
+                   <div className="p-1.5 bg-blue-50 rounded-lg">
+                     <ListTodo size={18} className="text-blue-500" />
+                   </div>
+                   <span className="text-gray-900 font-black text-sm tracking-tight">Log de comandos</span>
+                 </div>
+                 <div className="flex items-center gap-2">
+                   {isLogsOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                 </div>
+               </div>
+               {isLogsOpen && (
+                 <div className="flex flex-col gap-3 font-mono max-h-[420px] overflow-y-auto pr-2 no-scrollbar mt-4 animate-in slide-in-from-top-2 duration-300">
+                    {voiceLogs.length === 0 ? (
+                      <div className="py-10 flex items-center justify-center text-gray-300 text-[11px] font-bold italic text-center">Aguardando comandos...</div>
+                    ) : (
+                      voiceLogs.map((log) => {
+                         const [b1, b2] = log.before.split('-'); 
+                         const [a1, a2] = log.after.split('-'); 
+                         const cmdColor = log.winner === 1 ? TEXT_COLORS['azul'] : log.winner === 2 ? TEXT_COLORS['vermelho'] : log.isError ? 'text-red-600' : 'text-slate-500';
+                         return (
+                           <div key={log.id} className={`flex items-start gap-2.5 p-2.5 rounded-2xl border shadow-xs transition-all animate-in fade-in slide-in-from-left-2 duration-300 ${log.isError ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                             <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${log.isError ? 'bg-red-600 text-white' : (log.isRemote ? 'bg-sky-500 text-white' : 'bg-green-500 text-white')}`}>{log.isError ? <X size={14} className="stroke-[4]" /> : (log.source?.toLowerCase().includes('w') ? <Watch size={14} className="text-white" strokeWidth={3} /> : <CheckCircle size={14} className="text-white" strokeWidth={4} />)}</div>
+                             <div className="flex-1 font-mono text-[11px] overflow-hidden leading-tight">
+                               <div className="flex items-center flex-wrap gap-x-1.5 text-slate-500">
+                                 <span className="font-black text-blue-600">{log.source?.toUpperCase() || (log.isRemote ? 'WB' : 'CB')}#</span>
+                                 {!log.isError && <span className="text-blue-500 font-bold">[{log.liveSequence}]</span>}
+                                 {!log.isError && <>
+                                     <span className="opacity-30">|</span>
+                                     <span className="font-bold"><span className="text-black">I: </span><span className={TEXT_COLORS['azul']}>{b1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS['vermelho']}>{b2}</span></span>
+                                     <span className="font-black text-orange-500"><span className="text-black ml-1 mr-0.5">&gt; F: </span><span className={TEXT_COLORS['azul']}>{a1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS['vermelho']}>{a2}</span></span>
+                                   </>}
+                               </div>
+                               <div className={`font-black mt-0.5 truncate ${cmdColor}`}>[ {log.text} ]</div>
+                               <div className="flex items-center gap-1.5 mt-0.5 text-black font-bold text-[10px]"><span>{log.startTime}</span>{!log.isError && <><span className="opacity-30">|</span><span>{log.latency}ms</span></>}</div>
+                             </div>
+                           </div>
+                         );
+                       })
+                    )}
+                 </div>
+               )}
+            </div>
+            {gameState.matchConfig.isHistoryEnabled && (
+              <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">
+                 <div 
+                   className="flex items-center justify-between mb-0 cursor-pointer select-none"
+                   onClick={() => setIsTimelineOpen(!isTimelineOpen)}
+                 >
+                   <div className="flex items-center gap-2">
+                     <div className="p-1.5 bg-blue-50 rounded-lg">
+                       <Activity size={18} className="text-blue-500" />
+                     </div>
+                     <span className="text-gray-900 font-black text-sm tracking-tight">Cronologia da partida</span>
+                   </div>
+                   <div className="flex items-center gap-2">
+                     {isTimelineOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                   </div>
+                 </div>
+                 {isTimelineOpen && (
+                   <div className="mt-6 animate-in slide-in-from-top-2 duration-300">
+                     <MatchTimeline history={gameState.pointHistory ?? []} currentSet={gameState.currentSet} p1Sets={gameState.p1.sets} p2Sets={gameState.p2.sets} isMatchOver={gameState.isMatchOver} />
+                   </div>
+                 )}
+              </div>
+            )}
+            <div className={`bg-[#0f172a] rounded-[3rem] p-4 pl-6 pr-6 shadow-2xl border border-white/50 w-full animate-in fade-in duration-700 flex flex-col gap-4 overflow-hidden transition-all duration-500 ${gameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                     <div className={`w-12 h-12 rounded-2xl transition-all duration-500 flex items-center justify-center shadow-lg ${gameState.isMirroringActive && !gameState.isLiveClosed ? 'bg-sky-500' : 'bg-slate-800'}`}><QrCode size={24} className="text-white" /></div>
+                     <div className="flex flex-col min-w-0"><h3 className="text-white font-black text-lg tracking-tight leading-none mb-1">Espelhar partida</h3><p className="text-[10px] font-bold text-slate-400 truncate tracking-tight">O PIN serve tanto para torcida quanto para seu controle.</p></div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                     {isLiveActive && <button onClick={() => setIsMirrorExpanded(!isMirrorExpanded)} className="w-10 h-10 bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-90 transition-all border border-white/5">{isMirrorExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>}
+                     <div className="flex items-center h-7 px-0.5">
+                       <div className="relative inline-block w-12 h-7 align-middle select-none transition duration-200 ease-in">
+                         <input type="checkbox" id="toggle-mirroring" checked={isLiveActive || false} onChange={(e) => handleToggleMirroringLocal(e.target.checked)} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out shadow-sm top-[2px] left-[2px] checked:translate-x-full" />
+                         <label htmlFor="toggle-mirroring" className={`toggle-label block overflow-hidden h-7 rounded-full cursor-pointer transition-colors duration-300 ease-in-out ${isLiveActive ? 'bg-[#22c55e]' : 'bg-slate-800'}`}></label>
+                       </div>
+                     </div>
+                  </div>
+               </div>
+               {isLiveActive && isMirrorExpanded && (
+                 <div className="mt-4 space-y-6 animate-in zoom-in duration-500 border-t border-white/5 pt-6">
+                    {isAdmin && <div className="bg-white/5 border border-white/10 rounded-3xl p-5 space-y-3"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Globe size={14} className="text-blue-400" /><span className="text-[10px] font-black text-blue-400 tracking-tight">Endereço público do app</span></div><button onClick={() => setIsEditingUrl(!isEditingUrl)} className="text-gray-400 p-1 active:scale-90 transition-all"><Edit3 size={14} /></button></div>{isEditingUrl ? <div className="flex gap-2 animate-in slide-in-from-top-1"><input type="text" value={customBaseUrl} onChange={(e) => setCustomBaseUrl(e.target.value)} placeholder="https://seu-link-real.app/" className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-xs text-white outline-none" /><button onClick={handleSaveBaseUrl} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black">Ok</button></div> : <p className="text-[11px] font-bold text-gray-400 truncate bg-black/20 p-2 rounded-xl border border-white/5">{customBaseUrl}</p>}</div>}
+                    <div className="flex flex-col items-center gap-8 w-full"><div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeUrl} alt="QR code" className="w-full h-full object-contain" /></div><div className="w-full space-y-3"><button onClick={handleShareWhatsApp} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Share2 size={18} /> WhatsApp</button><button onClick={handleCopyLink} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all"><Copy size={18} /> Copiar link</button><button onClick={handleCopyWatchLink} className="w-full bg-indigo-600 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Watch size={18} /> Link para relógio</button></div></div>
+                 </div>
+               )}
+            </div>
+            {(gameState.isMirroringActive || isMirrorExpanded) && (
+            <div className={`bg-white rounded-[2.5rem] p-4 pl-7 pr-7 shadow-sm border border-gray-100 w-full animate-in fade-in transition-all duration-500 ${gameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+               <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner"><Wifi size={22} /></div><h3 className="text-gray-900 font-black text-lg tracking-tight leading-none">Live</h3></div>
+                  <button onClick={() => setIsLiveExpanded(!isLiveExpanded)} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center active:scale-90 transition-all border border-gray-100">{isLiveExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
+               </div>
+               {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
+                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ name, count }) => { const isPrimary = gameState.commandOwner === name; return <div key={name} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${isPrimary && !gameState.isLiveClosed ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : 'bg-white border-gray-100 text-gray-400 opacity-60'}`}>{isPrimary && !gameState.isLiveClosed ? <ShieldCheck size={14} className="text-blue-600" fill="white" /> : <Eye size={12} className="text-[#40E0D0]" />}<span className="text-[10px] font-black">{name}{count > 1 ? ` (${count})` : ''}</span></div>; })}</div></div>
+                   <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex items-center gap-2.5"><CheckCircle size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Sincronização confirmada</span></div><div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-colors ${gameState.isLiveClosed ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{gameState.isLiveClosed ? <X size={12} strokeWidth={4} /> : <Check size={12} strokeWidth={4} />}<span className="text-[10px] font-black">{gameState.isLiveClosed ? 'Encerrado' : 'Ativo'}</span></div></div>
+                   {isCommandOwner && <Button onClick={handlePingTest} disabled={isPinging || gameState.isLiveClosed} className="w-full !bg-blue-600 !text-white !py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">{isPinging ? <Loader2 size={18} className="animate-spin" /> : <Wifi size={18} />} Testar conexão (ping)</Button>}
+                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 mt-3 space-y-3"><div className="flex items-center gap-2 px-1"><Activity size={14} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Tipo de link ativo</span></div><div className="flex items-center gap-3"><div className="w-10 h-10 bg-white rounded-xl border border-gray-100 flex items-center justify-center shadow-sm">{connType === 'bluetooth' ? <Bluetooth size={20} className="text-blue-500" /> : connType === 'wifi' ? <Wifi size={20} className="text-emerald-500" /> : connType === 'cellular' ? <Smartphone size={20} className="text-orange-500" /> : <Globe size={20} className="text-slate-400" />}</div><div className="flex-1 min-w-0"><p className="text-xs font-black text-gray-900 leading-tight">{connType === 'bluetooth' ? 'Conectado via bluetooth' : connType === 'wifi' ? 'Conectado via wi-fi' : connType === 'cellular' ? 'Conectado via rede móvel' : !connType ? 'Meio físico de conexão oculto' : 'Conectado via cabo'}</p>{downlink && <p className="text-[10px] font-bold text-slate-400 mt-1">Velocidade estimada: {downlink} Mbps</p>}</div></div></div>
+                 </div>}
+            </div>
+            )}
+          </div>
+        )}
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-4 pt-3 pb-10 flex justify-between items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        <button onClick={() => onNavigateToTab?.('config')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100 scale-110"><div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}><ScoreboardIcon className="w-6 h-6" />{isSettingsInicialSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}</div><span className="text-[10px] font-black text-black">Início</span></button>
-        <button onClick={onBack} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}><Settings size={22} />{isSettingsRegrasSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}</div><span className="text-[10px] font-black text-black">Regras</span></button>
-        <button onClick={() => onNavigateToTab?.('history')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><Clock size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Histórico</span></button>
-        <button onClick={() => onNavigateToTab?.('profile')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><User size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Perfil</span></button>
-        <button onClick={() => onNavigateToTab?.('help')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><HelpCircle size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Ajuda</span></button>
+        {isOfflineMode && (
+          <button onClick={onExitOffline} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-500 shadow-md"><LogOut size={22} /></div><span className="text-[10px] font-black text-black">Sair</span></button>
+        )}
+        {!isOfflineMode && (
+          <button onClick={() => onNavigateToTab?.('config')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100 scale-110"><div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}><ScoreboardIcon className="w-6 h-6" />{isSettingsInicialSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}</div><span className="text-[10px] font-black text-black">Início</span></button>
+        )}
+        <button onClick={onBack} className="hidden" />
+        {!isOfflineMode && (
+          <>
+            <button onClick={() => onNavigateToTab?.('history')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><Clock size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Histórico</span></button>
+            <button onClick={() => onNavigateToTab?.('profile')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><User size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Perfil</span></button>
+            <button onClick={onOpenMenu} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><Menu size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Menu</span></button>
+          </>
+        )}
       </nav>
     </div>
   );

@@ -1,20 +1,22 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, Firestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, Firestore, terminate, clearIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getAuth, Auth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCV5E7vvTw4W8sYi0bOb633yZF02ZLjr_M",
+  apiKey: "AIzaSyADlTazVqqT6vyI-SBmG_PKI2jvdzAYhMg",
   authDomain: "myplacar-b4ccc.firebaseapp.com",
-  projectId: "myplacar-b4ccc", 
+  projectId: "myplacar-b4ccc",
   storageBucket: "myplacar-b4ccc.firebasestorage.app",
   messagingSenderId: "244305581318",
-  appId: "1:244305581318:android:323af0d4b306b6c5f03a87"
+  appId: "1:244305581318:web:ebd4846ca2509469f03a87"
 };
 
 let dbInstance: Firestore | null = null;
 let storageInstance: FirebaseStorage | null = null;
+let authInstance: Auth | null = null;
 
-export const getDb = (): Firestore | null => {
+const getDb = (): Firestore | null => {
   if (dbInstance) return dbInstance;
   
   try {
@@ -27,20 +29,62 @@ export const getDb = (): Firestore | null => {
       app = getApp();
     }
     
-    // Inicializa com cache persistente para suporte offline aprimorado
-    dbInstance = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
+    // O erro QuotaExceededError no log indica que o Firestore estava tentando usar WebStorage (LocalStorage)
+    // Isso acontece como fallback quando o IndexedDB não está disponível (ex: em alguns iframes)
+    // LocalStorage tem limite de apenas 5MB, o que causa o estouro facilmente.
+    try {
+      dbInstance = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+      });
+      console.log("MyPlacar: Firestore inicializado com cache persistente.");
+    } catch (cacheError) {
+      console.warn("MyPlacar: Falha ao inicializar cache persistente, tentando sem persistência.", cacheError);
+      dbInstance = initializeFirestore(app, {});
+    }
     
-    console.log("MyPlacar: Firestore inicializado com cache persistente.");
     return dbInstance;
   } catch (e: any) {
-    console.error("MyPlacar: Erro ao inicializar Firestore.");
+    console.error("MyPlacar: Erro fatal ao inicializar Firestore.", e);
     return null;
   }
 };
 
-export const getStorageInstance = (): FirebaseStorage | null => {
+export const clearFirestoreCache = async () => {
+  const db = getDb();
+  if (db) {
+    try {
+      await terminate(db);
+      // Tenta limpar tanto IndexedDB quanto LocalStorage (fallback do Firestore)
+      await clearIndexedDbPersistence(db);
+      
+      // Limpa chaves do Firestore no LocalStorage manualmente se necessário
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('firestore')) localStorage.removeItem(key);
+      });
+      
+      console.log("MyPlacar: Cache do Firestore limpo com sucesso.");
+      window.location.reload();
+    } catch (e) {
+      console.error("MyPlacar: Erro ao limpar cache do Firestore.", e);
+      // Força reload mesmo com erro
+      window.location.reload();
+    }
+  }
+};
+
+const getAuthInstance = (): Auth | null => {
+  if (authInstance) return authInstance;
+  try {
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    authInstance = getAuth(app);
+    return authInstance;
+  } catch (e) {
+    console.error("MyPlacar: Erro ao conectar com Auth.");
+    return null;
+  }
+};
+
+const getStorageInstance = (): FirebaseStorage | null => {
   if (storageInstance) return storageInstance;
   try {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -51,3 +95,5 @@ export const getStorageInstance = (): FirebaseStorage | null => {
     return null;
   }
 };
+
+export { getDb, getAuthInstance, getStorageInstance };
