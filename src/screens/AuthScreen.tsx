@@ -6,7 +6,7 @@ import { Toggle } from '../components/Toggle';
 import { UserProfile } from '../types';
 import { getDb, getAuthInstance } from '../firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithRedirect, getRedirectResult, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { emailService } from '../services/emailService';
 import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
@@ -170,6 +170,20 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         return () => clearTimeout(autoConfirmTimer);
     }
   }, []);
+
+
+	useEffect(() => {
+	  getRedirectResult(auth)
+		.then((result) => {
+		  if (result) {
+			const user = result.user;
+			console.log("Usuário logado via redirect:", user);
+		  }
+		})
+		.catch((error) => {
+		  console.error("Erro no redirect:", error);
+		});
+	}, []);
 
 
   useEffect(() => {
@@ -670,7 +684,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (!auth || !db) throw new Error("Erro de conexão.");
       
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithRedirect(auth, provider);
       const user = result.user;
       
       if (user && user.email) {
