@@ -1,23 +1,27 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AuthScreen } from './screens/AuthScreen.tsx';
-import { SettingsScreen } from './screens/SettingsScreen.tsx';
-import { ScoreboardScreen } from './screens/ScoreboardScreen.tsx';
-import { NewGameScreen } from './screens/NewGameScreen.tsx';
-import { AdminScreen } from './screens/AdminScreen.tsx';
-import { LocationScreen } from './screens/LocationScreen.tsx';
-import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
-import { PartnersScreen } from './screens/PartnersScreen.tsx';
-import { TournamentsScreen } from './screens/TournamentsScreen.tsx';
-import { EventDetailScreen } from './screens/EventDetailScreen.tsx';
-import { InstallPwaModal } from './components/InstallPwaModal.tsx';
-import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointType, Partner, PointEvent, QueuePlayer, TournamentEvent, TournamentMatch, TournamentPair } from './types.ts';
-import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
-import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
-import { applyGoldenRule } from './utils/formatters.ts';
-import { getDb } from './firebase.ts';
+import { AuthScreen } from './screens/AuthScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { ScoreboardScreen } from './screens/ScoreboardScreen';
+import { NewGameScreen } from './screens/NewGameScreen';
+import { AdminScreen } from './screens/AdminScreen';
+import { LocationScreen } from './screens/LocationScreen';
+import { SpectatorScreen } from './screens/SpectatorScreen';
+import { PartnersScreen } from './screens/PartnersScreen';
+import { TournamentsScreen } from './screens/TournamentsScreen';
+import { EventDetailScreen } from './screens/EventDetailScreen';
+import { CommunicationsScreen } from './screens/CommunicationsScreen';
+import { InstallPwaModal } from './components/InstallPwaModal';
+import { NavigationDrawer } from './components/NavigationDrawer';
+import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointType, Partner, PointEvent, QueuePlayer, TournamentEvent, TournamentMatch, TournamentPair } from './types';
+import { isValidGameState, isValidMatchSettings } from './utils/validation';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants';
+import { incrementScore, undoPoint } from './utils/tennisEngine';
+import { applyGoldenRule } from './utils/formatters';
+import { getDb } from './firebase';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
 import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2 } from 'lucide-react';
-import { LiveIndicator } from './components/LiveIndicator.tsx';
+import { LiveIndicator } from './components/LiveIndicator';
 
 const CURRENT_DATA_VERSION = '3.0.0';
 
@@ -35,6 +39,7 @@ const App: React.FC = () => {
   const [modalConfig, setModalConfig] = useState<{title: string, message: string, onConfirm: () => void, onCancel?: () => void, confirmLabel?: string, variant?: 'info' | 'danger' | 'success', icon?: React.ReactNode} | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [cloudMatchesCount, setCloudMatchesCount] = useState(0);
   const [isUpdatingVersion, setIsUpdatingVersion] = useState(false);
   const [showInstallPwa, setShowInstallPwa] = useState(false);
@@ -46,6 +51,8 @@ const App: React.FC = () => {
   const [isProfileSaved, setIsProfileSaved] = useState(true);
   const [activeCloudMatch, setActiveCloudMatch] = useState<{id: string, sport: string} | null>(null);
   const [cloudLiveExists, setCloudLiveExists] = useState<boolean>(false);
+  const [unreadCommsCount, setUnreadCommsCount] = useState(0);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const deviceId = useMemo(() => {
     if (sessionDeviceId) return sessionDeviceId;
@@ -64,8 +71,8 @@ const App: React.FC = () => {
   }, []);
 
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    const profile = safeJsonParse('myPlacarUserProfile', { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false });
-    return (profile && profile.email) ? profile : { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false };
+    const profile = safeJsonParse('myPlacarUserProfile', { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' });
+    return (profile && profile.email) ? profile : { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' };
   });
 
   const [matchSettings, setMatchSettings] = useState<MatchSettings>(() => {
@@ -100,9 +107,9 @@ const App: React.FC = () => {
   }, [gameState?.isMirroringActive, isCurrentDeviceOwner]);
 
   const liveRole = useMemo(() => { 
-    if (!gameState?.isMirroringActive && !cloudLiveExists) return 'spectator'; 
+    if (!cloudLiveExists) return 'spectator'; 
     return isCurrentDeviceOwner ? 'owner' : 'observer'; 
-  }, [gameState?.isMirroringActive, cloudLiveExists, isCurrentDeviceOwner]);
+  }, [cloudLiveExists, isCurrentDeviceOwner]);
 
   const [showLiveControlOverlay, setShowLiveControlOverlay] = useState(false);
   const [confirmDeleteLive, setConfirmDeleteLive] = useState(false);
@@ -125,7 +132,21 @@ const App: React.FC = () => {
       if (typeof window === 'undefined' || !window.localStorage) return fallback;
       const saved = localStorage.getItem(key);
       if (saved && saved !== "undefined" && saved !== "null" && saved.trim() !== "") {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (key === 'myPlacarActiveGameState' && parsed !== null) {
+          if (!isValidGameState(parsed)) {
+            console.warn("GameState corrompido detectado no localStorage. Limpando...");
+            localStorage.removeItem(key);
+            return fallback;
+          }
+        }
+        if (key === 'myPlacarSettings' && parsed !== null) {
+          if (!isValidMatchSettings(parsed)) {
+            console.warn("Settings corrompidas detectadas no localStorage. Usando padrão...");
+            return fallback;
+          }
+        }
+        return parsed;
       }
     } catch (e) {}
     return fallback;
@@ -178,6 +199,26 @@ const App: React.FC = () => {
   }, [registeredEvents]);
 
   useEffect(() => {
+    const db = getDb();
+    if (!db || !userProfile.pin || !navigator.onLine) return;
+
+    const q = query(
+      collection(db as any, 'communications'),
+      where('targetUserId', 'in', ['all', userProfile.pin])
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const unread = snapshot.docs.filter(d => {
+        const data = d.data();
+        return !data.readBy?.includes(userProfile.pin);
+      }).length;
+      setUnreadCommsCount(unread);
+    });
+
+    return () => unsubscribe();
+  }, [userProfile.pin]);
+
+  useEffect(() => {
     const handleAppExit = () => {
       if (gameState?.isMirroringActive && userProfile.pin && userProfile.email && navigator.onLine) {
         const db = getDb();
@@ -203,11 +244,21 @@ const App: React.FC = () => {
   }, [gameState, userProfile.pin, userProfile.email, deviceId]);
 
   useEffect(() => {
+    // Sinaliza para o script de emergência que o app carregou com sucesso
+    window.dispatchEvent(new CustomEvent('app-ready'));
+    localStorage.setItem('myPlacar_AppVersion', LOCAL_CODE_VERSION);
+    localStorage.setItem('myPlacar_CrashCount', '0');
+    
     const runMigration = () => {
       try {
+        // Aggressive cleanup of old backups on every load to prevent QuotaExceededError
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
+        });
+
         const lastVersion = localStorage.getItem('myPlacar_DataVersion') || '2.2.23';
         if (lastVersion === CURRENT_DATA_VERSION) return;
-        localStorage.setItem(`myPlacar_Backup_${Date.now()}`, JSON.stringify(localStorage));
+        
         const rawHistory = localStorage.getItem('myPlacarHistory');
         if (rawHistory && rawHistory !== "undefined" && rawHistory !== "null") {
           const history = JSON.parse(rawHistory) as any[];
@@ -230,6 +281,45 @@ const App: React.FC = () => {
       }
     };
     runMigration();
+  }, []);
+
+  useEffect(() => {
+    const handleQuotaError = (e: any) => {
+      const isQuotaError = e.name === 'QuotaExceededError' || 
+                          (e.reason && e.reason.name === 'QuotaExceededError') ||
+                          (e.message && e.message.includes('exceeded the quota'));
+      
+      if (isQuotaError) {
+        console.error("MyPlacar: Limite de armazenamento excedido (QuotaExceededError).");
+        
+        // 1. Limpeza imediata de backups
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
+        });
+
+        // 2. Se for erro do Firestore (mutations), o app pode travar.
+        // Tentamos alertar o usuário se possível
+        if (e.message && e.message.includes('firestore_mutations')) {
+          setModalConfig({
+            title: "Erro de armazenamento",
+            message: "O limite de espaço do navegador foi atingido. Deseja limpar o cache técnico e reiniciar?",
+            confirmLabel: "Limpar e reiniciar",
+            variant: "danger",
+            onConfirm: async () => {
+              const { clearFirestoreCache } = await import('./firebase');
+              await clearFirestoreCache();
+            },
+            onCancel: () => setModalConfig(null)
+          });
+        }
+      }
+    };
+    window.addEventListener('error', handleQuotaError);
+    window.addEventListener('unhandledrejection', handleQuotaError);
+    return () => {
+      window.removeEventListener('error', handleQuotaError);
+      window.removeEventListener('unhandledrejection', handleQuotaError);
+    };
   }, []);
 
   useEffect(() => {
@@ -364,6 +454,13 @@ const App: React.FC = () => {
     const unsubscribe = onSnapshot(doc(db, "live_matches", userProfile.pin.toUpperCase()), (snap) => {
       if (snap.exists()) {
         const cloudData = snap.data() as GameState;
+        
+        // Validação defensiva de dados da nuvem
+        if (!isValidGameState(cloudData)) {
+          console.warn("Recebido GameState inválido da nuvem. Ignorando atualização.");
+          return;
+        }
+
         if (cloudData.isLiveClosed) {
           setCloudLiveExists(false);
           setGameState(prev => {
@@ -407,6 +504,7 @@ const App: React.FC = () => {
         setGameState(prev => {
           if (!prev) return null;
           if (prev.isMirroringActive) {
+            console.log("Limpando mirroring local pois a live não existe na nuvem.");
             return { ...prev, isMirroringActive: false, isLiveClosed: false };
           }
           return prev;
@@ -425,6 +523,7 @@ const App: React.FC = () => {
     if (prev.sportType !== matchSettings.sportType) { setIsSettingsRegrasSaved(true); } else if (technicalFieldsChanged) { setIsSettingsRegrasSaved(false); }
 
     try {
+      localStorage.setItem('myPlacarSettings', JSON.stringify(matchSettings));
       localStorage.setItem('myPlacar_LocalDeviceLabel', matchSettings.deviceLabel || '');
       localStorage.setItem('myPlacar_LocalBrightness', matchSettings.brightness.toString());
       localStorage.setItem('myPlacar_LocalVolume', matchSettings.volume.toString());
@@ -454,9 +553,14 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!prevProfileRef.current) { prevProfileRef.current = { ...userProfile }; return; }
     const prev = prevProfileRef.current;
-    if (prev.name !== userProfile.name || prev.nickname !== userProfile.nickname || prev.gender !== userProfile.gender) {
+    if (prev.name !== userProfile.name || prev.nickname !== userProfile.nickname || prev.gender !== userProfile.gender || prev.authMethod !== userProfile.authMethod) {
       setIsProfileSaved(false);
     }
+    // Se o método de autenticação mudou para password, salvamos automaticamente para garantir persistência
+    if (prev.authMethod === 'pin' && userProfile.authMethod === 'password') {
+      handleSaveProfile();
+    }
+    prevProfileRef.current = { ...userProfile };
   }, [userProfile]);
 
   const checkLivePresence = useCallback(async (pin: string) => {
@@ -502,21 +606,68 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [gameState?.isPaused, gameState?.isMatchOver, gameState?.isLiveClosed, !!gameState, matchSettings.isWatchMode]);
 
+  const lastSeenUpdateRef = useRef<number>(0);
+  const lastSyncTimeRef = useRef<number>(0);
+
   useEffect(() => {
     if (gameState) {
       try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(gameState)); } catch(e) {}
+      
       if (gameState.isMirroringActive && userProfile.pin && userProfile.email && !gameState.isLiveClosed && navigator.onLine) {
         const db = getDb();
         if (db && gameState.commandOwnerId === deviceId) {
-            const nextControllers: Record<string, any> = { ...(gameState.controllers || {}) };
-            Object.keys(nextControllers).forEach(id => { if (nextControllers[id].label === currentFullDeviceName && id !== deviceId) delete nextControllers[id]; });
-            nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: Date.now() };
-            const stateToSave = sanitizeForFirestore({ ...gameState, controllers: nextControllers });
-            if (stateToSave) {
-              const strState = JSON.stringify(stateToSave);
-              if (strState !== lastSentStateRef.current) {
-                lastSentStateRef.current = strState;
-                setDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), stateToSave, { merge: true }).catch(() => {});
+            const now = Date.now();
+            
+            // 1. Determina se é uma mudança "crítica" (placar, status, etc) ou "passiva" (timer)
+            const prevStateStr = lastSentStateRef.current;
+            const prevState = prevStateStr ? JSON.parse(prevStateStr) : null;
+            
+            const isCriticalChange = !prevState || 
+              prevState.p1.score !== gameState.p1.score || 
+              prevState.p2.score !== gameState.p2.score ||
+              prevState.p1.games !== gameState.p1.games ||
+              prevState.p2.games !== gameState.p2.games ||
+              prevState.p1.sets.join(',') !== gameState.p1.sets.join(',') ||
+              prevState.p2.sets.join(',') !== gameState.p2.sets.join(',') ||
+              prevState.isPaused !== gameState.isPaused ||
+              prevState.isMatchOver !== gameState.isMatchOver ||
+              prevState.server !== gameState.server;
+
+            // 2. Throttle: Mudanças críticas são instantâneas, mudanças passivas (timer) a cada 10s
+            const timeSinceLastSync = now - lastSyncTimeRef.current;
+            const shouldSync = isCriticalChange || timeSinceLastSync > 10000;
+
+            if (shouldSync) {
+              const nextControllers: Record<string, any> = { ...(gameState.controllers || {}) };
+              
+              // Só atualiza o lastSeen a cada 30 segundos
+              const shouldUpdateLastSeen = now - lastSeenUpdateRef.current > 30000;
+              
+              if (shouldUpdateLastSeen) {
+                Object.keys(nextControllers).forEach(id => { 
+                  if (nextControllers[id].label === currentFullDeviceName && id !== deviceId) delete nextControllers[id]; 
+                });
+                nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now };
+                lastSeenUpdateRef.current = now;
+              } else {
+                const existing = gameState.controllers?.[deviceId];
+                if (existing) nextControllers[deviceId] = existing;
+                else {
+                  nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now };
+                  lastSeenUpdateRef.current = now;
+                }
+              }
+
+              const stateToSave = sanitizeForFirestore({ ...gameState, controllers: nextControllers });
+              if (stateToSave) {
+                const strState = JSON.stringify(stateToSave);
+                if (strState !== lastSentStateRef.current) {
+                  lastSentStateRef.current = strState;
+                  lastSyncTimeRef.current = now;
+                  setDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), stateToSave, { merge: true }).catch((err) => {
+                    console.error("Erro ao sincronizar com nuvem:", err);
+                  });
+                }
               }
             }
         }
@@ -532,12 +683,25 @@ const App: React.FC = () => {
   });
   
   const [activeTab, setActiveTab] = useState<'config' | 'history' | 'help' | 'profile'>('config');
+  const [adminTab, setAdminTab] = useState<'configs' | 'users' | 'icons' | 'events' | 'comms'>('configs');
   const [focusMatchId, setFocusMatchId] = useState<string | null>(null);
 
   const persistHistory = useCallback((newList: MatchHistoryItem[]) => {
+    // Limit local history to 100 items to prevent QuotaExceededError
+    const limitedList = newList.slice(0, 100);
     matchHistoryRef.current = newList;
     setMatchHistory(newList);
-    try { localStorage.setItem('myPlacarHistory', JSON.stringify(newList)); } catch(e) {}
+    try { 
+      localStorage.setItem('myPlacarHistory', JSON.stringify(limitedList)); 
+    } catch(e) {
+      // If still failing, try to clear some space
+      if (e instanceof Error && e.name === 'QuotaExceededError') {
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
+        });
+        try { localStorage.setItem('myPlacarHistory', JSON.stringify(limitedList.slice(0, 50))); } catch(ex) {}
+      }
+    }
   }, []);
 
   const handleClearAllHistory = async () => {
@@ -786,7 +950,8 @@ const App: React.FC = () => {
   };
 
   const initGameStateInternal = async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
-    let configToUse = { ...matchSettings };
+    const savedSettings = safeJsonParse('myPlacarSettings', matchSettings);
+    let configToUse = { ...savedSettings };
     let tournamentMeta: Partial<GameState> = {};
 
     if (tournamentOverride) {
@@ -857,7 +1022,16 @@ const App: React.FC = () => {
         if (db && userProfile.pin) {
            try {
              const snap = await getDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()));
-             if (snap.exists() && snap.data().isLiveClosed !== true) { setIsWaitingSync(true); setCurrentScreen('scoreboard'); return; }
+             if (snap.exists() && snap.data().isLiveClosed !== true) { 
+                // Se já temos o estado local e ele bate com o PIN, não precisamos mostrar o modal de espera
+                if (gameState && gameState.ownerPin?.toUpperCase() === userProfile.pin.toUpperCase()) {
+                   setCurrentScreen('scoreboard'); 
+                   return; 
+                }
+                setIsWaitingSync(true); 
+                setCurrentScreen('scoreboard'); 
+                return; 
+             }
            } catch (e) {}
         }
     }
@@ -909,7 +1083,7 @@ const App: React.FC = () => {
     setHistoryStack(prev => [...prev, JSON.parse(JSON.stringify(next))]);
   };
 
-  const handleCorrectScore = (type: 'game' | 'set', value: string) => {
+  const handleCorrectScore = (type: 'game' | 'gameSet' | 'matchSet', value: string) => {
     if (!gameState || gameState.isMatchOver || gameState.isLiveClosed) return;
     if (gameState.isMirroringActive && gameState.commandOwnerId !== deviceId) return;
     setIsRecoveryFromMatchOver(false);
@@ -926,11 +1100,20 @@ const App: React.FC = () => {
       for (let i = 0; i < p1Target; i++) nextState.pointHistory.push({ winner: 1, type: 'rally', server: nextState.server, scoreBefore: '...', source: 'cb' });
       for (let i = 0; i < p2Target; i++) nextState.pointHistory.push({ winner: 2, type: 'rally', server: nextState.server, scoreBefore: '...', source: 'cb' });
       nextState.p1.score = v1.charAt(0).toUpperCase() + v1.slice(1); nextState.p2.score = v2.charAt(0).toUpperCase() + v2.slice(1);
-    } else {
+    } else if (type === 'gameSet') {
       const g1 = parseInt(v1); const g2 = parseInt(v2);
       nextState.pointHistory = []; nextState.p1.games = g1; nextState.p2.games = g2; nextState.p1.score = '0'; nextState.p2.score = '0';
       for (let g = 0; g < g1; g++) { for (let b = 0; b < 4; b++) nextState.pointHistory.push({ winner: 1, type: 'rally', server: nextState.server, scoreBefore: '...', source: 'cb', resultingScore: b === 3 ? `${g+1}-${nextState.p2.games}` : undefined }); }
       for (let g = 0; g < g2; g++) { for (let b = 0; b < 4; b++) nextState.pointHistory.push({ winner: 2, type: 'rally', server: nextState.server, scoreBefore: '...', source: 'cb', resultingScore: b === 3 ? `${nextState.p1.games}-${g+1}` : undefined }); }
+    } else if (type === 'matchSet') {
+      const s1 = parseInt(v1); const s2 = parseInt(v2);
+      const maxGames = nextState.matchConfig.gamesPerSet || 6;
+      nextState.p1.sets = []; nextState.p2.sets = [];
+      for (let i = 0; i < s1; i++) { nextState.p1.sets.push(maxGames); nextState.p2.sets.push(0); }
+      for (let i = 0; i < s2; i++) { nextState.p1.sets.push(0); nextState.p2.sets.push(maxGames); }
+      nextState.p1.games = 0; nextState.p2.games = 0;
+      nextState.p1.score = '0'; nextState.p2.score = '0';
+      nextState.currentSet = s1 + s2;
     }
     setGameState(nextState); setHistoryStack([JSON.parse(JSON.stringify(nextState))]);
   };
@@ -975,7 +1158,31 @@ const App: React.FC = () => {
         if (snap.exists() && snap.data().isLiveClosed !== true) {
           const cloudState = snap.data() as GameState;
           const myCommandName = currentFullDeviceName;
-          const syncedSettings: MatchSettings = { ...matchSettings, p1Name: cloudState.p1.name, p1Partner: cloudState.p1.partnerName || '', p2Name: cloudState.p2.name, p2Partner: cloudState.p2.partnerName || '', p1Color: cloudState.p1.color || 'azul', p2Color: cloudState.p2.color || 'vermelho', isDoubles: cloudState.matchConfig.isDoubles, sets: cloudState.matchConfig.sets, gamesPerSet: cloudState.matchConfig.gamesPerSet, noAd: cloudState.matchConfig.noAd, tieBreak: cloudState.matchConfig.tieBreak, tieBreakAt: cloudState.matchConfig.tieBreakAt, tieBreakPoints: cloudState.matchConfig.tieBreakPoints, tieBreakWinByTwo: cloudState.matchConfig.tieBreakWinByTwo, sportType: cloudState.matchConfig.sportType, isWatchMode: !!matchSettings.isWatchMode };
+          const syncedSettings: MatchSettings = { 
+            ...matchSettings, 
+            p1Name: cloudState.p1.name, 
+            p1Partner: cloudState.p1.partnerName || '', 
+            p2Name: cloudState.p2.name, 
+            p2Partner: cloudState.p2.partnerName || '', 
+            p1Color: cloudState.p1.color || 'azul', 
+            p2Color: cloudState.p2.color || 'vermelho', 
+            isDoubles: cloudState.matchConfig.isDoubles, 
+            sets: cloudState.matchConfig.sets, 
+            gamesPerSet: cloudState.matchConfig.gamesPerSet, 
+            noAd: cloudState.matchConfig.noAd, 
+            tieBreak: cloudState.matchConfig.tieBreak, 
+            tieBreakAt: cloudState.matchConfig.tieBreakAt, 
+            tieBreakPoints: cloudState.matchConfig.tieBreakPoints, 
+            tieBreakWinByTwo: cloudState.matchConfig.tieBreakWinByTwo, 
+            switchSidesOdd: cloudState.matchConfig.switchSidesOdd,
+            tieBreakSideSwitchMode: cloudState.matchConfig.tieBreakSideSwitchMode,
+            pickleballScoringMode: cloudState.matchConfig.pickleballScoringMode,
+            pickleballServiceMode: cloudState.matchConfig.pickleballServiceMode,
+            winnersStay: cloudState.matchConfig.winnersStay,
+            isHistoryEnabled: cloudState.matchConfig.isHistoryEnabled,
+            sportType: cloudState.matchConfig.sportType, 
+            isWatchMode: !!matchSettings.isWatchMode 
+          };
           const nextControllers = { ...(cloudState.controllers || {}) };
           nextControllers[deviceId] = { label: myCommandName, lastSeen: Date.now() };
           const updatedStateRaw = { ...cloudState, commandOwner: myCommandName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false, matchConfig: { ...syncedSettings, setsToWin: syncedSettings.sets, isWatchMode: !!syncedSettings.isWatchMode } };
@@ -991,6 +1198,11 @@ const App: React.FC = () => {
             setModalConfig({ title: "Sucesso", message: "Controle da partida assumido com sucesso.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
             setTimeout(() => setModalConfig(null), 3000);
           }
+        } else {
+          setCloudLiveExists(false);
+          setShowLiveControlOverlay(false);
+          setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
+          setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
         }
       } catch (e) {}
     }
@@ -1011,6 +1223,11 @@ const App: React.FC = () => {
           await updateDoc(doc(db, "live_matches", pinUpper), { controllers: nextControllers }).catch(() => {});
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
+        } else {
+          setCloudLiveExists(false);
+          setShowLiveControlOverlay(false);
+          setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
+          setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
         }
       } catch (e) {}
     }
@@ -1061,6 +1278,7 @@ const App: React.FC = () => {
       Object.keys(localStorage).forEach(key => { if (key.startsWith('myPlacar_SavedSettings_')) localStorage.removeItem(key); });
     } catch(e) {}
     setCurrentScreen('auth'); setIsRecoveryFromMatchOver(false); window.history.replaceState({}, document.title, window.location.pathname);
+    setIsMenuOpen(false);
     setModalConfig({ title: "Sessão finalizada", message: "Limpando dados da sessão anterior.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
     setTimeout(() => setModalConfig(null), 2500);
   };
@@ -1079,6 +1297,7 @@ const App: React.FC = () => {
             phone: userProfile.phone || '',
             gender: userProfile.gender || 'M',
             pin: userProfile.pin,
+            authMethod: userProfile.authMethod || 'pin',
             isProfileComplete: userProfile.isProfileComplete,
             updatedAt: serverTimestamp()
           }, { merge: true });
@@ -1144,6 +1363,28 @@ const App: React.FC = () => {
        if (!silent) setModalConfig({ title: "Erro", message: "Falha ao buscar evento.", onConfirm: () => setModalConfig(null) });
     }
   };
+
+  const persistMatchSettings = useCallback(() => {
+    try {
+      localStorage.setItem('myPlacarSettings', JSON.stringify(matchSettings));
+      setIsSettingsInicialSaved(true);
+      setIsSettingsRegrasSaved(true);
+
+      if (gameState?.isMirroringActive && userProfile.pin && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
+        const db = getDb();
+        if (db) {
+          const pinUpper = userProfile.pin.toUpperCase();
+          const stateToSync = sanitizeForFirestore({
+            ...gameState,
+            p1: { ...gameState.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, color: matchSettings.p1Color },
+            p2: { ...gameState.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, color: matchSettings.p2Color },
+            matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode }
+          });
+          if (stateToSync) setDoc(doc(db, "live_matches", pinUpper), stateToSync, { merge: true }).catch(() => {});
+        }
+      }
+    } catch (e) {}
+  }, [matchSettings, gameState, userProfile.pin, userProfile.email, deviceId]);
 
   const handleExitTournament = () => {
     setActiveEvent(null);
@@ -1212,22 +1453,126 @@ const App: React.FC = () => {
     nextState.matchConfig = { ...nextState.matchConfig, ...nextSettings };
     setMatchSettings(nextSettings);
     setGameState(nextState);
+    setIsSettingsInicialSaved(true);
+    try { 
+      localStorage.setItem('myPlacarSettings', JSON.stringify(nextSettings));
+      localStorage.setItem('myPlacarActiveGameState', JSON.stringify(nextState));
+    } catch(e) {}
+    
+    if (nextState.isMirroringActive && userProfile.pin && userProfile.email && navigator.onLine && nextState.commandOwnerId === deviceId) {
+      const db = getDb();
+      if (db) {
+        const pinUpper = userProfile.pin.toUpperCase();
+        const stateToSync = sanitizeForFirestore(nextState);
+        if (stateToSync) setDoc(doc(db, "live_matches", pinUpper), stateToSync, { merge: true }).catch(() => {});
+      }
+    }
+
     if (navigator.vibrate) navigator.vibrate(30);
-  }, [gameState, isCommandOwner, matchSettings]);
+  }, [gameState, isCommandOwner, matchSettings, userProfile.pin, userProfile.email, deviceId]);
 
   const initialReferralPin = useMemo(() => { try { return localStorage.getItem('myPlacarPendingReferralPin') || ''; } catch(e) { return ''; } }, []);
 
+  const handleOfflineMode = useCallback(() => {
+    setIsOfflineMode(true);
+    const offlineSettings: MatchSettings = {
+      ...matchSettings,
+      p1Name: 'Jogador 1',
+      p2Name: 'Jogador 2',
+      isDoubles: false,
+      voiceEnabled: false,
+      voiceScoring: false,
+      isHistoryEnabled: false,
+      cloudSync: false,
+      useGeminiVoice: false,
+      isWatchMode: true,
+    };
+    setMatchSettings(offlineSettings);
+    
+    const matchId = `offline_${Date.now()}`;
+    const initialGameState: GameState = {
+      matchId,
+      startTime: Date.now(),
+      p1: { name: 'Jogador 1', score: '0', games: 0, sets: [], color: offlineSettings.p1Color },
+      p2: { name: 'Jogador 2', score: '0', games: 0, sets: [], color: offlineSettings.p2Color },
+      server: 1,
+      servingOrderOffset: 0,
+      pointHistory: [],
+      matchConfig: { ...offlineSettings, setsToWin: offlineSettings.sets },
+      history: [],
+      currentSet: 0,
+      isMatchOver: false,
+      matchDuration: 0,
+      isPaused: false,
+    };
+    setGameState(initialGameState);
+    setCurrentScreen('scoreboard');
+  }, [matchSettings]);
+
+  const handleExitOffline = useCallback(() => {
+    setIsOfflineMode(false);
+    setGameState(null);
+    setCurrentScreen('auth');
+  }, []);
+
+  const handleResetMatch = useCallback(() => {
+    if (!gameState) return;
+    setModalConfig({
+      title: "Zerar partida",
+      message: "Deseja zerar a partida? Esta ação não pode ser desfeita.",
+      confirmLabel: "Sim, zerar",
+      onConfirm: () => {
+        const resetState: GameState = {
+          ...gameState,
+          startTime: Date.now(),
+          p1: { ...gameState.p1, score: '0', games: 0, sets: [] },
+          p2: { ...gameState.p2, score: '0', games: 0, sets: [] },
+          server: 1,
+          servingOrderOffset: 0,
+          pointHistory: [],
+          history: [],
+          currentSet: 0,
+          isMatchOver: false,
+          isConfirmedFinished: false,
+          matchDuration: 0,
+          isPaused: false,
+        };
+        setGameState(resetState);
+        setHistoryStack([resetState]);
+        setModalConfig(null);
+      },
+      onCancel: () => setModalConfig(null)
+    });
+  }, [gameState]);
+
   return (
-    <div className="min-h-screen w-full bg-gray-50 flex flex-col">
-	
-	
-	
+    <ErrorBoundary>
+      <div className="min-h-screen w-full bg-gray-50 flex flex-col">
+        
+      <NavigationDrawer 
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        userProfile={userProfile}
+        currentScreen={currentScreen}
+        currentTab={currentScreen === 'admin' ? adminTab : activeTab}
+        onNavigate={(screen, tab) => {
+          setCurrentScreen(screen);
+          if (screen === 'admin' && tab) {
+            setAdminTab(tab as any);
+          } else if (tab) {
+            setActiveTab(tab as any);
+          }
+        }}
+        onLogout={handleLogout}
+        isAdmin={isAdmin}
+        canStartMatch={canStartMatch}
+      />
       {isWaitingSync && (
         <div className="fixed inset-0 z-[100002] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
            <Loader2 className="text-blue-600 animate-spin mb-6" size={48} />
            <h2 className="text-2xl font-black text-black tracking-tight">Sincronizando com a nuvem...</h2>
            <p className="text-slate-500 font-bold mt-2 mb-10">Aguardando dados da partida ao vivo</p>
-           <button onClick={() => setIsWaitingSync(false)} className="px-8 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-sm border border-gray-100" > Cancelar sincronismo </button>
+           <button onClick={() => setIsWaitingSync(false)} className="px-8 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs tracking-widest active:scale-95 transition-all shadow-sm border border-gray-100" > Cancelar sincronismo </button>
         </div>
       )}
       {showLiveControlOverlay && (
@@ -1296,12 +1641,23 @@ const App: React.FC = () => {
       )}
       <InstallPwaModal isOpen={showInstallPwa} onClose={() => setShowInstallPwa(false)} deferredPrompt={deferredPrompt} />
       {currentScreen === 'spectator' && (spectatorMatchId || spectatorPin) && <SpectatorScreen matchId={spectatorMatchId || ''} spectatorPin={spectatorPin || ''} onExit={handleExitSpectator} />}
-      {currentScreen === 'auth' && <AuthScreen onAuthSuccess={(p, s) => { if (s) { try { localStorage.setItem('myPlacarUserProfile', JSON.stringify(p)); localStorage.setItem('myPlacarSavedPin', p.pin); localStorage.setItem('myPlacarSavedEmail', p.email); } catch(e) {} } setUserProfile(p); checkLivePresence(p.pin); }} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} initialReferralPin={initialReferralPin} />}
+      {currentScreen === 'auth' && <AuthScreen onAuthSuccess={(p, s) => { 
+        setIsOfflineMode(false);
+        if (s) { 
+          try { 
+            localStorage.setItem('myPlacarUserProfile', JSON.stringify(p)); 
+            localStorage.setItem('myPlacarSavedPin', p.pin); 
+            localStorage.setItem('myPlacarSavedEmail', p.email); 
+          } catch(e) {} 
+        } 
+        setUserProfile(p); 
+        checkLivePresence(p.pin); 
+      }} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} initialReferralPin={initialReferralPin} onOfflineMode={handleOfflineMode} />}
       {currentScreen === 'settings' && <SettingsScreen 
         history={matchHistory} setHistory={setMatchHistory} 
         onDeleteMatch={id => setModalConfig({ title: "Excluir partida?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: async () => { const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim(); if (db && cleanEmail && navigator.onLine) try { await deleteDoc(doc(db as any, "matches", id)); } catch(e) {} persistHistory(matchHistory.filter(m => m.id !== id)); }, onCancel: () => setModalConfig(null) })} 
         onDeleteManyMatches={ids => setModalConfig({ title: `Excluir ${ids.size} partidas?`, message: "Apagar registros permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: async () => { const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim(); if (db && cleanEmail && navigator.onLine) { const batch = writeBatch(db as any); ids.forEach(id => batch.delete(doc(db as any, "matches", id))); try { await batch.commit(); } catch(e) {} } persistHistory(matchHistory.filter(m => !ids.has(m.id))); }, onCancel: () => setModalConfig(null) })}
-        onBack={() => setCurrentScreen('settings')} onNewGame={() => setCurrentScreen('new-game')} gameState={gameState} settings={matchSettings} setSettings={setMatchSettings} onStart={() => initGameState(true)} onPlayShortcut={() => initGameState(false)} onOpenRules={() => setCurrentScreen('new-game')} activeTab={activeTab} setActiveTab={(t) => setActiveTab(t)} onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }} userProfile={userProfile} setUserProfile={setUserProfile} onSaveProfile={handleSaveProfile} onLogout={handleLogout} onGoAdmin={() => setCurrentScreen('admin')} onGoToScoreboard={() => initGameState(false)} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} isProfileSaved={isProfileSaved} canStartMatch={canStartMatch} onSyncAll={(force) => syncHistoryToFirebase(undefined, force)} onDownloadHistory={downloadHistoryFromFirebase} cloudMatchesCount={cloudMatchesCount} isSyncingAll={isSyncing} isDownloading={isDownloading} onOpenPartners={() => setCurrentScreen('partners')} partners={partners} onAutoRegisterPartner={async (p, field) => { 
+        onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }} onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} gameState={gameState} settings={matchSettings} setSettings={setMatchSettings} onStart={() => { persistMatchSettings(); initGameState(true); }} onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }} onOpenRules={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} activeTab={activeTab} setActiveTab={(t) => { persistMatchSettings(); setActiveTab(t); }} onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }} userProfile={userProfile} setUserProfile={setUserProfile} onSaveProfile={handleSaveProfile} onLogout={handleLogout} onGoAdmin={() => setCurrentScreen('admin')} onGoToScoreboard={() => { persistMatchSettings(); initGameState(false); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} isProfileSaved={isProfileSaved} canStartMatch={canStartMatch} onSyncAll={(force) => syncHistoryToFirebase(undefined, force)} onDownloadHistory={downloadHistoryFromFirebase} cloudMatchesCount={cloudMatchesCount} isSyncingAll={isSyncing} isDownloading={isDownloading} onOpenPartners={() => setCurrentScreen('partners')} partners={partners} onAutoRegisterPartner={async (p, field) => { 
           if (!navigator.onLine) return null; 
           const db = getDb(); 
           if (!db) return null; 
@@ -1330,6 +1686,9 @@ const App: React.FC = () => {
         }, onCancel: () => setModalConfig(null) })}
         cloudLiveExists={cloudLiveExists} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} onOpenLiveControl={() => setShowLiveControlOverlay(true)} role={liveRole}
         activeEvent={activeEvent} userEntryDate={userEntryDate} onJoinTournament={() => setCurrentScreen('tournaments')} onExitTournament={handleExitTournament}
+        onOpenCommunications={() => setCurrentScreen('communications')} unreadCount={unreadCommsCount}
+        onOpenMenu={() => setIsMenuOpen(true)}
+        isOfflineMode={isOfflineMode}
       />}
       {currentScreen === 'partners' && <PartnersScreen partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => setCurrentScreen('settings')} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} onWatchLive={(pin) => { setSpectatorPin(pin); setCurrentScreen('spectator'); }} 
         onDeletePartners={(ids) => setModalConfig({ 
@@ -1354,9 +1713,43 @@ const App: React.FC = () => {
         matchSettings={matchSettings} 
         activeEvent={activeEvent}
       />}
-      {currentScreen === 'new-game' && <NewGameScreen baseSettings={DEFAULT_TENNIS_SETTINGS} settings={matchSettings} setSettings={setMatchSettings} onBack={() => setCurrentScreen('settings')} onHome={() => setCurrentScreen('settings')} onGoToScoreboard={() => initGameState(false)} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} gameState={gameState} onStartMatch={() => initGameState(true)} onPlayShortcut={() => initGameState(false)} isSettingsRegrasSaved={isSettingsRegrasSaved} isSettingsInicialSaved={isSettingsInicialSaved} canStartMatch={canStartMatch} onSportChange={() => {}} cloudLiveExists={cloudLiveExists} onOpenLiveControl={() => setShowLiveControlOverlay(true)} role={liveRole} activeEvent={activeEvent} onJoinTournament={() => setCurrentScreen('tournaments')} onExitTournament={handleExitTournament} userProfile={userProfile} />}
+      {currentScreen === 'new-game' && <NewGameScreen 
+        baseSettings={DEFAULT_TENNIS_SETTINGS} 
+        settings={matchSettings} 
+        setSettings={setMatchSettings} 
+        onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }} 
+        onHome={() => { persistMatchSettings(); setCurrentScreen('settings'); }} 
+        onGoToScoreboard={() => { persistMatchSettings(); initGameState(false); }} 
+        onNavigateToTab={t => { persistMatchSettings(); setActiveTab(t); setCurrentScreen('settings'); }} 
+        gameState={gameState} 
+        onStartMatch={() => { persistMatchSettings(); initGameState(true); }} 
+        onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }} 
+        isSettingsRegrasSaved={isSettingsRegrasSaved} 
+        isSettingsInicialSaved={isSettingsInicialSaved} 
+        canStartMatch={canStartMatch} 
+        onSportChange={() => {}} 
+        cloudLiveExists={cloudLiveExists} 
+        onOpenLiveControl={() => setShowLiveControlOverlay(true)} 
+        role={liveRole} 
+        activeEvent={activeEvent} 
+        onJoinTournament={() => setCurrentScreen('tournaments')} 
+        onExitTournament={handleExitTournament} 
+        onOpenMenu={() => { persistMatchSettings(); setIsMenuOpen(true); }} 
+        userProfile={userProfile} 
+        isOfflineMode={isOfflineMode} 
+        onExitOffline={handleExitOffline} 
+      />}
       {currentScreen === 'admin' && (
-        <AdminScreen onBack={() => setCurrentScreen('settings')} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} onOpenRules={() => setCurrentScreen('new-game')} onExportData={handleExportData} onImportData={handleImportData} onClearAllHistory={() => setModalConfig({ title: "Limpar histórico?", message: "Apagará permanentemente os registros locais e na nuvem.", confirmLabel: "Sim, apagar", variant: "danger", onConfirm: () => handleClearAllHistory(), onCancel: () => setModalConfig(null) })} />
+        <AdminScreen 
+          onBack={() => setCurrentScreen('settings')} 
+          onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} 
+          onOpenRules={() => setCurrentScreen('new-game')} 
+          onExportData={handleExportData} 
+          onImportData={handleImportData} 
+          onClearAllHistory={() => setModalConfig({ title: "Limpar histórico?", message: "Apagará permanentemente os registros locais e na nuvem.", confirmLabel: "Sim, apagar", variant: "danger", onConfirm: () => handleClearAllHistory(), onCancel: () => setModalConfig(null) })}
+          initialTab={adminTab}
+          onOpenMenu={() => setIsMenuOpen(true)}
+        />
       )}
       {currentScreen === 'scoreboard' && (gameState || isWaitingSync) && <ScoreboardScreen gameState={gameState!} onScoreUpdate={handleScoreUpdate} onUndo={() => { 
         if (!gameState || !isCommandOwner) return;
@@ -1383,11 +1776,13 @@ const App: React.FC = () => {
       }} onCorrectScore={handleCorrectScore} isAdmin={isAdmin} onConfirmMatch={async () => {
         const db = getDb(); if (db && userProfile.pin && navigator.onLine) try { await updateDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), { isConfirmedFinished: true, isLiveClosed: true }); } catch (e) {} 
         setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false} : null);
-      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} />}
+      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
+      {currentScreen === 'communications' && <CommunicationsScreen userProfile={userProfile} onBack={() => setCurrentScreen('settings')} />}
     </div>
+    </ErrorBoundary>
   );
 };
 

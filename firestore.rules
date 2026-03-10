@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         (request.auth.token.email == "celsomramalho@gmail.com" && request.auth.token.email_verified == true));
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Communications collection
+    match /communications/{commId} {
+      allow create, delete: if isAdmin();
+      
+      allow read: if isAuthenticated() && (
+        resource.data.targetUserId == 'all' || 
+        resource.data.targetUserId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pin ||
+        isAdmin()
+      );
+      
+      allow update: if isAuthenticated() && (
+        isAdmin() || (
+          // Ensure they are the target or it's global
+          (resource.data.targetUserId == 'all' || resource.data.targetUserId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pin) &&
+          // Validate that they only change specific fields
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'poll', 'readBy', 'replies']) &&
+          // If updating poll, ensure they only increment votes
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['poll']) || 
+           request.resource.data.poll.totalVotes == resource.data.poll.totalVotes + 1) &&
+          // If updating replies, ensure they only append to the list
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['replies']) || 
+           request.resource.data.replies.size() == (resource.data.keys().contains('replies') ? resource.data.replies.size() : 0) + 1)
+        )
+      );
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { LogOut, Play, User, X, Clock, Trash2, Share2, Check } from 'lucide-react';
+import { LogOut, Play, User, X, Clock, Trash2, Share2, Check, Bell } from 'lucide-react';
 import { ScoreboardIcon } from '../../components/ScoreboardIcon';
 import { LiveIndicator } from '../../components/LiveIndicator';
 
@@ -19,6 +19,8 @@ interface Props {
   isMirroringActive?: boolean;
   onOpenLiveControl?: () => void;
   role?: 'owner' | 'observer' | 'spectator';
+  onOpenCommunications?: () => void;
+  unreadCount?: number;
 }
 
 export const SettingsHeader: React.FC<Props> = ({ 
@@ -35,7 +37,9 @@ export const SettingsHeader: React.FC<Props> = ({
   onShareSelected,
   isMirroringActive,
   onOpenLiveControl,
-  role
+  role,
+  onOpenCommunications,
+  unreadCount = 0
 }) => {
   const isHistory = activeTab === 'history';
   const isProfile = activeTab === 'profile';
@@ -66,21 +70,46 @@ export const SettingsHeader: React.FC<Props> = ({
   return (
     <header className="px-6 py-5 flex items-center justify-between border-b border-gray-100 bg-white sticky top-0 z-40 shadow-sm min-h-[72px]">
       {isProfile ? (
-        <div className="flex items-center justify-center w-full gap-2">
-          {/* MC1: Círculo de status dinâmico para o perfil */}
-          <div className={`p-1.5 rounded-full shadow-lg transition-colors duration-500 relative ${isProfileSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-            <User size={22} className="text-white stroke-[2.5]" />
-            {isProfileSaved && isLiveActive && (
-              <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">
-                <Check size={8} strokeWidth={4} />
-              </div>
+        <div className="flex items-center justify-between w-full">
+          <button 
+            onClick={onOpenCommunications}
+            className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors relative"
+          >
+            <Bell size={24} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
+          </button>
+          <div className="flex items-center justify-center gap-2 flex-1">
+            {/* MC1: Círculo de status dinâmico para o perfil */}
+            <div className={`p-1.5 rounded-full shadow-lg transition-colors duration-500 relative ${isProfileSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
+              <User size={22} className="text-white stroke-[2.5]" />
+              {isProfileSaved && isLiveActive && (
+                <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">
+                  <Check size={8} strokeWidth={4} />
+                </div>
+              )}
+            </div>
+            <h1 className="text-lg font-bold text-black tracking-tight">Meu perfil</h1>
           </div>
-          <h1 className="text-lg font-bold text-black tracking-tight">Meu perfil</h1>
+          <div className="w-10" />
         </div>
       ) : (
         <>
-          <div className="w-16 flex items-center justify-start">
+          <div className="w-16 flex items-center justify-start gap-1">
+            <button 
+              onClick={onOpenCommunications}
+              className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors relative"
+            >
+              <Bell size={24} />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
             {isMirroringActive && <LiveIndicator onClick={onOpenLiveControl} role={role} />}
           </div>
           <div className="flex items-center justify-center gap-2 flex-1">

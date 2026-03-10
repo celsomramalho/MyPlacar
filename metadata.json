@@ -2,8 +2,10 @@
   "requestFramePermissions": [
     "camera",
     "microphone",
-    "geolocation"
+    "geolocation",
+    "publickey-credentials-get",
+    "publickey-credentials-create"
   ],
-  "name": "MyPlacar",
+  "name": "MyPlacar Pro",
   "description": ""
 }

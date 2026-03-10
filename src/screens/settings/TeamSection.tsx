@@ -432,7 +432,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
           <div className="relative flex items-center justify-center">
             <History size={18} className="text-blue-600" />
             {!settings.isHistoryEnabled && (
-              <div className="absolute w-[140%] h-[2.5px] bg-red-600 rotate-[-45deg] rounded-full shadow-sm" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-[2px] bg-red-600 -rotate-45 rounded-full shadow-sm pointer-events-none" />
             )}
           </div>
           Gravar histórico

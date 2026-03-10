@@ -49,10 +49,14 @@ interface Props {
   setIsUpdatingVersion?: (val: boolean) => void;
   onOpenLiveControl?: () => void;
   role?: 'owner' | 'observer' | 'spectator';
+  onOpenCommunications: () => void;
+  unreadCount: number;
+  onOpenMenu: () => void;
   activeEvent: TournamentEvent | null;
   userEntryDate: number | null;
   onJoinTournament: () => void;
   onExitTournament: () => void;
+  isOfflineMode?: boolean;
 }
 
 export const SettingsScreen: React.FC<Props> = (props) => {
@@ -139,6 +143,8 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           isMirroringActive={props.gameState?.isMirroringActive || props.cloudLiveExists}
           onOpenLiveControl={props.onOpenLiveControl}
           role={props.role}
+          onOpenCommunications={props.onOpenCommunications}
+          unreadCount={props.unreadCount}
         />
       )}
       <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} pb-32 no-scrollbar`}>
@@ -154,6 +160,8 @@ export const SettingsScreen: React.FC<Props> = (props) => {
         isSettingsRegrasSaved={props.isSettingsRegrasSaved}
         isProfileSaved={props.isProfileSaved}
         isMirroringActive={props.gameState?.isMirroringActive || props.cloudLiveExists}
+        onOpenMenu={props.onOpenMenu}
+        isOfflineMode={props.isOfflineMode}
       />
     </div>
   );

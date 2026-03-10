@@ -23,7 +23,7 @@ export const Toggle: React.FC<ToggleProps> = ({ id, checked, onChange, label, di
           checked={checked}
           disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
-          className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out shadow-sm top-0.5 left-0.5 checked:translate-x-full"
+          className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out shadow-sm top-0.5 left-0.5 checked:translate-x-5"
         />
         <label 
           htmlFor={id} 

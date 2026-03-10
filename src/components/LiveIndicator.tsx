@@ -6,15 +6,31 @@ interface Props {
   onClick?: () => void;
   variant?: 'header' | 'card';
   role?: 'owner' | 'observer' | 'spectator';
+  progress?: number;
+  onPointerDown?: (e: any) => void;
+  onPointerUp?: (e: any) => void;
+  onPointerLeave?: (e: any) => void;
 }
 
-export const LiveIndicator: React.FC<Props> = ({ className = "", onClick, variant = 'header', role = 'spectator' }) => (
+export const LiveIndicator: React.FC<Props> = ({ 
+  className = "", onClick, variant = 'header', role = 'spectator', 
+  progress = 0, onPointerDown, onPointerUp, onPointerLeave 
+}) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center justify-center gap-0.5 group transition-all duration-300 ${onClick ? 'active:scale-90 cursor-pointer' : 'cursor-default'} ${className}`}
+    onPointerDown={onPointerDown}
+    onPointerUp={onPointerUp}
+    onPointerLeave={onPointerLeave}
+    className={`flex flex-col items-center justify-center gap-0.5 group transition-all duration-300 relative overflow-hidden ${onClick ? 'active:scale-90 cursor-pointer' : 'cursor-default'} ${className}`}
     disabled={!onClick}
   >
-    <div className={`relative flex items-center justify-center ${variant === 'header' ? 'w-14 h-7' : 'w-16 h-8'}`}>
+    {progress > 0 && (
+      <div 
+        className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
+        style={{ transform: `scaleX(${progress / 100})` }} 
+      />
+    )}
+    <div className={`relative z-10 flex items-center justify-center ${variant === 'header' ? 'w-14 h-7' : 'w-16 h-8'}`}>
       {/* Ondas de sinal azul claro (#7dd3fc) */}
       <svg 
         width={variant === 'header' ? "32" : "40"} 

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, User, HelpCircle, Watch, Target, Sparkles, Antenna, Check, Ticket, X, Loader2, Share2, Copy, QrCode } from 'lucide-react';
+import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, User, HelpCircle, Watch, Target, Sparkles, Antenna, Check, Ticket, X, Loader2, Share2, Copy, QrCode, WifiOff, LogOut, Menu } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
 import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile } from '../types';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -31,13 +31,15 @@ interface Props {
   onOpenLiveControl?: () => void;
   role?: 'owner' | 'observer' | 'spectator';
   activeEvent: TournamentEvent | null;
-  // Alterado para () => void para consistência com as outras telas
   onJoinTournament?: () => void;
   onExitTournament?: () => void;
+  onOpenMenu?: () => void;
   userProfile: UserProfile;
+  isOfflineMode?: boolean;
+  onExitOffline?: () => void;
 }
 
-export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, onBack, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, activeEvent, onJoinTournament, onExitTournament, userProfile }) => {
+export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, onBack, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, activeEvent, onJoinTournament, onExitTournament, onOpenMenu, userProfile, isOfflineMode, onExitOffline }) => {
   const [activeGroupId, setActiveGroupId] = useState<string>(() => (SPORT_LIST.find(s => s.id === settings.sportType)?.group as string) || 'raquetes');
   const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [dbSports, setDbSports] = useState<any[]>([]);
@@ -118,12 +120,17 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
   return (
     <div className="min-h-screen bg-[#E5E7EB] flex flex-col relative font-sans">
       <header className="px-6 py-4 flex items-center bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="flex-1 flex items-center">
+        <div className="flex-1 flex items-center gap-2">
           {isLiveActive && (
             <LiveIndicator 
               onClick={onOpenLiveControl} 
               role={role} 
             />
+          )}
+          {isOfflineMode && (
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-black bg-yellow-500 shadow-md border-2 border-white">
+              <WifiOff size={22} />
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -135,7 +142,9 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
               </div>
             )}
           </div>
-          <h1 className="text-base font-black text-black">Regras</h1>
+          <h1 className="text-base font-black text-black flex items-center gap-2">
+            Regras
+          </h1>
         </div>
         <div className="flex-1 flex justify-end">
           <button onClick={onPlayShortcut} disabled={!canStartMatch} className={`p-2 active:scale-90 transition-all ${canStartMatch ? 'text-emerald-500' : 'text-slate-200 opacity-50'}`}>
@@ -292,106 +301,108 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
           )}
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 px-2"><Sparkles size={20} className="text-blue-500" /><h2 className="text-sm font-black text-black">Narrador contextual (ia)</h2></div>
-          <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
-            <Toggle id="toggle-gemini-voice" label="Ativar inteligência artificial" checked={settings.useGeminiVoice} onChange={v => setSettings({...settings, useGeminiVoice: v})} />
-            <p className="text-[10px] font-bold text-black leading-tight px-1">Voz humana e inteligente que narra os pontos com emoção e contexto real.</p>
-          </div>
-        </div>
-
-        <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-2 shadow-sm border border-white space-y-2">
-          <button onClick={() => setIsGeneralOpen(!isGeneralOpen)} className="w-full flex items-center justify-between p-4 px-6 text-black">
-             <div className="flex items-center gap-3"><Settings size={20} /><span className="text-sm font-black">Configurações locais</span></div>
-             {isGeneralOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-          </button>
-          {isGeneralOpen && (
-            <div className="px-4 pb-6 space-y-6 animate-in slide-in-from-top-2">
-              <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
-                 <div className="flex items-center gap-3 mb-2"><Mic size={18} className="text-indigo-500" /><span className="text-sm font-black text-black">Voz e narração</span></div>
-                 <Toggle id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
-                 <Toggle id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
-              </div>
-              
-              <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-8">
-                <div className="space-y-4">
-                  <span className="text-sm font-black text-gray-700">Brilho da tela</span>
-                  <div className="flex items-center gap-4">
-                    <Sun size={18} className="text-orange-400 shrink-0" />
-                    <input 
-                      type="range" min="10" max="100" 
-                      value={settings.brightness} 
-                      onChange={e => setSettings({...settings, brightness: parseInt(e.target.value)})} 
-                      className="flex-1 accent-orange-400 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer" 
-                    />
-                    <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.brightness}%</span>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <span className="text-sm font-black text-gray-700">Volume do áudio</span>
-                  <div className="flex items-center gap-4">
-                    <Volume2 size={18} className="text-emerald-500 shrink-0" />
-                    <input 
-                      type="range" min="0" max="100" 
-                      value={settings.volume} 
-                      onChange={e => setSettings({...settings, volume: parseInt(e.target.value)})} 
-                      className="flex-1 accent-emerald-500 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer" 
-                    />
-                    <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.volume}%</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
-                <div className="flex items-center gap-3 mb-2"><Clock size={18} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Latência</h2></div>
-                <div className="space-y-8">
-                  <div className="space-y-4">
-                    <span className="text-sm font-black text-gray-700">Debounce de ação</span>
-                    <div className="flex items-center gap-4">
-                      <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.actionCooldown} onChange={e => setSettings({...settings, actionCooldown: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.actionCooldown}s</span>
-                    </div>
-                    <p className="text-[11px] font-bold text-gray-400 leading-tight">Tempo mínimo entre os pontos para evitar duplicação em redes lentas.</p>
-                  </div>
-                  <div className="space-y-4">
-                    <span className="text-sm font-black text-gray-700">Trava de estado</span>
-                    <div className="flex items-center gap-4">
-                      <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.stateLockout} onChange={e => setSettings({...settings, stateLockout: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.stateLockout}s</span>
-                    </div>
-                    <p className="text-[11px] font-bold text-gray-400 leading-tight">Bloqueio de voz após falar o placar para evitar eco.</p>
-                  </div>
-                </div>
-              </div>
+        {!isOfflineMode && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 px-2"><Sparkles size={20} className="text-blue-500" /><h2 className="text-sm font-black text-black">Narrador contextual (ia)</h2></div>
+            <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
+              <Toggle id="toggle-gemini-voice" label="Ativar inteligência artificial" checked={settings.useGeminiVoice} onChange={v => setSettings({...settings, useGeminiVoice: v})} />
+              <p className="text-[10px] font-bold text-black leading-tight px-1">Voz humana e inteligente que narra os pontos com emoção e contexto real.</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {!isOfflineMode && (
+          <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-2 shadow-sm border border-white space-y-2">
+            <button onClick={() => setIsGeneralOpen(!isGeneralOpen)} className="w-full flex items-center justify-between p-4 px-6 text-black">
+               <div className="flex items-center gap-3"><Settings size={20} /><span className="text-sm font-black">Configurações locais</span></div>
+               {isGeneralOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </button>
+            {isGeneralOpen && (
+              <div className="px-4 pb-6 space-y-6 animate-in slide-in-from-top-2">
+                <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
+                   <div className="flex items-center gap-3 mb-2"><Mic size={18} className="text-indigo-500" /><span className="text-sm font-black text-black">Voz e narração</span></div>
+                   <Toggle id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
+                   <Toggle id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
+                </div>
+                
+                <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-8">
+                  <div className="space-y-4">
+                    <span className="text-sm font-black text-gray-700">Brilho da tela</span>
+                    <div className="flex items-center gap-4">
+                      <Sun size={18} className="text-orange-400 shrink-0" />
+                      <input 
+                        type="range" min="10" max="100" 
+                        value={settings.brightness} 
+                        onChange={e => setSettings({...settings, brightness: parseInt(e.target.value)})} 
+                        className="flex-1 accent-orange-400 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer" 
+                      />
+                      <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.brightness}%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <span className="text-sm font-black text-gray-700">Volume do áudio</span>
+                    <div className="flex items-center gap-4">
+                      <Volume2 size={18} className="text-emerald-500 shrink-0" />
+                      <input 
+                        type="range" min="0" max="100" 
+                        value={settings.volume} 
+                        onChange={e => setSettings({...settings, volume: parseInt(e.target.value)})} 
+                        className="flex-1 accent-emerald-500 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer" 
+                      />
+                      <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.volume}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
+                  <div className="flex items-center gap-3 mb-2"><Clock size={18} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Latência</h2></div>
+                  <div className="space-y-8">
+                    <div className="space-y-4">
+                      <span className="text-sm font-black text-gray-700">Debounce de ação</span>
+                      <div className="flex items-center gap-4">
+                        <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.actionCooldown} onChange={e => setSettings({...settings, actionCooldown: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.actionCooldown}s</span>
+                      </div>
+                      <p className="text-[11px] font-bold text-gray-400 leading-tight">Tempo mínimo entre os pontos para evitar duplicação em redes lentas.</p>
+                    </div>
+                    <div className="space-y-4">
+                      <span className="text-sm font-black text-gray-700">Trava de estado</span>
+                      <div className="flex items-center gap-4">
+                        <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.stateLockout} onChange={e => setSettings({...settings, stateLockout: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.stateLockout}s</span>
+                      </div>
+                      <p className="text-[11px] font-bold text-gray-400 leading-tight">Bloqueio de voz após falar o placar para evitar eco.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-4 pt-3 pb-10 flex justify-between items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        <button onClick={() => onNavigateToTab?.('config')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-            <ScoreboardIcon className="w-6 h-6" />
-            {isSettingsInicialSaved && isLiveActive && (
-              <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">
-                <Check size={8} strokeWidth={4} />
-              </div>
-            )}
-          </div>
-          <span className="text-[10px] font-black text-black">Início</span>
-        </button>
-        <button className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100 scale-110">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-colors duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-            <Settings size={22} />
-            {isSettingsRegrasSaved && isLiveActive && (
-              <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">
-                <Check size={8} strokeWidth={4} />
-              </div>
-            )}
-          </div>
-          <span className="text-[10px] font-black text-black">Regras</span>
-        </button>
-        <button onClick={() => onNavigateToTab?.('history')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><Clock size={22} className="text-black" /><span className="text-[10px] font-black text-black">Histórico</span></button>
-        <button onClick={() => onNavigateToTab?.('profile')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><User size={22} className="text-black" /><span className="text-[10px] font-black text-black">Perfil</span></button>
-        <button onClick={() => onNavigateToTab?.('help')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><HelpCircle size={22} className="text-black" /><span className="text-[10px] font-black text-black">Ajuda</span></button>
+        {isOfflineMode && (
+          <button onClick={onExitOffline} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-500 shadow-md"><LogOut size={22} /></div><span className="text-[10px] font-black text-black">Sair</span></button>
+        )}
+        {!isOfflineMode && (
+          <button onClick={() => onNavigateToTab?.('config')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100 scale-110">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
+              <ScoreboardIcon className="w-6 h-6" />
+              {isSettingsInicialSaved && isLiveActive && (
+                <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">
+                  <Check size={8} strokeWidth={4} />
+                </div>
+              )}
+            </div>
+            <span className="text-[10px] font-black text-black">Início</span>
+          </button>
+        )}
+        {!isOfflineMode && (
+          <>
+            <button onClick={() => onNavigateToTab?.('history')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><Clock size={22} className="text-black" /><span className="text-[10px] font-black text-black">Histórico</span></button>
+            <button onClick={() => onNavigateToTab?.('profile')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><User size={22} className="text-black" /><span className="text-[10px] font-black text-black">Perfil</span></button>
+            <button onClick={onOpenMenu} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><Menu size={22} className="text-black" /><span className="text-[10px] font-black text-black">Menu</span></button>
+          </>
+        )}
       </nav>
     </div>
   );

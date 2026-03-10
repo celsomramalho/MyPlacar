@@ -1,6 +1,6 @@
 {
-  "short_name": "MyPlacar",
-  "name": "MyPlacar - Placar Esportivo Inteligente",
+  "short_name": "My placar",
+  "name": "My placar - placar esportivo inteligente",
   "description": "Placar inteligente com controle por voz.",
   "icons": [
     {
@@ -10,7 +10,7 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./index.html",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",

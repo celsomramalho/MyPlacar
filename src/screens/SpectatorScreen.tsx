@@ -164,7 +164,7 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
         </div>
         <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Partida não encontrada</h2>
         <p className="text-gray-500 font-bold mt-2 mb-8">O link expirou ou o host finalizou a transmissão.</p>
-        <button onClick={onExit} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black text-lg">Voltar ao MyPlacar</button>
+        <button onClick={onExit} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black text-lg">Voltar ao my placar</button>
       </div>
     );
   }

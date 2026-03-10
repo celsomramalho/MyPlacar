@@ -104,7 +104,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const isAlreadyRegistered = useMemo(() => partners.some(p => p.pin.toUpperCase() === pinInput.toUpperCase().trim()), [partners, pinInput]);
   const maxPerTeam = isDoubles ? 2 : 1;
   const meAsPartner: Partner = useMemo(() => ({ id: 'me', name: userProfile.name, nickname: userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu', pin: userProfile.pin, origin: 'manual', addedAt: 0, gender: userProfile.gender || 'M' }), [userProfile]);
-  const shareLink = useMemo(() => `https://myplacar-244305581318.us-west1.run.app/?ref=${encodeURIComponent(userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu')}&pin_ref=${userProfile.pin.toUpperCase()}`, [userProfile]);
+  const shareLink = useMemo(() => `${window.location.origin}/?ref=${encodeURIComponent(userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu')}&pin_ref=${userProfile.pin.toUpperCase()}`, [userProfile]);
   const qrCodeShareUrl = useMemo(() => `https://quickchart.io/qr?text=${encodeURIComponent(shareLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`, [shareLink]);
 
   const selectedInQueue = useMemo(() => playerQueue.filter(p => p.isSelected), [playerQueue]);
@@ -162,7 +162,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   }, [pinInput, userProfile.pin, meAsPartner.nickname, meAsPartner.name]);
 
   const handleShareWhatsApp = () => {
-    const text = `Participe comigo no MyPlacar. Clique no link para se cadastrar e me adicionar como parceiro: ${shareLink}`;
+    const text = `Participe comigo no my placar. Clique no link para se cadastrar e me adicionar como parceiro: ${shareLink}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
   const handleCopyShareLink = () => navigator.clipboard.writeText(shareLink).then(() => (window as any).alert("Link de indicação copiado com sucesso!"));
@@ -357,7 +357,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
           if (!matchSettings.p1Name && queueAsPartners[0]) team1.push(queueAsPartners[0]);
           if (!matchSettings.p2Name && queueAsPartners[team1.length ? 1 : 0]) team2.push(queueAsPartners[team1.length ? 1 : 0]);
        } else {
-          const needed = [];
+          const needed: string[] = [];
           if (!matchSettings.p1Name) needed.push('p1');
           if (!matchSettings.p1Partner) needed.push('p1P');
           if (!matchSettings.p2Name) needed.push('p2');
@@ -573,7 +573,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
                    <div className="flex flex-col items-center gap-8 w-full">
                       <div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeShareUrl} alt="Meu convite" className="w-full h-full object-contain" /></div>
                       <div className="flex-1 space-y-5 w-full text-center">
-                        <p className="text-[11px] font-bold text-slate-400 leading-tight">Convide seus amigos para usar o MyPlacar. Ao se cadastrarem pelo seu link, eles viram seus parceiros automaticamente.</p>
+                        <p className="text-[11px] font-bold text-slate-400 leading-tight">Convide seus amigos para usar o my placar. Ao se cadastrarem pelo seu link, eles viram seus parceiros automaticamente.</p>
                         <div className="space-y-3 w-full"><button onClick={handleShareWhatsApp} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Share2 size={18} /> WhatsApp</button><button onClick={handleCopyShareLink} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all"><Copy size={18} /> Copiar link de convite</button></div>
                       </div>
                    </div>

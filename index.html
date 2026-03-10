@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Myplacar pro</title>
+    <title>MyPlacar Pro</title>
     
     <!-- Pwa primary meta tags -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Myplacar" />
-    <meta name="application-name" content="Myplacar" />
+    <meta name="apple-mobile-web-app-title" content="My placar" />
+    <meta name="application-name" content="My placar" />
     <meta name="theme-color" content="#ffffff" />
     
     <!-- Fonts -->
@@ -23,11 +23,56 @@
     
     <link rel="manifest" href="manifest.json" />
 
-	<script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 	
 </head>
   <body>
+    <script>
+      (function() {
+        const CURRENT_VERSION = '2.3.04';
+        const lastVersion = localStorage.getItem('myPlacar_AppVersion');
+        const crashCount = parseInt(localStorage.getItem('myPlacar_CrashCount') || '0');
+        
+        // Se a versão mudou ou se houve muitos crashes seguidos, limpamos o estado crítico
+        if (lastVersion !== CURRENT_VERSION || crashCount > 2) {
+          console.log('Executando limpeza de emergência...');
+          localStorage.removeItem('myPlacarActiveGameState');
+          localStorage.setItem('myPlacar_AppVersion', CURRENT_VERSION);
+          localStorage.setItem('myPlacar_CrashCount', '0');
+          
+          // Limpa Service Workers para forçar atualização
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+              for (let registration of registrations) {
+                registration.unregister();
+              }
+            });
+          }
+          
+          if (lastVersion !== CURRENT_VERSION) {
+            window.location.reload();
+          }
+        }
+
+        // Monitor de carregamento: se não carregar em 8 segundos, incrementa crash count e recarrega
+        const loadTimeout = setTimeout(() => {
+          console.warn('O aplicativo demorou muito para carregar. Tentando recuperar...');
+          localStorage.setItem('myPlacar_CrashCount', (crashCount + 1).toString());
+          localStorage.removeItem('myPlacarActiveGameState');
+          window.location.reload();
+        }, 8000);
+
+        window.addEventListener('load', () => {
+          // Quando o app sinalizar que está pronto (via evento customizado ou apenas carregamento da página)
+          // No React, vamos disparar um evento 'app-ready'
+        });
+
+        window.addEventListener('app-ready', () => {
+          clearTimeout(loadTimeout);
+          localStorage.setItem('myPlacar_CrashCount', '0');
+        });
+      })();
+    </script>
     <div id="brightness-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; pointer-events: none; z-index: 9999; opacity: 0;"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

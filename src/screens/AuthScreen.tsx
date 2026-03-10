@@ -1,35 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy } from 'lucide-react';
-import { Input } from '../components/Input.tsx';
-import { Button } from '../components/Button.tsx';
-import { Toggle } from '../components/Toggle.tsx';
-import { UserProfile } from '../types.ts';
-import { getDb } from '../firebase.ts';
+import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint } from 'lucide-react';
+import { Input } from '../components/Input';
+import { Button } from '../components/Button';
+import { Toggle } from '../components/Toggle';
+import { UserProfile } from '../types';
+import { getDb, getAuthInstance } from '../firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
-import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
-import { formatPortugueseName, applyGoldenRule } from '../utils/formatters.ts';
-import { APP_VERSION } from '../constants.ts';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
+import { ScoreboardIcon } from '../components/ScoreboardIcon';
+import { emailService } from '../services/emailService';
+import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
+import { APP_VERSION } from '../constants';
 
 interface Props {
   onAuthSuccess: (profile: UserProfile, stayConnected: boolean) => void;
   onCheckUpdate: () => Promise<string | boolean>;
   setIsUpdatingVersion: (val: boolean) => void;
+  onOfflineMode?: () => void;
   initialReferralPin?: string;
 }
 
-export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, initialReferralPin = '' }) => {
+export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, onOfflineMode, initialReferralPin = '' }) => {
   const [showSplash, setShowSplash] = useState(true);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
   const [remoteVersionFound, setRemoteVersionFound] = useState<string | null>(null);
   
-  const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent'>(() => {
+  const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password'>(() => {
     const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'resetPassword' && params.get('oobCode')) return 'reset_password';
     return (params.get('ref') || params.get('pin_ref') || params.get('joinEvent')) ? 'register' : 'login';
   });
 
+  const [oobCode, setOobCode] = useState(() => new URLSearchParams(window.location.search).get('oobCode') || '');
+
   const [email, setEmail] = useState(() => localStorage.getItem('myPlacarSavedEmail') || '');
   const [pin, setPin] = useState(() => localStorage.getItem('myPlacarSavedPin') || ''); 
+  const [password, setPassword] = useState('');
+  const [authMethod, setAuthMethod] = useState<'pin' | 'password'>('pin');
+  const [showPassword, setShowPassword] = useState(false);
   
   const [verificationCode, setVerificationCode] = useState('');
   const [generatedVerifyCode, setGeneratedVerifyCode] = useState(() => localStorage.getItem('myPlacarPendingVerifyCode') || '');
@@ -49,6 +58,14 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isAutoConfirming, setIsAutoConfirming] = useState(false);
+  const [showRecoveryInfoModal, setShowRecoveryInfoModal] = useState(false);
+  const [recoveryInfo, setRecoveryInfo] = useState<{ 
+    type: 'link' | 'pin', 
+    value: string,
+    userName?: string,
+    userEmail?: string,
+    userUid?: string
+  }>({ type: 'pin', value: '' });
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2800);
@@ -68,6 +85,37 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     };
     initialCheck();
   }, [onCheckUpdate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const modeParam = params.get('mode');
+    const codeParam = params.get('oobCode');
+
+    if (modeParam === 'resetPassword' && codeParam) {
+      const auth = getAuthInstance();
+      if (auth) {
+        // Limpa qualquer sessão anterior para garantir que o link abra para o usuário correto
+        auth.signOut().then(() => {
+          localStorage.removeItem('myPlacarSavedEmail');
+          localStorage.removeItem('myPlacarSavedPin');
+          localStorage.removeItem('myPlacarUser');
+          localStorage.removeItem('myPlacarRememberMe');
+          
+          setOobCode(codeParam);
+          setMode('reset_password');
+          
+          verifyPasswordResetCode(auth, codeParam).then(email => {
+            setEmail(email);
+            // Bloqueia qualquer tentativa de login automático limpando os campos
+            setPassword('');
+            setPin('');
+          }).catch(e => {
+            setError("Link de recuperação inválido ou expirado.");
+          });
+        });
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -202,31 +250,45 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     }
   };
 
-  const sendEmail = async (templateId: string, templateParams: any) => {
-    const data = {
-      service_id: 'jqwq howd ypts pfho', 
-      template_id: templateId,
-      user_id: 'A7y2Vx7kzDN-rI1yL', 
-      template_params: templateParams,
+  useEffect(() => {
+    const checkAuthMethod = async () => {
+      const cleanEmail = email.toLowerCase().trim();
+      if (cleanEmail.includes('@') && cleanEmail.includes('.')) {
+        const db = getDb();
+        if (db) {
+          try {
+            const userSnap = await getDoc(doc(db as Firestore, "users", cleanEmail));
+            if (userSnap.exists()) {
+              const data = userSnap.data();
+              setAuthMethod(data.authMethod || 'pin');
+            }
+          } catch (e) {}
+        }
+      }
     };
+    const timer = setTimeout(checkAuthMethod, 500);
+    return () => clearTimeout(timer);
+  }, [email]);
 
-    try {
-      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      return response.ok;
-    } catch (error) {
-      console.error('Erro EmailJS:', error);
-      return false;
-    }
+  const validatePassword = (pass: string) => {
+    const hasMinLength = pass.length >= 6;
+    const hasUpper = /[A-Z]/.test(pass);
+    const hasLower = /[a-z]/.test(pass);
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
+    return {
+      hasMinLength,
+      hasUpper,
+      hasLower,
+      hasSpecial,
+      isValid: hasMinLength && hasUpper && hasLower && hasSpecial
+    };
   };
 
+  const passwordValidation = validatePassword(password);
+
   const handleLogin = async () => {
-    if (!email || !pin) {
-      setError("Preencha seu e-mail e pin de acesso.");
+    if (!email || (authMethod === 'pin' ? !pin : !password)) {
+      setError(authMethod === 'pin' ? "Preencha seu e-mail e pin de acesso." : "Preencha seu e-mail e senha.");
       return;
     }
     setIsLoading(true);
@@ -234,25 +296,53 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setStatusText('Autenticando...');
     try {
       const db = getDb();
-      if (!db) throw new Error("Erro de conexão.");
+      const auth = getAuthInstance();
+      if (!db || !auth) throw new Error("Erro de conexão.");
       const cleanEmail = email.toLowerCase().trim();
-      const userSnap = await getDoc(doc(db as Firestore, "users", cleanEmail));
-      if (userSnap.exists()) {
-        const userData = userSnap.data() as UserProfile;
-        if (userData.pin === pin.toUpperCase().trim()) {
-          if (rememberMe) {
-            localStorage.setItem('myPlacarSavedEmail', cleanEmail);
-            localStorage.setItem('myPlacarSavedPin', pin.toUpperCase().trim());
-          } else {
-            localStorage.removeItem('myPlacarSavedEmail');
-            localStorage.removeItem('myPlacarSavedPin');
+
+      if (authMethod === 'password') {
+        try {
+          const cleanPassword = password.trim();
+          await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+          const userSnap = await getDoc(doc(db as Firestore, "users", cleanEmail));
+          if (userSnap.exists()) {
+            const userData = userSnap.data() as UserProfile;
+            if (rememberMe) {
+              localStorage.setItem('myPlacarSavedEmail', cleanEmail);
+            } else {
+              localStorage.removeItem('myPlacarSavedEmail');
+            }
+            onAuthSuccess(userData, rememberMe);
           }
-          onAuthSuccess(userData, rememberMe);
-        } else {
-          setError("Pin incorreto, tente novamente.");
+        } catch (e: any) {
+          console.error("Login error:", e);
+          if (e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
+            setError("E-mail ou senha incorretos.");
+          } else if (e.code === 'auth/unauthorized-domain') {
+            setError("Este domínio não está autorizado no Firebase. Verifique as configurações do console.");
+          } else {
+            setError("Erro ao autenticar. Tente novamente.");
+          }
         }
       } else {
-        setError("E-mail não localizado no sistema.");
+        const userSnap = await getDoc(doc(db as Firestore, "users", cleanEmail));
+        if (userSnap.exists()) {
+          const userData = userSnap.data() as UserProfile;
+          if (userData.pin === pin.toUpperCase().trim()) {
+            if (rememberMe) {
+              localStorage.setItem('myPlacarSavedEmail', cleanEmail);
+              localStorage.setItem('myPlacarSavedPin', pin.toUpperCase().trim());
+            } else {
+              localStorage.removeItem('myPlacarSavedEmail');
+              localStorage.removeItem('myPlacarSavedPin');
+            }
+            onAuthSuccess(userData, rememberMe);
+          } else {
+            setError("Pin incorreto, tente novamente.");
+          }
+        } else {
+          setError("E-mail não localizado no sistema.");
+        }
       }
     } catch (e: any) {
       setError("Não foi possível realizar o login agora.");
@@ -262,8 +352,13 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handleRequestRegister = async () => {
-    if (!email || !name) {
-      setError("Preencha seu nome e e-mail para continuar.");
+    if (!email || !name || !password) {
+      setError("Preencha seu nome, e-mail e senha para continuar.");
+      return;
+    }
+
+    if (!passwordValidation.isValid) {
+      setError("A senha não atende aos requisitos de segurança.");
       return;
     }
 
@@ -283,7 +378,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userRef = doc(db as Firestore, "users", cleanEmail);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
-        setError("Este e-mail já possui cadastro. Use a recuperação de pin.");
+        setError("Este e-mail já possui cadastro. Use a recuperação de senha.");
         return;
       }
       const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -291,6 +386,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       localStorage.setItem('myPlacarPendingVerifyCode', code);
       localStorage.setItem('myPlacarPendingName', name);
       localStorage.setItem('myPlacarSavedEmail', cleanEmail);
+      localStorage.setItem('myPlacarPendingPassword', password);
       setGeneratedVerifyCode(code);
       
       setStatusText('Enviando seu código por e-mail...');
@@ -298,14 +394,15 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const appBaseUrl = 'https://myplacar-244305581318.us-west1.run.app';
       const confirmationLink = `${appBaseUrl}/?email=${encodeURIComponent(cleanEmail)}&code=${code}`;
 
-      const emailSent = await sendEmail('template_v9fhxz3', {
+      const emailSent = await emailService.sendEmail('template_v9fhxz3', {
         to_name: name.split(' ')[0],
         email: cleanEmail,
         pin_code: code,
         confirmation_link: confirmationLink,
         app_access_link: appBaseUrl,
         subject: "Código de verificação - MyPlacar",
-        from_name: "MyPlacar"
+        from_name: "MyPlacar",
+        reply_to: "celsomramalho@gmail.com"
       });
 
       if (emailSent) {
@@ -339,14 +436,29 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       
       const cleanEmail = targetEmail.toLowerCase().trim();
       const storedName = localStorage.getItem('myPlacarPendingName') || name || "Jogador";
+      const storedPassword = localStorage.getItem('myPlacarPendingPassword') || password;
       const finalPin = Math.random().toString(36).substring(2, 7).toUpperCase();
       
+      const auth = getAuthInstance();
+      if (auth && storedPassword) {
+        try {
+          await createUserWithEmailAndPassword(auth, cleanEmail, storedPassword);
+        } catch (e: any) {
+          console.log("Firebase Register Error Details:", { code: e.code, message: e.message, full: e });
+          if (e.message?.includes('signup-are-blocked') || e.code === 'auth/operation-not-allowed') {
+            throw new Error(`O cadastro de novos usuários está temporariamente desativado. Entre em contato com o suporte. (Erro: ${e.code})`);
+          }
+          throw new Error(`${e.message} (Código: ${e.code})`);
+        }
+      }
+
       const newProfile = {
         name: formatPortugueseName(storedName),
         nickname: storedName.split(' ')[0],
         email: cleanEmail,
         phone: '', 
         pin: finalPin,
+        authMethod: 'password',
         isProfileComplete: true,
         emailVerified: true,
         referredByPin: referralPin.toUpperCase().trim(),
@@ -355,15 +467,18 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       
       await setDoc(doc(db as Firestore, "users", cleanEmail), newProfile);
       
-      const appBaseUrl = 'https://myplacar-244305581318.us-west1.run.app'; 
-      await sendEmail('template_wn0f65h', {
+      const appBaseUrl = window.location.origin; 
+      await emailService.sendEmail('template_wn0f65h', {
         to_name: newProfile.nickname,
         email: cleanEmail,
         pin_code: finalPin,
         app_access_link: appBaseUrl,
         subject: "Seu pin de acesso - MyPlacar",
-        from_name: "MyPlacar"
+        from_name: "MyPlacar",
+        reply_to: "celsomramalho@gmail.com"
       });
+
+      localStorage.removeItem('myPlacarPendingPassword');
 
       setMode('verifying');
       localStorage.removeItem('myPlacarPendingReferral');
@@ -385,7 +500,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   const handleForgotPassword = async () => {
     if (!email) {
-      setError("Digite seu e-mail para recuperar o pin.");
+      setError("Digite seu e-mail para recuperar seu acesso.");
       return;
     }
     setIsLoading(true);
@@ -393,37 +508,205 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setStatusText('Processando sua recuperação...');
     try {
       const db = getDb();
-      if (!db) throw new Error("Erro de conexão.");
+      const auth = getAuthInstance();
+      if (!db || !auth) throw new Error("Erro de conexão.");
       const cleanEmail = email.toLowerCase().trim();
       const userRef = doc(db as Firestore, "users", cleanEmail);
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        throw new Error("E-mail não localizado.");
+        throw new Error("E-mail não localizado no sistema.");
       }
       
       const userData = userSnap.data();
       const userPin = userData?.pin || '';
-      const userName = userData?.nickname || "Jogador";
+      const userName = userData?.nickname || userData?.name || "Jogador";
+      const userAuthMethod = userData?.authMethod || 'pin';
+      const userUid = userData?.uid || userSnap.id;
 
-      setStatusText('Enviando seu pin por e-mail...');
-      const appBaseUrl = 'https://myplacar-244305581318.us-west1.run.app'; 
-      const emailSent = await sendEmail('template_wn0f65h', {
-        to_name: userName,
-        email: cleanEmail,
-        pin_code: userPin,
-        app_access_link: appBaseUrl,
-        subject: "Recuperação de pin - MyPlacar",
-        from_name: "MyPlacar"
-      });
+      // Tenta enviar redefinição de senha do Firebase para todos que podem ter uma conta
+      let firebaseEmailSent = false;
+      const resetLink = `${window.location.origin}/?mode=resetPassword`;
+      try {
+        await sendPasswordResetEmail(auth, cleanEmail, {
+          url: resetLink,
+          handleCodeInApp: true,
+        });
+        firebaseEmailSent = true;
+        setRecoveryInfo({ 
+          type: 'link', 
+          value: resetLink,
+          userName,
+          userEmail: cleanEmail,
+          userUid
+        });
+      } catch (e: any) {
+        console.warn("Firebase reset error:", e);
+        if (e.code === 'auth/unauthorized-domain') {
+          setError("Este domínio não está autorizado no Firebase para enviar e-mails.");
+          setIsLoading(false);
+          return;
+        }
+      }
 
-      if (emailSent) {
-        setMode('recovery_sent');
-      } else {
-        throw new Error("Não foi possível enviar o e-mail.");
+      // Se for método pin ou se o envio do Firebase falhou, tenta enviar o pin via EmailJS
+      if (userAuthMethod === 'pin' || !firebaseEmailSent) {
+        setStatusText('Enviando dados de acesso por e-mail...');
+        const appBaseUrl = window.location.origin; 
+        const emailSent = await emailService.sendEmail('template_wn0f65h', {
+          to_name: userName,
+          email: cleanEmail,
+          pin_code: userPin,
+          app_access_link: appBaseUrl,
+          subject: "Recuperação de acesso - MyPlacar",
+          from_name: "MyPlacar",
+          reply_to: "celsomramalho@gmail.com"
+        });
+
+        if (!emailSent && !firebaseEmailSent) {
+          throw new Error("Não foi possível enviar o e-mail de recuperação.");
+        }
+        
+        if (userPin) {
+          setRecoveryInfo({ 
+            type: 'pin', 
+            value: userPin,
+            userName,
+            userEmail: cleanEmail,
+            userUid
+          });
+        }
+      }
+
+      setMode('recovery_sent');
+      setShowRecoveryInfoModal(true);
+    } catch (e: any) {
+      setError(e.message || "Erro ao recuperar seu acesso.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    if (!window.PublicKeyCredential) {
+      setError("Seu navegador não suporta biometria.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setStatusText('Validando biometria...');
+
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      const options: any = {
+        challenge,
+        rpId: window.location.hostname,
+        userVerification: "required",
+        timeout: 60000,
+      };
+
+      const assertion = await navigator.credentials.get({
+        publicKey: options,
+      }) as any;
+
+      if (assertion) {
+        const rawId = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
+        
+        const db = getDb();
+        if (!db) throw new Error("Erro de conexão.");
+        
+        const usersRef = collection(db as Firestore, "users");
+        const q = query(usersRef, where("passkeyCredentialId", "==", rawId));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          throw new Error("Biometria não reconhecida ou não cadastrada.");
+        }
+        
+        const userData = querySnapshot.docs[0].data() as UserProfile;
+        onAuthSuccess(userData, rememberMe);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError("Falha na autenticação biométrica.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!passwordValidation.isValid) {
+      setError("A senha não atende aos requisitos de segurança.");
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    setStatusText('Redefinindo sua senha...');
+    try {
+      const auth = getAuthInstance();
+      if (!auth) throw new Error("Erro de conexão.");
+      await confirmPasswordReset(auth, oobCode, password);
+      setMode('login');
+      setError(null);
+      alert("Senha redefinida com sucesso! Agora você pode entrar.");
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch (e: any) {
+      setError("Erro ao redefinir senha. O link pode ter expirado.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+    setStatusText('Conectando com Google...');
+    try {
+      const auth = getAuthInstance();
+      const db = getDb();
+      if (!auth || !db) throw new Error("Erro de conexão.");
+      
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      if (user && user.email) {
+        const cleanEmail = user.email.toLowerCase().trim();
+        const userRef = doc(db as Firestore, "users", cleanEmail);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          const userData = userSnap.data() as UserProfile;
+          onAuthSuccess(userData, rememberMe);
+        } else {
+          const finalPin = Math.random().toString(36).substring(2, 7).toUpperCase();
+          const newProfile = {
+            name: formatPortugueseName(user.displayName || "Jogador"),
+            nickname: (user.displayName || "Jogador").split(' ')[0],
+            email: cleanEmail,
+            phone: '', 
+            pin: finalPin,
+            authMethod: 'password',
+            isProfileComplete: true,
+            emailVerified: true,
+            referredByPin: referralPin.toUpperCase().trim(),
+            createdAt: serverTimestamp()
+          };
+          
+          await setDoc(userRef, newProfile);
+          onAuthSuccess(newProfile as unknown as UserProfile, rememberMe);
+        }
       }
     } catch (e: any) {
-      setError(e.message || "Erro ao recuperar seu pin.");
+      console.error(e);
+      if (e.code === 'auth/popup-closed-by-user') {
+        setError("Login cancelado pelo usuário.");
+      } else {
+        setError("Erro ao autenticar com Google.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -469,18 +752,115 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       )}
 
       <div className="space-y-6 flex-1 max-w-md mx-auto w-full">
-        {mode === 'register' && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 ml-1">
-              <UserIcon size={16} className="text-blue-600" />
-              <label className="text-[13px] font-bold text-black leading-tight">Seu nome completo <span className="text-red-500">*</span></label>
+        {mode === 'login' && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="text-center">
+              <h2 className="text-2xl font-black text-black tracking-tight">Bem-vindo de volta</h2>
+              <p className="text-slate-500 font-bold text-sm mt-1">Acesse sua conta para continuar no MyPlacar Pro</p>
             </div>
-            <Input value={name} onChange={e => setName(formatPortugueseName(e.target.value))} className="h-16 text-lg font-bold rounded-3xl" />
           </div>
         )}
-        
-        {(mode !== 'confirm_email' && mode !== 'verifying' && mode !== 'recovery_sent') && (
-          <div className="space-y-2">
+
+        {mode === 'register' && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="text-center">
+              <h2 className="text-2xl font-black text-black tracking-tight">Criar nova conta</h2>
+              <p className="text-slate-500 font-bold text-sm mt-1">Junte-se à comunidade MyPlacar Pro</p>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 ml-1">
+                <UserIcon size={16} className="text-blue-600" />
+                <label className="text-[13px] font-bold text-black leading-tight">Seu nome completo <span className="text-red-500">*</span></label>
+              </div>
+              <Input value={name} onChange={e => setName(formatPortugueseName(e.target.value))} className="h-16 text-lg font-bold rounded-3xl" />
+            </div>
+          </div>
+        )}
+
+        {mode === 'reset_password' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center">
+              <h2 className="text-2xl font-black text-black tracking-tight">Redefinir sua senha</h2>
+              <p className="text-slate-500 font-bold text-sm mt-1">Crie uma nova senha para {email}</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 ml-1">
+                  <Lock size={16} className="text-blue-600" />
+                  <label className="text-[13px] font-bold text-black leading-tight">Nova senha forte <span className="text-red-500">*</span></label>
+                </div>
+                <Input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password} 
+                  onChange={e => setPassword(e.target.value)}
+                  className="h-16 text-lg font-bold rounded-3xl"
+                  placeholder="Digite sua nova senha"
+                  rightAction={<button onClick={() => setShowPassword(!showPassword)} className="p-3 text-slate-400">{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button>}
+                />
+              </div>
+
+              <div className="bg-slate-50 rounded-3xl p-4 space-y-2 border border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Requisitos da senha</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasMinLength ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasMinLength ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                      {passwordValidation.hasMinLength && <CheckIcon size={10} />}
+                    </div>
+                    Mín. 6 caracteres
+                  </div>
+                  <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasUpper ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasUpper ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                      {passwordValidation.hasUpper && <CheckIcon size={10} />}
+                    </div>
+                    1 Maiúscula
+                  </div>
+                  <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasLower ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasLower ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                      {passwordValidation.hasLower && <CheckIcon size={10} />}
+                    </div>
+                    1 Minúscula
+                  </div>
+                  <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasSpecial ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasSpecial ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                      {passwordValidation.hasSpecial && <CheckIcon size={10} />}
+                    </div>
+                    1 Especial
+                  </div>
+                </div>
+                <div className="mt-3 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-500 ${
+                      Object.values(passwordValidation).filter(v => v === true).length <= 1 ? 'bg-red-500 w-1/4' :
+                      Object.values(passwordValidation).filter(v => v === true).length <= 2 ? 'bg-orange-500 w-2/4' :
+                      Object.values(passwordValidation).filter(v => v === true).length <= 3 ? 'bg-yellow-500 w-3/4' :
+                      'bg-emerald-500 w-full'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <Button 
+                onClick={handleResetPassword} 
+                disabled={isLoading || !passwordValidation.isValid}
+                className="w-full h-16 rounded-3xl text-lg font-black shadow-xl shadow-blue-100"
+              >
+                {isLoading ? <Loader2 className="animate-spin" /> : 'Salvar nova senha'}
+              </Button>
+
+              <button 
+                onClick={() => setMode('login')} 
+                className="w-full py-2 text-sm font-bold text-slate-400 hover:text-blue-600 transition-colors"
+              >
+                Voltar para o login
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(mode === 'login' || mode === 'register') && (
+          <div className="space-y-2 animate-in fade-in duration-500">
             <div className="flex items-center gap-2 ml-1">
               <Mail size={16} className="text-blue-600" />
               <label className="text-[13px] font-bold text-black leading-tight">E-mail de acesso {mode === 'register' && <span className="text-red-500">*</span>}</label>
@@ -533,21 +913,98 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
            </div>
         )}
 
-        {mode === 'login' && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 ml-1">
-              <Hash size={16} className="text-blue-600" />
-              <label className="text-[13px] font-bold text-black leading-tight">Pin de acesso</label>
+        {mode === 'register' && (
+          <div className="space-y-4 animate-in fade-in duration-500">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 ml-1">
+                <Lock size={16} className="text-blue-600" />
+                <label className="text-[13px] font-bold text-black leading-tight">Crie uma senha forte <span className="text-red-500">*</span></label>
+              </div>
+              <Input 
+                type={showPassword ? "text" : "password"} 
+                value={password} 
+                onChange={e => setPassword(e.target.value)}
+                className="h-16 text-lg font-bold rounded-3xl"
+                rightAction={<button onClick={() => setShowPassword(!showPassword)} className="p-3 text-slate-400">{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button>}
+              />
             </div>
-            <Input 
-              placeholder="•••••" 
-              type={!showPin ? "password" : "text"} 
-              value={pin} 
-              onChange={e => setPin(e.target.value.toUpperCase().trim())} 
-              rightAction={<button onClick={() => setShowPin(!showPin)} className={`p-3 transition-colors ${showPin ? 'text-emerald-500' : 'text-red-500'}`}>{showPin ? <Eye size={20} /> : <EyeOff size={20} />}</button>} 
-              className="text-center font-black text-3xl tracking-[0.4em] h-16 rounded-4xl" 
-            />
-            <button onClick={handleForgotPassword} className="w-full text-right text-[11px] font-black text-brand-500">Esqueci meu pin</button>
+
+            <div className="bg-slate-50 rounded-3xl p-4 space-y-2 border border-slate-100">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Requisitos da senha</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasMinLength ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasMinLength ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                    {passwordValidation.hasMinLength && <CheckIcon size={10} />}
+                  </div>
+                  Mín. 6 caracteres
+                </div>
+                <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasUpper ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasUpper ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                    {passwordValidation.hasUpper && <CheckIcon size={10} />}
+                  </div>
+                  1 Maiúscula
+                </div>
+                <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasLower ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasLower ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                    {passwordValidation.hasLower && <CheckIcon size={10} />}
+                  </div>
+                  1 Minúscula
+                </div>
+                <div className={`flex items-center gap-2 text-[11px] font-bold ${passwordValidation.hasSpecial ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.hasSpecial ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                    {passwordValidation.hasSpecial && <CheckIcon size={10} />}
+                  </div>
+                  1 Especial
+                </div>
+              </div>
+              <div className="mt-3 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-500 ${
+                    Object.values(passwordValidation).filter(v => v === true).length <= 1 ? 'bg-red-500 w-1/4' :
+                    Object.values(passwordValidation).filter(v => v === true).length <= 2 ? 'bg-orange-500 w-2/4' :
+                    Object.values(passwordValidation).filter(v => v === true).length <= 3 ? 'bg-yellow-500 w-3/4' :
+                    'bg-emerald-500 w-full'
+                  }`}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {mode === 'login' && (
+          <div className="space-y-4">
+            {authMethod === 'password' ? (
+              <div className="space-y-2 animate-in slide-in-from-top-2 duration-500">
+                <div className="flex items-center gap-2 ml-1">
+                  <Lock size={16} className="text-blue-600" />
+                  <label className="text-[13px] font-bold text-black leading-tight">Senha de acesso</label>
+                </div>
+                <Input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password} 
+                  onChange={e => setPassword(e.target.value)}
+                  className="h-16 text-lg font-bold rounded-3xl"
+                  rightAction={<button onClick={() => setShowPassword(!showPassword)} className="p-3 text-slate-400">{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button>}
+                />
+                <button onClick={handleForgotPassword} className="w-full text-right text-[11px] font-black text-brand-500">Esqueci minha senha</button>
+              </div>
+            ) : (
+              <div className="space-y-2 animate-in slide-in-from-top-2 duration-500">
+                <div className="flex items-center gap-2 ml-1">
+                  <Hash size={16} className="text-blue-600" />
+                  <label className="text-[13px] font-bold text-black leading-tight">Pin de acesso</label>
+                </div>
+                <Input 
+                  placeholder="•••••" 
+                  type={!showPin ? "password" : "text"} 
+                  value={pin} 
+                  onChange={e => setPin(e.target.value.toUpperCase().trim())} 
+                  rightAction={<button onClick={() => setShowPin(!showPin)} className={`p-3 transition-colors ${showPin ? 'text-emerald-500' : 'text-red-500'}`}>{showPin ? <Eye size={20} /> : <EyeOff size={20} />}</button>} 
+                  className="text-center font-black text-3xl tracking-[0.4em] h-16 rounded-4xl" 
+                />
+                <button onClick={handleForgotPassword} className="w-full text-right text-[11px] font-black text-brand-500">Esqueci meu pin</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -568,13 +1025,13 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           </div>
         )}
 
-        {mode === 'recovery_sent' && (
+         {mode === 'recovery_sent' && (
           <div className="flex flex-col items-center justify-center py-12 animate-in zoom-in duration-500">
              <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-6 shadow-inner">
                 <MailCheck size={40} strokeWidth={3} />
              </div>
-             <p className="text-lg font-black text-black tracking-tight text-center">E-mail de recuperação enviado!</p>
-             <p className="text-xs font-bold text-slate-500 mt-2 text-center">Verifique sua caixa de entrada para recuperar o acesso.</p>
+             <p className="text-lg font-black text-black tracking-tight text-center">{authMethod === 'password' ? 'E-mail de redefinição enviado!' : 'E-mail de recuperação enviado!'}</p>
+             <p className="text-xs font-bold text-slate-500 mt-2 text-center">{authMethod === 'password' ? 'Siga as instruções no e-mail para criar uma nova senha.' : 'Verifique sua caixa de entrada para recuperar o acesso.'}</p>
           </div>
         )}
 
@@ -595,7 +1052,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         {mode !== 'verifying' && mode !== 'recovery_sent' && (
           <Button 
             disabled={isLoading} 
-            onClick={mode === 'login' ? handleLogin : (mode === 'confirm_email' ? handleConfirmEmail : handleRequestRegister)} 
+            onClick={mode === 'login' ? handleLogin : (mode === 'confirm_email' ? handleConfirmEmail : (mode === 'reset_password' ? handleResetPassword : handleRequestRegister))} 
             className="w-full py-6 rounded-4xl font-black shadow-xl text-xl !bg-brand-600 text-white gap-3"
           >
             {isLoading ? (
@@ -605,12 +1062,40 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                {mode === 'login' ? 'Entrar no MyPlacar' : (
-                  mode === 'confirm_email' ? 'Validar código de segurança' : <>Solicitar cadastro <UserPlus size={20} className="text-white" /></>
+                {mode === 'login' ? <><LogIn size={24} /> Entrar no MyPlacar</> : (
+                  mode === 'confirm_email' ? 'Validar código de segurança' : <><UserPlus size={20} className="text-white" /> Solicitar cadastro</>
                 )}
               </div>
             )}
           </Button>
+        )}
+
+        {mode === 'login' && (
+          <div className="w-full space-y-3">
+            <div className="flex items-center gap-3 py-2">
+              <div className="h-[1px] flex-1 bg-slate-100" />
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">ou</span>
+              <div className="h-[1px] flex-1 bg-slate-100" />
+            </div>
+
+            {window.PublicKeyCredential && (
+              <button 
+                onClick={handlePasskeyLogin}
+                disabled={isLoading}
+                className="w-full py-4 rounded-3xl font-black border-2 border-blue-50 text-blue-600 flex items-center justify-center gap-3 active:scale-95 transition-all bg-blue-50/30"
+              >
+                <Fingerprint size={20} /> Entrar com biometria
+              </button>
+            )}
+
+            <button 
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+              className="w-full py-4 rounded-3xl font-black border-2 border-red-50 text-red-600 flex items-center justify-center gap-3 active:scale-95 transition-all bg-red-50/30"
+            >
+              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" /> Continuar com Google
+            </button>
+          </div>
         )}
 
         {mode === 'recovery_sent' && (
@@ -623,31 +1108,99 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         )}
         
         {mode === 'login' && (
-          <div className="w-full flex items-center px-4 gap-2">
+          <div className="w-full flex items-center justify-end px-4 gap-2">
             <span className="text-[11px] font-black text-black">Manter conectado</span>
             <Toggle id="remember-me" checked={rememberMe} onChange={setRememberMe} />
           </div>
         )}
 
         {mode === 'login' ? (
-          <div className="w-full flex flex-col items-center">
-            <Button onClick={() => setMode('register')} variant="secondary" className="w-full py-6 rounded-4xl font-black border-2 border-brand-100 text-brand-600 text-xl">
-              Criar nova conta
+          <div className="w-full flex flex-col items-center gap-4">
+            <Button onClick={() => setMode('register')} variant="secondary" className="w-full py-6 rounded-4xl font-black border-2 border-brand-100 text-brand-600 text-xl gap-3">
+              <UserPlus size={24} /> Criar nova conta
             </Button>
             
-            <button 
+            <Button 
               onClick={handleManualUpdateCheck} 
               disabled={isCheckingUpdate}
-              className={`flex items-center gap-2 text-[13px] font-black mt-8 transition-all duration-300 ${remoteVersionFound ? 'text-amber-500 scale-110 animate-bounce' : updateFeedback ? 'text-emerald-500' : 'text-emerald-500 opacity-60'}`}
+              variant="secondary"
+              className={`w-full py-4 rounded-4xl font-black border-2 text-lg gap-3 transition-all duration-300 ${remoteVersionFound ? 'border-amber-200 text-amber-600 animate-bounce' : 'border-emerald-100 text-emerald-600'}`}
             >
-               {isCheckingUpdate ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
+               {isCheckingUpdate ? <Loader2 size={20} className="animate-spin" /> : <RotateCw size={20} />}
                {updateFeedback || (remoteVersionFound ? `Atualizar para ${remoteVersionFound}` : `Versão ${APP_VERSION}`)}
-            </button>
+            </Button>
+
+            <Button 
+              onClick={onOfflineMode}
+              variant="secondary"
+              className="w-full py-4 rounded-4xl font-black border-2 border-slate-200 text-slate-500 text-lg gap-3"
+            >
+              <WifiOff size={20} /> Usar offline
+            </Button>
           </div>
         ) : (mode !== 'verifying' && mode !== 'recovery_sent') ? (
-          <button onClick={() => setMode('login')} className="text-black text-xs font-black py-4">Já tenho uma conta</button>
+          <Button 
+            onClick={() => setMode('login')} 
+            variant="secondary" 
+            className="w-full py-4 rounded-4xl font-black border-2 border-slate-100 text-blue-600 text-lg gap-3 shadow-sm"
+          >
+            <ArrowLeft size={20} /> Já tenho uma conta
+          </Button>
         ) : null}
       </div>
+
+      {showRecoveryInfoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="flex flex-col items-center text-center space-y-6">
+              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center">
+                <KeyRound size={32} />
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-black tracking-tight">Informações de recuperação</h3>
+                <p className="text-xs font-bold text-slate-500">Use as informações abaixo se não receber o e-mail em instantes.</p>
+              </div>
+
+              <div className="w-full space-y-1">
+                <p className="text-sm font-black text-black">{recoveryInfo.userName}</p>
+                <p className="text-xs font-bold text-slate-500">{recoveryInfo.userEmail}</p>
+                {recoveryInfo.userUid && (
+                  <p className="text-[10px] font-mono text-slate-400 mt-1">Uid: {recoveryInfo.userUid}</p>
+                )}
+              </div>
+
+              <div className="w-full p-4 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col items-center gap-3">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  {recoveryInfo.type === 'link' ? 'Status do envio' : 'Seu pin de acesso'}
+                </p>
+                <div className="w-full bg-white p-3 rounded-2xl border border-slate-200 text-center">
+                  {recoveryInfo.type === 'link' ? (
+                    <span className="text-sm font-black text-emerald-600">Link enviado com sucesso</span>
+                  ) : (
+                    <code className="text-sm font-black text-blue-600 break-all">{recoveryInfo.value}</code>
+                  )}
+                </div>
+                {recoveryInfo.type === 'pin' && (
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(recoveryInfo.value);
+                      alert("Copiado para a área de transferência!");
+                    }}
+                    className="flex items-center gap-2 text-[11px] font-black text-blue-600 hover:text-blue-700 transition-colors"
+                  >
+                    <SearchCheck size={14} /> Copiar informação
+                  </button>
+                )}
+              </div>
+
+              <Button onClick={() => setShowRecoveryInfoModal(false)} className="w-full py-4 rounded-3xl font-black shadow-lg">
+                Entendi, fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
