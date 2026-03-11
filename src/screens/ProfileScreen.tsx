@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, ShieldCheck, Save, Loader2, LogOut, Settings, Smartphone, CheckCircle2, AlertCircle, Mic, MapPin, Camera, Wifi, RotateCw, Zap, Crown, Star, ArrowRight, HelpCircle, Eye, EyeOff, Hash, Lock, Check as CheckIcon, Shield, Fingerprint } from 'lucide-react';
-import { Input } from '../components/Input'; 
-import { Button } from '../components/Button'; 
-import { UserProfile, MatchSettings } from '../types'; 
-import { formatPortugueseName, applyGoldenRule } from '../utils/formatters'; 
-import { APP_VERSION } from '../constants'; 
-import { getAuthInstance, getDb } from '../firebase'; 
+import { Input } from '../components/Input';
+import { Button } from '../components/Button';
+import { UserProfile, MatchSettings } from '../types';
+import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
+import { APP_VERSION } from '../constants';
+import { getAuthInstance, getDb } from '../firebase';
 import { createUserWithEmailAndPassword, updatePassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, updateDoc, Firestore } from 'firebase/firestore';
 

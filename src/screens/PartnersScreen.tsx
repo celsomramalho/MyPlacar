@@ -1,14 +1,14 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, ShieldCheck, Plus, Play, Info, CloudDownload, CloudUpload, RotateCw, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Antenna, Wifi, Dices, UserCheck, ArrowRightLeft, UserX, History, Check, CheckSquare, Eraser, Mic, Clock, Trophy } from 'lucide-react';
-import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent, TournamentEntry } from '../types'; 
-import { Input } from '../components/Input'; 
-import { getDb } from '../firebase'; 
-import { collection, query, where, getDocs, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
-import { LiveIndicator } from '../components/LiveIndicator'; 
-import { formatPortugueseName } from '../utils/formatters'; 
-import { Toggle } from '../components/Toggle'; 
-import { ScoreboardIcon } from '../components/ScoreboardIcon'; 
+import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent, TournamentEntry } from '../types';
+import { Input } from '../components/Input';
+import { getDb } from '../firebase';
+import { collection, query, where, getDocs, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore';
+import { LiveIndicator } from '../components/LiveIndicator';
+import { formatPortugueseName } from '../utils/formatters';
+import { Toggle } from '../components/Toggle';
+import { ScoreboardIcon } from '../components/ScoreboardIcon';
 
 interface Props {
   partners: Partner[];
