@@ -9,9 +9,10 @@ import { notificationService } from '../services/notificationService';
 
 interface Props {
   adminProfile: UserProfile;
+  appUrl: string;
 }
 
-export const CommunicationsPanel: React.FC<Props> = ({ adminProfile }) => {
+export const CommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) => {
   const [type, setType] = useState<'message' | 'poll'>('message');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -107,7 +108,7 @@ export const CommunicationsPanel: React.FC<Props> = ({ adminProfile }) => {
         });
       }
 
-      await notificationService.triggerHybridNotifications(commData, usersToNotify, sendEmail);
+      await notificationService.triggerHybridNotifications(commData, usersToNotify, sendEmail, appUrl);
       
       setStatus('Comunicado enviado com sucesso!');
       setTitle('');

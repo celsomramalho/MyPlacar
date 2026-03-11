@@ -58,6 +58,7 @@ interface Props {
   onOpenMenu?: () => void;
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
+  appUrl: string;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -238,7 +239,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl } = props;
 
   if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
     return (
@@ -433,7 +434,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const [customBaseUrl, setCustomBaseUrl] = useState(() => {
     const saved = localStorage.getItem('myPlacar_CustomHost');
     if (saved) return saved;
-    return window.location.origin + '/';
+    return appUrl.endsWith('/') ? appUrl : appUrl + '/';
   });
   const [isEditingUrl, setIsEditingUrl] = useState(false);
   const mirrorLink = useMemo(() => {

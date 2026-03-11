@@ -26,6 +26,7 @@ interface Props {
     variant?: 'info' | 'danger' | 'success';
     icon?: React.ReactNode;
   } | null>>;
+  appUrl: string;
 }
 
 interface MarsIconProps {
@@ -61,7 +62,7 @@ const DesfazerTimeIcon: React.FC<DesfazerTimeIconProps> = ({ size = 16 }) => (
 
 const idxToLetter = (idx: number) => String.fromCharCode(65 + idx);
 
-export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack, userProfile, onExitTournament, onAddPartner, partners, onStartTournamentMatch, setModalConfig }) => {
+export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack, userProfile, onExitTournament, onAddPartner, partners, onStartTournamentMatch, setModalConfig, appUrl }) => {
   const [event, setEvent] = useState<TournamentEvent>(initialEvent);
   const [entries, setEntries] = useState<TournamentEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -90,7 +91,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
            coAdmins.includes(userProfile.pin.toUpperCase());
   }, [userProfile, event.coAdminPins]);
 
-  const baseUrl = window.location.origin;
+  const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
 
   useEffect(() => {
     const db = getDb();

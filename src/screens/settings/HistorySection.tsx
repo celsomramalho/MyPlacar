@@ -29,6 +29,7 @@ interface Props {
   onViewMap: (id: string) => void;
   selectedMatches: Set<string>;
   setSelectedMatches: React.Dispatch<React.SetStateAction<Set<string>>>;
+  appUrl: string;
 }
 
 const formatDateShort = (dateStr: string) => {
@@ -54,7 +55,8 @@ export const HistorySection: React.FC<Props> = ({
   onDeleteMatch,
   onViewMap,
   selectedMatches,
-  setSelectedMatches
+  setSelectedMatches,
+  appUrl
 }) => {
   const [expandedMatch, setExpandedMatch] = useState<string | null>(null);
 
@@ -317,7 +319,11 @@ export const HistorySection: React.FC<Props> = ({
                         </div>
 
                         <div className="flex gap-3">
-                          <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/?viewMatch=${item.id}`); alert("Link copiado!"); }} className="flex-1 py-5 bg-black text-white rounded-3xl font-black text-sm tracking-tight shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+                          <button onClick={() => { 
+                            const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+                            navigator.clipboard.writeText(`${appBaseUrl}/?viewMatch=${item.id}`); 
+                            alert("Link copiado!"); 
+                          }} className="flex-1 py-5 bg-black text-white rounded-3xl font-black text-sm tracking-tight shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
                             <Share2 size={18} /> Compartilhar
                           </button>
                           <button onClick={() => onDeleteMatch(item.id)} className="w-16 h-16 bg-red-50 text-red-500 border-2 border-red-100 rounded-[1.8rem] flex items-center justify-center active:scale-90 transition-all shadow-sm">

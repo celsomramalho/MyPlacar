@@ -18,9 +18,10 @@ interface Props {
   setIsUpdatingVersion: (val: boolean) => void;
   onOfflineMode?: () => void;
   initialReferralPin?: string;
+  appUrl: string;
 }
 
-export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, onOfflineMode, initialReferralPin = '' }) => {
+export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, onOfflineMode, initialReferralPin = '', appUrl }) => {
   const [showSplash, setShowSplash] = useState(true);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
@@ -467,7 +468,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       
       await setDoc(doc(db as Firestore, "users", cleanEmail), newProfile);
       
-      const appBaseUrl = window.location.origin; 
+      const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl; 
       await emailService.sendEmail('template_wn0f65h', {
         to_name: newProfile.nickname,
         email: cleanEmail,
@@ -526,7 +527,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
       // Tenta enviar redefinição de senha do Firebase para todos que podem ter uma conta
       let firebaseEmailSent = false;
-      const resetLink = `${window.location.origin}/?mode=resetPassword`;
+      const resetLink = `${appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl}/?mode=resetPassword`;
       try {
         await sendPasswordResetEmail(auth, cleanEmail, {
           url: resetLink,
@@ -552,7 +553,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       // Se for método pin ou se o envio do Firebase falhou, tenta enviar o pin via EmailJS
       if (userAuthMethod === 'pin' || !firebaseEmailSent) {
         setStatusText('Enviando dados de acesso por e-mail...');
-        const appBaseUrl = window.location.origin; 
+        const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl; 
         const emailSent = await emailService.sendEmail('template_wn0f65h', {
           to_name: userName,
           email: cleanEmail,
@@ -631,7 +632,13 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       }
     } catch (err: any) {
       console.error(err);
-      setError("Falha na autenticação biométrica.");
+      if (err.name === 'NotAllowedError') {
+        setError("Autenticação cancelada pelo usuário.");
+      } else if (err.message === "Biometria não reconhecida ou não cadastrada.") {
+        setError("Biometria não reconhecida ou não cadastrada.");
+      } else {
+        setError("Falha na autenticação biométrica.");
+      }
     } finally {
       setIsLoading(false);
     }

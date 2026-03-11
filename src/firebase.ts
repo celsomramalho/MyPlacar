@@ -34,12 +34,15 @@ const getDb = (): Firestore | null => {
     // LocalStorage tem limite de apenas 5MB, o que causa o estouro facilmente.
     try {
       dbInstance = initializeFirestore(app, {
-        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+        experimentalForceLongPolling: true
       });
       console.log("MyPlacar: Firestore inicializado com cache persistente.");
     } catch (cacheError) {
       console.warn("MyPlacar: Falha ao inicializar cache persistente, tentando sem persistência.", cacheError);
-      dbInstance = initializeFirestore(app, {});
+      dbInstance = initializeFirestore(app, {
+        experimentalForceLongPolling: true
+      });
     }
     
     return dbInstance;

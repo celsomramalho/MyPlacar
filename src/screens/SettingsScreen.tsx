@@ -57,6 +57,7 @@ interface Props {
   onJoinTournament: () => void;
   onExitTournament: () => void;
   isOfflineMode?: boolean;
+  appUrl: string;
 }
 
 export const SettingsScreen: React.FC<Props> = (props) => {
@@ -88,6 +89,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
       case 'history':
         return (
           <HistorySection 
+            appUrl={props.appUrl}
             history={props.history} 
             searchQuery="" 
             setSearchQuery={() => {}} 

@@ -33,6 +33,30 @@ const App: React.FC = () => {
   const initialSpectatorPin = useMemo(() => urlParams.get('viewPin'), [urlParams]);
   
   const [currentScreen, setCurrentScreen] = useState<Screen>((initialSpectatorMatchId || initialSpectatorPin) ? 'spectator' : 'auth');
+
+  useEffect(() => {
+    const db = getDb();
+    if (!db) return;
+    const unsubscribe = onSnapshot(doc(db, "system", "config"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.appUrl) {
+          setAppUrl(data.appUrl);
+          
+          // Redirecionamento automático para a URL canônica se necessário
+          const hostname = window.location.hostname;
+          const canonicalUrl = new URL(data.appUrl);
+          if (hostname !== canonicalUrl.hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1')) {
+            // Preserva os parâmetros da URL ao redirecionar
+            const currentSearch = window.location.search;
+            window.location.href = data.appUrl + currentSearch;
+          }
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [spectatorMatchId, setMatchId] = useState<string | null>(initialSpectatorMatchId);
   const [spectatorPin, setSpectatorPin] = useState<string | null>(initialSpectatorPin);
 
@@ -53,6 +77,7 @@ const App: React.FC = () => {
   const [cloudLiveExists, setCloudLiveExists] = useState<boolean>(false);
   const [unreadCommsCount, setUnreadCommsCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [appUrl, setAppUrl] = useState("https://my-placar.vercel.app/");
 
   const deviceId = useMemo(() => {
     if (sessionDeviceId) return sessionDeviceId;
@@ -1299,6 +1324,8 @@ const App: React.FC = () => {
             pin: userProfile.pin,
             authMethod: userProfile.authMethod || 'pin',
             isProfileComplete: userProfile.isProfileComplete,
+            passkeyCredentialId: userProfile.passkeyCredentialId || null,
+            passkeyPublicKey: userProfile.passkeyPublicKey || null,
             updatedAt: serverTimestamp()
           }, { merge: true });
         }
@@ -1641,7 +1668,7 @@ const App: React.FC = () => {
       )}
       <InstallPwaModal isOpen={showInstallPwa} onClose={() => setShowInstallPwa(false)} deferredPrompt={deferredPrompt} />
       {currentScreen === 'spectator' && (spectatorMatchId || spectatorPin) && <SpectatorScreen matchId={spectatorMatchId || ''} spectatorPin={spectatorPin || ''} onExit={handleExitSpectator} />}
-      {currentScreen === 'auth' && <AuthScreen onAuthSuccess={(p, s) => { 
+      {currentScreen === 'auth' && <AuthScreen appUrl={appUrl} onAuthSuccess={(p, s) => { 
         setIsOfflineMode(false);
         if (s) { 
           try { 
@@ -1654,6 +1681,7 @@ const App: React.FC = () => {
         checkLivePresence(p.pin); 
       }} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} initialReferralPin={initialReferralPin} onOfflineMode={handleOfflineMode} />}
       {currentScreen === 'settings' && <SettingsScreen 
+        appUrl={appUrl}
         history={matchHistory} setHistory={setMatchHistory} 
         onDeleteMatch={id => setModalConfig({ title: "Excluir partida?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: async () => { const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim(); if (db && cleanEmail && navigator.onLine) try { await deleteDoc(doc(db as any, "matches", id)); } catch(e) {} persistHistory(matchHistory.filter(m => m.id !== id)); }, onCancel: () => setModalConfig(null) })} 
         onDeleteManyMatches={ids => setModalConfig({ title: `Excluir ${ids.size} partidas?`, message: "Apagar registros permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: async () => { const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim(); if (db && cleanEmail && navigator.onLine) { const batch = writeBatch(db as any); ids.forEach(id => batch.delete(doc(db as any, "matches", id))); try { await batch.commit(); } catch(e) {} } persistHistory(matchHistory.filter(m => !ids.has(m.id))); }, onCancel: () => setModalConfig(null) })}
@@ -1690,7 +1718,7 @@ const App: React.FC = () => {
         onOpenMenu={() => setIsMenuOpen(true)}
         isOfflineMode={isOfflineMode}
       />}
-      {currentScreen === 'partners' && <PartnersScreen partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => setCurrentScreen('settings')} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} onWatchLive={(pin) => { setSpectatorPin(pin); setCurrentScreen('spectator'); }} 
+      {currentScreen === 'partners' && <PartnersScreen appUrl={appUrl} partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => setCurrentScreen('settings')} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} onWatchLive={(pin) => { setSpectatorPin(pin); setCurrentScreen('spectator'); }} 
         onDeletePartners={(ids) => setModalConfig({ 
           title: "Excluir jogadores?", 
           message: `Deseja excluir os jogadores selecionados?`, 
@@ -1751,8 +1779,7 @@ const App: React.FC = () => {
           onOpenMenu={() => setIsMenuOpen(true)}
         />
       )}
-      {currentScreen === 'scoreboard' && (gameState || isWaitingSync) && <ScoreboardScreen gameState={gameState!} onScoreUpdate={handleScoreUpdate} onUndo={() => { 
-        if (!gameState || !isCommandOwner) return;
+      {currentScreen === 'scoreboard' && (gameState || isWaitingSync) && <ScoreboardScreen appUrl={appUrl} gameState={gameState!} onScoreUpdate={handleScoreUpdate} onUndo={() => {         if (!gameState || !isCommandOwner) return;
         const p = undoPoint(historyStack); 
         if (p) { 
           const s = gameState!; const isFinishedPending = (s.isMatchOver && !s.isConfirmedFinished);
@@ -1779,7 +1806,7 @@ const App: React.FC = () => {
       }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as TournamentEvent); setCurrentScreen('event-detail'); }} />}
-      {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
+      {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
       {currentScreen === 'communications' && <CommunicationsScreen userProfile={userProfile} onBack={() => setCurrentScreen('settings')} />}
     </div>
     </ErrorBoundary>

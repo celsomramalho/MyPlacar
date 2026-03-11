@@ -26,6 +26,7 @@ interface Props {
   onDeletePartners?: (ids: Set<string>) => void;
   matchSettings: MatchSettings;
   activeEvent: TournamentEvent | null;
+  appUrl: string;
 }
 
 const SOLID_COLORS_BG: Record<string, string> = {
@@ -61,7 +62,7 @@ const VenusIcon = ({ size = 14 }) => (
   </svg>
 );
 
-export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, userProfile, p1Color, p2Color, onWatchLive, onDeletePartners, matchSettings, activeEvent }) => {
+export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, userProfile, p1Color, p2Color, onWatchLive, onDeletePartners, matchSettings, activeEvent, appUrl }) => {
   const [activeTab, setActiveTab] = useState<'list' | 'queue'>('list');
   const [isShuffling, setIsShuffling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,7 +105,10 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const isAlreadyRegistered = useMemo(() => partners.some(p => p.pin.toUpperCase() === pinInput.toUpperCase().trim()), [partners, pinInput]);
   const maxPerTeam = isDoubles ? 2 : 1;
   const meAsPartner: Partner = useMemo(() => ({ id: 'me', name: userProfile.name, nickname: userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu', pin: userProfile.pin, origin: 'manual', addedAt: 0, gender: userProfile.gender || 'M' }), [userProfile]);
-  const shareLink = useMemo(() => `${window.location.origin}/?ref=${encodeURIComponent(userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu')}&pin_ref=${userProfile.pin.toUpperCase()}`, [userProfile]);
+  const shareLink = useMemo(() => {
+    const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+    return `${appBaseUrl}/?ref=${encodeURIComponent(userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu')}&pin_ref=${userProfile.pin.toUpperCase()}`;
+  }, [userProfile, appUrl]);
   const qrCodeShareUrl = useMemo(() => `https://quickchart.io/qr?text=${encodeURIComponent(shareLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`, [shareLink]);
 
   const selectedInQueue = useMemo(() => playerQueue.filter(p => p.isSelected), [playerQueue]);

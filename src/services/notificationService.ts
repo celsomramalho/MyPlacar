@@ -23,7 +23,7 @@ export const notificationService = {
   /**
    * Envia e-mails formatados para os destinatários
    */
-  sendEmailNotification: async (comm: Partial<Communication>, targetEmails: string[]) => {
+  sendEmailNotification: async (comm: Partial<Communication>, targetEmails: string[], appUrl: string) => {
     if (targetEmails.length === 0) return;
     console.log(`[Email Notification] Enviando para ${targetEmails.length} e-mails:`, {
       subject: comm.title,
@@ -38,7 +38,7 @@ export const notificationService = {
         email: email,
         title: comm.title,
         message: comm.content,
-        app_url: window.location.origin
+        app_url: appUrl
       })
     );
 
@@ -48,7 +48,7 @@ export const notificationService = {
   /**
    * Orquestra o envio híbrido baseado no tipo de comunicado
    */
-  triggerHybridNotifications: async (comm: Partial<Communication>, users: { email: string, pushToken?: string }[], sendEmail: boolean = true) => {
+  triggerHybridNotifications: async (comm: Partial<Communication>, users: { email: string, pushToken?: string }[], sendEmail: boolean = true, appUrl: string = window.location.origin) => {
     const emails = users.map(u => u.email).filter(Boolean);
     const tokens = users.map(u => u.pushToken).filter(Boolean) as string[];
 
@@ -57,7 +57,7 @@ export const notificationService = {
     ];
 
     if (sendEmail) {
-      promises.push(notificationService.sendEmailNotification(comm, emails));
+      promises.push(notificationService.sendEmailNotification(comm, emails, appUrl));
     }
 
     const results = await Promise.allSettled(promises);

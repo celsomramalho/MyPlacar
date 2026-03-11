@@ -59,6 +59,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [remoteAppVersion, setRemoteAppVersion] = useState(LOCAL_VERSION);
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isVoiceSaved, setIsVoiceSaved] = useState(true);
+  const [appUrl, setAppUrl] = useState("https://my-placar.vercel.app/");
 
   const [userSearch, setUserSearch] = useState('');
   const [foundUsers, setFoundUsers] = useState<UserProfile[]>([]);
@@ -186,6 +187,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         if (data.voiceCommands) setVoiceCommands(data.voiceCommands);
         if (data.errorSoundType) setErrorSound(data.errorSoundType);
         if (data.appVersion) setRemoteAppVersion(data.appVersion);
+        if (data.appUrl) setAppUrl(data.appUrl);
         if (data.buckets && Array.isArray(data.buckets)) {
           setBuckets(data.buckets.includes(defaultBucketName) ? data.buckets : [defaultBucketName, ...data.buckets]);
         }
@@ -455,7 +457,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       await setDoc(doc(db, "system", "config"), { 
         voiceCommands: voiceCommands,
         errorSoundType: errorSound,
-        appVersion: remoteAppVersion
+        appVersion: remoteAppVersion,
+        appUrl: appUrl
       }, { merge: true });
       setStatus({ type: 'success', msg: "Configurações globais salvas!" });
       setIsVoiceSaved(true);
@@ -692,6 +695,24 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                       <span className="text-[11px] font-black text-black">Versão do sistema</span>
                     </div>
                     <input type="text" value={remoteAppVersion} onChange={(e) => { setRemoteAppVersion(e.target.value); setIsVoiceSaved(false); }} className="w-full h-[52px] bg-white border rounded-xl px-4 font-black text-lg text-black outline-none" />
+                </div>
+                <div className="p-4 bg-slate-50 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black text-black">Url do sistema</span>
+                    </div>
+                    <div className="relative">
+                      <select 
+                        value={appUrl} 
+                        onChange={(e) => { setAppUrl(e.target.value); setIsVoiceSaved(false); }} 
+                        className="w-full h-[52px] bg-white border rounded-xl px-4 font-black text-sm text-black outline-none appearance-none"
+                      >
+                        <option value="https://myplacar-244305581318.us-west1.run.app/">Google Cloud Run (run.app)</option>
+                        <option value="https://my-placar.vercel.app/">Vercel (vercel.app)</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                        <ChevronDown size={20} />
+                      </div>
+                    </div>
                 </div>
                 <div className="px-2">
                   <Button onClick={handleSaveVoiceConfigs} disabled={isSavingVoice} className={`w-full !py-4 rounded-2xl font-black text-white shadow-xl flex gap-2 ${isVoiceSaved ? '!bg-[#3b82f6]' : '!bg-amber-500'}`}>{isSavingVoice ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar alterações</Button>
@@ -1047,7 +1068,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         )}
         {adminTab === 'comms' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <CommunicationsPanel adminProfile={{ name: 'Admin', nickname: 'Administrador', email: 'admin@myplacar.pro', phone: '', pin: 'admin', isProfileComplete: true, isAdmin: true }} />
+            <CommunicationsPanel appUrl={appUrl} adminProfile={{ name: 'Admin', nickname: 'Administrador', email: 'admin@myplacar.pro', phone: '', pin: 'admin', isProfileComplete: true, isAdmin: true }} />
           </div>
         )}
       </main>
