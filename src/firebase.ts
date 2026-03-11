@@ -5,7 +5,7 @@ import { getAuth, Auth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyADlTazVqqT6vyI-SBmG_PKI2jvdzAYhMg",
-  authDomain: "my-placar.vercel.app",
+  authDomain: "myplacar-b4ccc.firebaseapp.com",
   projectId: "myplacar-b4ccc",
   storageBucket: "myplacar-b4ccc.firebasestorage.app",
   messagingSenderId: "244305581318",
@@ -29,17 +29,17 @@ const getDb = (): Firestore | null => {
       app = getApp();
     }
     
-    // O erro QuotaExceededError no log indica que o Firestore estava tentando usar WebStorage (LocalStorage)
+    // O erro QuotaExceededError no log indica que o firestore estava tentando usar WebStorage (LocalStorage)
     // Isso acontece como fallback quando o IndexedDB não está disponível (ex: em alguns iframes)
     // LocalStorage tem limite de apenas 5MB, o que causa o estouro facilmente.
     try {
       dbInstance = initializeFirestore(app, {
-        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+        localCache: persistentLocalCache({}),
         experimentalForceLongPolling: true
       });
-      console.log("MyPlacar: Firestore inicializado com cache persistente.");
+      console.log("Myplacar: Firestore inicializado com cache persistente.");
     } catch (cacheError) {
-      console.warn("MyPlacar: Falha ao inicializar cache persistente, tentando sem persistência.", cacheError);
+      console.warn("Myplacar: Falha ao inicializar cache persistente, tentando sem persistência.", cacheError);
       dbInstance = initializeFirestore(app, {
         experimentalForceLongPolling: true
       });
@@ -47,7 +47,7 @@ const getDb = (): Firestore | null => {
     
     return dbInstance;
   } catch (e: any) {
-    console.error("MyPlacar: Erro fatal ao inicializar Firestore.", e);
+    console.error("Myplacar: Erro fatal ao inicializar firestore.", e);
     return null;
   }
 };
@@ -65,10 +65,10 @@ export const clearFirestoreCache = async () => {
         if (key.includes('firestore')) localStorage.removeItem(key);
       });
       
-      console.log("MyPlacar: Cache do Firestore limpo com sucesso.");
+      console.log("Myplacar: Cache do firestore limpo com sucesso.");
       window.location.reload();
     } catch (e) {
-      console.error("MyPlacar: Erro ao limpar cache do Firestore.", e);
+      console.error("Myplacar: Erro ao limpar cache do firestore.", e);
       // Força reload mesmo com erro
       window.location.reload();
     }
@@ -82,7 +82,7 @@ const getAuthInstance = (): Auth | null => {
     authInstance = getAuth(app);
     return authInstance;
   } catch (e) {
-    console.error("MyPlacar: Erro ao conectar com Auth.");
+    console.error("Myplacar: Erro ao conectar com auth.");
     return null;
   }
 };
@@ -94,7 +94,7 @@ const getStorageInstance = (): FirebaseStorage | null => {
     storageInstance = getStorage(app);
     return storageInstance;
   } catch (e) {
-    console.error("MyPlacar: Erro ao conectar com Storage.");
+    console.error("Myplacar: Erro ao conectar com storage.");
     return null;
   }
 };

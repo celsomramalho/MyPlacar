@@ -401,8 +401,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         pin_code: code,
         confirmation_link: confirmationLink,
         app_access_link: appBaseUrl,
-        subject: "Código de verificação - MyPlacar",
-        from_name: "MyPlacar",
+        subject: "Código de verificação - Myplacar",
+        from_name: "Myplacar",
         reply_to: "celsomramalho@gmail.com"
       });
 
@@ -474,8 +474,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         email: cleanEmail,
         pin_code: finalPin,
         app_access_link: appBaseUrl,
-        subject: "Seu pin de acesso - MyPlacar",
-        from_name: "MyPlacar",
+        subject: "Seu pin de acesso - Myplacar",
+        from_name: "Myplacar",
         reply_to: "celsomramalho@gmail.com"
       });
 
@@ -559,8 +559,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           email: cleanEmail,
           pin_code: userPin,
           app_access_link: appBaseUrl,
-          subject: "Recuperação de acesso - MyPlacar",
-          from_name: "MyPlacar",
+          subject: "Recuperação de acesso - Myplacar",
+          from_name: "Myplacar",
           reply_to: "celsomramalho@gmail.com"
         });
 
@@ -670,7 +670,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError(null);
-    setStatusText('Conectando com Google...');
+    setStatusText('Conectando com google...');
     try {
       const auth = getAuthInstance();
       const db = getDb();
@@ -712,7 +712,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (e.code === 'auth/popup-closed-by-user') {
         setError("Login cancelado pelo usuário.");
       } else {
-        setError("Erro ao autenticar com Google.");
+        setError("Erro ao autenticar com google.");
       }
     } finally {
       setIsLoading(false);
@@ -725,7 +725,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         <div className="relative z-10 flex flex-col items-center">
           <ScoreboardIcon className="w-56 h-56 mb-8 drop-shadow-[0_25px_50px_rgba(0,0,0,0.15)] animate-bounce" style={{animationDuration: '3s'}} />
           <div className="text-center space-y-4">
-            <h1 className="text-[48px] font-black text-black tracking-tighter leading-none font-display">MyPlacar Pro</h1>
+            <h1 className="text-[48px] font-black text-black tracking-tighter leading-none font-display">Myplacar pro</h1>
             <p className="text-[17px] font-bold text-black max-w-[280px]">O jogo em suas mãos</p>
           </div>
         </div>
@@ -737,7 +737,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     <div className="min-h-screen bg-white flex flex-col p-8 animate-in slide-in-from-bottom-6 duration-700 overflow-y-auto no-scrollbar">
       <div className="flex flex-col items-center justify-center mb-10 mt-6 text-center">
         <ScoreboardIcon className="w-32 h-32 mb-6 drop-shadow-2xl" />
-        <h1 className="text-[36px] font-black text-black tracking-tighter leading-none font-display">MyPlacar Pro</h1>
+        <h1 className="text-[36px] font-black text-black tracking-tighter leading-none font-display">Myplacar pro</h1>
       </div>
 
       {eventDetails && (
@@ -763,7 +763,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="text-center">
               <h2 className="text-2xl font-black text-black tracking-tight">Bem-vindo de volta</h2>
-              <p className="text-slate-500 font-bold text-sm mt-1">Acesse sua conta para continuar no MyPlacar Pro</p>
+              <p className="text-slate-500 font-bold text-sm mt-1">Acesse sua conta para continuar no Myplacar pro</p>
             </div>
           </div>
         )}
@@ -772,7 +772,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="text-center">
               <h2 className="text-2xl font-black text-black tracking-tight">Criar nova conta</h2>
-              <p className="text-slate-500 font-bold text-sm mt-1">Junte-se à comunidade MyPlacar Pro</p>
+              <p className="text-slate-500 font-bold text-sm mt-1">Junte-se à comunidade Myplacar pro</p>
             </div>
             
             <div className="space-y-2">
@@ -1069,7 +1069,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                {mode === 'login' ? <><LogIn size={24} /> Entrar no MyPlacar</> : (
+                {mode === 'login' ? <><LogIn size={24} /> Entrar no Myplacar</> : (
                   mode === 'confirm_email' ? 'Validar código de segurança' : <><UserPlus size={20} className="text-white" /> Solicitar cadastro</>
                 )}
               </div>
@@ -1100,7 +1100,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               disabled={isLoading}
               className="w-full py-4 rounded-3xl font-black border-2 border-red-50 text-red-600 flex items-center justify-center gap-3 active:scale-95 transition-all bg-red-50/30"
             >
-              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" /> Continuar com Google
+              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" /> Continuar com google
             </button>
           </div>
         )}

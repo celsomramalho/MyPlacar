@@ -3,7 +3,7 @@ import { MatchSettings, VoiceCommands, SportDefinition } from './types';
 
 // ATENÇÃO: Esta é a versão deste arquivo de código. 
 // Se você mudar no Admin para um número DIFERENTE deste, todos os usuários serão forçados a atualizar.
-export const APP_VERSION = '2.4.03'; 
+export const APP_VERSION = '2.4.04'; 
 
 export const SPORT_GROUPS = [
   { id: 'raquetes', name: 'Raquetes', icon: '🎾' },
@@ -15,11 +15,11 @@ export const SPORT_GROUPS = [
 
 export const SPORT_LIST: SportDefinition[] = [
   { id: 'tennis', group: 'raquetes', name: 'Tênis', defaultIcon: '🎾', engine: 'tennis' },
-  { id: 'beach-tennis', group: 'raquetes', name: 'Beach Tênis', defaultIcon: '🏖️', engine: 'tennis' },
+  { id: 'beach-tennis', group: 'raquetes', name: 'Beach tênis', defaultIcon: '🏖️', engine: 'tennis' },
   { id: 'pickleball', group: 'raquetes', name: 'Pickleball', defaultIcon: '🥒', engine: 'rally' },
   { id: 'voley', group: 'coletivos', name: 'Vôlei', defaultIcon: '🏐', engine: 'rally' },
-  { id: 'voley-praia', group: 'coletivos', name: 'Vôlei de Praia', defaultIcon: '⛱️', engine: 'rally' },
-  { id: 'pingpong', group: 'mesa', name: 'Tênis de Mesa', defaultIcon: '🏓', engine: 'rally' },
+  { id: 'voley-praia', group: 'coletivos', name: 'Vôlei de praia', defaultIcon: '⛱️', engine: 'rally' },
+  { id: 'pingpong', group: 'mesa', name: 'Tênis de mesa', defaultIcon: '🏓', engine: 'rally' },
   { id: 'truco', group: 'cartas', name: 'Truco', defaultIcon: '🃏', engine: 'points-fixed' }
 ];
 

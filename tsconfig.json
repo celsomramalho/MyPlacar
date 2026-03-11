@@ -11,7 +11,6 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "noImplicitAny": false,
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -19,5 +18,5 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  "include": ["./**/*.ts", "./**/*.tsx"]
+  "include": ["src/**/*"]
 }

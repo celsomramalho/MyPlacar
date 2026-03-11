@@ -43,10 +43,10 @@ const App: React.FC = () => {
         if (data.appUrl) {
           setAppUrl(data.appUrl);
           
-          // Redirecionamento automático para a URL canônica se necessário
+          // Redirecionamento automático para a url canônica se necessário
           const hostname = window.location.hostname;
           const canonicalUrl = new URL(data.appUrl);
-          if (hostname !== canonicalUrl.hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1')) {
+          if (hostname !== canonicalUrl.hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.includes('.run.app')) {
             // Preserva os parâmetros da URL ao redirecionar
             const currentSearch = window.location.search;
             window.location.href = data.appUrl + currentSearch;
@@ -315,7 +315,7 @@ const App: React.FC = () => {
                           (e.message && e.message.includes('exceeded the quota'));
       
       if (isQuotaError) {
-        console.error("MyPlacar: Limite de armazenamento excedido (QuotaExceededError).");
+        console.error("Myplacar: Limite de armazenamento excedido (QuotaExceededError).");
         
         // 1. Limpeza imediata de backups
         Object.keys(localStorage).forEach(key => {
