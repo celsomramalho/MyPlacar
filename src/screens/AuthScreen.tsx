@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint } from 'lucide-react';
-import { Input } from '../components/Input';
-import { Button } from '../components/Button';
-import { Toggle } from '../components/Toggle';
-import { UserProfile } from '../types';
-import { getDb, getAuthInstance } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
-import { ScoreboardIcon } from '../components/ScoreboardIcon';
-import { emailService } from '../services/emailService';
-import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
-import { APP_VERSION } from '../constants';
+import { Input } from '../components/Input'; 
+import { Button } from '../components/Button'; 
+import { Toggle } from '../components/Toggle'; 
+import { UserProfile } from '../types'; 
+import { getDb, getAuthInstance } from '../firebase'; 
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore'; 
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth'; 
+import { ScoreboardIcon } from '../components/ScoreboardIcon'; 
+import { emailService } from '../services/emailService'; 
+import { formatPortugueseName, applyGoldenRule } from '../utils/formatters'; 
+import { APP_VERSION } from '../constants'; 
 
 interface Props {
   onAuthSuccess: (profile: UserProfile, stayConnected: boolean) => void;
@@ -392,7 +392,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       
       setStatusText('Enviando seu código por e-mail...');
 
-      const appBaseUrl = 'https://myplacar-244305581318.us-west1.run.app';
+      const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
       const confirmationLink = `${appBaseUrl}/?email=${encodeURIComponent(cleanEmail)}&code=${code}`;
 
       const emailSent = await emailService.sendEmail('template_v9fhxz3', {

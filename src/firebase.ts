@@ -5,7 +5,7 @@ import { getAuth, Auth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyADlTazVqqT6vyI-SBmG_PKI2jvdzAYhMg",
-  authDomain: "myplacar-b4ccc.firebaseapp.com",
+  authDomain: "my-placar.vercel.app",
   projectId: "myplacar-b4ccc",
   storageBucket: "myplacar-b4ccc.firebasestorage.app",
   messagingSenderId: "244305581318",
