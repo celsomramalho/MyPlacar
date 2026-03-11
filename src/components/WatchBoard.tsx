@@ -36,6 +36,8 @@ interface WatchBoardProps {
   handleScoreCardPointerUp: (type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => void;
   isEmbedded?: boolean;
   scorePressProgress?: { player: 1 | 2; type: 'game' | 'gameSet' | 'matchSet'; progress: number } | null;
+  cloudLiveExists?: boolean;
+  role?: 'owner' | 'observer' | 'spectator';
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -70,14 +72,14 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, isCommandOwner, onResetMatch, onOpenLiveControl, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress
+  isEmbedded, scorePressProgress, cloudLiveExists, role
 }) => {
   const [pressProgress, setPressProgress] = React.useState(0);
   const pressTimerRef = React.useRef<any>(null);
   const progressIntervalRef = React.useRef<any>(null);
 
   const startPress = () => {
-    if (!onResetMatch) return;
+    if (!onResetMatch || role === 'observer') return;
     setPressProgress(0);
     const startTime = Date.now();
     progressIntervalRef.current = setInterval(() => {
@@ -123,7 +125,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     );
   };
 
-  const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed);
+  const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
 
   return (
     <div className={`${isEmbedded ? 'relative w-full aspect-[4/5] rounded-[2rem]' : 'fixed inset-0 h-full w-full z-[99999]'} bg-black flex select-none touch-none overflow-hidden ${gameState.isLiveClosed ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
@@ -254,7 +256,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           </button>
           {isLiveActive ? (
             <LiveIndicator 
-              role={isCommandOwner ? 'owner' : 'observer'} 
+              role={role || (isCommandOwner ? 'owner' : 'observer')} 
               variant="header" 
               onClick={onOpenLiveControl}
               onPointerDown={startPress}

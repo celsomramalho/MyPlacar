@@ -20,7 +20,7 @@ import { incrementScore, undoPoint } from './utils/tennisEngine';
 import { applyGoldenRule } from './utils/formatters';
 import { getDb } from './firebase';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
-import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2 } from 'lucide-react';
+import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2, ArrowLeftRight } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator';
 
 const CURRENT_DATA_VERSION = '3.0.0';
@@ -220,6 +220,8 @@ const App: React.FC = () => {
   const [confirmDeleteLive, setConfirmDeleteLive] = useState(false);
   const [isRecoveryFromMatchOver, setIsRecoveryFromMatchOver] = useState(false);
   const [isWaitingSync, setIsWaitingSync] = useState(false);
+  const [isServiceInterrupted, setIsServiceInterrupted] = useState(false);
+  const [newAppUrl, setNewAppUrl] = useState("");
 
   const [activeEvent, setActiveEvent] = useState<TournamentEvent | null>(() => safeJsonParse('myPlacarActiveEvent', null));
   const [userEntryDate, setUserEntryDate] = useState<number | null>(null);
@@ -515,15 +517,6 @@ const App: React.FC = () => {
     }
   }, [userProfile.email, userProfile.pin]);
 
-  const isAdmin = userProfile.email?.toLowerCase().trim() === 'celsomramalho@gmail.com';
-
-  useEffect(() => {
-    const overlay = document.getElementById('brightness-overlay');
-    if (overlay) {
-      overlay.style.opacity = ((100 - matchSettings.brightness) / 100).toString();
-    }
-  }, [matchSettings.brightness]);
-
   const handleCheckUpdate = useCallback(async () => {
     if (!navigator.onLine) return false;
     const db = getDb();
@@ -533,7 +526,7 @@ const App: React.FC = () => {
       if (snap.exists()) {
         const remoteVersion = (snap.data().appVersion || "").toString().trim().replace(/^v/, '');
         const localVersion = LOCAL_CODE_VERSION.trim().replace(/^v/, '');
-        if (!remoteVersion || remoteVersion === localVersion) return false;
+        
         const isNewer = (remote: string, local: string) => {
           const r = remote.split('.').map(Number);
           const l = local.split('.').map(Number);
@@ -546,11 +539,54 @@ const App: React.FC = () => {
           }
           return false;
         };
-        if (isNewer(remoteVersion, localVersion)) return remoteVersion; 
+
+        // Check for service interruption/deprecation
+        const deprecatedVersions = snap.data().deprecatedVersions || [];
+        const minVersion = snap.data().minVersion || "";
+        const serviceMovedTo = snap.data().serviceMovedTo || "";
+
+        // Hardcoded check for 2.3.04 or lower as requested
+        const isTooOld = !isNewer(localVersion, "2.3.04") || localVersion === "2.3.04";
+
+        if (isTooOld || deprecatedVersions.includes(LOCAL_CODE_VERSION) || (minVersion && !isNewer(localVersion, minVersion.replace(/^v/, '')) && localVersion !== minVersion.replace(/^v/, ''))) {
+          if (serviceMovedTo) {
+            setNewAppUrl(serviceMovedTo);
+            setIsServiceInterrupted(true);
+            return true;
+          }
+        }
+
+        if (!remoteVersion || remoteVersion === localVersion) return false;
+        
+        if (isNewer(remoteVersion, localVersion)) {
+          setModalConfig({
+            title: "Nova versão disponível",
+            message: `Uma nova versão (${remoteVersion}) está disponível. Deseja atualizar agora?`,
+            confirmLabel: "Sim, atualizar",
+            onConfirm: () => {
+              window.location.reload();
+            },
+            onCancel: () => setModalConfig(null)
+          });
+          return remoteVersion;
+        }
       }
     } catch (e) { console.error(e); }
     return false; 
-  }, []);
+  }, [setModalConfig]);
+
+  useEffect(() => {
+    handleCheckUpdate();
+  }, [handleCheckUpdate]);
+
+  const isAdmin = userProfile.email?.toLowerCase().trim() === 'celsomramalho@gmail.com';
+
+  useEffect(() => {
+    const overlay = document.getElementById('brightness-overlay');
+    if (overlay) {
+      overlay.style.opacity = ((100 - matchSettings.brightness) / 100).toString();
+    }
+  }, [matchSettings.brightness]);
 
   useEffect(() => {
     if (!userProfile.pin || !currentFullDeviceName) return;
@@ -1682,8 +1718,29 @@ const App: React.FC = () => {
            <button onClick={() => setIsWaitingSync(false)} className="px-8 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs tracking-widest active:scale-95 transition-all shadow-sm border border-gray-100" > Cancelar sincronismo </button>
         </div>
       )}
+      {isServiceInterrupted && (
+        <div className="fixed inset-0 z-[200000] bg-slate-900 flex items-center justify-center p-6 text-center">
+          <div className="bg-white rounded-[3rem] p-10 w-full max-w-md shadow-2xl space-y-8 animate-in zoom-in duration-500">
+            <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mx-auto shadow-inner">
+              <AlertCircle size={48} />
+            </div>
+            <div className="space-y-3">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">Versão descontinuada</h2>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed">Esta versão do aplicativo não é mais suportada. Por favor, utilize o novo endereço oficial para continuar usando o My placar.</p>
+            </div>
+            <div className="pt-4">
+              <button 
+                onClick={() => window.location.href = newAppUrl}
+                className="w-full py-5 bg-blue-600 text-white rounded-3xl font-black text-base shadow-xl shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3"
+              >
+                Acessar novo endereço <ArrowLeftRight size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showLiveControlOverlay && (
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100005] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
            <div className="bg-white/90 backdrop-blur-2xl rounded-[3rem] p-8 w-full max-sm shadow-2xl border border-white/50 flex flex-col items-center gap-6 animate-in zoom-in duration-300 relative">
               <button onClick={() => { setShowLiveControlOverlay(false); setConfirmDeleteLive(false); }} className="absolute top-6 right-6 p-2 text-black hover:bg-gray-100 rounded-full transition-colors active:scale-90"><X size={28} strokeWidth={3} /></button>
               <LiveIndicator variant="card" className="scale-125 mb-2" />
@@ -1885,7 +1942,7 @@ const App: React.FC = () => {
       }} onCorrectScore={handleCorrectScore} isAdmin={isAdmin} onConfirmMatch={async () => {
         const db = getDb(); if (db && userProfile.pin && navigator.onLine) try { await updateDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), { isConfirmedFinished: true, isLiveClosed: true }); } catch (e) {} 
         setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false} : null);
-      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} />}
+      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}

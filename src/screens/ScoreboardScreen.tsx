@@ -59,6 +59,8 @@ interface Props {
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
   appUrl: string;
+  cloudLiveExists?: boolean;
+  role?: 'owner' | 'observer' | 'spectator';
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -239,7 +241,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role } = props;
 
   if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
     return (
@@ -255,7 +257,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const resetProgressIntervalRef = useRef<any>(null);
 
   const startResetPress = () => {
-    if (!onResetMatch) return;
+    if (!onResetMatch || role === 'observer') return;
     setResetPressProgress(0);
     const startTime = Date.now();
     resetProgressIntervalRef.current = setInterval(() => {
@@ -276,6 +278,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   const [scorePressProgress, setScorePressProgress] = useState<{ player: 1 | 2; type: 'game' | 'gameSet' | 'matchSet'; progress: number } | null>(null);
   const scoreProgressIntervalRef = useRef<any>(null);
+  const hasDraggedRef = useRef(false);
 
   const [isLogsOpen, setIsLogsOpen] = useState(gameState.matchConfig.isHistoryEnabled);
   const [isTimelineOpen, setIsTimelineOpen] = useState(gameState.matchConfig.isHistoryEnabled);
@@ -309,8 +312,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [gameState.isMirroringActive, gameState.commandOwnerId, currentDeviceId]);
 
   const isLiveActive = useMemo(() => {
-    return !!(gameState.isMirroringActive && !gameState.isLiveClosed);
-  }, [gameState.isMirroringActive, gameState.isLiveClosed]);
+    return !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
+  }, [gameState.isMirroringActive, gameState.isLiveClosed, cloudLiveExists]);
 
   const resetDimTimer = useCallback(() => {
     if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
@@ -551,7 +554,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   const handleScoreCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => {
     if (gameState.isConfirmedFinished || gameState.isMatchOver || isWaitingAck || isRecoveryFromMatchOver || gameState.isLiveClosed || !isCommandOwner) return;
-    isLongPressActive.current = false; touchStartPos.current = { x: e.clientX, y: e.clientY };
+    isLongPressActive.current = false; 
+    hasDraggedRef.current = false;
+    touchStartPos.current = { x: e.clientX, y: e.clientY };
     
     const duration = gameState.matchConfig.isWatchMode ? 4000 : 3000;
     const startTime = Date.now();
@@ -571,7 +576,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }, duration);
   };
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (longPressTimer.current && Math.sqrt(Math.pow(e.clientX - touchStartPos.current.x, 2) + Math.pow(e.clientY - touchStartPos.current.y, 2)) > 10) { 
+    const dist = Math.sqrt(Math.pow(e.clientX - touchStartPos.current.x, 2) + Math.pow(e.clientY - touchStartPos.current.y, 2));
+    if (dist > 10) {
+      hasDraggedRef.current = true;
+    }
+    if (longPressTimer.current && dist > 10) { 
       clearTimeout(longPressTimer.current); 
       longPressTimer.current = null; 
       if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
@@ -583,7 +592,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
     setScorePressProgress(null);
     
-    if (!isLongPressActive.current && correctionMode === 'none' && !gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) {
+    if (!isLongPressActive.current && !hasDraggedRef.current && correctionMode === 'none' && !gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) {
       if (gameState.isMirroringActive && gameState.commandOwnerId !== currentDeviceId) return;
       
       // Item 8: Retirar incremento do placar do game nos botões de set (matchSet) e gameSet
@@ -621,6 +630,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
         pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
         handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
+        cloudLiveExists={cloudLiveExists}
+        role={role}
       />
     );
   }
@@ -691,7 +702,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           </button>
           {isLiveActive && (
             <LiveIndicator 
-              role={isCommandOwner ? 'owner' : 'observer'} 
+              role={role || (isCommandOwner ? 'owner' : 'observer')} 
               onClick={onOpenLiveControl} 
               onPointerDown={startResetPress}
               onPointerUp={stopResetPress}
@@ -777,6 +788,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
              handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
              isEmbedded={true}
              scorePressProgress={scorePressProgress}
+             cloudLiveExists={cloudLiveExists}
+             role={role}
            />
         </div>
         {!isOfflineMode && (
