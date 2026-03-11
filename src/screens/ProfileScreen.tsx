@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, ShieldCheck, Save, Loader2, LogOut, Settings, Smartphone, CheckCircle2, AlertCircle, Mic, MapPin, Camera, Wifi, RotateCw, Zap, Crown, Star, ArrowRight, HelpCircle, Eye, EyeOff, Hash, Lock, Check as CheckIcon, Shield, Fingerprint } from 'lucide-react';
-import { Input } from '../components/Input'; 
-import { Button } from '../components/Button'; 
-import { UserProfile, MatchSettings } from '../types'; 
-import { formatPortugueseName, applyGoldenRule } from '../utils/formatters'; 
-import { APP_VERSION } from '../constants'; 
-import { getAuthInstance, getDb } from '../firebase'; 
+import { Input } from '../components/Input';
+import { Button } from '../components/Button';
+import { UserProfile, MatchSettings } from '../types';
+import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
+import { APP_VERSION } from '../constants';
+import { getAuthInstance, getDb } from '../firebase';
 import { createUserWithEmailAndPassword, updatePassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, updateDoc, Firestore } from 'firebase/firestore';
 
@@ -20,6 +20,7 @@ interface Props {
   setIsUpdatingVersion?: (val: boolean) => void;
   settings?: MatchSettings;
   setSettings?: React.Dispatch<React.SetStateAction<MatchSettings>>;
+  onVersionTap?: () => void;
 }
 
 type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'checking' | 'unavailable';
@@ -46,7 +47,7 @@ const guessGender = (name: string): 'M' | 'F' | undefined => {
   return lastChar === 'A' ? 'F' : 'M';
 };
 
-export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, onLogout, onGoAdmin, onCheckUpdate, setIsUpdatingVersion, settings, setSettings }) => {
+export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, onLogout, onGoAdmin, onCheckUpdate, setIsUpdatingVersion, settings, setSettings, onVersionTap }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
@@ -387,12 +388,29 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
 
       if (credential) {
         const rawId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
-        setProfile({
+        const updatedProfile = {
           ...profile,
           passkeyCredentialId: rawId,
           passkeyPublicKey: "registered" 
-        });
-        alert("Biometria cadastrada com sucesso! Clique em 'Salvar perfil' para concluir.");
+        };
+        setProfile(updatedProfile);
+        
+        // Salvamento imediato para garantir persistência
+        try {
+          localStorage.setItem('myPlacarUserProfile', JSON.stringify(updatedProfile));
+          const db = getDb();
+          if (db && profile.email) {
+            const userDocRef = doc(db as Firestore, "users", profile.email.toLowerCase().trim());
+            await updateDoc(userDocRef, {
+              passkeyCredentialId: rawId,
+              passkeyPublicKey: "registered"
+            });
+          }
+        } catch (saveErr) {
+          console.error("Myplacar: Erro ao salvar biometria imediatamente.", saveErr);
+        }
+        
+        alert("Biometria cadastrada e salva com sucesso!");
       }
     } catch (err) {
       console.error(err);
@@ -684,7 +702,10 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
 
         <Button 
           variant="secondary"
-          onClick={handleManualUpdateCheck}
+          onClick={() => {
+            handleManualUpdateCheck();
+            if (onVersionTap) onVersionTap();
+          }}
           disabled={isCheckingUpdate}
           className={`w-full py-4 rounded-3xl font-black border-2 text-sm gap-3 transition-all duration-300 ${remoteVersionFound ? 'border-amber-200 text-amber-600 animate-bounce' : 'border-emerald-100 text-emerald-600'}`}
         >

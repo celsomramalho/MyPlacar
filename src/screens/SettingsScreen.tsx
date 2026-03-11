@@ -58,6 +58,7 @@ interface Props {
   onExitTournament: () => void;
   isOfflineMode?: boolean;
   appUrl: string;
+  onVersionTap?: () => void;
 }
 
 export const SettingsScreen: React.FC<Props> = (props) => {
@@ -85,6 +86,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           setIsUpdatingVersion={props.setIsUpdatingVersion}
           settings={props.settings}
           setSettings={props.setSettings}
+          onVersionTap={props.onVersionTap}
         />;
       case 'history':
         return (

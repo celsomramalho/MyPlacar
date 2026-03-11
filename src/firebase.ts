@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, Firestore, terminate, clearIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, Firestore, terminate, clearIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getAuth, Auth } from 'firebase/auth';
 
@@ -34,7 +34,9 @@ const getDb = (): Firestore | null => {
     // LocalStorage tem limite de apenas 5MB, o que causa o estouro facilmente.
     try {
       dbInstance = initializeFirestore(app, {
-        localCache: persistentLocalCache({}),
+        localCache: persistentLocalCache({
+          tabManager: persistentSingleTabManager({})
+        }),
         experimentalForceLongPolling: true
       });
       console.log("Myplacar: Firestore inicializado com cache persistente.");

@@ -25,6 +25,43 @@ import { LiveIndicator } from './components/LiveIndicator';
 
 const CURRENT_DATA_VERSION = '3.0.0';
 
+const LogViewer: React.FC<{logs: {type: string, msg: string, time: string}[], onClose: () => void, onClear: () => void}> = ({logs, onClose, onClear}) => {
+  return (
+    <div className="fixed inset-0 z-[2000] bg-black/95 text-white p-6 flex flex-col font-mono text-[10px] animate-in fade-in duration-300">
+      <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+        <div className="flex flex-col">
+          <h3 className="text-sm font-black uppercase tracking-widest text-blue-400">Registros do sistema</h3>
+          <p className="text-[9px] font-bold text-slate-500 mt-1">Captura de logs em tempo real</p>
+        </div>
+        <button onClick={onClose} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-colors">
+          <X size={24} />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-3 no-scrollbar">
+        {logs.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-2">
+            <AlertCircle size={40} opacity={0.2} />
+            <p className="italic">Nenhum registro capturado ainda.</p>
+          </div>
+        )}
+        {logs.map((log, i) => (
+          <div key={i} className={`p-3 rounded-2xl border-l-4 ${log.type === 'error' ? 'bg-red-500/5 border-red-500/50' : log.type === 'warn' ? 'bg-amber-500/5 border-amber-500/50' : 'bg-blue-500/5 border-blue-500/50'}`}>
+            <div className="flex justify-between items-center opacity-40 mb-2 text-[8px] font-black uppercase tracking-tighter">
+              <span className={log.type === 'error' ? 'text-red-400' : log.type === 'warn' ? 'text-amber-400' : 'text-blue-400'}>{log.type}</span>
+              <span>{log.time}</span>
+            </div>
+            <div className="break-all whitespace-pre-wrap text-[11px] font-medium leading-relaxed text-slate-300">{log.msg}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 flex gap-3">
+        <button onClick={onClear} className="flex-1 py-4 bg-white/5 hover:bg-white/10 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all active:scale-95">Limpar</button>
+        <button onClick={onClose} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all active:scale-95 shadow-lg shadow-blue-900/20">Fechar</button>
+      </div>
+    </div>
+  );
+};
+
 let sessionDeviceId = "";
 
 const App: React.FC = () => {
@@ -99,6 +136,49 @@ const App: React.FC = () => {
     const profile = safeJsonParse('myPlacarUserProfile', { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' });
     return (profile && profile.email) ? profile : { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' };
   });
+
+  // MC: Log Viewer para celular
+  const [logs, setLogs] = useState<{type: 'log' | 'error' | 'warn', msg: string, time: string}[]>([]);
+  const [showLogViewer, setShowLogViewer] = useState(false);
+  const [versionTapCount, setVersionTapCount] = useState(0);
+
+  useEffect(() => {
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalWarn = console.warn;
+
+    const addLog = (type: 'log' | 'error' | 'warn', args: any[]) => {
+      const msg = args.map(arg => {
+        if (arg instanceof Error) return `${arg.name}: ${arg.message}\n${arg.stack}`;
+        return typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg);
+      }).join(' ');
+      const time = new Date().toLocaleTimeString();
+      setLogs(prev => [{type, msg, time}, ...prev].slice(0, 100));
+    };
+
+    console.log = (...args) => { addLog('log', args); originalLog(...args); };
+    console.error = (...args) => { addLog('error', args); originalError(...args); };
+    console.warn = (...args) => { addLog('warn', args); originalWarn(...args); };
+
+    return () => {
+      console.log = originalLog;
+      console.error = originalError;
+      console.warn = originalWarn;
+    };
+  }, []);
+
+  const handleVersionTap = () => {
+    setVersionTapCount(prev => {
+      const next = prev + 1;
+      if (next >= 5) {
+        setShowLogViewer(true);
+        return 0;
+      }
+      return next;
+    });
+    // Reset do contador após 2 segundos de inatividade
+    setTimeout(() => setVersionTapCount(0), 2000);
+  };
 
   const [matchSettings, setMatchSettings] = useState<MatchSettings>(() => {
     const s = safeJsonParse('myPlacarSettings', { ...DEFAULT_TENNIS_SETTINGS, winnersStay: false });
@@ -1766,7 +1846,9 @@ const App: React.FC = () => {
         userProfile={userProfile} 
         isOfflineMode={isOfflineMode} 
         onExitOffline={handleExitOffline} 
+        onVersionTap={handleVersionTap}
       />}
+      {showLogViewer && <LogViewer logs={logs} onClose={() => setShowLogViewer(false)} onClear={() => setLogs([])} />}
       {currentScreen === 'admin' && (
         <AdminScreen 
           onBack={() => setCurrentScreen('settings')} 

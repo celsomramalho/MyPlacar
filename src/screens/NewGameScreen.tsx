@@ -37,9 +37,10 @@ interface Props {
   userProfile: UserProfile;
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
+  onVersionTap?: () => void;
 }
 
-export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, onBack, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, activeEvent, onJoinTournament, onExitTournament, onOpenMenu, userProfile, isOfflineMode, onExitOffline }) => {
+export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, onBack, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, activeEvent, onJoinTournament, onExitTournament, onOpenMenu, userProfile, isOfflineMode, onExitOffline, onVersionTap }) => {
   const [activeGroupId, setActiveGroupId] = useState<string>(() => (SPORT_LIST.find(s => s.id === settings.sportType)?.group as string) || 'raquetes');
   const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [dbSports, setDbSports] = useState<any[]>([]);
