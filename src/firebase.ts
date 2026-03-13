@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, Firestore, terminate, clearIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, Firestore, terminate, clearIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getAuth, Auth } from 'firebase/auth';
 
@@ -35,7 +35,7 @@ const getDb = (): Firestore | null => {
     try {
       dbInstance = initializeFirestore(app, {
         localCache: persistentLocalCache({
-          tabManager: persistentSingleTabManager({})
+          tabManager: persistentMultipleTabManager()
         }),
         experimentalForceLongPolling: true
       });

@@ -1,9 +1,10 @@
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu, Gavel } from 'lucide-react';
+import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu, Gavel, Trash2, Users } from 'lucide-react';
 import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
+import { Input } from '../components/Input';
 import { GameState, PointType, PointEvent, UserProfile } from '../types';
 import { useGeminiReferee } from '../hooks/useGeminiReferee';
 import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../hooks/useScoreAnnouncer';
@@ -15,7 +16,7 @@ import { getDb } from '../firebase';
 import { doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { LazySportIcon } from '../components/LazySportIcon';
 import { LiveIndicator } from '../components/LiveIndicator';
-import { applyGoldenRule } from '../utils/formatters';
+import { applyGoldenRule, maskPin } from '../utils/formatters';
 import { WatchBoard } from '../components/WatchBoard';
 
 interface CommandLogEntry {
@@ -62,6 +63,16 @@ interface Props {
   appUrl: string;
   cloudLiveExists?: boolean;
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
+  isOriginalOwner?: boolean;
+  judgePinInput?: string;
+  setJudgePinInput?: (val: string) => void;
+  isSearchingJudgePin?: boolean;
+  judgeNicknameLookup?: string;
+  isSavingJudge?: boolean;
+  onAddJudge?: () => void;
+  onDeleteJudge?: () => void;
+  isJudgeOnline?: boolean;
+  onSelectJudgeFromPartners?: () => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -242,7 +253,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners } = props;
 
   if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
     return (
@@ -350,14 +361,24 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [gameState.p1.score, gameState.p2.score, (gameState.pointHistory?.length ?? 0)]);
 
   const groupedControllers = useMemo(() => {
-    const counts: Record<string, number> = {};
+    const counts: Record<string, { count: number; isOnline: boolean; isOwner: boolean }> = {};
     const list = Object.entries(gameState.controllers || {});
+    const now = Date.now();
     list.forEach(([id, data]) => {
-      const d = data as { label: string; lastSeen: number };
-      counts[d.label] = (counts[d.label] || 0) + 1;
+      const d = data as { label: string; lastSeen: number; isOwner?: boolean };
+      if (!counts[d.label]) {
+        counts[d.label] = { count: 0, isOnline: false, isOwner: false };
+      }
+      counts[d.label].count += 1;
+      if (now - d.lastSeen < 60000) {
+        counts[d.label].isOnline = true;
+      }
+      if (d.isOwner) {
+        counts[d.label].isOwner = true;
+      }
     });
     return Object.entries(counts)
-      .map(([name, count]) => ({ name, count }))
+      .map(([name, { count, isOnline, isOwner }]) => ({ name, count, isOnline, isOwner }))
       .sort((a, b) => {
         if (a.name === gameState.commandOwner) return -1;
         if (b.name === gameState.commandOwner) return 1;
@@ -895,15 +916,87 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   <button onClick={() => setIsLiveExpanded(!isLiveExpanded)} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center active:scale-90 transition-all border border-gray-100">{isLiveExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
                </div>
                {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
-                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ name, count }) => { const isPrimary = gameState.commandOwner === name; return <div key={name} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${isPrimary && !gameState.isLiveClosed ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : 'bg-white border-gray-100 text-gray-400 opacity-60'}`}>{isPrimary && !gameState.isLiveClosed ? <ShieldCheck size={14} className="text-blue-600" fill="white" /> : <Eye size={12} className="text-[#40E0D0]" />}<span className="text-[10px] font-black">{name}{count > 1 ? ` (${count})` : ''}</span></div>; })}</div></div>
+                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ name, count, isOnline, isOwner }) => { const isPrimary = gameState.commandOwner === name; const isActive = isPrimary || (isOwner && isOnline); return <div key={name} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${isActive && !gameState.isLiveClosed ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : 'bg-white border-gray-100 text-gray-400 opacity-60'}`}>{isActive && !gameState.isLiveClosed ? <ShieldCheck size={14} className="text-blue-600" fill="white" /> : <Eye size={12} className="text-[#40E0D0]" />}<span className="text-[10px] font-black">{name}{count > 1 ? ` (${count})` : ''}</span></div>; })}</div></div>
                    <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex items-center gap-2.5"><CheckCircle size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Sincronização confirmada</span></div><div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-colors ${gameState.isLiveClosed ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{gameState.isLiveClosed ? <X size={12} strokeWidth={4} /> : <Check size={12} strokeWidth={4} />}<span className="text-[10px] font-black">{gameState.isLiveClosed ? 'Encerrado' : 'Ativo'}</span></div></div>
-                    {gameState.judgeNickname && (
+                    {/* Recurso de inserir juiz - Apenas para o proprietário */}
+                    {isOriginalOwner && (
+                      <div className="w-full space-y-4">
+                        <div className="flex items-center gap-2 px-1">
+                          <Gavel size={16} className="text-gray-400" />
+                          <span className="text-[11px] font-bold text-gray-500">Juiz da partida</span>
+                        </div>
+
+                        {gameState?.judgePin ? (
+                          <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <div className="flex flex-col">
+                                <span className="text-xs font-black text-black">{gameState.judgeNickname}</span>
+                                <span className="text-[10px] font-bold text-slate-400">{maskPin(gameState.judgePin)}</span>
+                              </div>
+                              {/* Status do Juiz */}
+                              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black ${isJudgeOnline ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                                <div className={`w-1 h-1 rounded-full ${isJudgeOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
+                                {isJudgeOnline ? 'Online' : 'Offline'}
+                              </div>
+                            </div>
+                            <button 
+                              onClick={onDeleteJudge}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <Input 
+                              value={judgePinInput || ''}
+                              onChange={(e) => setJudgePinInput?.(e.target.value.toUpperCase().slice(0, 5))}
+                              placeholder="PIN do Juiz"
+                              enableVoice={true}
+                              enableCamera={true}
+                              className="bg-white border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all"
+                              rightAction={
+                                <div className="flex items-center gap-1">
+                                  {isSearchingJudgePin && <Loader2 size={16} className="animate-spin text-blue-500 mr-1" />}
+                                  <button 
+                                    onClick={onSelectJudgeFromPartners}
+                                    className="p-2 text-[#40E0D0] hover:text-[#30C0B0] transition-all active:scale-75"
+                                  >
+                                    <Users size={18} />
+                                  </button>
+                                </div>
+                              }
+                            />
+                            
+                            {judgeNicknameLookup && (
+                              <div className="flex items-center gap-2 px-4 animate-in fade-in slide-in-from-top-2">
+                                <User size={14} className="text-blue-500" />
+                                <span className="text-xs font-black text-blue-600">{judgeNicknameLookup}</span>
+                              </div>
+                            )}
+
+                            <button 
+                              onClick={onAddJudge}
+                              disabled={!judgeNicknameLookup || judgeNicknameLookup === "Usuário não localizado" || isSavingJudge}
+                              className="w-full py-3 bg-slate-900 text-white rounded-2xl font-black text-xs disabled:opacity-50 active:scale-95 transition-all"
+                            >
+                              {isSavingJudge ? 'Salvando...' : 'Adicionar juiz'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {gameState.judgeNickname && !isOriginalOwner && (
                       <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
                         <div className="flex items-center gap-2.5">
                           <Gavel size={16} className="text-gray-400" />
                           <span className="text-[11px] font-bold text-gray-500">Juiz da partida</span>
                         </div>
-                        <span className="text-[10px] font-black text-blue-600">{gameState.judgeNickname}</span>
+                        <div className="flex items-center gap-2">
+                          {gameState.commandOwner === gameState.judgeNickname && <CheckCircle size={14} className="text-blue-600" />}
+                          <span className="text-[10px] font-black text-blue-600">{gameState.judgeNickname}</span>
+                        </div>
                       </div>
                     )}
                    {/* MC1: Network diagnostic block removed per user request */}

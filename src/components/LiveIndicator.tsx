@@ -50,8 +50,10 @@ export const LiveIndicator: React.FC<Props> = ({
       <div className={`relative z-10 flex items-center justify-center ${variant === 'header' ? '-mt-0.5' : '-mt-1'}`}>
         {role === 'owner' ? (
           <Crown size={variant === 'header' ? 18 : 22} className="text-blue-600 fill-white" strokeWidth={2.5} />
-        ) : (role === 'judge' || role === 'observer') ? (
-          <Eye size={variant === 'header' ? 18 : 22} className={role === 'judge' ? "text-emerald-500" : "text-[#00FFFF]"} strokeWidth={3} />
+        ) : role === 'judge' ? (
+          <Gavel size={variant === 'header' ? 18 : 22} className="text-emerald-500" strokeWidth={3} />
+        ) : role === 'observer' ? (
+          <Eye size={variant === 'header' ? 18 : 22} className="text-[#00FFFF]" strokeWidth={3} />
         ) : (
           <svg 
             width={variant === 'header' ? "12" : "14"} 
