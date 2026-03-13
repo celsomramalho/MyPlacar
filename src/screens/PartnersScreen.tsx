@@ -406,6 +406,32 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     setPlayerQueue(next);
   };
 
+  const handleQueueVoiceComplexResult = (index: number, p1: string, p2: string) => {
+    const next = [...playerQueue];
+    
+    // Process p1 for current index
+    const formatted1 = formatPortugueseName(p1);
+    next[index] = {
+      ...next[index],
+      name: formatted1,
+      verified: false,
+      gender: guessGender(formatted1) || next[index].gender
+    };
+
+    // Process p2 for next index if it exists
+    if (index + 1 < next.length) {
+      const formatted2 = formatPortugueseName(p2);
+      next[index + 1] = {
+        ...next[index + 1],
+        name: formatted2,
+        verified: false,
+        gender: guessGender(formatted2) || next[index + 1].gender
+      };
+    }
+    
+    setPlayerQueue(next);
+  };
+
   const guessGender = (name: string): 'M' | 'F' | undefined => {
     if (!name) return undefined;
     const firstWord = name.trim().split(' ')[0].toUpperCase();
@@ -685,13 +711,13 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
                  <div className="w-10 h-10 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-sm shrink-0 shadow-md">{idx + 1}</div>
                  <div className={`flex-1 min-w-0 ${player.isSelected ? 'opacity-40 pointer-none' : ''}`} onClick={e => e.stopPropagation()}>
                     <Input 
-                      value={player.name} onChange={e => handleQueueNameChange(idx, e.target.value)} onVoiceComplexResult={(n) => handleQueueNameChange(idx, n)} placeholder="" 
+                      value={player.name} onChange={e => handleQueueNameChange(idx, e.target.value)} onVoiceComplexResult={(n1, n2) => handleQueueVoiceComplexResult(idx, n1, n2)} placeholder="" 
                       className={`h-12 rounded-2xl font-bold shadow-none border-gray-100 transition-all duration-500 ${
                         player.verified 
                         ? 'bg-blue-50 border-blue-600 text-blue-600 border-2' 
                         : (player.name ? 'bg-white text-black' : 'bg-gray-50')
                       }`}
-                      rightAction={<div className="flex items-center gap-1.5 mr-1"><Camera size={18} className="text-[#10b981]" /><Mic size={18} className="text-indigo-500" /><button onClick={(e) => { e.stopPropagation(); setNavigationSource('queue'); setPendingQueueIndex(idx); setActiveTab('list'); }} className="p-1 active:scale-90"><Users size={18} className="text-[#40E0D0]" /></button></div>}
+                      rightAction={<div className="flex items-center gap-1.5 mr-1"><Camera size={18} className="text-[#10b981]" /><Mic size={18} className="text-blue-500" /><button onClick={(e) => { e.stopPropagation(); setNavigationSource('queue'); setPendingQueueIndex(idx); setActiveTab('list'); }} className="p-1 active:scale-90"><Users size={18} className="text-[#40E0D0]" /></button></div>}
                     />
                  </div>
                  <button onClick={e => { e.stopPropagation(); handleQueueGenderToggle(idx); }} className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center transition-all active:scale-90 shadow-sm ${player.gender === 'M' ? 'bg-sky-50 text-sky-600 border-sky-100' : 'bg-pink-50 text-pink-600 border-pink-100'} ${player.isSelected ? 'opacity-40 pointer-none' : ''}`}>{player.gender === 'M' ? <MarsIcon size={18}/> : <VenusIcon size={18}/>}</button>

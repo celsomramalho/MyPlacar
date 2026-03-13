@@ -1,11 +1,11 @@
 import React from 'react';
-import { ShieldCheck, Eye } from 'lucide-react';
+import { ShieldCheck, Eye, Gavel, Crown, UserCheck } from 'lucide-react';
 
 interface Props {
   className?: string;
   onClick?: () => void;
   variant?: 'header' | 'card';
-  role?: 'owner' | 'observer' | 'spectator';
+  role?: 'owner' | 'judge' | 'observer' | 'spectator';
   progress?: number;
   onPointerDown?: (e: any) => void;
   onPointerUp?: (e: any) => void;
@@ -49,9 +49,9 @@ export const LiveIndicator: React.FC<Props> = ({
       {/* Ícone central dinâmico */}
       <div className={`relative z-10 flex items-center justify-center ${variant === 'header' ? '-mt-0.5' : '-mt-1'}`}>
         {role === 'owner' ? (
-          <ShieldCheck size={variant === 'header' ? 18 : 22} className="text-blue-600 fill-white" strokeWidth={2.5} />
-        ) : role === 'observer' ? (
-          <Eye size={variant === 'header' ? 18 : 22} className="text-[#00FFFF]" strokeWidth={3} />
+          <Crown size={variant === 'header' ? 18 : 22} className="text-blue-600 fill-white" strokeWidth={2.5} />
+        ) : (role === 'judge' || role === 'observer') ? (
+          <Eye size={variant === 'header' ? 18 : 22} className={role === 'judge' ? "text-emerald-500" : "text-[#00FFFF]"} strokeWidth={3} />
         ) : (
           <svg 
             width={variant === 'header' ? "12" : "14"} 

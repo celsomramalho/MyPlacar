@@ -3,7 +3,7 @@ import { MatchSettings, VoiceCommands, SportDefinition } from './types';
 
 // ATENÇÃO: Esta é a versão deste arquivo de código. 
 // Se você mudar no Admin para um número DIFERENTE deste, todos os usuários serão forçados a atualizar.
-export const APP_VERSION = '2.4.05'; 
+export const APP_VERSION = '2.4.06'; 
 
 export const SPORT_GROUPS = [
   { id: 'raquetes', name: 'Raquetes', icon: '🎾' },
@@ -32,7 +32,7 @@ export const DEFAULT_VOICE_COMMANDS: VoiceCommands = {
   fault: ['saque errado', 'erro de saque'],
   switchServer: ['trocar sacador', 'inverter saque'],
   undo: ['desfazer', 'voltar ponto'],
-  partnerTerm: ['mais', 'com'],
+  partnerTerm: ['mais', 'com', 'e'],
 };
 
 export const DEFAULT_TENNIS_SETTINGS: MatchSettings = {

@@ -730,7 +730,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
             <div className="space-y-3">
               <div className="flex items-center gap-2 px-2">
-                <Mic size={20} className="text-indigo-500" />
+                <Mic size={20} className="text-blue-500" />
                 <h2 className="text-sm font-black text-black">Regras de voz</h2>
               </div>
               <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-white space-y-5">

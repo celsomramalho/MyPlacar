@@ -341,7 +341,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   const isAdmin = profile.email?.toLowerCase().trim() === 'celsomramalho@gmail.com';
 
   const permissionItems = [
-    { id: 'mic', label: 'Microfone', sublabel: 'Para comandos de voz', icon: <Mic size={22} />, color: 'bg-indigo-50 text-indigo-500' },
+    { id: 'mic', label: 'Microfone', sublabel: 'Para comandos de voz', icon: <Mic size={22} />, color: 'bg-blue-50 text-blue-500' },
     { id: 'loc', label: 'Localização', sublabel: 'Para mapa das partidas', icon: <MapPin size={22} />, color: 'bg-green-50 text-green-500' },
     { id: 'cam', label: 'Câmera', sublabel: 'Para escanear parceiros', icon: <Camera size={22} />, color: 'bg-emerald-50 text-emerald-500' },
     { id: 'passkey', label: 'Biometria', sublabel: 'Login sem senha', icon: <Fingerprint size={22} />, color: 'bg-blue-50 text-blue-500' }

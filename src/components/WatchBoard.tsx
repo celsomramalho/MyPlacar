@@ -37,7 +37,7 @@ interface WatchBoardProps {
   isEmbedded?: boolean;
   scorePressProgress?: { player: 1 | 2; type: 'game' | 'gameSet' | 'matchSet'; progress: number } | null;
   cloudLiveExists?: boolean;
-  role?: 'owner' | 'observer' | 'spectator';
+  role?: 'owner' | 'judge' | 'observer' | 'spectator';
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -111,7 +111,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     
     if (!name) return null;
     const initial = name.trim().charAt(0).toUpperCase();
-    const teamColorText = team === 1 ? TEXT_COLORS['azul'] : TEXT_COLORS['vermelho'];
+    const teamColorText = team === 1 ? TEXT_COLORS[gameState.p1.color || 'azul'] : TEXT_COLORS[gameState.p2.color || 'vermelho'];
 
     return (
       <div 
@@ -166,7 +166,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 1)} 
             onPointerMove={handlePointerMove} 
             onPointerUp={() => handleScoreCardPointerUp('matchSet', 1)}
-            className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS['azul']}`}
+            className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p1.color || 'azul']}`}
           >
             {scorePressProgress?.player === 1 && scorePressProgress?.type === 'matchSet' && (
               <div 
@@ -218,7 +218,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 2)} 
             onPointerMove={handlePointerMove} 
             onPointerUp={() => handleScoreCardPointerUp('matchSet', 2)}
-            className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS['vermelho']}`}
+            className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p2.color || 'vermelho']}`}
           >
             {scorePressProgress?.player === 2 && scorePressProgress?.type === 'matchSet' && (
               <div 
@@ -232,7 +232,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', 1)} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 1)} className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS['azul']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
+        <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', 1)} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 1)} className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
           {scorePressProgress?.player === 1 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
@@ -249,7 +249,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             disabled={!isCommandOwner} 
             onClick={() => onScoreUpdate(gameState.server, 'ace', 'cb')} 
             className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
-              SOLID_COLORS[gameState.server === 1 ? 'azul' : 'vermelho']
+              SOLID_COLORS[gameState.server === 1 ? (gameState.p1.color || 'azul') : (gameState.p2.color || 'vermelho')]
             }`}
           >
             <Zap size={28} fill="currentColor" />
@@ -285,7 +285,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             disabled={!isCommandOwner} 
             onClick={() => onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb')} 
             className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
-              SOLID_COLORS[gameState.server === 1 ? 'vermelho' : 'azul']
+              SOLID_COLORS[gameState.server === 1 ? (gameState.p2.color || 'vermelho') : (gameState.p1.color || 'azul')]
             }`}
           >
             <X size={32} strokeWidth={5} />
@@ -297,7 +297,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           )}
         </div>
 
-        <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', 2)} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS['vermelho']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
+        <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', 2)} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
           {scorePressProgress?.player === 2 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 

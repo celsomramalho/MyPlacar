@@ -62,6 +62,11 @@ const DesfazerTimeIcon: React.FC<DesfazerTimeIconProps> = ({ size = 16 }) => (
 
 const idxToLetter = (idx: number) => String.fromCharCode(65 + idx);
 
+const maskPin = (pin: string) => {
+  if (!pin || pin.length < 5) return pin;
+  return `${pin[0]}*${pin[2]}*${pin[4]}`;
+};
+
 export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack, userProfile, onExitTournament, onAddPartner, partners, onStartTournamentMatch, setModalConfig, appUrl }) => {
   const [event, setEvent] = useState<TournamentEvent>(initialEvent);
   const [entries, setEntries] = useState<TournamentEntry[]>([]);
@@ -84,6 +89,13 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   const [editingEmail, setEditingEmail] = useState<string | null>(null);
   const [tempNickname, setTempNickname] = useState('');
   const [isSavingNickname, setIsSavingNickname] = useState(false);
+
+  const getNicknameByPin = useCallback((pin: string) => {
+    if (userProfile.pin === pin) return userProfile.nickname;
+    const entry = entries.find(e => e.pin === pin);
+    if (entry) return entry.nickname;
+    return 'Administrador';
+  }, [entries, userProfile.pin, userProfile.nickname]);
 
   const isAdmin = useMemo(() => {
     const coAdmins = (event.coAdminPins as string[]) || [];
@@ -637,7 +649,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                      <div className="flex flex-wrap gap-2 pt-2">
                         {event.coAdminPins?.map(pin => (
                            <div key={pin} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100 animate-in zoom-in">
-                              <span className="text-[10px] font-black">{pin}</span>
+                              <span className="text-[10px] font-black">{getNicknameByPin(pin)} - {maskPin(pin)}</span>
                               <button onClick={() => handleRemoveCoAdmin(pin)} className="text-indigo-400 hover:text-red-500 transition-colors">
                                  <X size={14} strokeWidth={3} />
                               </button>
@@ -962,7 +974,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                                   </div>
                                )}
                              </div>
-                             <p className="text-[10px] font-bold text-gray-400 uppercase">{entry.nickname} - {entry.pin}</p>
+                             <p className="text-[10px] font-bold text-gray-400 uppercase">{entry.nickname} - {maskPin(entry.pin)}</p>
                            </div>
                          </div>
                          <div className="flex items-center gap-2 shrink-0">

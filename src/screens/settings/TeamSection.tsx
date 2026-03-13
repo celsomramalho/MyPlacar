@@ -170,11 +170,13 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     
     if (name2 && name2.length === 5 && !name2.includes(' ') && onAutoRegisterPartner) {
         const dbNickname = await onAutoRegisterPartner(name2, fieldPrefix);
-        const finalName = dbNickname || name1 || name2; 
-        const guessed = guessGender(finalName);
-        if (guessed) setGenders(prev => ({ ...prev, [fieldPrefix]: guessed }));
-        setSettings(prev => ({ ...prev, [targetField]: finalName, [verifiedKey]: !!dbNickname }));
-        return;
+        if (dbNickname) {
+            const finalName = dbNickname; 
+            const guessed = guessGender(finalName);
+            if (guessed) setGenders(prev => ({ ...prev, [fieldPrefix]: guessed }));
+            setSettings(prev => ({ ...prev, [targetField]: finalName, [verifiedKey]: true }));
+            return;
+        }
     }
 
     let f1 = name1;

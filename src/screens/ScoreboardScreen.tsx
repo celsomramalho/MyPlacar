@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu } from 'lucide-react';
+import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu, Gavel } from 'lucide-react';
+import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { GameState, PointType, PointEvent, UserProfile } from '../types';
@@ -60,7 +61,7 @@ interface Props {
   onExitOffline?: () => void;
   appUrl: string;
   cloudLiveExists?: boolean;
-  role?: 'owner' | 'observer' | 'spectator';
+  role?: 'owner' | 'judge' | 'observer' | 'spectator';
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -164,7 +165,7 @@ const ScorePickerModal: React.FC<{
   );
 };
 
-export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number, p1Sets: number[], p2Sets: number[], isMatchOver?: boolean }> = ({ history, currentSet, p1Sets, p2Sets, isMatchOver }) => {
+export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number, p1Sets: number[], p2Sets: number[], isMatchOver?: boolean, p1Color?: string, p2Color?: string }> = ({ history, currentSet, p1Sets, p2Sets, isMatchOver, p1Color, p2Color }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (scrollRef.current) { scrollRef.current.scrollLeft = scrollRef.current.scrollWidth; } }, [history]);
   const timelineElements = useMemo(() => {
@@ -215,8 +216,8 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
                );
                if (el.type === 'score-start') return (
                  <div key={idx} className="relative flex flex-col items-center justify-start shrink-0 mx-2 z-10">
-                    <div className="flex flex-col items-center justify-center min-w-[24px] h-[38px] rounded-lg border border-blue-100 bg-blue-50/30 shadow-xs">
-                       <span className="text-[10px] font-black text-blue-600">0</span>
+                    <div className={`flex flex-col items-center justify-center min-w-[24px] h-[38px] rounded-lg border bg-opacity-30 shadow-xs ${BORDER_COLORS[p1Color || 'azul']} ${p1Color === 'amarelo' ? 'bg-yellow-50' : p1Color === 'verde' ? 'bg-green-50' : 'bg-blue-50'}`}>
+                       <span className={`text-[10px] font-black ${TEXT_COLORS[p1Color || 'azul']}`}>0</span>
                        <span className="text-[10px] font-black text-gray-400">0</span>
                     </div>
                  </div>
@@ -230,8 +231,8 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
                   </div>
                 </div>
                );
-               if (el.type === 'game-score') return <div key={idx} className="relative flex flex-col items-center justify-start shrink-0 mx-1 z-20"><div className={`flex flex-col items-center justify-center min-w-[22px] h-[36px] rounded-lg border shadow-sm ${el.winner === 1 ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'}`}><span className={`text-[10px] font-black leading-none mb-0.5 ${el.winner === 1 ? 'text-blue-700' : 'text-gray-400'}`}>{el.g1}</span><span className={`text-[10px] font-black leading-none mt-0.5 ${el.winner === 2 ? 'text-red-700' : 'text-gray-400'}`}>{el.g2}</span></div></div>;
-               if (el.type === 'set-score') return <div key={idx} className="relative flex flex-col items-center justify-start shrink-0 ml-1 mr-2 z-20 animate-in zoom-in duration-300"><div className={`flex flex-col items-center justify-center min-w-[26px] h-[40px] rounded-lg border shadow-md ${el.winner === 1 ? 'bg-blue-100 border-blue-300' : 'bg-red-100 border-red-300'}`}><span className={`text-[11px] font-black leading-none mb-0.5 ${el.winner === 1 ? 'text-blue-800' : 'text-gray-600'}`}>{el.s1}</span><span className={`text-[11px] font-black leading-none mt-0.5 ${el.winner === 2 ? 'text-red-800' : 'text-gray-600'}`}>{el.s2}</span></div><div className="absolute -bottom-4 text-[7px] font-black text-gray-400 tracking-tighter">Set</div></div>;
+               if (el.type === 'game-score') return <div key={idx} className="relative flex flex-col items-center justify-start shrink-0 mx-1 z-20"><div className={`flex flex-col items-center justify-center min-w-[22px] h-[36px] rounded-lg border shadow-sm ${el.winner === 1 ? `${p1Color === 'amarelo' ? 'bg-yellow-50' : 'bg-blue-50'} ${BORDER_COLORS[p1Color || 'azul']}` : `${p2Color === 'vermelho' ? 'bg-red-50' : 'bg-slate-50'} ${BORDER_COLORS[p2Color || 'vermelho']}`}`}><span className={`text-[10px] font-black leading-none mb-0.5 ${el.winner === 1 ? TEXT_COLORS[p1Color || 'azul'] : 'text-gray-400'}`}>{el.g1}</span><span className={`text-[10px] font-black leading-none mt-0.5 ${el.winner === 2 ? TEXT_COLORS[p2Color || 'vermelho'] : 'text-gray-400'}`}>{el.g2}</span></div></div>;
+               if (el.type === 'set-score') return <div key={idx} className="relative flex flex-col items-center justify-start shrink-0 ml-1 mr-2 z-20 animate-in zoom-in duration-300"><div className={`flex flex-col items-center justify-center min-w-[26px] h-[40px] rounded-lg border shadow-md ${el.winner === 1 ? `${p1Color === 'amarelo' ? 'bg-yellow-100' : 'bg-blue-100'} ${BORDER_COLORS[p1Color || 'azul']}` : `${p2Color === 'vermelho' ? 'bg-red-100' : 'bg-slate-100'} ${BORDER_COLORS[p2Color || 'vermelho']}`}`}><span className={`text-[11px] font-black leading-none mb-0.5 ${el.winner === 1 ? TEXT_COLORS[p1Color || 'azul'] : 'text-gray-600'}`}>{el.s1}</span><span className={`text-[11px] font-black leading-none mt-0.5 ${el.winner === 2 ? TEXT_COLORS[p2Color || 'vermelho'] : 'text-gray-600'}`}>{el.s2}</span></div><div className="absolute -bottom-4 text-[7px] font-black text-gray-400 tracking-tighter">Set</div></div>;
                return null;
              })}
            </div>
@@ -726,7 +727,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                <div className="flex items-center gap-2"></div>
                <div className="flex flex-col items-center justify-center -mt-12 md:-mt-16">
                  {!isOfflineMode && (
-                   <button onClick={handleVoiceToggle} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed || !isCommandOwner || gameState.isMatchOver} className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-2 ${isVoiceActive ? 'bg-blue-600 border-blue-600' : 'bg-white border-blue-600'}`}>
+                   <button onClick={handleVoiceToggle} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed || !isCommandOwner || gameState.isMatchOver} className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-2 ${isVoiceActive ? 'bg-blue-600 border-blue-700' : 'bg-white border-blue-600'}`}>
                      <div className="relative flex items-center justify-center">
                        <Mic size={32} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-white' : 'text-blue-600'} />
                        {(voiceWasManuallyStopped || !gameState.matchConfig.voiceEnabled || gameState.isLiveClosed || !isCommandOwner || gameState.isMatchOver) && (
@@ -817,18 +818,18 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       voiceLogs.map((log) => {
                          const [b1, b2] = log.before.split('-'); 
                          const [a1, a2] = log.after.split('-'); 
-                         const cmdColor = log.winner === 1 ? TEXT_COLORS['azul'] : log.winner === 2 ? TEXT_COLORS['vermelho'] : log.isError ? 'text-red-600' : 'text-slate-500';
+                         const cmdColor = log.winner === 1 ? TEXT_COLORS[gameState.p1.color || 'azul'] : log.winner === 2 ? TEXT_COLORS[gameState.p2.color || 'vermelho'] : log.isError ? 'text-red-600' : 'text-slate-500';
                          return (
                            <div key={log.id} className={`flex items-start gap-2.5 p-2.5 rounded-2xl border shadow-xs transition-all animate-in fade-in slide-in-from-left-2 duration-300 ${log.isError ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
                              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${log.isError ? 'bg-red-600 text-white' : (log.isRemote ? 'bg-sky-500 text-white' : 'bg-green-500 text-white')}`}>{log.isError ? <X size={14} className="stroke-[4]" /> : (log.source?.toLowerCase().includes('w') ? <Watch size={14} className="text-white" strokeWidth={3} /> : <CheckCircle size={14} className="text-white" strokeWidth={4} />)}</div>
                              <div className="flex-1 font-mono text-[11px] overflow-hidden leading-tight">
                                <div className="flex items-center flex-wrap gap-x-1.5 text-slate-500">
-                                 <span className="font-black text-blue-600">{log.source?.toUpperCase() || (log.isRemote ? 'WB' : 'CB')}#</span>
-                                 {!log.isError && <span className="text-blue-500 font-bold">[{log.liveSequence}]</span>}
+                                 <span className={`font-black ${TEXT_COLORS[gameState.p1.color || 'azul']}`}>{log.source?.toUpperCase() || (log.isRemote ? 'WB' : 'CB')}#</span>
+                                 {!log.isError && <span className={`${TEXT_COLORS[gameState.p1.color || 'azul']} font-bold`}>[{log.liveSequence}]</span>}
                                  {!log.isError && <>
                                      <span className="opacity-30">|</span>
-                                     <span className="font-bold"><span className="text-black">I: </span><span className={TEXT_COLORS['azul']}>{b1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS['vermelho']}>{b2}</span></span>
-                                     <span className="font-black text-orange-500"><span className="text-black ml-1 mr-0.5">&gt; F: </span><span className={TEXT_COLORS['azul']}>{a1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS['vermelho']}>{a2}</span></span>
+                                     <span className="font-bold"><span className="text-black">I: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{b1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{b2}</span></span>
+                                     <span className="font-black text-orange-500"><span className="text-black ml-1 mr-0.5">&gt; F: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{a1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{a2}</span></span>
                                    </>}
                                </div>
                                <div className={`font-black mt-0.5 truncate ${cmdColor}`}>[ {log.text} ]</div>
@@ -859,7 +860,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                  </div>
                  {isTimelineOpen && (
                    <div className="mt-6 animate-in slide-in-from-top-2 duration-300">
-                     <MatchTimeline history={gameState.pointHistory ?? []} currentSet={gameState.currentSet} p1Sets={gameState.p1.sets} p2Sets={gameState.p2.sets} isMatchOver={gameState.isMatchOver} />
+                     <MatchTimeline history={gameState.pointHistory ?? []} currentSet={gameState.currentSet} p1Sets={gameState.p1.sets} p2Sets={gameState.p2.sets} isMatchOver={gameState.isMatchOver} p1Color={gameState.p1.color} p2Color={gameState.p2.color} />
                    </div>
                  )}
               </div>
@@ -896,30 +897,32 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
                    <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ name, count }) => { const isPrimary = gameState.commandOwner === name; return <div key={name} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${isPrimary && !gameState.isLiveClosed ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : 'bg-white border-gray-100 text-gray-400 opacity-60'}`}>{isPrimary && !gameState.isLiveClosed ? <ShieldCheck size={14} className="text-blue-600" fill="white" /> : <Eye size={12} className="text-[#40E0D0]" />}<span className="text-[10px] font-black">{name}{count > 1 ? ` (${count})` : ''}</span></div>; })}</div></div>
                    <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex items-center gap-2.5"><CheckCircle size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Sincronização confirmada</span></div><div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-colors ${gameState.isLiveClosed ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{gameState.isLiveClosed ? <X size={12} strokeWidth={4} /> : <Check size={12} strokeWidth={4} />}<span className="text-[10px] font-black">{gameState.isLiveClosed ? 'Encerrado' : 'Ativo'}</span></div></div>
-                   {isCommandOwner && <Button onClick={handlePingTest} disabled={isPinging || gameState.isLiveClosed} className="w-full !bg-blue-600 !text-white !py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">{isPinging ? <Loader2 size={18} className="animate-spin" /> : <Wifi size={18} />} Testar conexão (ping)</Button>}
-                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 mt-3 space-y-3"><div className="flex items-center gap-2 px-1"><Activity size={14} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Tipo de link ativo</span></div><div className="flex items-center gap-3"><div className="w-10 h-10 bg-white rounded-xl border border-gray-100 flex items-center justify-center shadow-sm">{connType === 'bluetooth' ? <Bluetooth size={20} className="text-blue-500" /> : connType === 'wifi' ? <Wifi size={20} className="text-emerald-500" /> : connType === 'cellular' ? <Smartphone size={20} className="text-orange-500" /> : <Globe size={20} className="text-slate-400" />}</div><div className="flex-1 min-w-0"><p className="text-xs font-black text-gray-900 leading-tight">{connType === 'bluetooth' ? 'Conectado via bluetooth' : connType === 'wifi' ? 'Conectado via wi-fi' : connType === 'cellular' ? 'Conectado via rede móvel' : !connType ? 'Meio físico de conexão oculto' : 'Conectado via cabo'}</p>{downlink && <p className="text-[10px] font-bold text-slate-400 mt-1">Velocidade estimada: {downlink} Mbps</p>}</div></div></div>
+                    {gameState.judgeNickname && (
+                      <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
+                        <div className="flex items-center gap-2.5">
+                          <Gavel size={16} className="text-gray-400" />
+                          <span className="text-[11px] font-bold text-gray-500">Juiz da partida</span>
+                        </div>
+                        <span className="text-[10px] font-black text-blue-600">{gameState.judgeNickname}</span>
+                      </div>
+                    )}
+                   {/* MC1: Network diagnostic block removed per user request */}
                  </div>}
             </div>
             )}
           </div>
         )}
       </main>
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-4 pt-3 pb-10 flex justify-between items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        {isOfflineMode && (
-          <button onClick={onExitOffline} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-500 shadow-md"><LogOut size={22} /></div><span className="text-[10px] font-black text-black">Sair</span></button>
-        )}
-        {!isOfflineMode && (
-          <button onClick={() => onNavigateToTab?.('config')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100 scale-110"><div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}><ScoreboardIcon className="w-6 h-6" />{isSettingsInicialSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}</div><span className="text-[10px] font-black text-black">Início</span></button>
-        )}
-        <button onClick={onBack} className="hidden" />
-        {!isOfflineMode && (
-          <>
-            <button onClick={() => onNavigateToTab?.('history')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><Clock size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Histórico</span></button>
-            <button onClick={() => onNavigateToTab?.('profile')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><User size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Perfil</span></button>
-            <button onClick={onOpenMenu} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-transparent"><Menu size={22} className="text-black" /></div><span className="text-[10px] font-black text-black">Menu</span></button>
-          </>
-        )}
-      </nav>
+      <SettingsTabs 
+        activeTab="none"
+        setActiveTab={(tab) => onNavigateToTab?.(tab)}
+        onOpenRules={() => onNavigateToTab?.('config')}
+        isSettingsInicialSaved={isSettingsInicialSaved}
+        isSettingsRegrasSaved={isSettingsRegrasSaved}
+        isMirroringActive={isLiveActive}
+        onOpenMenu={() => onOpenMenu?.()}
+        isOfflineMode={isOfflineMode}
+      />
     </div>
   );
 };

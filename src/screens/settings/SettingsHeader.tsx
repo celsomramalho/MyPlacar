@@ -18,7 +18,7 @@ interface Props {
   onShareSelected?: () => void;
   isMirroringActive?: boolean;
   onOpenLiveControl?: () => void;
-  role?: 'owner' | 'observer' | 'spectator';
+  role?: 'owner' | 'judge' | 'observer' | 'spectator';
   onOpenCommunications?: () => void;
   unreadCount?: number;
 }

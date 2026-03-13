@@ -14,7 +14,7 @@ export const HelpScreen: React.FC<Props> = ({ profile, onNavigateToTab, onOpenRu
   const helpItems = [
     {
       title: "Placar e voz",
-      icon: <Mic className="text-indigo-500" />,
+      icon: <Mic className="text-blue-500" />,
       content: "Controle o jogo dizendo 'ponto', 'ponto sacador' ou 'ponto contra'. Ative o árbitro Gemini para narrações emocionantes."
     },
     {

@@ -12,6 +12,7 @@ import { EventDetailScreen } from './screens/EventDetailScreen';
 import { CommunicationsScreen } from './screens/CommunicationsScreen';
 import { InstallPwaModal } from './components/InstallPwaModal';
 import { NavigationDrawer } from './components/NavigationDrawer';
+import { Input } from './components/Input';
 import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointType, Partner, PointEvent, QueuePlayer, TournamentEvent, TournamentMatch, TournamentPair } from './types';
 import { isValidGameState, isValidMatchSettings } from './utils/validation';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -20,7 +21,7 @@ import { incrementScore, undoPoint } from './utils/tennisEngine';
 import { applyGoldenRule } from './utils/formatters';
 import { getDb } from './firebase';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
-import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2, ArrowLeftRight } from 'lucide-react';
+import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Gavel, User, QrCode, Users } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator';
 
 const CURRENT_DATA_VERSION = '3.0.0';
@@ -167,6 +168,11 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const maskPin = (pin: string) => {
+    if (!pin || pin.length < 5) return pin;
+    return pin.split('').map((char, i) => (i === 1 || i === 3) ? '*' : char).join('');
+  };
+
   const handleVersionTap = () => {
     setVersionTapCount(prev => {
       const next = prev + 1;
@@ -204,20 +210,44 @@ const App: React.FC = () => {
 
   const [gameState, setGameState] = useState<GameState | null>(() => safeJsonParse('myPlacarActiveGameState', null));
 
-  const isCurrentDeviceOwner = useMemo(() => gameState?.commandOwnerId === deviceId, [gameState?.commandOwnerId, deviceId]);
+  const isOriginalOwner = useMemo(() => {
+    if (!gameState || !userProfile.pin) return false;
+    return userProfile.pin.toUpperCase() === gameState.ownerPin?.toUpperCase();
+  }, [gameState?.ownerPin, userProfile.pin]);
+
+  const isCurrentController = useMemo(() => gameState?.commandOwnerId === deviceId, [gameState?.commandOwnerId, deviceId]);
+  const isJudgeOnline = useMemo(() => {
+    if (!gameState?.judgeNickname || !gameState?.controllers) return false;
+    const now = Date.now();
+    return Object.values(gameState.controllers).some((c: any) => 
+      (c.nickname === gameState.judgeNickname || c.label === gameState.judgeNickname || (c.label && c.label.includes(`(${gameState.judgeNickname})`))) && (now - c.lastSeen) < 30000
+    );
+  }, [gameState?.judgeNickname, gameState?.controllers]);
 
   const isCommandOwner = useMemo(() => {
     if (!gameState || !gameState.isMirroringActive) return true;
-    return isCurrentDeviceOwner;
-  }, [gameState?.isMirroringActive, isCurrentDeviceOwner]);
+    return isCurrentController;
+  }, [gameState?.isMirroringActive, isCurrentController]);
 
   const liveRole = useMemo(() => { 
     if (!cloudLiveExists) return 'spectator'; 
-    return isCurrentDeviceOwner ? 'owner' : 'observer'; 
-  }, [cloudLiveExists, isCurrentDeviceOwner]);
+    if (isOriginalOwner) return 'owner';
+    if (gameState?.judgePin === userProfile.pin.toUpperCase()) return 'judge';
+    return 'observer'; 
+  }, [cloudLiveExists, isOriginalOwner, gameState?.judgePin, userProfile.pin]);
+
+  const indicatorRole = useMemo(() => {
+    if (!isCurrentController) return 'observer';
+    return isOriginalOwner ? 'owner' : 'judge';
+  }, [isCurrentController, isOriginalOwner]);
 
   const [showLiveControlOverlay, setShowLiveControlOverlay] = useState(false);
   const [confirmDeleteLive, setConfirmDeleteLive] = useState(false);
+  const [confirmDeleteJudge, setConfirmDeleteJudge] = useState(false);
+  const [judgePinInput, setJudgePinInput] = useState('');
+  const [judgeNicknameLookup, setJudgeNicknameLookup] = useState('');
+  const [isSearchingJudgePin, setIsSearchingJudgePin] = useState(false);
+  const [isSavingJudge, setIsSavingJudge] = useState(false);
   const [isRecoveryFromMatchOver, setIsRecoveryFromMatchOver] = useState(false);
   const [isWaitingSync, setIsWaitingSync] = useState(false);
   const [isServiceInterrupted, setIsServiceInterrupted] = useState(false);
@@ -637,7 +667,12 @@ const App: React.FC = () => {
         } else {
            setGameState(prev => {
              if (!prev) return null;
-             return { ...prev, controllers: cloudData.controllers };
+              return { 
+                ...prev, 
+                controllers: cloudData.controllers,
+                judgePin: cloudData.judgePin,
+                judgeNickname: cloudData.judgeNickname
+              };
            });
         }
       } else {
@@ -1277,9 +1312,10 @@ const App: React.FC = () => {
   const handleCloseCloudLive = async () => {
     const db = getDb();
     if (db && userProfile.pin && navigator.onLine) {
-      const pinUpper = userProfile.pin.toUpperCase();
+      const targetPin = isOriginalOwner ? userProfile.pin.toUpperCase() : gameState?.ownerPin?.toUpperCase();
+      if (!targetPin) return;
       try {
-        await deleteDoc(doc(db, "live_matches", pinUpper));
+        await deleteDoc(doc(db, "live_matches", targetPin));
         setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: false, isLiveClosed: false }; });
         setCloudLiveExists(false); try { localStorage.removeItem('myPlacarActiveGameState'); } catch(e) {}
         setShowLiveControlOverlay(false); setConfirmDeleteLive(false); setCurrentScreen('settings');
@@ -1293,9 +1329,10 @@ const App: React.FC = () => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
     const db = getDb();
     if (db && userProfile.pin) {
-      const pinUpper = userProfile.pin.toUpperCase();
+      const targetPin = isOriginalOwner ? userProfile.pin.toUpperCase() : gameState?.ownerPin?.toUpperCase();
+      if (!targetPin) return;
       try {
-        const snap = await getDoc(doc(db, "live_matches", pinUpper));
+        const snap = await getDoc(doc(db, "live_matches", targetPin));
         if (snap.exists() && snap.data().isLiveClosed !== true) {
           const cloudState = snap.data() as GameState;
           const myCommandName = currentFullDeviceName;
@@ -1329,7 +1366,7 @@ const App: React.FC = () => {
           const updatedStateRaw = { ...cloudState, commandOwner: myCommandName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false, matchConfig: { ...syncedSettings, setsToWin: syncedSettings.sets, isWatchMode: !!syncedSettings.isWatchMode } };
           const updatedState = sanitizeForFirestore(updatedStateRaw);
           if (updatedState) {
-            await setDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), updatedState, { merge: true }).catch(() => {});
+            await setDoc(doc(db, "live_matches", targetPin), updatedState, { merge: true }).catch(() => {});
             prevSettingsRef.current = JSON.parse(JSON.stringify(syncedSettings)); setMatchSettings(syncedSettings); 
             try { localStorage.setItem('myPlacarSettings', JSON.stringify(syncedSettings)); } catch(e) {}
             setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
@@ -1359,9 +1396,16 @@ const App: React.FC = () => {
         if (snap.exists() && snap.data().isLiveClosed !== true) {
           const cloudData = snap.data() as GameState;
           const myCommandName = currentFullDeviceName;
+          const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
           const nextControllers = { ...(cloudData.controllers || {}) };
-          nextControllers[deviceId] = { label: myCommandName, lastSeen: Date.now() };
+          nextControllers[deviceId] = { label: myCommandName, nickname: myNickname, lastSeen: Date.now() };
           await updateDoc(doc(db, "live_matches", pinUpper), { controllers: nextControllers }).catch(() => {});
+          
+          // Sincronizar regras da partida se o juiz/observador estiver conectando
+          if (cloudData.matchConfig) {
+            setMatchSettings(prev => ({ ...prev, ...cloudData.matchConfig }));
+          }
+
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
@@ -1371,6 +1415,97 @@ const App: React.FC = () => {
           setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
         }
       } catch (e) {}
+    }
+  };
+
+  useEffect(() => {
+    const lookup = async () => {
+      const pin = judgePinInput.toUpperCase().trim();
+      if (pin.length === 5) {
+        setIsSearchingJudgePin(true);
+        const db = getDb();
+        if (!db) return;
+        try {
+          const q = query(collection(db as Firestore, "users"), where("pin", "==", pin));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const data = snap.docs[0].data();
+            setJudgeNicknameLookup(data.nickname || data.name.split(' ')[0]);
+          } else {
+            setJudgeNicknameLookup("Usuário não localizado");
+          }
+        } catch (e) {
+          setJudgeNicknameLookup("");
+        } finally {
+          setIsSearchingJudgePin(false);
+        }
+      } else {
+        setJudgeNicknameLookup("");
+      }
+    };
+    lookup();
+  }, [judgePinInput]);
+
+  const handleAddJudge = async () => {
+    if (!judgePinInput || judgePinInput.length < 5 || !gameState || !userProfile.pin) return;
+    setIsSavingJudge(true);
+    const db = getDb();
+    if (!db) return;
+    try {
+      const pinUpper = judgePinInput.toUpperCase().trim();
+      const nickname = judgeNicknameLookup;
+
+      // Se o juiz não estiver nos parceiros, adiciona-lo
+      if (pinUpper && !partners.some(p => p.pin === pinUpper)) {
+        const newPartner: Partner = {
+          id: `p_${Date.now()}`,
+          pin: pinUpper,
+          nickname: nickname || 'Juiz',
+          addedAt: Date.now(),
+          origin: 'manual'
+        };
+        const updatedPartners = [...partners, newPartner];
+        setPartners(updatedPartners);
+        localStorage.setItem('myPlacarPartners', JSON.stringify(updatedPartners));
+
+        // Salvar no Firestore para persistência
+        if (db && userProfile.pin) {
+          await setDoc(doc(db as Firestore, 'users', userProfile.pin.toUpperCase(), 'partners', pinUpper), {
+            pin: pinUpper,
+            nickname: nickname || 'Juiz',
+            addedAt: Date.now(),
+            origin: 'manual'
+          }).catch(err => console.error("Erro ao salvar parceiro no Firestore:", err));
+        }
+      }
+
+      await updateDoc(doc(db as Firestore, "live_matches", userProfile.pin.toUpperCase()), { 
+        judgePin: pinUpper,
+        judgeNickname: nickname
+      });
+      setJudgePinInput('');
+      setJudgeNicknameLookup('');
+      setModalConfig({ title: "Sucesso", message: "Juiz adicionado com sucesso!", onConfirm: () => setModalConfig(null) });
+    } catch (e) {
+      setModalConfig({ title: "Erro", message: "Erro ao adicionar juiz.", onConfirm: () => setModalConfig(null) });
+    } finally {
+      setIsSavingJudge(false);
+    }
+  };
+
+  const handleDeleteJudge = async () => {
+    if (!userProfile.pin) return;
+    const db = getDb();
+    if (!db) return;
+    try {
+      await updateDoc(doc(db as Firestore, "live_matches", userProfile.pin.toUpperCase()), { 
+        judgePin: null,
+        judgeNickname: null
+      });
+      setConfirmDeleteJudge(false);
+      setModalConfig({ title: "Sucesso", message: "Juiz removido.", onConfirm: () => setModalConfig(null) });
+    } catch (e) {
+      setModalConfig({ title: "Erro", message: "Erro ao remover juiz.", onConfirm: () => setModalConfig(null) });
     }
   };
 
@@ -1537,6 +1672,7 @@ const App: React.FC = () => {
   const handleSmartSwitchServer = useCallback((team: 1 | 2, isPartner: boolean) => {
     if (!gameState || !isCommandOwner || gameState.isMatchOver) return;
     setIsSettingsInicialSaved(true);
+    persistMatchSettings();
     const totalGames = gameState.p1.games + gameState.p2.games;
     const expectedServingTeam = (totalGames % 2 === 0) ? 1 : 2;
     let nextState = JSON.parse(JSON.stringify(gameState)) as GameState;
@@ -1550,20 +1686,14 @@ const App: React.FC = () => {
       const tmpPartner = nextSettings.p1Partner;
       const tmpV1 = nextSettings.p1Verified;
       const tmpPV1 = nextSettings.p1PartnerVerified;
-      const tmpC1 = nextSettings.p1Color;
       nextSettings.p1Name = nextSettings.p2Name;
       nextSettings.p1Partner = nextSettings.p2Partner;
       nextSettings.p1Verified = nextSettings.p2Verified;
       nextSettings.p1PartnerVerified = nextSettings.p2PartnerVerified;
-      nextSettings.p1Color = nextSettings.p2Color;
       nextSettings.p2Name = tmpName;
       nextSettings.p2Partner = tmpPartner;
       nextSettings.p2Verified = tmpV1;
       nextSettings.p2PartnerVerified = tmpPV1;
-      nextSettings.p2Color = tmpC1;
-      // Garante que a cor acompanhe a inversão do time fisicamente no estado
-      nextState.p1.color = nextSettings.p1Color;
-      nextState.p2.color = nextSettings.p2Color;
     }
 
     const currentCycle = totalGames % 4;
@@ -1595,6 +1725,7 @@ const App: React.FC = () => {
     nextState.server = expectedServingTeam;
     nextState.matchConfig = { ...nextState.matchConfig, ...nextSettings };
     setMatchSettings(nextSettings);
+    prevSettingsRef.current = { ...nextSettings };
     setGameState(nextState);
     setIsSettingsInicialSaved(true);
     try { 
@@ -1742,21 +1873,105 @@ const App: React.FC = () => {
       {showLiveControlOverlay && (
         <div className="fixed inset-0 z-[100005] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
            <div className="bg-white/90 backdrop-blur-2xl rounded-[3rem] p-8 w-full max-sm shadow-2xl border border-white/50 flex flex-col items-center gap-6 animate-in zoom-in duration-300 relative">
-              <button onClick={() => { setShowLiveControlOverlay(false); setConfirmDeleteLive(false); }} className="absolute top-6 right-6 p-2 text-black hover:bg-gray-100 rounded-full transition-colors active:scale-90"><X size={28} strokeWidth={3} /></button>
-              <LiveIndicator variant="card" className="scale-125 mb-2" />
-              {!confirmDeleteLive ? (
+              <button onClick={() => { setShowLiveControlOverlay(false); setConfirmDeleteLive(false); setConfirmDeleteJudge(false); }} className="absolute top-6 right-6 p-2 text-black hover:bg-gray-100 rounded-full transition-colors active:scale-90"><X size={28} strokeWidth={3} /></button>
+              <LiveIndicator variant="card" className="scale-125 mb-2" role={indicatorRole} />
+              
+              {!confirmDeleteLive && !confirmDeleteJudge ? (
                 <>
                   <div className="text-center space-y-2">
-                    <h3 className="text-xl font-black text-black tracking-tight leading-tight">{isCurrentDeviceOwner ? 'Você está no controle' : 'Live em andamento, quer controlar?'}</h3>
-                    <p className="text-xs font-bold text-slate-500">{isCurrentDeviceOwner ? 'A transmissão está ativa para os seus parceiros.' : 'Isso aplicará as regras salvas neste celular.'}</p>
+                    <h3 className="text-xl font-black text-black tracking-tight leading-tight">
+                      {isCurrentController ? 'Você está no controle' : 'Live em andamento, quer controlar?'}
+                    </h3>
+                    <p className="text-xs font-bold text-slate-500">
+                      {isCurrentController ? 'A transmissão está ativa para os seus parceiros.' : 'Isso aplicará as regras salvas neste celular.'}
+                    </p>
                   </div>
+
                   <div className="flex flex-col w-full gap-3">
-                    {!isCurrentDeviceOwner && (<button onClick={handleControlLive} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-base shadow-xl shadow-blue-100 active:scale-95 transition-all flex items-center justify-center gap-3"><ShieldCheck size={24} /> Controlar</button>)}
-                    <button onClick={handleObserveLive} className="w-full py-5 bg-[#00FFFF] text-black rounded-[2rem] font-black text-base shadow-xl shadow-cyan-100 active:scale-95 transition-all flex items-center justify-center gap-3"><Eye size={24} /> Observador</button>
-                    {isCurrentDeviceOwner && (<button onClick={() => setConfirmDeleteLive(true)} className="w-full py-4 text-red-500 font-black text-xs tracking-widest active:scale-95 flex items-center justify-center gap-2 mt-2"><Trash2 size={16} /> Excluir transmissão</button>)}
+                    {/* Botão Controlar - Visível para Owner ou Judge */}
+                    {(isOriginalOwner || liveRole === 'judge') && !isCurrentController && (
+                      <button onClick={handleControlLive} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-base shadow-xl shadow-blue-100 active:scale-95 transition-all flex items-center justify-center gap-3">
+                        {isOriginalOwner ? <Crown size={24} /> : <UserCheck size={24} />} Controlar
+                      </button>
+                    )}
+
+                    {/* Botão Observador - Visível para todos exceto quando Owner é o único controlador */}
+                    {(!isCurrentController || (gameState?.judgePin)) && (
+                      <button onClick={handleObserveLive} className="w-full py-5 bg-[#00FFFF] text-black rounded-[2rem] font-black text-base shadow-xl shadow-cyan-100 active:scale-95 transition-all flex items-center justify-center gap-3">
+                        <Eye size={24} /> Observador
+                      </button>
+                    )}
+
+                    {/* Bloco do Juiz - Visível para todos se existir, mas edição apenas para Owner */}
+                    {(gameState?.judgePin || isOriginalOwner) && (
+                      <div className="w-full mt-4 pt-4 border-t border-gray-100 space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Gavel size={18} className="text-slate-400" />
+                          <span className="text-[10px] font-black text-slate-400">Juiz da partida</span>
+                        </div>
+
+                        {gameState?.judgePin ? (
+                          <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                            <div className="flex items-center gap-3">
+                              <div className="flex flex-col">
+                                <span className="text-xs font-black text-black">{gameState.judgeNickname}</span>
+                                <span className="text-[10px] font-bold text-slate-400">{maskPin(gameState.judgePin)}</span>
+                              </div>
+                              {/* Status do Juiz */}
+                              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black ${isJudgeOnline ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                                <div className={`w-1 h-1 rounded-full ${isJudgeOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
+                                {isJudgeOnline ? 'Online' : 'Offline'}
+                              </div>
+                            </div>
+                            {isOriginalOwner && (
+                              <button 
+                                onClick={() => setConfirmDeleteJudge(true)}
+                                className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            )}
+                          </div>
+                        ) : isOriginalOwner ? (
+                          <div className="space-y-3">
+                            <Input 
+                              value={judgePinInput}
+                              onChange={(e) => setJudgePinInput(e.target.value.toUpperCase().slice(0, 5))}
+                              placeholder="PIN do Juiz"
+                              enableVoice={true}
+                              enableCamera={true}
+                              className="bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all"
+                              rightAction={isSearchingJudgePin ? <Loader2 size={16} className="animate-spin text-blue-500 mr-2" /> : null}
+                            />
+                            
+                            {judgeNicknameLookup && (
+                              <div className="flex items-center gap-2 px-4 animate-in fade-in slide-in-from-top-2">
+                                <User size={14} className="text-blue-500" />
+                                <span className="text-xs font-black text-blue-600">{judgeNicknameLookup}</span>
+                              </div>
+                            )}
+
+                            <button 
+                              onClick={handleAddJudge}
+                              disabled={!judgeNicknameLookup || judgeNicknameLookup === "Usuário não localizado" || isSavingJudge}
+                              className="w-full py-3 bg-slate-900 text-white rounded-2xl font-black text-xs disabled:opacity-50 active:scale-95 transition-all"
+                            >
+                              {isSavingJudge ? 'Salvando...' : 'Adicionar juiz'}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {/* Botão Excluir Transmissão - Apenas para Owner */}
+                    {isOriginalOwner && (
+                      <button onClick={() => setConfirmDeleteLive(true)} className="w-full py-4 text-red-500 font-black text-xs active:scale-95 flex items-center justify-center gap-2 mt-2">
+                        <Trash2 size={16} /> Excluir transmissão
+                      </button>
+                    )}
                   </div>
                 </>
-              ) : (
+              ) : confirmDeleteLive ? (
                 <>
                   <div className="text-center space-y-2">
                     <h3 className="text-xl font-black text-red-500 tracking-tight leading-tight">Quer realmente excluir a live em andamento?</h3>
@@ -1765,6 +1980,17 @@ const App: React.FC = () => {
                   <div className="flex flex-col w-full gap-3">
                     <button onClick={handleCloseCloudLive} className="w-full py-5 bg-red-600 text-white rounded-3xl font-black text-base shadow-xl shadow-red-200 active:scale-95 transition-all">Confirmar exclusão</button>
                     <button onClick={() => setConfirmDeleteLive(false)} className="w-full py-4 text-slate-400 font-bold text-xs tracking-widest">Cancelar</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-center space-y-2">
+                    <h3 className="text-xl font-black text-red-500 tracking-tight leading-tight">Remover juiz?</h3>
+                    <p className="text-xs font-bold text-slate-500">O juiz perderá o acesso de controle à partida.</p>
+                  </div>
+                  <div className="flex flex-col w-full gap-3">
+                    <button onClick={handleDeleteJudge} className="w-full py-5 bg-red-600 text-white rounded-3xl font-black text-base shadow-xl shadow-red-200 active:scale-95 transition-all">Confirmar remoção</button>
+                    <button onClick={() => setConfirmDeleteJudge(false)} className="w-full py-4 text-slate-400 font-bold text-xs tracking-widest">Cancelar</button>
                   </div>
                 </>
               )}

@@ -48,7 +48,7 @@ interface Props {
   onCheckUpdate?: () => Promise<string | boolean>;
   setIsUpdatingVersion?: (val: boolean) => void;
   onOpenLiveControl?: () => void;
-  role?: 'owner' | 'observer' | 'spectator';
+  role?: 'owner' | 'judge' | 'observer' | 'spectator';
   onOpenCommunications: () => void;
   unreadCount: number;
   onOpenMenu: () => void;

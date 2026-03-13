@@ -32,8 +32,11 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
 
       if (onVoiceComplexResult) {
         const terms = (partnerTerms || []).map(t => t.toLowerCase().trim()).filter(t => !!t);
+        // Adiciona 'e' como termo comum se não estiver presente
+        if (!terms.includes('e')) terms.push('e');
+        
         for (const term of terms) {
-          const regex = new RegExp(`\\b${term}\\b`, 'i');
+          const regex = new RegExp(`\\s+${term}\\s+`, 'i');
           const match = transcript.match(regex);
           if (match && match.index !== undefined) {
             const p1 = transcript.substring(0, match.index).trim();
@@ -320,7 +323,7 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
             </button>
           )}
           {enableVoice && (
-            <button type="button" onClick={startListening} className={`p-2 rounded-lg transition-all active:scale-75 ${isListening ? 'text-red-500 bg-red-50 animate-pulse' : 'text-indigo-500 hover:text-indigo-600'}`}>
+            <button type="button" onClick={startListening} className={`p-2 rounded-lg transition-all active:scale-75 ${isListening ? 'text-red-500 bg-red-50 animate-pulse' : 'text-blue-500 hover:text-blue-600'}`}>
               <Mic size={18} />
             </button>
           )}

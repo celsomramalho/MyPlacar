@@ -22,9 +22,9 @@ export const SettingsTabs: React.FC<Props> = ({ activeTab, setActiveTab, onOpenR
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-4 pt-3 pb-10 flex justify-between items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
       <button onClick={() => setActiveTab('config')} className={getBtnClass(activeTab === 'config')}>
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 relative ${activeTab === 'config' ? (isSettingsInicialSaved ? 'bg-emerald-500 shadow-md' : 'bg-amber-500 shadow-md') : 'bg-transparent'}`}>
-          <ScoreboardIcon className={`w-6 h-6 ${activeTab === 'config' ? 'text-white' : 'text-black'}`} />
-          {activeTab === 'config' && isSettingsInicialSaved && isMirroringActive && (
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 relative ${activeTab === 'config' ? (isSettingsInicialSaved ? 'bg-emerald-500 shadow-md' : 'bg-amber-500 shadow-md') : (isSettingsInicialSaved ? 'bg-emerald-500 shadow-md opacity-50' : 'bg-amber-500 shadow-md opacity-50')}`}>
+          <ScoreboardIcon className="w-6 h-6 text-white" />
+          {isSettingsInicialSaved && isMirroringActive && (
             <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">
               <Check size={8} strokeWidth={4} />
             </div>
@@ -32,8 +32,8 @@ export const SettingsTabs: React.FC<Props> = ({ activeTab, setActiveTab, onOpenR
         </div>
         <span className="text-[10px] font-black text-black">Início</span>
       </button>
-      <button onClick={onOpenRules} className={getBtnClass(false)}>
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500 shadow-md' : 'bg-amber-500 shadow-md'} opacity-50`}>
+      <button onClick={onOpenRules} className={getBtnClass(activeTab === 'regras')}>
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 relative ${activeTab === 'regras' ? (isSettingsRegrasSaved ? 'bg-emerald-500 shadow-md' : 'bg-amber-500 shadow-md') : (isSettingsRegrasSaved ? 'bg-emerald-500 shadow-md opacity-50' : 'bg-amber-500 shadow-md opacity-50')}`}>
           <Settings size={22} className="text-white" />
           {isSettingsRegrasSaved && isMirroringActive && (
             <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">

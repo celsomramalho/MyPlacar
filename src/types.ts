@@ -158,12 +158,14 @@ export interface GameState {
   liveSessionCounter?: number;
   commandOwner?: string;
   commandOwnerId?: string;
-  controllers?: Record<string, { label: string, lastSeen: number }>;
+  controllers?: Record<string, { label: string, nickname?: string, lastSeen: number }>;
   pingTimestamp?: number;
   pingConfirmed?: boolean;
   isLiveClosed?: boolean;
   tournamentMatchId?: string;
   tournamentPin?: string;
+  judgePin?: string;
+  judgeNickname?: string;
 }
 
 export interface MatchHistoryItem {

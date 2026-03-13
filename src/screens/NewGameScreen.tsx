@@ -11,6 +11,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '../components/LazySportIcon';
 import { Button } from '../components/Button';
 import { LiveIndicator } from '../components/LiveIndicator';
+import { SettingsTabs } from './settings/SettingsTabs';
 
 interface Props {
   baseSettings: MatchSettings; 
@@ -29,7 +30,7 @@ interface Props {
   canStartMatch: boolean;
   cloudLiveExists?: boolean;
   onOpenLiveControl?: () => void;
-  role?: 'owner' | 'observer' | 'spectator';
+  role?: 'owner' | 'judge' | 'observer' | 'spectator';
   activeEvent: TournamentEvent | null;
   onJoinTournament?: () => void;
   onExitTournament?: () => void;
@@ -321,7 +322,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
             {isGeneralOpen && (
               <div className="px-4 pb-6 space-y-6 animate-in slide-in-from-top-2">
                 <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
-                   <div className="flex items-center gap-3 mb-2"><Mic size={18} className="text-indigo-500" /><span className="text-sm font-black text-black">Voz e narração</span></div>
+                   <div className="flex items-center gap-3 mb-2"><Mic size={18} className="text-blue-500" /><span className="text-sm font-black text-black">Voz e narração</span></div>
                    <Toggle id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
                    <Toggle id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
                 </div>
@@ -380,31 +381,16 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         )}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-4 pt-3 pb-10 flex justify-between items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        {isOfflineMode && (
-          <button onClick={onExitOffline} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100"><div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-500 shadow-md"><LogOut size={22} /></div><span className="text-[10px] font-black text-black">Sair</span></button>
-        )}
-        {!isOfflineMode && (
-          <button onClick={() => onNavigateToTab?.('config')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-100 scale-110">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-              <ScoreboardIcon className="w-6 h-6" />
-              {isSettingsInicialSaved && isLiveActive && (
-                <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">
-                  <Check size={8} strokeWidth={4} />
-                </div>
-              )}
-            </div>
-            <span className="text-[10px] font-black text-black">Início</span>
-          </button>
-        )}
-        {!isOfflineMode && (
-          <>
-            <button onClick={() => onNavigateToTab?.('history')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><Clock size={22} className="text-black" /><span className="text-[10px] font-black text-black">Histórico</span></button>
-            <button onClick={() => onNavigateToTab?.('profile')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><User size={22} className="text-black" /><span className="text-[10px] font-black text-black">Perfil</span></button>
-            <button onClick={onOpenMenu} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40"><Menu size={22} className="text-black" /><span className="text-[10px] font-black text-black">Menu</span></button>
-          </>
-        )}
-      </nav>
+      <SettingsTabs 
+        activeTab="regras" 
+        setActiveTab={onNavigateToTab || (() => {})} 
+        onOpenRules={() => {}} 
+        isSettingsRegrasSaved={isSettingsRegrasSaved}
+        isSettingsInicialSaved={isSettingsInicialSaved}
+        isMirroringActive={isLiveActive}
+        onOpenMenu={onOpenMenu || (() => {})}
+        isOfflineMode={isOfflineMode}
+      />
     </div>
   );
 };
