@@ -211,6 +211,10 @@ const App: React.FC = () => {
     return userProfile.pin.toUpperCase() === gameState.ownerPin?.toUpperCase();
   }, [gameState?.ownerPin, userProfile.pin]);
 
+  const activeMatchPin = useMemo(() => {
+    return isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState?.ownerPin?.toUpperCase();
+  }, [isOriginalOwner, userProfile.pin, gameState?.ownerPin]);
+
   const isCurrentController = useMemo(() => gameState?.commandOwnerId === deviceId, [gameState?.commandOwnerId, deviceId]);
   const isJudgeOnline = useMemo(() => {
     if (!gameState?.judgeNickname || !gameState?.controllers) return false;
@@ -363,28 +367,32 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleAppExit = () => {
-      if (gameState?.isMirroringActive && userProfile.pin && userProfile.email && navigator.onLine) {
+      if (gameState?.isMirroringActive && userProfile.email && navigator.onLine) {
         const db = getDb();
         if (db) {
-          const pinUpper = userProfile.pin.toUpperCase();
-          if (gameState.commandOwnerId === deviceId) {
-            setDoc(doc(db, "live_matches", pinUpper), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
-          } else {
-            getDoc(doc(db, "live_matches", pinUpper)).then(snap => {
-              if (snap.exists()) {
-                const data = snap.data();
-                const nextControllers = { ...(data.controllers || {}) };
-                delete nextControllers[deviceId];
-                updateDoc(doc(db, "live_matches", pinUpper), { controllers: nextControllers }).catch(() => {});
-              }
-            }).catch(() => {});
+          const myPin = userProfile.pin?.toUpperCase();
+          const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+          const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+          if (targetPin) {
+            if (gameState.commandOwnerId === deviceId) {
+              setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
+            } else {
+              getDoc(doc(db, "live_matches", targetPin)).then(snap => {
+                if (snap.exists()) {
+                  const data = snap.data();
+                  const nextControllers = { ...(data.controllers || {}) };
+                  delete nextControllers[deviceId];
+                  updateDoc(doc(db, "live_matches", targetPin), { controllers: nextControllers }).catch(() => {});
+                }
+              }).catch(() => {});
+            }
           }
         }
       }
     };
     window.addEventListener('beforeunload', handleAppExit);
     return () => window.removeEventListener('beforeunload', handleAppExit);
-  }, [gameState, userProfile.pin, userProfile.email, deviceId]);
+  }, [gameState, userProfile.pin, userProfile.email, deviceId, isOriginalOwner]);
 
   useEffect(() => {
     // Sinaliza para o script de emergência que o app carregou com sucesso
@@ -627,7 +635,13 @@ const App: React.FC = () => {
     if (!userProfile.pin || !currentFullDeviceName) return;
     const db = getDb();
     if (!db) return;
-    const unsubscribe = onSnapshot(doc(db, "live_matches", userProfile.pin.toUpperCase()), (snap) => {
+    const myPin = userProfile.pin.toUpperCase();
+    const myLive = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin || l.judgePin?.toUpperCase() === myPin);
+    const listenPin = myLive ? myLive.ownerPin?.toUpperCase() : myPin;
+
+    if (!listenPin) return;
+
+    const unsubscribe = onSnapshot(doc(db, "live_matches", listenPin), (snap) => {
       if (snap.exists()) {
         const cloudData = snap.data() as GameState;
         
@@ -693,7 +707,20 @@ const App: React.FC = () => {
       }
     });
     return () => unsubscribe();
-  }, [userProfile.pin, currentFullDeviceName, deviceId, matchSettings]);
+  }, [userProfile.pin, currentFullDeviceName, deviceId, matchSettings, activeLives]);
+
+  const prevIsCommandOwner = useRef(isCommandOwner);
+  useEffect(() => {
+    if (prevIsCommandOwner.current === true && isCommandOwner === false && gameState?.isMirroringActive && !gameState.isLiveClosed) {
+      setModalConfig({
+        title: "Controle alterado",
+        message: "Outro dispositivo assumiu o controle da transmissão. Você agora está no modo de observador.",
+        onConfirm: () => setModalConfig(null)
+      });
+      setShowLiveControlOverlay(false);
+    }
+    prevIsCommandOwner.current = isCommandOwner;
+  }, [isCommandOwner, gameState?.isMirroringActive, gameState?.isLiveClosed]);
 
   useEffect(() => {
     if (!prevSettingsRef.current) { prevSettingsRef.current = { ...matchSettings }; return; }
@@ -835,7 +862,7 @@ const App: React.FC = () => {
     if (gameState) {
       try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(gameState)); } catch(e) {}
       
-      if (gameState.isMirroringActive && userProfile.pin && userProfile.email && !gameState.isLiveClosed && navigator.onLine) {
+      if (gameState.isMirroringActive && userProfile.email && !gameState.isLiveClosed && navigator.onLine) {
         const db = getDb();
         if (db && gameState.commandOwnerId === deviceId) {
             const now = Date.now();
@@ -886,9 +913,14 @@ const App: React.FC = () => {
                 if (strState !== lastSentStateRef.current) {
                   lastSentStateRef.current = strState;
                   lastSyncTimeRef.current = now;
-                  setDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), stateToSave, { merge: true }).catch((err) => {
-                    console.error("Erro ao sincronizar com nuvem:", err);
-                  });
+                  const myPin = userProfile.pin?.toUpperCase();
+                  const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+                  const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+                  if (targetPin) {
+                    setDoc(doc(db, "live_matches", targetPin), stateToSave, { merge: true }).catch((err) => {
+                      console.error("Erro ao sincronizar com nuvem:", err);
+                    });
+                  }
                 }
               }
             }
@@ -1115,7 +1147,10 @@ const App: React.FC = () => {
     if (!state.matchConfig.isHistoryEnabled) {
       try { localStorage.removeItem('myPlacarActiveGameState'); } catch(e) {}
       const db = getDb();
-      if (db && userProfile.pin && navigator.onLine) deleteDoc(doc(db, "live_matches", userProfile.pin.toUpperCase())).catch(() => {});
+      const myPin = userProfile.pin?.toUpperCase();
+      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+      const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : state.ownerPin?.toUpperCase());
+      if (db && targetPin && navigator.onLine) deleteDoc(doc(db, "live_matches", targetPin)).catch(() => {});
       return;
     }
 
@@ -1205,7 +1240,7 @@ const App: React.FC = () => {
        }
     }
 
-    if (gameState?.isMirroringActive && userProfile.pin && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
+    if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
        const db = getDb();
        if (db) {
           const updatedMatchConfig = { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode };
@@ -1216,7 +1251,8 @@ const App: React.FC = () => {
              matchConfig: updatedMatchConfig,
              isLiveClosed: false
           });
-          if (stateToSync) await setDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), stateToSync, { merge: true }).catch(() => {});
+          const targetPin = isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState.ownerPin?.toUpperCase();
+          if (stateToSync && targetPin) await setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
        }
     }
 
@@ -1358,7 +1394,9 @@ const App: React.FC = () => {
   const handleCloseCloudLive = async () => {
     const db = getDb();
     if (db && userProfile.pin && navigator.onLine) {
-      const targetPin = isOriginalOwner ? userProfile.pin.toUpperCase() : gameState?.ownerPin?.toUpperCase();
+      const myPin = userProfile.pin.toUpperCase();
+      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+      const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
       if (!targetPin) return;
       try {
         await deleteDoc(doc(db, "live_matches", targetPin));
@@ -1375,15 +1413,10 @@ const App: React.FC = () => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
     const db = getDb();
     if (db && userProfile.pin) {
-      let targetPin = isOriginalOwner ? userProfile.pin.toUpperCase() : gameState?.ownerPin?.toUpperCase();
+      const myPin = userProfile.pin.toUpperCase();
+      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+      let targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
       
-      // Se não temos targetPin mas somos juiz de alguma partida, pegamos o ownerPin
-      if (!targetPin) {
-        const myPin = userProfile.pin.toUpperCase();
-        const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-        if (judgeMatch) targetPin = judgeMatch.ownerPin;
-      }
-
       if (!targetPin) return;
       try {
         const snap = await getDoc(doc(db, "live_matches", targetPin));
@@ -1602,19 +1635,23 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    if (gameState?.isMirroringActive && userProfile.pin && userProfile.email && navigator.onLine) {
+    if (gameState?.isMirroringActive && userProfile.email && navigator.onLine) {
       const db = getDb();
       if (db) {
-        const pinUpper = userProfile.pin.toUpperCase();
-        if (gameState.commandOwnerId === deviceId) {
-          await setDoc(doc(db, "live_matches", pinUpper), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
-        } else {
-          const snap = await getDoc(doc(db, "live_matches", pinUpper));
-          if (snap.exists() && snap.data().isLiveClosed !== true) {
-            const data = snap.data();
-            const nextControllers = { ...(data.controllers || {}) };
-            delete nextControllers[deviceId];
-            await updateDoc(doc(db, "live_matches", pinUpper), { controllers: nextControllers }).catch(() => {});
+        const myPin = userProfile.pin?.toUpperCase();
+        const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+        const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
+        if (targetPin) {
+          if (gameState.commandOwnerId === deviceId) {
+            await setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
+          } else {
+            const snap = await getDoc(doc(db, "live_matches", targetPin));
+            if (snap.exists() && snap.data().isLiveClosed !== true) {
+              const data = snap.data();
+              const nextControllers = { ...(data.controllers || {}) };
+              delete nextControllers[deviceId];
+              await updateDoc(doc(db, "live_matches", targetPin), { controllers: nextControllers }).catch(() => {});
+            }
           }
         }
       }
@@ -1719,17 +1756,19 @@ const App: React.FC = () => {
       setIsSettingsInicialSaved(true);
       setIsSettingsRegrasSaved(true);
 
-      if (gameState?.isMirroringActive && userProfile.pin && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
+      if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
         const db = getDb();
         if (db) {
-          const pinUpper = userProfile.pin.toUpperCase();
+          const myPin = userProfile.pin?.toUpperCase();
+          const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+          const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
           const stateToSync = sanitizeForFirestore({
             ...gameState,
             p1: { ...gameState.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, color: matchSettings.p1Color },
             p2: { ...gameState.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, color: matchSettings.p2Color },
             matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode }
           });
-          if (stateToSync) setDoc(doc(db, "live_matches", pinUpper), stateToSync, { merge: true }).catch(() => {});
+          if (stateToSync && targetPin) setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
         }
       }
     } catch (e) {}
@@ -1804,12 +1843,12 @@ const App: React.FC = () => {
       localStorage.setItem('myPlacarActiveGameState', JSON.stringify(nextState));
     } catch(e) {}
     
-    if (nextState.isMirroringActive && userProfile.pin && userProfile.email && navigator.onLine && nextState.commandOwnerId === deviceId) {
+    if (nextState.isMirroringActive && userProfile.email && navigator.onLine && nextState.commandOwnerId === deviceId) {
       const db = getDb();
       if (db) {
-        const pinUpper = userProfile.pin.toUpperCase();
+        const targetPin = isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState.ownerPin?.toUpperCase();
         const stateToSync = sanitizeForFirestore(nextState);
-        if (stateToSync) setDoc(doc(db, "live_matches", pinUpper), stateToSync, { merge: true }).catch(() => {});
+        if (stateToSync && targetPin) setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
       }
     }
 
@@ -2208,14 +2247,21 @@ const App: React.FC = () => {
         if(!gameState || gameState.isConfirmedFinished || gameState.isLiveClosed) return; 
         if (a) { const isStarted = (gameState.pointHistory?.length ?? 0) > 0 || gameState.p1.games > 0 || gameState.p2.games > 0 || (gameState.p1.score !== '0' && gameState.p1.score !== '') || (gameState.p2.score !== '0' && gameState.p2.score !== ''); if (isStarted) { setModalConfig({ title: "Atenção", message: "Não é possível iniciar a live com a partida em andamento.", onConfirm: () => setModalConfig(null) }); return; } }
         const db = getDb();
-        if (a && db && userProfile.pin && navigator.onLine) {
+        if (a && db && navigator.onLine) {
+          const myPin = userProfile.pin?.toUpperCase();
+          const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+          const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
           const nextControllers = { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now() } };
           const stateToSave = sanitizeForFirestore({...gameState, isMirroringActive: true, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false});
-          if (stateToSave) { setDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), stateToSave).catch(() => {}); }
+          if (stateToSave && targetPin) { setDoc(doc(db, "live_matches", targetPin), stateToSave).catch(() => {}); }
         }
         setGameState(p => p ? {...p, isMirroringActive: a, isLiveClosed: false, commandOwnerId: a ? deviceId : p.commandOwnerId} : null); 
       }} onCorrectScore={handleCorrectScore} isAdmin={isAdmin} onConfirmMatch={async () => {
-        const db = getDb(); if (db && userProfile.pin && navigator.onLine) try { await updateDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), { isConfirmedFinished: true, isLiveClosed: true }); } catch (e) {} 
+        const db = getDb();
+        const myPin = userProfile.pin?.toUpperCase();
+        const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+        const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
+        if (db && targetPin && navigator.onLine) try { await updateDoc(doc(db, "live_matches", targetPin), { isConfirmedFinished: true, isLiveClosed: true }); } catch (e) {} 
         setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false} : null);
       }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
