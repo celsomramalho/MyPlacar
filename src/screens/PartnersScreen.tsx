@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, ShieldCheck, Plus, Play, Info, CloudDownload, CloudUpload, RotateCw, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Antenna, Wifi, Dices, UserCheck, ArrowRightLeft, UserX, History, Check, CheckSquare, Eraser, Mic, Clock, Trophy } from 'lucide-react';
+import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, ShieldCheck, Plus, Play, Info, CloudDownload, CloudUpload, RotateCw, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Antenna, Wifi, Dices, UserCheck, ArrowRightLeft, UserX, History, Check, CheckSquare, Eraser, Mic, Clock, Trophy, Gavel } from 'lucide-react';
 import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent, TournamentEntry } from '../types'; 
 import { Input } from '../components/Input'; 
 import { getDb } from '../firebase'; 
 import { collection, query, where, getDocs, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
 import { LiveIndicator } from '../components/LiveIndicator'; 
-import { formatPortugueseName } from '../utils/formatters'; 
+import { formatPortugueseName, maskPin } from '../utils/formatters'; 
 import { Toggle } from '../components/Toggle'; 
 import { ScoreboardIcon } from '../components/ScoreboardIcon'; 
 
@@ -24,6 +24,8 @@ interface Props {
   p2Color: string;
   onWatchLive: (pin: string) => void;
   onDeletePartners?: (ids: Set<string>) => void;
+  onSelectPartner?: (partner: Partner) => void;
+  activeLives: GameState[];
   matchSettings: MatchSettings;
   activeEvent: TournamentEvent | null;
   appUrl: string;
@@ -62,7 +64,7 @@ const VenusIcon = ({ size = 14 }) => (
   </svg>
 );
 
-export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, userProfile, p1Color, p2Color, onWatchLive, onDeletePartners, matchSettings, activeEvent, appUrl }) => {
+export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, userProfile, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, matchSettings, activeEvent, appUrl }) => {
   const [activeTab, setActiveTab] = useState<'list' | 'queue'>('list');
   const [isShuffling, setIsShuffling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,7 +77,6 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cloudCount, setCloudCount] = useState(0);
   const [referralCount, setReferralCount] = useState(0);
-  const [activeLives, setActiveLives] = useState<GameState[]>([]);
   const [navigationSource, setNavigationSource] = useState<'settings' | 'queue'>('settings');
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   
@@ -101,7 +102,14 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
   const scannerInputRef = useRef<any>(null);
   const partnerPins = useMemo(() => new Set(partners.map(p => p.pin.toUpperCase())), [partners]);
-  const displayedLives = useMemo(() => activeLives.filter(live => live.ownerPin && partnerPins.has(live.ownerPin.toUpperCase())), [activeLives, partnerPins]);
+  const displayedLives = useMemo(() => {
+    const myPin = userProfile.pin.toUpperCase();
+    return activeLives.filter(live => {
+      const isPartnerMatch = live.ownerPin && partnerPins.has(live.ownerPin.toUpperCase());
+      const isJudgeMatch = live.judgePin && live.judgePin.toUpperCase() === myPin;
+      return isPartnerMatch || isJudgeMatch;
+    });
+  }, [activeLives, partnerPins, userProfile.pin]);
   const isAlreadyRegistered = useMemo(() => partners.some(p => p.pin.toUpperCase() === pinInput.toUpperCase().trim()), [partners, pinInput]);
   const maxPerTeam = isDoubles ? 2 : 1;
   const meAsPartner: Partner = useMemo(() => ({ id: 'me', name: userProfile.name, nickname: userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu', pin: userProfile.pin, origin: 'manual', addedAt: 0, gender: userProfile.gender || 'M' }), [userProfile]);
@@ -124,16 +132,6 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
   useEffect(() => {
     syncAllData(true);
-    const db = getDb();
-    if (db) {
-      const q = query(collection(db, "live_matches"), where("isLiveClosed", "==", false));
-      const unsubscribe = onSnapshot(q, (snap) => {
-        const lives: GameState[] = [];
-        snap.forEach(d => lives.push(d.data() as GameState));
-        setActiveLives(lives);
-      });
-      return () => unsubscribe();
-    }
   }, []);
 
   useEffect(() => {
@@ -198,6 +196,11 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   };
 
   const handleToggleSelect = (id: string) => {
+    if (onSelectPartner) {
+        const found = [...partners, meAsPartner].find(p => p.id === id);
+        if (found) onSelectPartner(found);
+        return;
+    }
     if (pendingQueueIndex !== null) {
       const allPartners = [meAsPartner, ...partners];
       const partner = allPartners.find(p => p.id === id);
@@ -573,13 +576,29 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
               <div className="space-y-4">
                  <div className="flex items-center gap-2 px-1 text-sky-500 font-black"><div className="p-1 bg-white shadow-sm rounded-lg flex items-center justify-center"><LiveIndicator className="scale-75" /></div><h3 className="text-sm font-black text-black tracking-tight">Assista agora</h3></div>
                  <div className="grid grid-cols-1 gap-3">
-                   {displayedLives.map(live => (
-                     <button key={live.ownerPin} onClick={() => onWatchLive(live.ownerPin!)} className="bg-white rounded-[2rem] p-5 shadow-sm border border-sky-100 flex items-center justify-between active:scale-[0.98] transition-all group relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1.5 h-full bg-sky-400"></div>
-                        <div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center shadow-inner"><Wifi size={24} className="text-blue-500" /></div><div className="text-left"><p className="text-[10px] font-black text-slate-400 leading-none mb-1">Partida em andamento</p><p className="text-sm font-black text-gray-900 truncate max-w-[150px]">{live.p1.name} vs {live.p2.name}</p></div></div>
-                        <div className="flex items-center gap-3"><div className="bg-sky-50 px-3 py-2 rounded-xl border border-sky-100 font-mono text-[13px] font-black text-sky-700">{live.p1.score}-{live.p2.score}</div><ChevronRight size={20} className="text-gray-300 group-hover:text-sky-500 transition-colors" /></div>
-                     </button>
-                   ))}
+                   {displayedLives.map(live => {
+                     const isJudge = live.judgePin?.toUpperCase() === userProfile.pin.toUpperCase();
+                     return (
+                       <button key={live.ownerPin} onClick={() => onWatchLive(live.ownerPin!)} className="bg-white rounded-[2rem] p-5 shadow-sm border border-sky-100 flex items-center justify-between active:scale-[0.98] transition-all group relative overflow-hidden">
+                          <div className={`absolute top-0 left-0 w-1.5 h-full ${isJudge ? 'bg-emerald-400' : 'bg-sky-400'}`}></div>
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center shadow-inner">
+                              {isJudge ? <Gavel size={24} className="text-emerald-500" /> : <Wifi size={24} className="text-blue-500" />}
+                            </div>
+                            <div className="text-left">
+                              <p className="text-[10px] font-black text-slate-400 leading-none mb-1">
+                                {isJudge ? 'Você é o juiz' : 'Partida em andamento'}
+                              </p>
+                              <p className="text-sm font-black text-gray-900 truncate max-w-[150px]">{live.p1.name} vs {live.p2.name}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="bg-sky-50 px-3 py-2 rounded-xl border border-sky-100 font-mono text-[13px] font-black text-sky-700">{live.p1.score}-{live.p2.score}</div>
+                            <ChevronRight size={20} className="text-gray-300 group-hover:text-sky-500 transition-colors" />
+                          </div>
+                       </button>
+                     );
+                   })}
                  </div>
               </div>
             )}
@@ -650,7 +669,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
                       <div className="relative shrink-0"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${p.id === 'me' ? 'bg-[#4B0082] text-white shadow-lg' : 'bg-green-100 text-green-600'}`}><User size={24} fill={p.id === 'me' ? "currentColor" : "none"} /></div></div>
                       <div className="flex-1 min-w-0">
                         <h4 className={`font-black text-[15px] truncate transition-colors ${team ? 'text-black' : 'text-slate-900'}`}>{p.name || p.nickname} {p.id === 'me' && <span className="text-[10px] opacity-40 ml-1">(você)</span>}</h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.nickname} - {p.pin}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.nickname} - {maskPin(p.pin)}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button 

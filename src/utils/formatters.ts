@@ -25,3 +25,11 @@ export const applyGoldenRule = (text: string, enabled: boolean): string => {
   if (trimmed.length === 0) return text;
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
 };
+
+/**
+ * Mascara o PIN para o padrão p*p*p.
+ */
+export const maskPin = (pin: string): string => {
+  if (!pin || pin.length < 5) return pin;
+  return pin.split('').map((char, i) => (i === 1 || i === 3) ? '*' : char).join('');
+};

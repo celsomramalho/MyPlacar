@@ -18,7 +18,7 @@ import { isValidGameState, isValidMatchSettings } from './utils/validation';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants';
 import { incrementScore, undoPoint } from './utils/tennisEngine';
-import { applyGoldenRule } from './utils/formatters';
+import { applyGoldenRule, maskPin } from './utils/formatters';
 import { getDb } from './firebase';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
 import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Gavel, User, QrCode, Users } from 'lucide-react';
@@ -113,6 +113,7 @@ const App: React.FC = () => {
   const [isProfileSaved, setIsProfileSaved] = useState(true);
   const [activeCloudMatch, setActiveCloudMatch] = useState<{id: string, sport: string} | null>(null);
   const [cloudLiveExists, setCloudLiveExists] = useState<boolean>(false);
+  const [activeLives, setActiveLives] = useState<GameState[]>([]);
   const [unreadCommsCount, setUnreadCommsCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [appUrl, setAppUrl] = useState("https://my-placar.vercel.app/");
@@ -167,11 +168,6 @@ const App: React.FC = () => {
       console.warn = originalWarn;
     };
   }, []);
-
-  const maskPin = (pin: string) => {
-    if (!pin || pin.length < 5) return pin;
-    return pin.split('').map((char, i) => (i === 1 || i === 3) ? '*' : char).join('');
-  };
 
   const handleVersionTap = () => {
     setVersionTapCount(prev => {
@@ -232,9 +228,11 @@ const App: React.FC = () => {
   const liveRole = useMemo(() => { 
     if (!cloudLiveExists) return 'spectator'; 
     if (isOriginalOwner) return 'owner';
-    if (gameState?.judgePin === userProfile.pin.toUpperCase()) return 'judge';
+    const myPin = userProfile.pin.toUpperCase();
+    if (gameState?.judgePin === myPin) return 'judge';
+    if (activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
     return 'observer'; 
-  }, [cloudLiveExists, isOriginalOwner, gameState?.judgePin, userProfile.pin]);
+  }, [cloudLiveExists, isOriginalOwner, gameState?.judgePin, userProfile.pin, activeLives]);
 
   const indicatorRole = useMemo(() => {
     if (!isCurrentController) return 'observer';
@@ -247,6 +245,7 @@ const App: React.FC = () => {
   const [judgePinInput, setJudgePinInput] = useState('');
   const [judgeNicknameLookup, setJudgeNicknameLookup] = useState('');
   const [isSearchingJudgePin, setIsSearchingJudgePin] = useState(false);
+  const [isSelectingJudge, setIsSelectingJudge] = useState(false);
   const [isSavingJudge, setIsSavingJudge] = useState(false);
   const [isRecoveryFromMatchOver, setIsRecoveryFromMatchOver] = useState(false);
   const [isWaitingSync, setIsWaitingSync] = useState(false);
@@ -739,23 +738,33 @@ const App: React.FC = () => {
     prevProfileRef.current = { ...userProfile };
   }, [userProfile]);
 
-  const checkLivePresence = useCallback(async (pin: string) => {
-    if (!pin || !navigator.onLine) return;
+  useEffect(() => {
     const db = getDb();
-    if (!db) return;
-    try {
-      const snap = await getDoc(doc(db, "live_matches", pin.toUpperCase()));
-      const exists = snap.exists() && snap.data().isLiveClosed !== true;
-      setCloudLiveExists(exists);
-      if (!exists && gameState?.isMirroringActive) {
-        setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
-      }
-    } catch (e) {}
-  }, [gameState?.isMirroringActive]);
+    if (db) {
+      const q = query(collection(db, "live_matches"), where("isLiveClosed", "==", false));
+      const unsubscribe = onSnapshot(q, (snap) => {
+        const lives: GameState[] = [];
+        snap.forEach(d => lives.push(d.data() as GameState));
+        setActiveLives(lives);
+      });
+      return () => unsubscribe();
+    }
+  }, []);
 
   useEffect(() => {
     if (!userProfile.pin) { setCloudLiveExists(false); return; }
-    checkLivePresence(userProfile.pin);
+    const myPin = userProfile.pin.toUpperCase();
+    const exists = activeLives.some(live => 
+      (live.ownerPin?.toUpperCase() === myPin) || 
+      (live.judgePin?.toUpperCase() === myPin)
+    );
+    setCloudLiveExists(exists);
+    if (!exists && gameState?.isMirroringActive) {
+      setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
+    }
+  }, [activeLives, userProfile.pin, gameState?.isMirroringActive]);
+
+  useEffect(() => {
     if (userProfile.email && navigator.onLine) {
         const db = getDb();
         if (db) {
@@ -767,7 +776,7 @@ const App: React.FC = () => {
             fetchUserRegistrations(userProfile.email);
         }
     }
-  }, [userProfile.pin, userProfile.email, checkLivePresence]);
+  }, [userProfile.pin, userProfile.email]);
 
   useEffect(() => {
     let timer: any;
@@ -1329,7 +1338,15 @@ const App: React.FC = () => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
     const db = getDb();
     if (db && userProfile.pin) {
-      const targetPin = isOriginalOwner ? userProfile.pin.toUpperCase() : gameState?.ownerPin?.toUpperCase();
+      let targetPin = isOriginalOwner ? userProfile.pin.toUpperCase() : gameState?.ownerPin?.toUpperCase();
+      
+      // Se não temos targetPin mas somos juiz de alguma partida, pegamos o ownerPin
+      if (!targetPin) {
+        const myPin = userProfile.pin.toUpperCase();
+        const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+        if (judgeMatch) targetPin = judgeMatch.ownerPin;
+      }
+
       if (!targetPin) return;
       try {
         const snap = await getDoc(doc(db, "live_matches", targetPin));
@@ -1386,11 +1403,28 @@ const App: React.FC = () => {
     }
   };
 
-  const handleObserveLive = async () => {
+  const handleSelectJudgeFromPartners = (partner: Partner) => {
+    setJudgePinInput(partner.pin || '');
+    setJudgeNicknameLookup(partner.nickname);
+    setIsSelectingJudge(false);
+    setCurrentScreen('scoreboard');
+  };
+
+  const handleObserveLive = async (targetPin?: string) => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para observar.", onConfirm: () => setModalConfig(null) }); return; }
     const db = getDb();
-    if (db && userProfile.pin) {
-      const pinUpper = userProfile.pin.toUpperCase();
+    let pinToObserve = targetPin || userProfile.pin?.toUpperCase();
+
+    // Se não temos pinToObserve (ex: clicou no botão Live sem estar em uma partida própria)
+    // mas somos juiz de alguma partida em activeLives, pegamos o ownerPin dessa partida.
+    if (!targetPin && userProfile.pin) {
+      const myPin = userProfile.pin.toUpperCase();
+      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+      if (judgeMatch && judgeMatch.ownerPin) pinToObserve = judgeMatch.ownerPin;
+    }
+
+    if (db && pinToObserve) {
+      const pinUpper = pinToObserve.toUpperCase();
       try {
         const snap = await getDoc(doc(db, "live_matches", pinUpper));
         if (snap.exists() && snap.data().isLiveClosed !== true) {
@@ -1409,7 +1443,7 @@ const App: React.FC = () => {
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
-          setCloudLiveExists(false);
+          if (!targetPin) setCloudLiveExists(false);
           setShowLiveControlOverlay(false);
           setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
           setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
@@ -1897,7 +1931,7 @@ const App: React.FC = () => {
 
                     {/* Botão Observador - Visível para todos exceto quando Owner é o único controlador */}
                     {(!isCurrentController || (gameState?.judgePin)) && (
-                      <button onClick={handleObserveLive} className="w-full py-5 bg-[#00FFFF] text-black rounded-[2rem] font-black text-base shadow-xl shadow-cyan-100 active:scale-95 transition-all flex items-center justify-center gap-3">
+                      <button onClick={() => handleObserveLive()} className="w-full py-5 bg-[#00FFFF] text-black rounded-[2rem] font-black text-base shadow-xl shadow-cyan-100 active:scale-95 transition-all flex items-center justify-center gap-3">
                         <Eye size={24} /> Observador
                       </button>
                     )}
@@ -1941,7 +1975,17 @@ const App: React.FC = () => {
                               enableVoice={true}
                               enableCamera={true}
                               className="bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all"
-                              rightAction={isSearchingJudgePin ? <Loader2 size={16} className="animate-spin text-blue-500 mr-2" /> : null}
+                              rightAction={
+                                <div className="flex items-center gap-1">
+                                  {isSearchingJudgePin && <Loader2 size={16} className="animate-spin text-blue-500 mr-1" />}
+                                  <button 
+                                    onClick={() => { setIsSelectingJudge(true); setCurrentScreen('partners'); }}
+                                    className="p-2 text-[#40E0D0] hover:text-[#30C0B0] transition-all active:scale-75"
+                                  >
+                                    <Users size={18} />
+                                  </button>
+                                </div>
+                              }
                             />
                             
                             {judgeNicknameLookup && (
@@ -2041,7 +2085,6 @@ const App: React.FC = () => {
           } catch(e) {} 
         } 
         setUserProfile(p); 
-        checkLivePresence(p.pin); 
       }} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} initialReferralPin={initialReferralPin} onOfflineMode={handleOfflineMode} />}
       {currentScreen === 'settings' && <SettingsScreen 
         appUrl={appUrl}
@@ -2081,7 +2124,15 @@ const App: React.FC = () => {
         onOpenMenu={() => setIsMenuOpen(true)}
         isOfflineMode={isOfflineMode}
       />}
-      {currentScreen === 'partners' && <PartnersScreen appUrl={appUrl} partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => setCurrentScreen('settings')} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} onWatchLive={(pin) => { setSpectatorPin(pin); setCurrentScreen('spectator'); }} 
+      {currentScreen === 'partners' && <PartnersScreen appUrl={appUrl} partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => { if (isSelectingJudge) { setIsSelectingJudge(false); setCurrentScreen('scoreboard'); } else setCurrentScreen('settings'); }} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} onSelectPartner={isSelectingJudge ? handleSelectJudgeFromPartners : undefined} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} activeLives={activeLives} onWatchLive={(pin) => { 
+        const isJudge = activeLives.find(l => l.ownerPin?.toUpperCase() === pin.toUpperCase())?.judgePin?.toUpperCase() === userProfile.pin.toUpperCase();
+        if (isJudge) {
+          handleObserveLive(pin);
+        } else {
+          setSpectatorPin(pin); 
+          setCurrentScreen('spectator'); 
+        }
+      }} 
         onDeletePartners={(ids) => setModalConfig({ 
           title: "Excluir jogadores?", 
           message: `Deseja excluir os jogadores selecionados?`, 
