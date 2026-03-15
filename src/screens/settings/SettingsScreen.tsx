@@ -1,12 +1,11 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent } from '../types';
-import { ProfileScreen } from './ProfileScreen';
-import { HelpScreen } from './HelpScreen';
-import { SettingsHeader } from './settings/SettingsHeader';
-import { TeamSection } from './settings/TeamSection';
-import { HistorySection } from './settings/HistorySection';
-import { SettingsTabs } from './settings/SettingsTabs';
+import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent } from '../../types';
+import { ProfileScreen } from '../ProfileScreen';
+import { HelpScreen } from '../HelpScreen';
+import { SettingsHeader } from './SettingsHeader';
+import { TeamSection } from './TeamSection';
+import { HistorySection } from './HistorySection';
+import { SettingsTabs } from './SettingsTabs';
 
 interface Props {
   history: MatchHistoryItem[];
@@ -53,6 +52,9 @@ interface Props {
   userEntryDate: number | null;
   onJoinTournament: () => void;
   onExitTournament: () => void;
+  appUrl: string;
+  onOpenMenu: () => void;
+  isOfflineMode?: boolean;
 }
 
 export const SettingsScreen: React.FC<Props> = (props) => {
@@ -84,6 +86,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
       case 'history':
         return (
           <HistorySection 
+            appUrl={props.appUrl}
             history={props.history} 
             searchQuery="" 
             setSearchQuery={() => {}} 
@@ -154,6 +157,8 @@ export const SettingsScreen: React.FC<Props> = (props) => {
         isSettingsRegrasSaved={props.isSettingsRegrasSaved}
         isProfileSaved={props.isProfileSaved}
         isMirroringActive={props.gameState?.isMirroringActive || props.cloudLiveExists}
+        onOpenMenu={props.onOpenMenu}
+        isOfflineMode={props.isOfflineMode}
       />
     </div>
   );
