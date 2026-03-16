@@ -20,12 +20,11 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants';
 import { incrementScore, undoPoint } from './utils/tennisEngine';
 import { applyGoldenRule } from './utils/formatters';
-import { getDb, clearFirestoreCache } from './firebase';
+import { getDb, getAuthInstance, clearFirestoreCache } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
 import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, CheckCircle2, ShieldCheck, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Gavel, User, QrCode, Users } from 'lucide-react';
-import { LiveIndicator } from './components/LiveIndicator';
-
-const CURRENT_DATA_VERSION = '3.0.0';
+import { ScoreboardIcon } from './components/ScoreboardIcon';
 
 const LogViewer: React.FC<{logs: {type: string, msg: string, time: string}[], onClose: () => void, onClear: () => void}> = ({logs, onClose, onClear}) => {
   return (
@@ -71,6 +70,7 @@ const App: React.FC = () => {
   const initialSpectatorMatchId = useMemo(() => urlParams.get('viewMatch'), [urlParams]);
   const initialSpectatorPin = useMemo(() => urlParams.get('viewPin'), [urlParams]);
   
+  const [isAppLoading, setIsAppLoading] = useState(true);
   const [currentScreen, setCurrentScreen] = useState<Screen>((initialSpectatorMatchId || initialSpectatorPin) ? 'spectator' : 'auth');
   const [spectatorMatchId, setMatchId] = useState<string | null>(initialSpectatorMatchId);
   const [spectatorPin, setSpectatorPin] = useState<string | null>(initialSpectatorPin);
@@ -155,6 +155,59 @@ const App: React.FC = () => {
     return fallback;
   }
 
+  // Listener de autenticação global - Única fonte de verdade para o estado inicial
+  useEffect(() => {
+    const auth = getAuthInstance();
+    if (!auth) {
+      setIsAppLoading(false);
+      return;
+    }
+
+    // Grava a versão para evitar o loop do script no index.html
+    localStorage.setItem('myPlacar_AppVersion', LOCAL_CODE_VERSION);
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user && user.email) {
+        const db = getDb();
+        if (db) {
+          try {
+            const userDoc = await getDoc(doc(db as Firestore, "users", user.email.toLowerCase().trim()));
+            if (userDoc.exists()) {
+              const profile = userDoc.data() as UserProfile;
+              setUserProfile(profile);
+              localStorage.setItem('myPlacarUserProfile', JSON.stringify(profile));
+              
+              // Se estiver na tela de auth e logado, vai para o painel
+              if (currentScreen === 'auth') {
+                setCurrentScreen('settings');
+              }
+            } else {
+              // Usuário autenticado mas sem perfil no Firestore (erro raro de cadastro)
+              console.warn("MyPlacar: Usuário autenticado sem perfil no banco.");
+              setCurrentScreen('auth');
+            }
+          } catch (e) {
+            console.error("MyPlacar: Erro ao carregar perfil:", e);
+            setCurrentScreen('auth');
+          }
+        }
+      } else {
+        // Não logado
+        if (currentScreen !== 'spectator') {
+          setCurrentScreen('auth');
+        }
+      }
+      
+      // Pequeno delay para o splash ser visível e a transição ser suave
+      setTimeout(() => {
+        setIsAppLoading(false);
+        window.dispatchEvent(new CustomEvent('app-ready'));
+      }, 2000);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const sanitizeForFirestore = (obj: any) => {
     if (!obj) return null;
     return JSON.parse(JSON.stringify(obj));
@@ -167,6 +220,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
+    const auth = getAuthInstance();
+    if (auth) auth.signOut();
     localStorage.clear();
     window.location.reload();
   };
@@ -239,6 +294,20 @@ const App: React.FC = () => {
   const canStartMatch = true;
 
   const currentFullDeviceName = "Aparelho";
+
+  if (isAppLoading) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 animate-in fade-in zoom-in duration-1000 relative overflow-hidden">
+        <div className="relative z-10 flex flex-col items-center">
+          <ScoreboardIcon className="w-56 h-56 mb-8 drop-shadow-[0_25px_50px_rgba(0,0,0,0.15)] animate-bounce" style={{animationDuration: '3s'}} />
+          <div className="text-center space-y-4">
+            <h1 className="text-[48px] font-black text-black tracking-tighter leading-none font-display">Myplacar pro</h1>
+            <p className="text-[17px] font-bold text-black max-w-[280px]">O jogo em suas mãos</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ErrorBoundary>
