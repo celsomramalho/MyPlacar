@@ -1,3 +1,4 @@
+"use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, User, HelpCircle, Watch, Target, Sparkles, Antenna, Check, Ticket, X, Loader2, Share2, Copy, QrCode, WifiOff, LogOut, Menu } from 'lucide-react';
@@ -159,12 +160,22 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-2"><Watch size={20} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Otimização para relógios</h2></div>
           <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
-            <Toggle id="toggle-watchmode" label="Modo relógio (interface gigante)" checked={settings.isWatchMode || false} onChange={v => { 
+            <Toggle 
+              id="toggle-watchmode" 
+              label="Modo relógio (interface gigante)" 
+              checked={isOfflineMode ? true : (settings.isWatchMode || false)} 
+              disabled={isOfflineMode}
+              onChange={v => { 
                 const next = {...settings, isWatchMode: v};
                 setSettings(next); 
                 localStorage.setItem('myPlacarSettings', JSON.stringify(next)); 
-            }} />
-            <p className="text-[10px] font-bold text-black leading-tight px-1">Ideal para telas de 200x200px. Divide a tela em dois botões massivos.</p>
+              }} 
+            />
+            <p className="text-[10px] font-bold text-black leading-tight px-1">
+              {isOfflineMode 
+                ? "O modo relógio é obrigatório no uso offline para garantir a melhor visibilidade." 
+                : "Ideal para telas de 200x200px. Divide a tela em dois botões massivos."}
+            </p>
           </div>
         </div>
 
@@ -313,72 +324,70 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
           </div>
         )}
 
-        {!isOfflineMode && (
-          <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-2 shadow-sm border border-white space-y-2">
-            <button onClick={() => setIsGeneralOpen(!isGeneralOpen)} className="w-full flex items-center justify-between p-4 px-6 text-black">
-               <div className="flex items-center gap-3"><Settings size={20} /><span className="text-sm font-black">Configurações locais</span></div>
-               {isGeneralOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-            </button>
-            {isGeneralOpen && (
-              <div className="px-4 pb-6 space-y-6 animate-in slide-in-from-top-2">
-                <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
-                   <div className="flex items-center gap-3 mb-2"><Mic size={18} className="text-blue-500" /><span className="text-sm font-black text-black">Voz e narração</span></div>
-                   <Toggle id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
-                   <Toggle id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
-                </div>
-                
-                <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-8">
-                  <div className="space-y-4">
-                    <span className="text-sm font-black text-gray-700">Brilho da tela</span>
-                    <div className="flex items-center gap-4">
-                      <Sun size={18} className="text-orange-400 shrink-0" />
-                      <input 
-                        type="range" min="10" max="100" 
-                        value={settings.brightness} 
-                        onChange={e => setSettings({...settings, brightness: parseInt(e.target.value)})} 
-                        className="flex-1 accent-orange-400 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer" 
-                      />
-                      <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.brightness}%</span>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <span className="text-sm font-black text-gray-700">Volume do áudio</span>
-                    <div className="flex items-center gap-4">
-                      <Volume2 size={18} className="text-emerald-500 shrink-0" />
-                      <input 
-                        type="range" min="0" max="100" 
-                        value={settings.volume} 
-                        onChange={e => setSettings({...settings, volume: parseInt(e.target.value)})} 
-                        className="flex-1 accent-emerald-500 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer" 
-                      />
-                      <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.volume}%</span>
-                    </div>
+        <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-2 shadow-sm border border-white space-y-2">
+          <button onClick={() => setIsGeneralOpen(!isGeneralOpen)} className="w-full flex items-center justify-between p-4 px-6 text-black">
+             <div className="flex items-center gap-3"><Settings size={20} /><span className="text-sm font-black">Configurações locais</span></div>
+             {isGeneralOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </button>
+          {isGeneralOpen && (
+            <div className="px-4 pb-6 space-y-6 animate-in slide-in-from-top-2">
+              <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
+                 <div className="flex items-center gap-3 mb-2"><Mic size={18} className="text-blue-500" /><span className="text-sm font-black text-black">Voz e narração</span></div>
+                 <Toggle id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
+                 <Toggle id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
+              </div>
+              
+              <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-8">
+                <div className="space-y-4">
+                  <span className="text-sm font-black text-gray-700">Brilho da tela</span>
+                  <div className="flex items-center gap-4">
+                    <Sun size={18} className="text-orange-400 shrink-0" />
+                    <input 
+                      type="range" min="10" max="100" 
+                      value={settings.brightness} 
+                      onChange={e => setSettings({...settings, brightness: parseInt(e.target.value)})} 
+                      className="flex-1 accent-orange-400 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer" 
+                    />
+                    <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.brightness}%</span>
                   </div>
                 </div>
-
-                <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
-                  <div className="flex items-center gap-3 mb-2"><Clock size={18} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Latência</h2></div>
-                  <div className="space-y-8">
-                    <div className="space-y-4">
-                      <span className="text-sm font-black text-gray-700">Debounce de ação</span>
-                      <div className="flex items-center gap-4">
-                        <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.actionCooldown} onChange={e => setSettings({...settings, actionCooldown: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.actionCooldown}s</span>
-                      </div>
-                      <p className="text-[11px] font-bold text-gray-400 leading-tight">Tempo mínimo entre os pontos para evitar duplicação em redes lentas.</p>
-                    </div>
-                    <div className="space-y-4">
-                      <span className="text-sm font-black text-gray-700">Trava de estado</span>
-                      <div className="flex items-center gap-4">
-                        <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.stateLockout} onChange={e => setSettings({...settings, stateLockout: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.stateLockout}s</span>
-                      </div>
-                      <p className="text-[11px] font-bold text-gray-400 leading-tight">Bloqueio de voz após falar o placar para evitar eco.</p>
-                    </div>
+                <div className="space-y-4">
+                  <span className="text-sm font-black text-gray-700">Volume do áudio</span>
+                  <div className="flex items-center gap-4">
+                    <Volume2 size={18} className="text-emerald-500 shrink-0" />
+                    <input 
+                      type="range" min="0" max="100" 
+                      value={settings.volume} 
+                      onChange={e => setSettings({...settings, volume: parseInt(e.target.value)})} 
+                      className="flex-1 accent-emerald-500 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer" 
+                    />
+                    <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.volume}%</span>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        )}
+
+              <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
+                <div className="flex items-center gap-3 mb-2"><Clock size={18} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Latência</h2></div>
+                <div className="space-y-8">
+                  <div className="space-y-4">
+                    <span className="text-sm font-black text-gray-700">Debounce de ação</span>
+                    <div className="flex items-center gap-4">
+                      <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.actionCooldown} onChange={e => setSettings({...settings, actionCooldown: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.actionCooldown}s</span>
+                    </div>
+                    <p className="text-[11px] font-bold text-gray-400 leading-tight">Tempo mínimo entre os pontos para evitar duplicação em redes lentas.</p>
+                  </div>
+                  <div className="space-y-4">
+                    <span className="text-sm font-black text-gray-700">Trava de estado</span>
+                    <div className="flex items-center gap-4">
+                      <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.stateLockout} onChange={e => setSettings({...settings, stateLockout: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.stateLockout}s</span>
+                    </div>
+                    <p className="text-[11px] font-bold text-gray-400 leading-tight">Bloqueio de voz após falar o placar para evitar eco.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <SettingsTabs 
@@ -390,6 +399,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         isMirroringActive={isLiveActive}
         onOpenMenu={onOpenMenu || (() => {})}
         isOfflineMode={isOfflineMode}
+        onExitOffline={onExitOffline}
       />
     </div>
   );

@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent } from '../../types';
 import { ProfileScreen } from '../ProfileScreen';
@@ -47,14 +49,18 @@ interface Props {
   onCheckUpdate?: () => Promise<string | boolean>;
   setIsUpdatingVersion?: (val: boolean) => void;
   onOpenLiveControl?: () => void;
-  role?: 'owner' | 'observer' | 'spectator';
+  role?: 'owner' | 'judge' | 'observer' | 'spectator';
+  onOpenCommunications: () => void;
+  unreadCount: number;
+  onOpenMenu: () => void;
   activeEvent: TournamentEvent | null;
   userEntryDate: number | null;
   onJoinTournament: () => void;
   onExitTournament: () => void;
-  appUrl: string;
-  onOpenMenu: () => void;
   isOfflineMode?: boolean;
+  onExitOffline?: () => void;
+  appUrl: string;
+  onVersionTap?: () => void;
 }
 
 export const SettingsScreen: React.FC<Props> = (props) => {
@@ -82,6 +88,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           setIsUpdatingVersion={props.setIsUpdatingVersion}
           settings={props.settings}
           setSettings={props.setSettings}
+          onVersionTap={props.onVersionTap}
         />;
       case 'history':
         return (
@@ -142,6 +149,8 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           isMirroringActive={props.gameState?.isMirroringActive || props.cloudLiveExists}
           onOpenLiveControl={props.onOpenLiveControl}
           role={props.role}
+          onOpenCommunications={props.onOpenCommunications}
+          unreadCount={props.unreadCount}
         />
       )}
       <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} pb-32 no-scrollbar`}>
@@ -159,6 +168,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
         isMirroringActive={props.gameState?.isMirroringActive || props.cloudLiveExists}
         onOpenMenu={props.onOpenMenu}
         isOfflineMode={props.isOfflineMode}
+        onExitOffline={props.onExitOffline}
       />
     </div>
   );

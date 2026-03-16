@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Mic, Camera, X, Loader2, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: React.ReactNode;
@@ -16,7 +17,7 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [isScanningFile, setIsScanningFile] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  const scannerRef = useRef<any>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const startListening = () => {
@@ -32,7 +33,6 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
 
       if (onVoiceComplexResult) {
         const terms = (partnerTerms || []).map(t => t.toLowerCase().trim()).filter(t => !!t);
-        // Adiciona 'e' como termo comum se não estiver presente
         if (!terms.includes('e')) terms.push('e');
         
         for (const term of terms) {
@@ -89,23 +89,30 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
     setScanError(null);
     setIsScanningFile(true);
 
-    // Tenta fechar a câmera antes de processar arquivo
     if (scannerRef.current) {
       try { await scannerRef.current.stop(); } catch(e) {}
     }
 
     const scanImage = async (imageSource: File | HTMLCanvasElement) => {
-      const processor = new (window as any).Html5Qrcode("qr-reader", { verbose: false });
-      return await processor.scanFile(imageSource, true);
+      const processor = new Html5Qrcode("qr-reader", { verbose: false });
+      
+      // Converte canvas para File se necessário para satisfazer o TypeScript e a biblioteca
+      const fileToScan = imageSource instanceof HTMLCanvasElement 
+        ? await new Promise<File>((resolve) => {
+            imageSource.toBlob((blob) => {
+              resolve(new File([blob!], "temp.png", { type: "image/png" }));
+            }, "image/png");
+          })
+        : imageSource;
+
+      return await processor.scanFile(fileToScan, true);
     };
 
     try {
-      // Tentativa 1: Imagem original
       try {
         const decoded = await scanImage(file);
         processDecodedText(decoded);
       } catch (err) {
-        // Tentativa 2: Redimensionar para canvas (melhora detecção em fotos de alta resolução)
         const bitmap = await createImageBitmap(file);
         const canvas = document.createElement('canvas');
         const MAX_SIZE = 1000;
@@ -158,7 +165,7 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
       }
 
       try {
-        const html5QrCode = new (window as any).Html5Qrcode("qr-reader", { verbose: false });
+        const html5QrCode = new Html5Qrcode("qr-reader", { verbose: false });
         scannerRef.current = html5QrCode;
 
         const config = { 
@@ -182,15 +189,11 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
       } catch (err) {
         console.error("Scanner error:", err);
         setIsCameraLoading(false);
-        if (!scannerRef.current) {
-           scannerRef.current = new (window as any).Html5Qrcode("qr-reader", { verbose: false });
-        }
       }
     }, 400);
   };
 
   const stopScanner = () => {
-    // Força o fechamento da UI imediatamente
     setShowScanner(false);
     
     const cleanup = () => {
@@ -199,13 +202,8 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
     };
 
     if (scannerRef.current) {
-      // Tenta parar a câmera de forma assíncrona mas não bloqueia a UI
       const scanner = scannerRef.current;
-      const stopPromise = typeof scanner.stop === 'function' 
-        ? scanner.stop() 
-        : Promise.resolve();
-
-      stopPromise.then(() => {
+      scanner.stop().then(() => {
         try { scanner.clear(); } catch(e) {}
         cleanup();
       }).catch(cleanup);

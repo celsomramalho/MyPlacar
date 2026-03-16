@@ -1,3 +1,4 @@
+"use client";
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent } from '../types';
@@ -57,6 +58,7 @@ interface Props {
   onJoinTournament: () => void;
   onExitTournament: () => void;
   isOfflineMode?: boolean;
+  onExitOffline?: () => void;
   appUrl: string;
   onVersionTap?: () => void;
 }
@@ -65,7 +67,6 @@ export const SettingsScreen: React.FC<Props> = (props) => {
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
   const prevTabRef = useRef(props.activeTab);
 
-  // MC1: Salvamento automático ao sair da aba perfil
   useEffect(() => {
     if (prevTabRef.current === 'profile' && props.activeTab !== 'profile' && props.isProfileSaved === false) {
       props.onSaveProfile();
@@ -166,6 +167,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
         isMirroringActive={props.gameState?.isMirroringActive || props.cloudLiveExists}
         onOpenMenu={props.onOpenMenu}
         isOfflineMode={props.isOfflineMode}
+        onExitOffline={props.onExitOffline}
       />
     </div>
   );
