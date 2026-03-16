@@ -67,7 +67,7 @@ const TEXT_COLORS: Record<string, string> = {
 };
 
 export const WatchBoard: React.FC<WatchBoardProps> = ({
-  gameState, onScoreUpdate, onSwitchServer, onBack, onConfirmMatch,
+  gameState, onScoreUpdate, onUndo, onSwitchServer, onBack, onConfirmMatch,
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, isCommandOwner, onResetMatch, onOpenLiveControl, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
@@ -87,6 +87,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     }, 50);
     pressTimerRef.current = setTimeout(() => {
       stopPress();
+      if (navigator.vibrate) navigator.vibrate(50);
       onResetMatch();
     }, 3000);
   };

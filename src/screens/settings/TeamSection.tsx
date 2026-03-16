@@ -1,4 +1,3 @@
-
 import React, { useState, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react';
 import { ArrowUpDown, Play, User, Users, ChevronDown, Camera, Dices, UserPlus, Loader2, Mic, ArrowRightLeft, Disc, ShieldCheck, Check, Antenna, Eraser, History, Trophy, Ticket, X, Share2, Copy } from 'lucide-react';
 import { Input } from '../../components/Input';
@@ -85,12 +84,12 @@ interface Props {
   userProfile?: UserProfile;
   activeEvent: TournamentEvent | null;
   userEntryDate: number | null;
-  // Alterado para () => void pois é usado para navegação e o App.tsx fornece () => void
   onJoinTournament: () => void;
   onExitTournament: () => void;
+  isOfflineMode?: boolean;
 }
 
-export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, gameState, onOpenPartners, partners, onAutoRegisterPartner, cloudLiveExists, userProfile, activeEvent, userEntryDate, onJoinTournament, onExitTournament }, ref) => {
+export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, gameState, onOpenPartners, partners, onAutoRegisterPartner, cloudLiveExists, userProfile, activeEvent, userEntryDate, onJoinTournament, onExitTournament, isOfflineMode }, ref) => {
   const [genders, setGenders] = useState<Record<string, Gender>>({
     p1: 'M', p1Partner: 'M', p2: 'M', p2Partner: 'M'
   });
@@ -428,12 +427,13 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
           <Eraser size={18} /> Limpar nomes
         </button>
         <button 
-          onClick={() => handleToggleHistory(!settings.isHistoryEnabled)}
-          className={`flex-1 py-4 bg-white border-2 rounded-full flex items-center justify-center gap-3 font-black text-xs active:scale-95 transition-all shadow-md ${settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400'}`}
+          onClick={() => !isOfflineMode && handleToggleHistory(!settings.isHistoryEnabled)}
+          disabled={isOfflineMode}
+          className={`flex-1 py-4 bg-white border-2 rounded-full flex items-center justify-center gap-3 font-black text-xs active:scale-95 transition-all shadow-md ${isOfflineMode ? 'border-gray-100 text-gray-300 opacity-50' : (settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400')}`}
         >
           <div className="relative flex items-center justify-center">
-            <History size={18} className="text-blue-600" />
-            {!settings.isHistoryEnabled && (
+            <History size={18} className={isOfflineMode ? 'text-gray-300' : 'text-blue-600'} />
+            {(isOfflineMode || !settings.isHistoryEnabled) && (
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-[2px] bg-red-600 -rotate-45 rounded-full shadow-sm pointer-events-none" />
             )}
           </div>
@@ -523,7 +523,6 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
         </Button>
 
         <Button variant="secondary" onClick={onOpenPartners} className="w-full py-5 rounded-[2.5rem] border-2 border-blue-100 text-blue-600 font-black flex gap-2 active:scale-95 transition-all bg-blue-50/30" > <Users size={20} className="text-[#40E0D0]" /> Meus parceiros </Button>
-        {/* Adicionado wrapper () => para onClick evitar passagem de evento MouseEvent para função que não espera argumentos */}
         <Button variant="secondary" onClick={() => onJoinTournament()} className="w-full py-5 rounded-[2.5rem] border-2 border-amber-100 text-amber-600 font-black flex gap-2 active:scale-95 transition-all bg-amber-50/30" > <Ticket size={20} /> Meus torneios </Button>
       </div>
     </div>

@@ -67,7 +67,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         catSnap.forEach(doc => cats.push({ id: doc.id, isActive: true, ...doc.data() }));
         const sports: any[] = [];
         sportSnap.forEach(doc => sports.push({ id: doc.id, isActive: true, ...doc.data() }));
-        const finalCats = cats.length > 0 ? cats : SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true }));
+        const finalCats = cats.length > 0 ? cats : SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, icon: g.icon, isActive: true }));
         const finalSports = sports.length > 0 ? sports : SPORT_LIST.map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true }));
         setDbCategories(finalCats.filter(c => c.isActive !== false));
         setDbSports(finalSports.filter(s => s.isActive !== false));
@@ -325,11 +325,18 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         )}
 
         <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-2 shadow-sm border border-white space-y-2">
-          <button onClick={() => setIsGeneralOpen(!isGeneralOpen)} className="w-full flex items-center justify-between p-4 px-6 text-black">
-             <div className="flex items-center gap-3"><Settings size={20} /><span className="text-sm font-black">Configurações locais</span></div>
-             {isGeneralOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          <button 
+            onClick={() => !isOfflineMode && setIsGeneralOpen(!isGeneralOpen)} 
+            className={`w-full flex items-center justify-between p-4 px-6 text-black transition-all ${isOfflineMode ? 'opacity-50 cursor-not-allowed' : 'active:bg-white/50'}`}
+          >
+             <div className="flex items-center gap-3">
+               <Settings size={20} />
+               <span className="text-sm font-black">Configurações locais</span>
+               {isOfflineMode && <span className="text-[10px] font-bold text-orange-500 ml-2">(Indisponível offline)</span>}
+             </div>
+             {!isOfflineMode && (isGeneralOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />)}
           </button>
-          {isGeneralOpen && (
+          {isGeneralOpen && !isOfflineMode && (
             <div className="px-4 pb-6 space-y-6 animate-in slide-in-from-top-2">
               <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
                  <div className="flex items-center gap-3 mb-2"><Mic size={18} className="text-blue-500" /><span className="text-sm font-black text-black">Voz e narração</span></div>

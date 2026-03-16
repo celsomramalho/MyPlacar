@@ -155,7 +155,6 @@ const App: React.FC = () => {
     return fallback;
   }
 
-  // Listener de autenticação global - Única fonte de verdade para o estado inicial
   useEffect(() => {
     const auth = getAuthInstance();
     if (!auth) {
@@ -163,7 +162,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Grava a versão para evitar o loop do script no index.html
     localStorage.setItem('myPlacar_AppVersion', LOCAL_CODE_VERSION);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -177,12 +175,10 @@ const App: React.FC = () => {
               setUserProfile(profile);
               localStorage.setItem('myPlacarUserProfile', JSON.stringify(profile));
               
-              // Se estiver na tela de auth e logado, vai para o painel
               if (currentScreen === 'auth') {
                 setCurrentScreen('settings');
               }
             } else {
-              // Usuário autenticado mas sem perfil no Firestore (erro raro de cadastro)
               console.warn("MyPlacar: Usuário autenticado sem perfil no banco.");
               setCurrentScreen('auth');
             }
@@ -192,13 +188,11 @@ const App: React.FC = () => {
           }
         }
       } else {
-        // Não logado
         if (currentScreen !== 'spectator') {
           setCurrentScreen('auth');
         }
       }
       
-      // Pequeno delay para o splash ser visível e a transição ser suave
       setTimeout(() => {
         setIsAppLoading(false);
         window.dispatchEvent(new CustomEvent('app-ready'));
@@ -245,7 +239,41 @@ const App: React.FC = () => {
 
   const handleOfflineMode = () => {
     setIsOfflineMode(true);
-    setCurrentScreen('settings');
+    
+    // Configurações forçadas para o modo offline
+    const updatedSettings: MatchSettings = { 
+      ...matchSettings, 
+      isWatchMode: true,
+      isHistoryEnabled: false,
+      p1Name: matchSettings.p1Name || 'Jogador 1',
+      p2Name: matchSettings.p2Name || 'Jogador 2'
+    };
+    setMatchSettings(updatedSettings);
+    localStorage.setItem('myPlacarSettings', JSON.stringify(updatedSettings));
+
+    // Se não houver partida ativa, cria uma partida rápida padrão
+    if (!gameState) {
+      const quickStartGame: GameState = {
+        matchId: `offline_${Date.now()}`,
+        startTime: Date.now(),
+        p1: { name: updatedSettings.p1Name, score: '0', games: 0, sets: [] },
+        p2: { name: updatedSettings.p2Name, score: '0', games: 0, sets: [] },
+        server: 1,
+        servingOrderOffset: 0,
+        pointHistory: [],
+        matchConfig: { ...updatedSettings, setsToWin: updatedSettings.sets },
+        history: [],
+        currentSet: 0,
+        isMatchOver: false,
+        matchDuration: 0,
+        isPaused: false
+      };
+      setGameState(quickStartGame);
+      localStorage.setItem('myPlacarActiveGameState', JSON.stringify(quickStartGame));
+    }
+    
+    // Vai direto para a tela da partida
+    setCurrentScreen('scoreboard');
   };
 
   const handleExitOffline = () => {
@@ -254,7 +282,36 @@ const App: React.FC = () => {
   };
 
   const handleResetMatch = () => {
-    setGameState(null);
+    setModalConfig({
+      title: "Zerar partida?",
+      message: "Deseja realmente zerar o placar atual? Esta ação não pode ser desfeita.",
+      confirmLabel: "Zerar",
+      variant: 'danger',
+      onConfirm: () => {
+        if (isOfflineMode && gameState) {
+          const resetGame: GameState = {
+            ...gameState,
+            p1: { ...gameState.p1, score: '0', games: 0, sets: [] },
+            p2: { ...gameState.p2, score: '0', games: 0, sets: [] },
+            pointHistory: [],
+            history: [],
+            currentSet: 0,
+            matchDuration: 0,
+            isPaused: false,
+            isMatchOver: false,
+            isConfirmedFinished: false
+          };
+          setGameState(resetGame);
+          localStorage.setItem('myPlacarActiveGameState', JSON.stringify(resetGame));
+        } else {
+          setGameState(null);
+          localStorage.removeItem('myPlacarActiveGameState');
+          setCurrentScreen('settings');
+        }
+        setModalConfig(null);
+      },
+      onCancel: () => setModalConfig(null)
+    });
   };
 
   const handleScoreUpdate = (player: 1 | 2, type: PointType = 'rally', source: string = 'cb') => {

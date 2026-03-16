@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu, Gavel, Trash2, Users } from 'lucide-react';
 import { SettingsTabs } from './settings/SettingsTabs';
@@ -278,6 +277,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }, 50);
     resetPressTimerRef.current = setTimeout(() => {
       stopResetPress();
+      if (navigator.vibrate) navigator.vibrate(50);
       onResetMatch();
     }, 3000);
   };
