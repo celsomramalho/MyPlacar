@@ -1,31 +1,34 @@
 # MyPlacar Pro - AI Development Rules
 
-## Tech Stack
-- **Framework**: React 18.x with TypeScript for type-safe development.
-- **Styling**: Tailwind CSS v4 for utility-first responsive design.
-- **Build Tool**: Vite for fast development and optimized production builds.
-- **Backend/Database**: Firebase (Firestore) for real-time data synchronization.
-- **Authentication**: Firebase Auth (supporting PIN, Password, and Biometrics).
-- **Storage**: Firebase Storage for assets and user-uploaded content.
-- **Icons**: Lucide React for a consistent and lightweight icon set.
-- **Maps**: Leaflet for match location visualization.
-- **AI Integration**: Google Gemini AI (@google/genai) for contextual match narration.
-- **PWA**: Service Workers and Manifest for offline support and "Add to Home Screen" functionality.
+## 🧠 Filosofia de Desenvolvimento (CRÍTICO)
+1. **Respeito ao Legado**: O app já veio funcional. Nunca reescreva uma lógica existente sem antes entendê-la completamente.
+2. **Análise Cirúrgica**: Antes de qualquer alteração, localize as variáveis e funções existentes nos arquivos `types.ts`, `constants.ts` e nos hooks.
+3. **Não Duplicação**: Só crie novas variáveis, estados ou lógicas se for comprovado que não existe nada similar no código.
+4. **Ajustes Pontuais**: Para correções e melhorias, foque apenas no trecho necessário. Não altere o que não foi solicitado.
+5. **Recursos Novos**: Para funcionalidades inéditas, siga o padrão de arquitetura do projeto (Interface -> Componente -> Tela).
+6. **Memória Permanente**: Este arquivo é a memória do AI. Regras combinadas em chat devem ser registradas aqui para persistirem entre sessões.
 
-## Library Usage Rules
-- **Icons**: Always use `lucide-react`. Do not import icons from other libraries.
-- **Styling**: Use Tailwind CSS classes exclusively. Avoid inline styles unless calculating dynamic values (e.g., progress bars).
-- **Database**: 
-  - Use `firebase/firestore` for main application logic.
-  - Use `firebase/firestore/lite` specifically for lazy-loading non-critical assets like sport icons to save bandwidth.
-- **State Management**: Use React Hooks (`useState`, `useEffect`, `useMemo`, `useCallback`) for local and shared state.
-- **Components**: Follow the project's pattern of creating small, focused components in `src/components/` and full-screen views in `src/pages/` or `src/screens/`.
-- **Formatting**: Use the utility functions in `src/utils/formatters.ts` for names (Sentence Case) and PIN masking to maintain UI consistency.
-- **Maps**: Use `leaflet` for all geographic visualizations.
-- **QR Scanning**: Use `html5-qrcode` for camera-based scanning features.
+## 🛠 Tech Stack
+- **Framework**: React 18.x com TypeScript.
+- **Styling**: Tailwind CSS v4 (Utility-first).
+- **Build Tool**: Vite.
+- **Backend/Database**: Firebase (Firestore) + Supabase (Auth/Edge Functions).
+- **Icons**: Lucide React (Exclusivo).
+- **AI Integration**: Google Gemini AI (@google/genai).
 
-## UI/UX Guidelines
-- **Golden Rule**: Apply "Sentence Case" to user-facing strings using the `applyGoldenRule` formatter.
-- **Responsiveness**: All new components must be mobile-first and fully responsive.
-- **Feedback**: Use the existing modal system and toast-like notifications to inform users of success or error states.
-- **Performance**: Use `LazySportIcon` for sport icons to prevent blocking the UI during network fetches.
+## 📐 Diretrizes de Código
+- **Types First**: Sempre verifique `src/types.ts` antes de manipular estados.
+- **Motor de Jogo**: A lógica de pontuação reside em `src/utils/tennisEngine.ts`. Não a duplique em componentes.
+- **Mobile-First**: O design deve ser responsivo e focado em dispositivos móveis/relógios.
+- **Voz**: Use `useGeminiReferee` e `useScoreAnnouncer` para toda interação sonora.
+
+## 🗣 Como solicitar alterações
+- **Para Corrigir/Melhorar**: "No arquivo [X], ajuste a função [Y] para que [Z]. Use a variável [W] que já existe."
+- **Para Novo Recurso**: "Crie o recurso [A]. Pode criar novos tipos e componentes seguindo o padrão do app."
+
+## 🎨 UI/UX Guidelines
+- **Escrita (Sentence Case)**: Todo novo texto, label ou mensagem deve usar obrigatoriamente "Sentence case" (ex: "Configurações do sistema", "Novo jogador").
+- **Exceção de Marca**: O nome do app **MyPlacar** é a única exceção e deve manter sempre essa grafia exata.
+- **Golden Rule**: Aplicar a lógica de Sentence Case programaticamente via `applyGoldenRule` sempre que possível.
+- **Feedback**: Usar modais e toasts para estados de sucesso/erro.
+- **Performance**: Usar `LazySportIcon` para ícones de esportes.

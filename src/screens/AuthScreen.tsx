@@ -22,6 +22,7 @@ interface Props {
 }
 
 export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, onOfflineMode, initialReferralPin = '', appUrl }) => {
+  const [showSplash, setShowSplash] = useState(true);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
   const [remoteVersionFound, setRemoteVersionFound] = useState<string | null>(null);
@@ -68,6 +69,11 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   }>({ type: 'pin', value: '' });
 
   useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 2800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     const initialCheck = async () => {
       try {
         const result = await onCheckUpdate();
@@ -75,11 +81,11 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           setRemoteVersionFound(result);
         }
       } catch (e) {
-        console.error("MyPlacar: Erro na verificação inicial:", e);
+        console.error("Erro na verificação inicial:", e);
       }
     };
     initialCheck();
-  }, []);
+  }, [onCheckUpdate]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -89,12 +95,19 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     if (modeParam === 'resetPassword' && codeParam) {
       const auth = getAuthInstance();
       if (auth) {
+        // Limpa qualquer sessão anterior para garantir que o link abra para o usuário correto
         auth.signOut().then(() => {
+          localStorage.removeItem('myPlacarSavedEmail');
+          localStorage.removeItem('myPlacarSavedPin');
+          localStorage.removeItem('myPlacarUser');
+          localStorage.removeItem('myPlacarRememberMe');
+          
           setOobCode(codeParam);
           setMode('reset_password');
           
           verifyPasswordResetCode(auth, codeParam).then(email => {
             setEmail(email);
+            // Bloqueia qualquer tentativa de login automático limpando os campos
             setPassword('');
             setPin('');
           }).catch(e => {
@@ -128,7 +141,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     const urlEmail = params.get('email');
     const urlCode = params.get('code');
 
-    if (urlEmail && urlCode && mode !== 'verifying') {
+    if (urlEmail && urlCode) {
         setEmail(urlEmail);
         setVerificationCode(urlCode);
         setMode('confirm_email');
@@ -139,6 +152,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         localStorage.setItem('myPlacarPendingVerifyCode', urlCode);
         setGeneratedVerifyCode(urlCode);
 
+        try {
+            window.history.replaceState(null, '', window.location.pathname);
+        } catch (e) {
+            console.warn("History API not available or blocked:", e);
+        }
+
         const autoConfirmTimer = setTimeout(async () => {
             try {
                 await handleConfirmEmailInternal(urlEmail, urlCode);
@@ -148,7 +167,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 setIsAutoConfirming(false);
                 setIsLoading(false);
             }
-        }, 500);
+        }, 300);
         return () => clearTimeout(autoConfirmTimer);
     }
   }, []);
@@ -506,6 +525,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userAuthMethod = userData?.authMethod || 'pin';
       const userUid = userData?.uid || userSnap.id;
 
+      // Tenta enviar redefinição de senha do Firebase para todos que podem ter uma conta
       let firebaseEmailSent = false;
       const resetLink = `${appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl}/?mode=resetPassword`;
       try {
@@ -530,6 +550,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         }
       }
 
+      // Se for método pin ou se o envio do Firebase falhou, tenta enviar o pin via EmailJS
       if (userAuthMethod === 'pin' || !firebaseEmailSent) {
         setStatusText('Enviando dados de acesso por e-mail...');
         const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl; 
@@ -697,6 +718,20 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       setIsLoading(false);
     }
   };
+
+  if (showSplash) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 animate-in fade-in zoom-in duration-1000 relative overflow-hidden">
+        <div className="relative z-10 flex flex-col items-center">
+          <ScoreboardIcon className="w-56 h-56 mb-8 drop-shadow-[0_25px_50px_rgba(0,0,0,0.15)] animate-bounce" style={{animationDuration: '3s'}} />
+          <div className="text-center space-y-4">
+            <h1 className="text-[48px] font-black text-black tracking-tighter leading-none font-display">Myplacar pro</h1>
+            <p className="text-[17px] font-bold text-black max-w-[280px]">O jogo em suas mãos</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col p-8 animate-in slide-in-from-bottom-6 duration-700 overflow-y-auto no-scrollbar">

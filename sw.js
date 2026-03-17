@@ -1,15 +1,8 @@
-const CACHE_NAME = 'myplacar-v2.4.08';
+const CACHE_NAME = 'myplacar-v2.4.06';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/src/main.tsx'
-];
-
-// Origens externas permitidas para cache (Fontes)
-const EXTERNAL_ORIGINS = [
-  'fonts.googleapis.com',
-  'fonts.gstatic.com'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (e) => {
@@ -34,35 +27,32 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// Estratégia de rede resiliente com suporte offline aprimorado
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   
+  // Ignora chamadas de API externas para não quebrar o app
   const url = new URL(e.request.url);
-  const isSameOrigin = url.origin === self.location.origin;
-  const isExternalAllowed = EXTERNAL_ORIGINS.some(origin => url.hostname.includes(origin));
-
-  if (!isSameOrigin && !isExternalAllowed) return;
+  if (url.origin !== self.location.origin) return;
 
   e.respondWith(
     caches.match(e.request).then(cachedResponse => {
-      // Estratégia: Cache First para Assets, Network First para Navegação
-      if (cachedResponse && !e.request.mode === 'navigate') {
-        return cachedResponse;
-      }
-
-      return fetch(e.request).then(networkResponse => {
+      // Se tiver no cache, retorna o cache e tenta atualizar em background
+      // Se não tiver no cache, busca na rede
+      const fetchPromise = fetch(e.request).then(networkResponse => {
         if (networkResponse.ok) {
           const copy = networkResponse.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, copy));
         }
         return networkResponse;
-      }).catch(() => {
-        // Se falhar a rede e for navegação, retorna o index.html do cache
-        if (e.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-        return cachedResponse;
       });
+
+      return cachedResponse || fetchPromise;
+    }).catch(() => {
+      // Fallback total se tudo falhar (rede e cache)
+      if (e.request.mode === 'navigate') {
+        return caches.match('/index.html');
+      }
     })
   );
 });

@@ -2,7 +2,7 @@ import React, { useState, forwardRef, useImperativeHandle, useMemo, useEffect } 
 import { ArrowUpDown, Play, User, Users, ChevronDown, Camera, Dices, UserPlus, Loader2, Mic, ArrowRightLeft, Disc, ShieldCheck, Check, Antenna, Eraser, History, Trophy, Ticket, X, Share2, Copy } from 'lucide-react';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
-import { MatchSettings, GameState, Partner, UserProfile, TournamentEvent } from '../../types';
+import { MatchSettings, GameState, Partner, UserProfile, TournamentEvent, QueuePlayer } from '../../types';
 import { formatPortugueseName } from '../../utils/formatters';
 import { SPORT_LIST } from '../../constants';
 import { getDb } from '../../firebase';
@@ -79,6 +79,7 @@ interface Props {
   gameState: GameState | null;
   onOpenPartners?: () => void;
   partners: Partner[];
+  playerQueue: QueuePlayer[];
   onAutoRegisterPartner?: (pin: string, field: string) => Promise<string | null>;
   cloudLiveExists?: boolean;
   userProfile?: UserProfile;
@@ -89,7 +90,7 @@ interface Props {
   isOfflineMode?: boolean;
 }
 
-export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, gameState, onOpenPartners, partners, onAutoRegisterPartner, cloudLiveExists, userProfile, activeEvent, userEntryDate, onJoinTournament, onExitTournament, isOfflineMode }, ref) => {
+export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, gameState, onOpenPartners, partners, playerQueue, onAutoRegisterPartner, cloudLiveExists, userProfile, activeEvent, userEntryDate, onJoinTournament, onExitTournament, isOfflineMode }, ref) => {
   const [genders, setGenders] = useState<Record<string, Gender>>({
     p1: 'M', p1Partner: 'M', p2: 'M', p2Partner: 'M'
   });
@@ -427,13 +428,12 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
           <Eraser size={18} /> Limpar nomes
         </button>
         <button 
-          onClick={() => !isOfflineMode && handleToggleHistory(!settings.isHistoryEnabled)}
-          disabled={isOfflineMode}
-          className={`flex-1 py-4 bg-white border-2 rounded-full flex items-center justify-center gap-3 font-black text-xs active:scale-95 transition-all shadow-md ${isOfflineMode ? 'border-gray-100 text-gray-300 opacity-50' : (settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400')}`}
+          onClick={() => handleToggleHistory(!settings.isHistoryEnabled)}
+          className={`flex-1 py-4 bg-white border-2 rounded-full flex items-center justify-center gap-3 font-black text-xs active:scale-95 transition-all shadow-md ${settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400'}`}
         >
           <div className="relative flex items-center justify-center">
-            <History size={18} className={isOfflineMode ? 'text-gray-300' : 'text-blue-600'} />
-            {(isOfflineMode || !settings.isHistoryEnabled) && (
+            <History size={18} className="text-blue-600" />
+            {!settings.isHistoryEnabled && (
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-[2px] bg-red-600 -rotate-45 rounded-full shadow-sm pointer-events-none" />
             )}
           </div>

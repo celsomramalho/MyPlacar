@@ -1,7 +1,5 @@
-"use client";
-
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent } from '../../types';
+import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent, QueuePlayer } from '../../types';
 import { ProfileScreen } from '../ProfileScreen';
 import { HelpScreen } from '../HelpScreen';
 import { SettingsHeader } from './SettingsHeader';
@@ -43,6 +41,7 @@ interface Props {
   isSyncingAll?: boolean;
   onOpenPartners?: () => void;
   partners: Partner[];
+  playerQueue: QueuePlayer[];
   onAutoRegisterPartner: (pin: string, field: string) => Promise<string | null>;
   onDeletePartners?: (ids: Set<string>) => void;
   cloudLiveExists?: boolean;
@@ -50,15 +49,16 @@ interface Props {
   setIsUpdatingVersion?: (val: boolean) => void;
   onOpenLiveControl?: () => void;
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
-  onOpenCommunications: () => void;
-  unreadCount: number;
-  onOpenMenu: () => void;
   activeEvent: TournamentEvent | null;
   userEntryDate: number | null;
   onJoinTournament: () => void;
   onExitTournament: () => void;
+  onOpenCommunications: () => void;
+  unreadCount: number;
+  onOpenMenu: () => void;
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
+  onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile' | 'regras') => void;
   appUrl: string;
   onVersionTap?: () => void;
 }
@@ -119,6 +119,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           gameState={props.gameState} 
           onOpenPartners={props.onOpenPartners} 
           partners={props.partners}
+          playerQueue={props.playerQueue}
           onAutoRegisterPartner={props.onAutoRegisterPartner}
           cloudLiveExists={props.cloudLiveExists}
           userProfile={props.userProfile}
@@ -126,6 +127,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           userEntryDate={props.userEntryDate}
           onJoinTournament={props.onJoinTournament}
           onExitTournament={props.onExitTournament}
+          isOfflineMode={props.isOfflineMode}
         />;
     }
   };
@@ -168,7 +170,6 @@ export const SettingsScreen: React.FC<Props> = (props) => {
         isMirroringActive={props.gameState?.isMirroringActive || props.cloudLiveExists}
         onOpenMenu={props.onOpenMenu}
         isOfflineMode={props.isOfflineMode}
-        onExitOffline={props.onExitOffline}
       />
     </div>
   );
