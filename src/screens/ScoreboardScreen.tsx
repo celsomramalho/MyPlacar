@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu, Gavel, Trash2, Users } from 'lucide-react';
 import { SettingsTabs } from './settings/SettingsTabs';
@@ -643,7 +642,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return (
       <WatchBoard 
         gameState={gameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
-        /* MC1: onTogglePause removed from WatchBoard as it's not supported in WatchBoardProps */
         onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
         isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
         handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} 
@@ -850,7 +848,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                                  {!log.isError && <>
                                      <span className="opacity-30">|</span>
                                      <span className="font-bold"><span className="text-black">I: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{b1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{b2}</span></span>
-                                     <span className="font-black text-orange-500"><span className="text-black ml-1 mr-0.5">&gt; F: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{a1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{a2}</span></span>
+                                     <span className="font-black text-orange-500"><span className="text-black ml-1 mr-0.5"> F: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{a1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{a2}</span></span>
                                    </>}
                                </div>
                                <div className={`font-black mt-0.5 truncate ${cmdColor}`}>[ {log.text} ]</div>
@@ -893,7 +891,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                      <div className="flex flex-col min-w-0"><h3 className="text-white font-black text-lg tracking-tight leading-none mb-1">Espelhar partida</h3><p className="text-[10px] font-bold text-slate-400 truncate tracking-tight">O PIN serve tanto para torcida quanto para seu controle.</p></div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                     {isLiveActive && <button onClick={() => setIsMirrorExpanded(!isMirrorExpanded)} className="w-10 h-10 bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-90 transition-all border border-white/5">{isMirrorExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>}
+                     {isLiveActive && <button onClick={() => setIsMirrorExpanded(!isMirrorExpanded)} className="w-10 h-10 bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-90 transition-all border border-white/50">{isMirrorExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>}
                      <div className="flex items-center h-7 px-0.5">
                        <div className="relative inline-block w-12 h-7 align-middle select-none transition duration-200 ease-in">
                          <input type="checkbox" id="toggle-mirroring" checked={isLiveActive || false} onChange={(e) => handleToggleMirroringLocal(e.target.checked)} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out shadow-sm top-[2px] left-[2px] checked:translate-x-full" />
@@ -905,7 +903,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                {isLiveActive && isMirrorExpanded && (
                  <div className="mt-4 space-y-6 animate-in zoom-in duration-500 border-t border-white/5 pt-6">
                     {isAdmin && <div className="bg-white/5 border border-white/10 rounded-3xl p-5 space-y-3"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Globe size={14} className="text-blue-400" /><span className="text-[10px] font-black text-blue-400 tracking-tight">Endereço público do app</span></div><button onClick={() => setIsEditingUrl(!isEditingUrl)} className="text-gray-400 p-1 active:scale-90 transition-all"><Edit3 size={14} /></button></div>{isEditingUrl ? <div className="flex gap-2 animate-in slide-in-from-top-1"><input type="text" value={customBaseUrl} onChange={(e) => setCustomBaseUrl(e.target.value)} placeholder="https://seu-link-real.app/" className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-xs text-white outline-none" /><button onClick={handleSaveBaseUrl} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black">Ok</button></div> : <p className="text-[11px] font-bold text-gray-400 truncate bg-black/20 p-2 rounded-xl border border-white/5">{customBaseUrl}</p>}</div>}
-                    <div className="flex flex-col items-center gap-8 w-full"><div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeUrl} alt="QR code" className="w-full h-full object-contain" /></div><div className="w-full space-y-3"><button onClick={handleShareWhatsApp} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Share2 size={18} /> WhatsApp</button><button onClick={handleCopyLink} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all"><Copy size={18} /> Copiar link</button><button onClick={handleCopyWatchLink} className="w-full bg-indigo-600 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Watch size={18} /> Link para relógio</button></div></div>
+                    <div className="flex flex-col items-center gap-8 w-full"><div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeUrl} alt="QR code" className="w-full h-full object-contain" /></div><div className="w-full space-y-3"><button onClick={handleShareWhatsApp} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 shadow-lg active:scale-95 transition-all flex"><Share2 size={18} /> WhatsApp</button><button onClick={handleCopyLink} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all flex"><Copy size={18} /> Copiar link</button><button onClick={handleCopyWatchLink} className="w-full bg-indigo-600 text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 shadow-lg active:scale-95 transition-all flex"><Watch size={18} /> Link para relógio</button></div></div>
                  </div>
                )}
             </div>
@@ -1015,6 +1013,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         isMirroringActive={isLiveActive}
         onOpenMenu={() => onOpenMenu?.()}
         isOfflineMode={isOfflineMode}
+        onExitOffline={onExitOffline}
       />
     </div>
   );

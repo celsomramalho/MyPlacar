@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, User, HelpCircle, Watch, Target, Sparkles, Antenna, Check, Ticket, X, Loader2, Share2, Copy, QrCode, WifiOff, LogOut, Menu } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
@@ -159,12 +158,20 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-2"><Watch size={20} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Otimização para relógios</h2></div>
           <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
-            <Toggle id="toggle-watchmode" label="Modo relógio (interface gigante)" checked={settings.isWatchMode || false} onChange={v => { 
+            <Toggle 
+              id="toggle-watchmode" 
+              label="Modo relógio (interface gigante)" 
+              checked={isOfflineMode ? true : (settings.isWatchMode || false)} 
+              disabled={isOfflineMode || isReadOnly}
+              onChange={v => { 
                 const next = {...settings, isWatchMode: v};
                 setSettings(next); 
                 localStorage.setItem('myPlacarSettings', JSON.stringify(next)); 
-            }} />
-            <p className="text-[10px] font-bold text-black leading-tight px-1">Ideal para telas de 200x200px. Divide a tela em dois botões massivos.</p>
+              }} 
+            />
+            <p className={`text-[10px] font-bold text-black leading-tight px-1 transition-opacity ${isOfflineMode ? 'opacity-50' : 'opacity-100'}`}>
+              Ideal para telas de 200x200px. Divide a tela em dois botões massivos.
+            </p>
           </div>
         </div>
 
@@ -390,6 +397,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         isMirroringActive={isLiveActive}
         onOpenMenu={onOpenMenu || (() => {})}
         isOfflineMode={isOfflineMode}
+        onExitOffline={onExitOffline}
       />
     </div>
   );

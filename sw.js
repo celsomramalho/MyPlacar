@@ -1,25 +1,29 @@
-const CACHE_NAME = 'myplacar-v2.4.06';
+const CACHE_NAME = 'myplacar-v2.4.07';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/src/main.tsx',
+  '/src/index.css'
 ];
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE_ASSETS))
-      .then(() => self.skipWaiting())
+// Instalação: Pre-cache de arquivos essenciais
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(PRECACHE_ASSETS);
+    }).then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => {
+// Ativação: Limpeza de caches antigos
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        keys.map(k => {
-          if (k !== CACHE_NAME) {
-            return caches.delete(k);
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
           }
         })
       );
@@ -27,32 +31,48 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Estratégia de rede resiliente com suporte offline aprimorado
-self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
-  
-  // Ignora chamadas de API externas para não quebrar o app
-  const url = new URL(e.request.url);
-  if (url.origin !== self.location.origin) return;
+// Interceptação de requisições
+self.addEventListener('fetch', (event) => {
+  // Apenas métodos GET
+  if (event.request.method !== 'GET') return;
 
-  e.respondWith(
-    caches.match(e.request).then(cachedResponse => {
-      // Se tiver no cache, retorna o cache e tenta atualizar em background
-      // Se não tiver no cache, busca na rede
-      const fetchPromise = fetch(e.request).then(networkResponse => {
-        if (networkResponse.ok) {
-          const copy = networkResponse.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, copy));
-        }
-        return networkResponse;
-      });
+  const url = new URL(event.request.url);
 
-      return cachedResponse || fetchPromise;
-    }).catch(() => {
-      // Fallback total se tudo falhar (rede e cache)
-      if (e.request.mode === 'navigate') {
+  // Estratégia para navegação (Single Page App)
+  // Se falhar a rede ou estiver offline, retorna o index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
         return caches.match('/index.html');
+      })
+    );
+    return;
+  }
+
+  // Estratégia para Assets (JS, CSS, Imagens)
+  // Cache First, falling back to network
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
       }
+
+      return fetch(event.request).then((response) => {
+        // Não faz cache de respostas de terceiros (Firebase, etc) a menos que necessário
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
+        }
+
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+
+        return response;
+      }).catch(() => {
+        // Se falhar rede e não tiver no cache, retorna nada ou um placeholder
+        return null;
+      });
     })
   );
 });

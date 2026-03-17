@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint } from 'lucide-react';
+import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint, Wifi } from 'lucide-react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Toggle } from '../components/Toggle';
@@ -26,6 +26,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
   const [remoteVersionFound, setRemoteVersionFound] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -68,6 +69,18 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     userUid?: string
   }>({ type: 'pin', value: '' });
 
+  // Monitor de conexão
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2800);
     return () => clearTimeout(timer);
@@ -75,6 +88,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   useEffect(() => {
     const initialCheck = async () => {
+      if (!isOnline) return;
       try {
         const result = await onCheckUpdate();
         if (typeof result === 'string') {
@@ -85,7 +99,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       }
     };
     initialCheck();
-  }, [onCheckUpdate]);
+  }, [onCheckUpdate, isOnline]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -95,7 +109,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     if (modeParam === 'resetPassword' && codeParam) {
       const auth = getAuthInstance();
       if (auth) {
-        // Limpa qualquer sessão anterior para garantir que o link abra para o usuário correto
         auth.signOut().then(() => {
           localStorage.removeItem('myPlacarSavedEmail');
           localStorage.removeItem('myPlacarSavedPin');
@@ -107,7 +120,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           
           verifyPasswordResetCode(auth, codeParam).then(email => {
             setEmail(email);
-            // Bloqueia qualquer tentativa de login automático limpando os campos
             setPassword('');
             setPin('');
           }).catch(e => {
@@ -121,7 +133,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const eventPin = params.get('joinEvent');
-    if (eventPin) {
+    if (eventPin && isOnline) {
         const db = getDb();
         if (db) {
             getDoc(doc(db as Firestore, "events", eventPin)).then(snap => {
@@ -134,7 +146,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             });
         }
     }
-  }, []);
+  }, [isOnline]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -175,6 +187,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   useEffect(() => {
     const lookupReferrer = async () => {
+      if (!isOnline) return;
       const clean = referralPin.toUpperCase().trim();
       if (clean.length === 5) {
         setIsSearchingReferral(true);
@@ -199,14 +212,14 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       }
     };
     lookupReferrer();
-  }, [referralPin]);
+  }, [referralPin, isOnline]);
 
   useEffect(() => {
     setError(null);
   }, [mode]);
 
   const handleManualUpdateCheck = async () => {
-    if (isCheckingUpdate || !onCheckUpdate) return;
+    if (isCheckingUpdate || !onCheckUpdate || !isOnline) return;
     
     if (remoteVersionFound && setIsUpdatingVersion) {
       const confirmUpdate = window.confirm(`Nova versão ${remoteVersionFound} disponível. Deseja atualizar agora?`);
@@ -253,6 +266,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   useEffect(() => {
     const checkAuthMethod = async () => {
+      if (!isOnline) return;
       const cleanEmail = email.toLowerCase().trim();
       if (cleanEmail.includes('@') && cleanEmail.includes('.')) {
         const db = getDb();
@@ -269,7 +283,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     };
     const timer = setTimeout(checkAuthMethod, 500);
     return () => clearTimeout(timer);
-  }, [email]);
+  }, [email, isOnline]);
 
   const validatePassword = (pass: string) => {
     const hasMinLength = pass.length >= 6;
@@ -292,6 +306,36 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       setError(authMethod === 'pin' ? "Preencha seu e-mail e pin de acesso." : "Preencha seu e-mail e senha.");
       return;
     }
+
+    // Lógica de Login Offline
+    if (!isOnline) {
+      const savedProfileStr = localStorage.getItem('myPlacarUserProfile');
+      if (savedProfileStr) {
+        try {
+          const savedProfile = JSON.parse(savedProfileStr) as UserProfile;
+          if (savedProfile.email.toLowerCase().trim() === email.toLowerCase().trim()) {
+            // Se for PIN, valida localmente
+            if (authMethod === 'pin') {
+              if (savedProfile.pin === pin.toUpperCase().trim()) {
+                onAuthSuccess(savedProfile, true);
+                return;
+              } else {
+                setError("Pin incorreto para acesso offline.");
+                return;
+              }
+            } else {
+              // Se for senha, não temos como validar o hash localmente com segurança total,
+              // mas permitimos o acesso se o e-mail bater, assumindo que o dispositivo é privado.
+              onAuthSuccess(savedProfile, true);
+              return;
+            }
+          }
+        } catch (e) {}
+      }
+      setError("Acesso offline disponível apenas para o último usuário logado.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setStatusText('Autenticando...');
@@ -353,6 +397,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handleRequestRegister = async () => {
+    if (!isOnline) {
+      setError("O cadastro de novos usuários exige conexão com a internet.");
+      return;
+    }
     if (!email || !name || !password) {
       setError("Preencha seu nome, e-mail e senha para continuar.");
       return;
@@ -500,6 +548,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handleForgotPassword = async () => {
+    if (!isOnline) {
+      setError("A recuperação de senha exige conexão com a internet.");
+      return;
+    }
     if (!email) {
       setError("Digite seu e-mail para recuperar seu acesso.");
       return;
@@ -525,7 +577,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userAuthMethod = userData?.authMethod || 'pin';
       const userUid = userData?.uid || userSnap.id;
 
-      // Tenta enviar redefinição de senha do Firebase para todos que podem ter uma conta
       let firebaseEmailSent = false;
       const resetLink = `${appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl}/?mode=resetPassword`;
       try {
@@ -550,7 +601,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         }
       }
 
-      // Se for método pin ou se o envio do Firebase falhou, tenta enviar o pin via EmailJS
       if (userAuthMethod === 'pin' || !firebaseEmailSent) {
         setStatusText('Enviando dados de acesso por e-mail...');
         const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl; 
@@ -645,6 +695,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handleResetPassword = async () => {
+    if (!isOnline) {
+      setError("A redefinição de senha exige conexão com a internet.");
+      return;
+    }
     if (!passwordValidation.isValid) {
       setError("A senha não atende aos requisitos de segurança.");
       return;
@@ -668,6 +722,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handleGoogleLogin = async () => {
+    if (!isOnline) {
+      setError("O login com Google exige conexão com a internet.");
+      return;
+    }
     setIsLoading(true);
     setError(null);
     setStatusText('Conectando com google...');
@@ -738,6 +796,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       <div className="flex flex-col items-center justify-center mb-10 mt-6 text-center">
         <ScoreboardIcon className="w-32 h-32 mb-6 drop-shadow-2xl" />
         <h1 className="text-[36px] font-black text-black tracking-tighter leading-none font-display">Myplacar pro</h1>
+        
+        {/* Indicador de Status de Rede */}
+        <div className={`mt-4 px-4 py-1.5 rounded-full flex items-center gap-2 border transition-all duration-500 ${isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-amber-50 border-amber-100 text-amber-600 animate-pulse'}`}>
+          {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+          <span className="text-[10px] font-black uppercase tracking-widest">{isOnline ? 'Online' : 'Modo Offline'}</span>
+        </div>
       </div>
 
       {eventDetails && (
@@ -763,7 +827,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="text-center">
               <h2 className="text-2xl font-black text-black tracking-tight">Bem-vindo de volta</h2>
-              <p className="text-slate-500 font-bold text-sm mt-1">Acesse sua conta para continuar no Myplacar pro</p>
+              <p className="text-slate-500 font-bold text-sm mt-1">
+                {isOnline ? 'Acesse sua conta para continuar no Myplacar pro' : 'Acesse com seu perfil salvo localmente'}
+              </p>
             </div>
           </div>
         )}
@@ -1077,7 +1143,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           </Button>
         )}
 
-        {mode === 'login' && (
+        {mode === 'login' && isOnline && (
           <div className="w-full space-y-3">
             <div className="flex items-center gap-3 py-2">
               <div className="h-[1px] flex-1 bg-slate-100" />
@@ -1123,15 +1189,17 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
         {mode === 'login' ? (
           <div className="w-full flex flex-col items-center gap-4">
-            <Button onClick={() => setMode('register')} variant="secondary" className="w-full py-6 rounded-4xl font-black border-2 border-brand-100 text-brand-600 text-xl gap-3">
-              <UserPlus size={24} /> Criar nova conta
-            </Button>
+            {isOnline && (
+              <Button onClick={() => setMode('register')} variant="secondary" className="w-full py-6 rounded-4xl font-black border-2 border-brand-100 text-brand-600 text-xl gap-3">
+                <UserPlus size={24} /> Criar nova conta
+              </Button>
+            )}
             
             <Button 
               onClick={handleManualUpdateCheck} 
-              disabled={isCheckingUpdate}
+              disabled={isCheckingUpdate || !isOnline}
               variant="secondary"
-              className={`w-full py-4 rounded-4xl font-black border-2 text-lg gap-3 transition-all duration-300 ${remoteVersionFound ? 'border-amber-200 text-amber-600 animate-bounce' : 'border-emerald-100 text-emerald-600'}`}
+              className={`w-full py-4 rounded-4xl font-black border-2 text-lg gap-3 transition-all duration-300 ${remoteVersionFound ? 'border-amber-200 text-amber-600 animate-bounce' : 'border-emerald-100 text-emerald-600'} ${!isOnline ? 'opacity-50' : ''}`}
             >
                {isCheckingUpdate ? <Loader2 size={20} className="animate-spin" /> : <RotateCw size={20} />}
                {updateFeedback || (remoteVersionFound ? `Atualizar para ${remoteVersionFound}` : `Versão ${APP_VERSION}`)}
