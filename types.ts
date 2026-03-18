@@ -1,6 +1,14 @@
 
-export type Screen = 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail';
+export type Screen = 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail' | 'communications';
 export type Tab = 'config' | 'history' | 'help' | 'profile';
+export type AdminTab = 'configs' | 'users' | 'icons' | 'events' | 'comms';
+
+export interface ControllerRecord {
+  label: string;
+  lastSeen: number;
+  isOwner?: boolean;
+  nickname?: string;
+}
 export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros';
 export type SportType = string;
 export type PlanType = 'free' | 'premium';
@@ -155,7 +163,7 @@ export interface GameState {
   liveSessionCounter?: number;
   commandOwner?: string;
   commandOwnerId?: string;
-  controllers?: Record<string, { label: string, lastSeen: number }>;
+  controllers?: Record<string, ControllerRecord>;
   pingTimestamp?: number;
   pingConfirmed?: boolean;
   isLiveClosed?: boolean;

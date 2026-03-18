@@ -1,75 +1,116 @@
-const CACHE_NAME = 'myplacar-v2.4.07';
+const CACHE_NAME = 'myplacar-v2.5.01';
 
-// Instalação: Pre-cache apenas do essencial
+// Assets essenciais que sempre devem estar em cache
+const PRECACHE_URLS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+];
+
+// ─── INSTALL ────────────────────────────────────────────────────────────────
+// Pré-faz cache do index.html e depois descobre e cacheia todos os
+// assets JS/CSS do build dinamicamente (hashes do Vite incluídos).
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([
-        '/',
-        '/index.html',
-        '/manifest.json'
-      ]);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // 1. Cacheia os arquivos essenciais conhecidos
+      await cache.addAll(PRECACHE_URLS);
+
+      // 2. Busca o index.html para extrair os assets do Vite (JS/CSS com hash)
+      try {
+        const response = await fetch('/index.html');
+        const html = await response.text();
+
+        // Encontra todos os src/href que apontam para /assets/
+        const assetRegex = /(?:src|href)=["'](\/?assets\/[^"']+)["']/g;
+        const assetUrls = new Set();
+        let match;
+        while ((match = assetRegex.exec(html)) !== null) {
+          assetUrls.add(match[1].startsWith('/') ? match[1] : '/' + match[1]);
+        }
+
+        // Cacheia cada asset encontrado
+        const fetchPromises = [...assetUrls].map(url =>
+          fetch(url)
+            .then(res => {
+              if (res.ok) cache.put(url, res);
+            })
+            .catch(() => {}) // ignora falhas individuais
+        );
+        await Promise.all(fetchPromises);
+        console.log(`Myplacar SW: ${assetUrls.size} assets cacheados.`);
+      } catch (e) {
+        console.warn('Myplacar SW: Não foi possível pré-cachear assets.', e);
+      }
+
+      return self.skipWaiting();
+    })
   );
 });
 
+// ─── ACTIVATE ───────────────────────────────────────────────────────────────
+// Remove caches de versões antigas para liberar espaço.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
+// ─── FETCH ──────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // IGNORAR LOCALHOST: Não cachear tráfego de desenvolvimento para evitar lag de 2 minutos
-  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-    return;
-  }
+  // Ignora tráfego de desenvolvimento (localhost)
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return;
 
-  // ESTRATÉGIA: Stale-While-Revalidate para o index.html e assets principais
-  // Isso entrega o cache INSTANTANEAMENTE e atualiza em segundo plano.
-  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+  // Ignora requisições ao Firebase/Firestore/Auth — nunca cachear
+  if (
+    url.hostname.includes('firestore.googleapis.com') ||
+    url.hostname.includes('firebase') ||
+    url.hostname.includes('googleapis.com') ||
+    url.hostname.includes('identitytoolkit') ||
+    url.hostname.includes('emailjs')
+  ) return;
+
+  // Navegação e index.html: Stale-While-Revalidate
+  // Entrega o cache instantaneamente e atualiza em segundo plano.
+  if (event.request.mode === 'navigate' ||
+      url.pathname === '/' ||
+      url.pathname === '/index.html') {
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request).then((networkResponse) => {
-          const copy = networkResponse.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-          return networkResponse;
-        });
-        return cachedResponse || fetchPromise;
+      caches.match(event.request).then((cached) => {
+        const networkFetch = fetch(event.request).then((res) => {
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, res.clone()));
+          return res;
+        }).catch(() => cached); // se falhar na rede, usa o cache
+        return cached || networkFetch;
       })
     );
     return;
   }
 
-  // Cache First para assets (JS, CSS, Imagens)
+  // Assets JS/CSS/imagens: Cache First
+  // Se estiver em cache entrega direto; se não, busca na rede e cacheia.
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
 
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
-        }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-        return response;
-      }).catch(() => {
-        return new Response('', { status: 408, statusText: 'Offline' });
-      });
+      return fetch(event.request).then((res) => {
+        if (!res || res.status !== 200 || res.type !== 'basic') return res;
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return res;
+      }).catch(() =>
+        new Response('', { status: 408, statusText: 'Offline' })
+      );
     })
   );
 });
