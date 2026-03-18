@@ -567,7 +567,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       </div>
       <div className="space-y-1.5 border-l-2 border-gray-200 pl-3">
         <p className="text-[10px] font-bold text-gray-500 leading-tight">Para que serve esse comando: <span className="text-black">{purpose}</span></p>
-        <p className="text-[10px] font-bold text-gray-500 leading-tight">Como usar &gt; <span className="text-black">{usage}</span></p>
+        <p className="text-[10px] font-bold text-gray-500 leading-tight">Como usar<span className="text-black">{usage}</span></p>
       </div>
       {field && (
         <div className="mt-2">
@@ -750,13 +750,13 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                           </div>
                         </div>
                         <div className="space-y-1.5 border-l-2 border-gray-200 pl-3">
-                          <p className="text-[10px] font-bold text-gray-500 leading-tight">Para que serve esse comando: <span className="text-black">quando a pontuação é da [cor], do [nome], do [time]</span></p>
-                          <p className="text-[10px] font-bold text-gray-500 leading-tight">Como usar &gt; <span className="text-black">diga: ponto [nome do jogador] ou ponto [cor do time] ou ponto [time 1 / time 2]</span></p>
+                          <p className="text-[10px] font-bold text-gray-500 leading-tight">Para que serve esse comando: <span className="text-black">{applyGoldenRule('quando a pontuação é da [cor], do [nome], do [time]', true)}</span></p>
+                          <p className="text-[10px] font-bold text-gray-500 leading-tight">Como usar <span className="text-black">{applyGoldenRule('diga: ponto [nome do jogador] ou ponto [cor do time] ou ponto [time 1 / time 2]', true)}</span></p>
                         </div>
                       </div>
                       {renderCmdItem('cvp3', 'Sacador', 'serverTerm', 'LIKE(text, FONETICA.sacador)', 'quando a pontuação é do time sacador', 'diga: ponto sacador')}
                       {renderCmdItem('cvp4', 'Contra', 'receiverTerm', 'LIKE(text, FONETICA.contra)', 'quando a pontuação é do time recebedor', 'diga: ponto contra')}
-                      {renderCmdItem('cvp5', 'Ace', 'ace', 'LIKE(text, FONETICA.ace) || LIKE(text, FONETICA.saque)', 'quando o sacador faz um ace', 'diga: ponto ace ou ponto de saque')}
+                      {renderCmdItem('cvp5', 'Ace', 'ace', 'LIKE(text, FONETICA.ace) || LIKE(text, FONETICA.saque)', 'quando o sacador faz um ace', 'diga: ponto ace or ponto de saque')}
                       {renderCmdItem('cvp6', 'Falta', 'fault', 'LIKE(text, FONETICA.falta)', 'quando the sacador saca na rede ou fora da quadra', 'diga: saque errado ou erro de saque')}
                       {renderCmdItem('cvp7', 'Voltar', 'undo', 'LIKE(text, FONETICA.voltar)', 'volta o placar para o último ponto', 'diga: desfazer ponto ou voltar ponto')}
                     </div>

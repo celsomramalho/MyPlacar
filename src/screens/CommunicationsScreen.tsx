@@ -20,7 +20,7 @@ export const CommunicationsScreen: React.FC<Props> = ({ userProfile, onBack }) =
 
   useEffect(() => {
     const db = getDb();
-    if (!db) return;
+    if (!db) { setIsLoading(false); return; }
 
     // Query for global messages or messages targeted to this user
     const q = query(

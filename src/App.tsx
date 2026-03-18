@@ -26,6 +26,20 @@ import { LiveIndicator } from './components/LiveIndicator';
 
 const CURRENT_DATA_VERSION = '3.0.0';
 
+const getUrlParams = () => new URLSearchParams(window.location.search);
+const getDeviceId = () => {
+  try {
+    let id = localStorage.getItem('myPlacar_DeviceId');
+    if (!id) {
+      id = Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('myPlacar_DeviceId', id);
+    }
+    return id;
+  } catch (e) {
+    return "session_" + Math.random().toString(36).substring(2, 11);
+  }
+};
+
 const LogViewer: React.FC<{logs: {type: string, msg: string, time: string}[], onClose: () => void, onClear: () => void}> = ({logs, onClose, onClear}) => {
   return (
     <div className="fixed inset-0 z-[2000] bg-black/95 text-white p-6 flex flex-col font-mono text-[10px] animate-in fade-in duration-300">
@@ -63,16 +77,19 @@ const LogViewer: React.FC<{logs: {type: string, msg: string, time: string}[], on
   );
 };
 
-let sessionDeviceId = "";
-
 const App: React.FC = () => {
-  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
-  const initialSpectatorMatchId = useMemo(() => urlParams.get('viewMatch'), [urlParams]);
-  const initialSpectatorPin = useMemo(() => urlParams.get('viewPin'), [urlParams]);
+  const urlParams = getUrlParams();
+  const deviceId = getDeviceId();
+  
+  const initialSpectatorMatchId = urlParams.get('viewMatch');
+  const initialSpectatorPin = urlParams.get('viewPin');
   
   const [currentScreen, setCurrentScreen] = useState<Screen>((initialSpectatorMatchId || initialSpectatorPin) ? 'spectator' : 'auth');
 
   useEffect(() => {
+    // Sinaliza que o app carregou IMEDIATAMENTE
+    window.dispatchEvent(new CustomEvent('app-ready'));
+    
     const db = getDb();
     if (!db) return;
     const unsubscribe = onSnapshot(doc(db, "system", "config"), (snap) => {
@@ -80,15 +97,6 @@ const App: React.FC = () => {
         const data = snap.data();
         if (data.appUrl) {
           setAppUrl(data.appUrl);
-          
-          // Redirecionamento automático para a url canônica se necessário
-          const hostname = window.location.hostname;
-          const canonicalUrl = new URL(data.appUrl);
-          if (hostname !== canonicalUrl.hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.includes('.run.app')) {
-            // Preserva os parâmetros da URL ao redirecionar
-            const currentSearch = window.location.search;
-            window.location.href = data.appUrl + currentSearch;
-          }
         }
       }
     });
@@ -101,7 +109,7 @@ const App: React.FC = () => {
   const [modalConfig, setModalConfig] = useState<{title: string, message: string, onConfirm: () => void, onCancel?: () => void, confirmLabel?: string, variant?: 'info' | 'danger' | 'success', icon?: React.ReactNode} | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const [cloudMatchesCount, setCloudMatchesCount] = useState(0);
   const [isUpdatingVersion, setIsUpdatingVersion] = useState(false);
   const [showInstallPwa, setShowInstallPwa] = useState(false);
@@ -118,28 +126,11 @@ const App: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [appUrl, setAppUrl] = useState("https://my-placar.vercel.app/");
 
-  const deviceId = useMemo(() => {
-    if (sessionDeviceId) return sessionDeviceId;
-    try {
-      let id = localStorage.getItem('myPlacar_DeviceId');
-      if (!id) {
-        id = Math.random().toString(36).substring(2, 11);
-        localStorage.setItem('myPlacar_DeviceId', id);
-      }
-      sessionDeviceId = id;
-      return id;
-    } catch (e) {
-      if (!sessionDeviceId) sessionDeviceId = "session_" + Math.random().toString(36).substring(2, 11);
-      return sessionDeviceId;
-    }
-  }, []);
-
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     const profile = safeJsonParse('myPlacarUserProfile', { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' });
     return (profile && profile.email) ? profile : { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' };
   });
 
-  // MC: Log Viewer para celular
   const [logs, setLogs] = useState<{type: 'log' | 'error' | 'warn', msg: string, time: string}[]>([]);
   const [showLogViewer, setShowLogViewer] = useState(false);
   const [versionTapCount, setVersionTapCount] = useState(0);
@@ -178,7 +169,6 @@ const App: React.FC = () => {
       }
       return next;
     });
-    // Reset do contador após 2 segundos de inatividade
     setTimeout(() => setVersionTapCount(0), 2000);
   };
 
@@ -282,14 +272,12 @@ const App: React.FC = () => {
         const parsed = JSON.parse(saved);
         if (key === 'myPlacarActiveGameState' && parsed !== null) {
           if (!isValidGameState(parsed)) {
-            console.warn("GameState corrompido detectado no localStorage. Limpando...");
             localStorage.removeItem(key);
             return fallback;
           }
         }
         if (key === 'myPlacarSettings' && parsed !== null) {
           if (!isValidMatchSettings(parsed)) {
-            console.warn("Settings corrompidas detectadas no localStorage. Usando padrão...");
             return fallback;
           }
         }
@@ -395,14 +383,11 @@ const App: React.FC = () => {
   }, [gameState, userProfile.pin, userProfile.email, deviceId, isOriginalOwner]);
 
   useEffect(() => {
-    // Sinaliza para o script de emergência que o app carregou com sucesso
-    window.dispatchEvent(new CustomEvent('app-ready'));
     localStorage.setItem('myPlacar_AppVersion', LOCAL_CODE_VERSION);
     localStorage.setItem('myPlacar_CrashCount', '0');
     
     const runMigration = () => {
       try {
-        // Aggressive cleanup of old backups on every load to prevent QuotaExceededError
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
         });
@@ -441,15 +426,10 @@ const App: React.FC = () => {
                           (e.message && e.message.includes('exceeded the quota'));
       
       if (isQuotaError) {
-        console.error("Myplacar: Limite de armazenamento excedido (QuotaExceededError).");
-        
-        // 1. Limpeza imediata de backups
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
         });
 
-        // 2. Se for erro do Firestore (mutations), o app pode travar.
-        // Tentamos alertar o usuário se possível
         if (e.message && e.message.includes('firestore_mutations')) {
           setModalConfig({
             title: "Erro de armazenamento",
@@ -583,12 +563,10 @@ const App: React.FC = () => {
           return false;
         };
 
-        // Check for service interruption/deprecation
         const deprecatedVersions = snap.data().deprecatedVersions || [];
         const minVersion = snap.data().minVersion || "";
         const serviceMovedTo = snap.data().serviceMovedTo || "";
 
-        // Hardcoded check for 2.3.04 or lower as requested
         const isTooOld = !isNewer(localVersion, "2.3.04") || localVersion === "2.3.04";
 
         if (isTooOld || deprecatedVersions.includes(LOCAL_CODE_VERSION) || (minVersion && !isNewer(localVersion, minVersion.replace(/^v/, '')) && localVersion !== minVersion.replace(/^v/, ''))) {
@@ -619,7 +597,11 @@ const App: React.FC = () => {
   }, [setModalConfig]);
 
   useEffect(() => {
-    handleCheckUpdate();
+    // Verificação de atualização NÃO-BLOQUEANTE: espera 3 segundos após o app abrir
+    const timer = setTimeout(() => {
+      handleCheckUpdate();
+    }, 3000);
+    return () => clearTimeout(timer);
   }, [handleCheckUpdate]);
 
   const isAdmin = userProfile.email?.toLowerCase().trim() === 'celsomramalho@gmail.com';
@@ -632,7 +614,7 @@ const App: React.FC = () => {
   }, [matchSettings.brightness]);
 
   useEffect(() => {
-    if (!userProfile.pin || !currentFullDeviceName) return;
+    if (!userProfile.pin || !currentFullDeviceName || !navigator.onLine) return;
     const db = getDb();
     if (!db) return;
     const myPin = userProfile.pin.toUpperCase();
@@ -645,9 +627,7 @@ const App: React.FC = () => {
       if (snap.exists()) {
         const cloudData = snap.data() as GameState;
         
-        // Validação defensiva de dados da nuvem
         if (!isValidGameState(cloudData)) {
-          console.warn("Recebido GameState inválido da nuvem. Ignorando atualização.");
           return;
         }
 
@@ -699,7 +679,6 @@ const App: React.FC = () => {
         setGameState(prev => {
           if (!prev) return null;
           if (prev.isMirroringActive) {
-            console.log("Limpando mirroring local pois a live não existe na nuvem.");
             return { ...prev, isMirroringActive: false, isLiveClosed: false };
           }
           return prev;
@@ -764,7 +743,6 @@ const App: React.FC = () => {
     if (prev.name !== userProfile.name || prev.nickname !== userProfile.nickname || prev.gender !== userProfile.gender || prev.authMethod !== userProfile.authMethod) {
       setIsProfileSaved(false);
     }
-    // Se o método de autenticação mudou para password, salvamos automaticamente para garantir persistência
     if (prev.authMethod === 'pin' && userProfile.authMethod === 'password') {
       handleSaveProfile();
     }
@@ -866,8 +844,6 @@ const App: React.FC = () => {
         const db = getDb();
         if (db && gameState.commandOwnerId === deviceId) {
             const now = Date.now();
-            
-            // 1. Determina se é uma mudança "crítica" (placar, status, etc) ou "passiva" (timer)
             const prevStateStr = lastSentStateRef.current;
             const prevState = prevStateStr ? JSON.parse(prevStateStr) : null;
             
@@ -882,14 +858,11 @@ const App: React.FC = () => {
               prevState.isMatchOver !== gameState.isMatchOver ||
               prevState.server !== gameState.server;
 
-            // 2. Throttle: Mudanças críticas são instantâneas, mudanças passivas (timer) a cada 10s
             const timeSinceLastSync = now - lastSyncTimeRef.current;
             const shouldSync = isCriticalChange || timeSinceLastSync > 10000;
 
             if (shouldSync) {
               const nextControllers: Record<string, any> = { ...(gameState.controllers || {}) };
-              
-              // Só atualiza o lastSeen a cada 30 segundos
               const shouldUpdateLastSeen = now - lastSeenUpdateRef.current > 30000;
               
               if (shouldUpdateLastSeen) {
@@ -917,9 +890,7 @@ const App: React.FC = () => {
                   const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
                   const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
                   if (targetPin) {
-                    setDoc(doc(db, "live_matches", targetPin), stateToSave, { merge: true }).catch((err) => {
-                      console.error("Erro ao sincronizar com nuvem:", err);
-                    });
+                    setDoc(doc(db, "live_matches", targetPin), stateToSave, { merge: true }).catch(() => {});
                   }
                 }
               }
@@ -941,14 +912,12 @@ const App: React.FC = () => {
   const [focusMatchId, setFocusMatchId] = useState<string | null>(null);
 
   const persistHistory = useCallback((newList: MatchHistoryItem[]) => {
-    // Limit local history to 100 items to prevent QuotaExceededError
     const limitedList = newList.slice(0, 100);
     matchHistoryRef.current = newList;
     setMatchHistory(newList);
     try { 
       localStorage.setItem('myPlacarHistory', JSON.stringify(limitedList)); 
     } catch(e) {
-      // If still failing, try to clear some space
       if (e instanceof Error && e.name === 'QuotaExceededError') {
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
@@ -1147,10 +1116,11 @@ const App: React.FC = () => {
     if (!state.matchConfig.isHistoryEnabled) {
       try { localStorage.removeItem('myPlacarActiveGameState'); } catch(e) {}
       const db = getDb();
+      if (!db) return;
       const myPin = userProfile.pin?.toUpperCase();
       const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
       const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : state.ownerPin?.toUpperCase());
-      if (db && targetPin && navigator.onLine) deleteDoc(doc(db, "live_matches", targetPin)).catch(() => {});
+      if (targetPin && navigator.onLine) deleteDoc(doc(db, "live_matches", targetPin)).catch(() => {});
       return;
     }
 
@@ -1281,7 +1251,6 @@ const App: React.FC = () => {
            try {
              const snap = await getDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()));
              if (snap.exists() && snap.data().isLiveClosed !== true) { 
-                // Se já temos o estado local e ele bate com o PIN, não precisamos mostrar o modal de espera
                 if (gameState && gameState.ownerPin?.toUpperCase() === userProfile.pin.toUpperCase()) {
                    setCurrentScreen('scoreboard'); 
                    return; 
@@ -1485,8 +1454,6 @@ const App: React.FC = () => {
     const db = getDb();
     let pinToObserve = targetPin || userProfile.pin?.toUpperCase();
 
-    // Se não temos pinToObserve (ex: clicou no botão Live sem estar em uma partida própria)
-    // mas somos juiz de alguma partida em activeLives, pegamos o ownerPin dessa partida.
     if (!targetPin && userProfile.pin) {
       const myPin = userProfile.pin.toUpperCase();
       const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
@@ -1505,7 +1472,6 @@ const App: React.FC = () => {
           nextControllers[deviceId] = { label: myCommandName, nickname: myNickname, lastSeen: Date.now() };
           await updateDoc(doc(db, "live_matches", pinUpper), { controllers: nextControllers }).catch(() => {});
           
-          // Sincronizar regras da partida se o juiz/observador estiver conectando
           if (cloudData.matchConfig) {
             setMatchSettings(prev => ({ ...prev, ...cloudData.matchConfig }));
           }
@@ -1559,7 +1525,6 @@ const App: React.FC = () => {
       const pinUpper = judgePinInput.toUpperCase().trim();
       const nickname = judgeNicknameLookup;
 
-      // Se o juiz não estiver nos parceiros, adiciona-lo
       if (pinUpper && !partners.some(p => p.pin === pinUpper)) {
         const newPartner: Partner = {
           id: `p_${Date.now()}`,
@@ -1572,7 +1537,6 @@ const App: React.FC = () => {
         setPartners(updatedPartners);
         localStorage.setItem('myPlacarPartners', JSON.stringify(updatedPartners));
 
-        // Salvar no Firestore para persistência
         if (db && userProfile.pin) {
           await setDoc(doc(db as Firestore, 'users', userProfile.pin.toUpperCase(), 'partners', pinUpper), {
             pin: pinUpper,
@@ -1961,7 +1925,7 @@ const App: React.FC = () => {
       )}
       {isServiceInterrupted && (
         <div className="fixed inset-0 z-[200000] bg-slate-900 flex items-center justify-center p-6 text-center">
-          <div className="bg-white rounded-[3rem] p-10 w-full max-w-md shadow-2xl space-y-8 animate-in zoom-in duration-500">
+          <div className="bg-white rounded-[3rem] p-10 w-full max-md shadow-2xl space-y-8 animate-in zoom-in duration-500">
             <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mx-auto shadow-inner">
               <AlertCircle size={48} />
             </div>
@@ -1998,21 +1962,18 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col w-full gap-3">
-                    {/* Botão Controlar - Visível para Owner ou Judge */}
                     {(isOriginalOwner || liveRole === 'judge') && !isCurrentController && (
                       <button onClick={handleControlLive} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-base shadow-xl shadow-blue-100 active:scale-95 transition-all flex items-center justify-center gap-3">
                         {isOriginalOwner ? <Crown size={24} /> : <UserCheck size={24} />} Controlar
                       </button>
                     )}
 
-                    {/* Botão Observador - Visível para todos exceto quando Owner é o único controlador */}
                     {(!isCurrentController || liveRole === 'judge' || gameState?.judgePin) && (
                       <button onClick={() => handleObserveLive()} className="w-full py-5 bg-[#00FFFF] text-black rounded-[2rem] font-black text-base shadow-xl shadow-cyan-100 active:scale-95 transition-all flex items-center justify-center gap-3">
                         <Eye size={24} /> Observador
                       </button>
                     )}
 
-                    {/* Bloco do Proprietário - Visível para o Juiz */}
                     {liveRole === 'judge' && (
                       <div className="w-full mt-4 pt-4 border-t border-gray-100 space-y-4">
                         <div className="flex items-center gap-2 mb-2">
@@ -2031,7 +1992,6 @@ const App: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Botão Excluir Transmissão - Apenas para Owner */}
                     {isOriginalOwner && (
                       <button onClick={() => setConfirmDeleteLive(true)} className="w-full py-4 text-red-500 font-black text-xs active:scale-95 flex items-center justify-center gap-2 mt-2">
                         <Trash2 size={16} /> Excluir transmissão
@@ -2146,7 +2106,6 @@ const App: React.FC = () => {
         activeEvent={activeEvent} userEntryDate={userEntryDate} onJoinTournament={() => setCurrentScreen('tournaments')} onExitTournament={handleExitTournament}
         onOpenCommunications={() => setCurrentScreen('communications')} unreadCount={unreadCommsCount}
         onOpenMenu={() => setIsMenuOpen(true)}
-        isOfflineMode={isOfflineMode}
       />}
       {currentScreen === 'partners' && <PartnersScreen appUrl={appUrl} partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => { if (isSelectingJudge) { setIsSelectingJudge(false); setCurrentScreen('scoreboard'); } else setCurrentScreen('settings'); }} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} onSelectPartner={isSelectingJudge ? handleSelectJudgeFromPartners : undefined} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} activeLives={activeLives} onWatchLive={(pin) => { 
         const isJudge = activeLives.find(l => l.ownerPin?.toUpperCase() === pin.toUpperCase())?.judgePin?.toUpperCase() === userProfile.pin.toUpperCase();
@@ -2236,9 +2195,9 @@ const App: React.FC = () => {
         const p = undoPoint(historyStack); 
         if (p) { 
           const s = gameState!; const isFinishedPending = (s.isMatchOver && !s.isConfirmedFinished);
-          if (isFinishedPending) { setHistoryStack(historyStack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false}); setIsRecoveryFromMatchOver(true); if (navigator.vibrate) navigator.vibrate(50); return; }
+          if (isFinishedPending) { setHistoryStack(historyStack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false}); setIsRecoveryFromMatchOver(true); return; }
           if (isRecoveryFromMatchOver) { const isCrossingGameOrSet = (p.p1.games !== s.p1.games) || (p.p2.games !== s.p2.games) || (p.p1.sets.length !== s.p1.sets.length); if (isCrossingGameOrSet) return; }
-          setHistoryStack(historyStack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false}); if (navigator.vibrate) navigator.vibrate(30);
+          setHistoryStack(historyStack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false});
         } 
       }} onSwitchServer={handleSmartSwitchServer} onTogglePause={() => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner) return; 

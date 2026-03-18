@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, ShieldCheck, Plus, Play, Info, CloudDownload, CloudUpload, RotateCw, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Antenna, Wifi, Dices, UserCheck, ArrowRightLeft, UserX, History, Check, CheckSquare, Eraser, Mic, Clock, Trophy, Gavel } from 'lucide-react';
 import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent, TournamentEntry } from '../types'; 
@@ -145,7 +144,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
         }
         setIsSearchingPin(true);
         const db = getDb();
-        if (!db) return;
+        if (!db) { setIsSearchingPin(false); return; }
         try {
           const q = query(collection(db as any, "users"), where("pin", "==", cleanPin));
           const snap = await getDocs(q);

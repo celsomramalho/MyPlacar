@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle } from 'lucide-react';
 import { TournamentEvent, TournamentEntry, UserProfile, Partner, TournamentPair, TournamentMatch, TournamentConfig } from '../types';
@@ -147,7 +146,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       if (pin.length === 5) {
         setIsSearchingCoAdminPin(true);
         const db = getDb();
-        if (!db) return;
+        if (!db) { setIsSearchingCoAdminPin(false); return; }
         try {
           const q = query(collection(db as Firestore, "users"), where("pin", "==", pin));
           const snap = await getDocs(q);
@@ -289,7 +288,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     if (!tempNickname.trim()) return;
     setIsSavingNickname(true);
     const db = getDb();
-    if (!db) return;
+    if (!db) { setIsSavingNickname(false); return; }
     try {
       const formatted = formatPortugueseName(tempNickname);
       await updateDoc(doc(db as Firestore, "events", event.pin, "entries", email), { nickname: formatted });
@@ -310,7 +309,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     if (!coAdminPin || coAdminPin.length < 5) return;
     setIsSavingCoAdmin(true);
     const db = getDb();
-    if (!db) return;
+    if (!db) { setIsSavingCoAdmin(false); return; }
     try {
       const pinUpper = coAdminPin.toUpperCase().trim();
       const currentAdmins: string[] = (event.coAdminPins || []) as string[];
@@ -374,7 +373,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           }
         } catch (e) {
           console.error("Erro ao excluir participante:", e);
-          setModalConfig({ title: "Erro", message: "Erro ao remover o participante.", onConfirm: () => setModalConfig(null) });
+          setModalConfig({ title: "Erro", message: "Erro ao remover the participante.", onConfirm: () => setModalConfig(null) });
         }
       },
       onCancel: () => setModalConfig(null)
@@ -462,7 +461,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     }
     setIsSavingManual(true);
     const db = getDb();
-    if (!db) return;
+    if (!db) { setIsSavingManual(false); return; }
     try {
        const cleanEmail = email.toLowerCase().trim();
        const tempPin = `TEMP${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -751,7 +750,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                    <Link2 size={18} />
                    <h3 className="text-sm font-black text-black tracking-tight">Times formados</h3>
                  </div>
-                 {selectedPairs.size === 2 && (
+                 {selectedEntries.size === 2 && (
                    <button onClick={handleCreateMatchManual} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black shadow-lg animate-in zoom-in">Escalar confronto</button>
                  )}
               </div>

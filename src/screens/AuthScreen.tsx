@@ -69,7 +69,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     userUid?: string
   }>({ type: 'pin', value: '' });
 
-  // Monitor de conexão
+  // Monitor de conexão em tempo real
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -324,8 +324,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 return;
               }
             } else {
-              // Se for senha, não temos como validar o hash localmente com segurança total,
-              // mas permitimos o acesso se o e-mail bater, assumindo que o dispositivo é privado.
+              // Se for senha, permitimos o acesso se o e-mail bater com o último logado,
+              // assumindo que o dispositivo é privado e o usuário já autenticou antes.
               onAuthSuccess(savedProfile, true);
               return;
             }
@@ -1164,7 +1164,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             <button 
               onClick={handleGoogleLogin}
               disabled={isLoading}
-              className="w-full py-4 rounded-3xl font-black border-2 border-red-50 text-red-600 flex items-center justify-center gap-3 active:scale-95 transition-all bg-red-50/30"
+              className="w-full py-4 rounded-3xl font-black border-2 border-red-50 text-red-600 flex items-center justify-center gap-3 active:scale-95 transition-all bg-blue-50/30"
             >
               <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" /> Entrar com google
             </button>

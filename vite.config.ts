@@ -4,12 +4,22 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: [
+      'firebase/app',
+      'firebase/firestore',
+      'firebase/auth',
+      'firebase/storage',
+      '@google/genai',
+      'lucide-react',
+      'leaflet'
+    ]
+  },
   build: {
     outDir: 'dist',
-    chunkSizeWarningLimit: 800, // Aumenta um pouco o limite tolerado
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
-        // Separa as bibliotecas em chunks diferentes para melhorar o carregamento e cache
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('firebase')) {
@@ -24,7 +34,7 @@ export default defineConfig({
             if (id.includes('lucide-react')) {
               return 'vendor-icons';
             }
-            return 'vendor'; // Outras libs menores ficam no chunk vendor padrão
+            return 'vendor';
           }
         },
       },
