@@ -1,6 +1,23 @@
 {
   "headers": [
     {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
@@ -11,6 +28,14 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
+      "source": "/manifest.json",
+      "destination": "/manifest.json"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
