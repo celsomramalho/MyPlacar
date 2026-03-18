@@ -222,27 +222,31 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     if (isCheckingUpdate || !onCheckUpdate || !isOnline) return;
     
     if (remoteVersionFound && setIsUpdatingVersion) {
-      const confirmUpdate = window.confirm(`Nova versão ${remoteVersionFound} disponível. Deseja atualizar agora?`);
-      if (confirmUpdate) {
-        setIsUpdatingVersion(true);
-        if ('serviceWorker' in navigator) {
-          try {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            for (const r of regs) await r.unregister();
-          } catch (e) {}
-        }
-        if ('caches' in window) {
-          try {
-            const keys = await caches.keys();
-            for (const k of keys) await caches.delete(k);
-          } catch (e) {}
-        }
-        setTimeout(() => {
-          const url = new URL(window.location.href);
-          url.searchParams.set('v', remoteVersionFound);
-          window.location.href = url.toString();
-        }, 1000);
+      setIsUpdatingVersion(true);
+      // 1. Sinaliza ao SW em espera para assumir imediatamente
+      if ('serviceWorker' in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.getRegistration();
+          if (reg?.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            await new Promise<void>(resolve => {
+              navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
+              setTimeout(resolve, 2000);
+            });
+          }
+        } catch (e) {}
       }
+      // 2. Limpa todos os caches
+      if ('caches' in window) {
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        } catch (e) {}
+      }
+      // 3. Recarrega com cache-bust
+      const url = new URL(window.location.href);
+      url.searchParams.set('v', remoteVersionFound);
+      window.location.href = url.toString();
       return;
     }
 

@@ -7,6 +7,15 @@ const PRECACHE_URLS = [
   '/manifest.json',
 ];
 
+// ─── SKIP WAITING ───────────────────────────────────────────────────────────
+// Recebe o sinal do app para ativar o novo SW imediatamente,
+// sem esperar todas as abas fecharem.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 // ─── INSTALL ────────────────────────────────────────────────────────────────
 // Pré-faz cache do index.html e depois descobre e cacheia todos os
 // assets JS/CSS do build dinamicamente (hashes do Vite incluídos).
@@ -43,7 +52,8 @@ self.addEventListener('install', (event) => {
         console.warn('Myplacar SW: Não foi possível pré-cachear assets.', e);
       }
 
-      return self.skipWaiting();
+      // skipWaiting é controlado pelo app via mensagem SKIP_WAITING
+      // para evitar ativar o SW no meio de uma sessão ativa
     })
   );
 });
