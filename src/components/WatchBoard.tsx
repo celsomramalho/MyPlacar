@@ -19,6 +19,7 @@ interface WatchBoardProps {
   isDimmed: boolean;
   setIsDimmed: (val: boolean) => void;
   resetDimTimer: () => void;
+  dimProgress?: number;
   isCommandOwner: boolean;
   onResetMatch?: () => void;
   onOpenLiveControl?: () => void;
@@ -70,7 +71,7 @@ const TEXT_COLORS: Record<string, string> = {
 export const WatchBoard: React.FC<WatchBoardProps> = ({
   gameState, onScoreUpdate, onSwitchServer, onBack, onConfirmMatch,
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
-  isDimmed, setIsDimmed, resetDimTimer, isCommandOwner, onResetMatch, onOpenLiveControl, remoteActionFeedback,
+  isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
   isEmbedded, scorePressProgress, cloudLiveExists, role
 }) => {
@@ -232,7 +233,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', 1)} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 1)} className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
+        <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 1); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 1)} className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
           {scorePressProgress?.player === 1 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
@@ -244,7 +245,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         </div>
         
         <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10">
-          <button onClick={handleUndoWithLog} disabled={!isCommandOwner} className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5"><RotateCcw size={32} strokeWidth={4} /></button>
+          <button onClick={() => { resetDimTimer(); handleUndoWithLog(); }} disabled={!isCommandOwner} className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5"><RotateCcw size={32} strokeWidth={4} /></button>
           <button 
             disabled={!isCommandOwner} 
             onClick={() => onScoreUpdate(gameState.server, 'ace', 'cb')} 
@@ -297,7 +298,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           )}
         </div>
 
-        <div onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', 2)} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
+        <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 2); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
           {scorePressProgress?.player === 2 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
@@ -308,6 +309,15 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           {remoteActionFeedback === 'P2_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
         </div>
       </div>
+      {/* Barra de progresso do dim — aparece nos últimos 5s antes de escurecer */}
+      {dimProgress > 0 && !isDimmed && (
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/10 z-[99998] pointer-events-none">
+          <div
+            className="h-full bg-white/30 transition-none"
+            style={{ width: `${dimProgress}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 };

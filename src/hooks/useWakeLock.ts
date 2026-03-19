@@ -1,10 +1,39 @@
-
 import { useEffect, useRef } from 'react';
 
 export const useWakeLock = (enabled: boolean) => {
-  // Desativado por padrão para evitar violações de política de permissão
-  // quando a permissão screen-wake-lock não está presente no metadata.json
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
   useEffect(() => {
-    return () => {};
+    if (!enabled) return;
+    if (!('wakeLock' in navigator)) return;
+
+    let released = false;
+
+    const acquire = async () => {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        wakeLockRef.current.addEventListener('release', () => {
+          // O sistema liberou o wake lock (ex: app foi para background)
+          // Tenta readquirir quando a página voltar ao foco
+          if (!released) acquire();
+        });
+      } catch (e) {
+        // Permissão negada ou API indisponível — falha silenciosa
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') acquire();
+    };
+
+    acquire();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      released = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+    };
   }, [enabled]);
 };

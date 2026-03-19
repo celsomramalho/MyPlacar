@@ -309,7 +309,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const [isMirrorExpanded, setIsMirrorExpanded] = useState(false);
   const [isLiveExpanded, setIsLiveExpanded] = useState(false);
   const [isDimmed, setIsDimmed] = useState(false);
+  const [dimProgress, setDimProgress] = useState(0);
   const dimTimeoutRef = useRef<any>(null);
+  const dimProgressIntervalRef = useRef<any>(null);
 
   const currentGameStateRef = useRef(gameState);
   const pendingLogIdRef = useRef<string | null>(null);
@@ -328,16 +330,33 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   const resetDimTimer = useCallback(() => {
     if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
+    if (dimProgressIntervalRef.current) clearInterval(dimProgressIntervalRef.current);
+    setDimProgress(0);
     if (gameState.matchConfig.isWatchMode) {
+      const timeoutSec = (gameState.matchConfig.screenDimTimeout || 10);
+      const timeoutMs = timeoutSec * 1000;
+      const startTime = Date.now();
+      // Atualiza a barra de progresso a cada 200ms
+      dimProgressIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const pct = Math.min((elapsed / timeoutMs) * 100, 100);
+        setDimProgress(pct);
+        if (pct >= 100) clearInterval(dimProgressIntervalRef.current);
+      }, 200);
       dimTimeoutRef.current = setTimeout(() => {
+        clearInterval(dimProgressIntervalRef.current);
+        setDimProgress(0);
         setIsDimmed(true);
-      }, 10000);
+      }, timeoutMs);
     }
-  }, [gameState.matchConfig.isWatchMode]);
+  }, [gameState.matchConfig.isWatchMode, gameState.matchConfig.screenDimTimeout]);
 
   useEffect(() => {
     resetDimTimer();
-    return () => { if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current); };
+    return () => {
+      if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
+      if (dimProgressIntervalRef.current) clearInterval(dimProgressIntervalRef.current);
+    };
   }, [gameState.p1.score, gameState.p2.score, resetDimTimer]);
 
   useEffect(() => {
@@ -644,7 +663,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         gameState={gameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
         onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
         isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
-        handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} 
+        handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
         isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
         isOfflineMode={isOfflineMode}
         correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
@@ -800,7 +819,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
              gameState={gameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
              onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
              isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
-             handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} 
+             handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
              isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
              isOfflineMode={isOfflineMode}
              correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}

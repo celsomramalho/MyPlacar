@@ -39,7 +39,19 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [email, setEmail] = useState(() => localStorage.getItem('myPlacarSavedEmail') || '');
   const [pin, setPin] = useState(() => localStorage.getItem('myPlacarSavedPin') || ''); 
   const [password, setPassword] = useState('');
-  const [authMethod, setAuthMethod] = useState<'pin' | 'password'>('pin');
+  const [authMethod, setAuthMethod] = useState<'pin' | 'password'>(() => {
+    // Inicializa a partir do perfil salvo no localStorage quando disponível
+    // (resolve offline e evita piscar de PIN → senha para usuários recorrentes)
+    try {
+      const savedProfile = localStorage.getItem('myPlacarUserProfile');
+      if (savedProfile) {
+        const profile = JSON.parse(savedProfile) as UserProfile;
+        if (profile?.authMethod) return profile.authMethod;
+      }
+    } catch (e) {}
+    return 'password'; // padrão: senha (não PIN)
+  });
+  const [isCheckingAuthMethod, setIsCheckingAuthMethod] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
   const [verificationCode, setVerificationCode] = useState('');
@@ -275,13 +287,23 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (cleanEmail.includes('@') && cleanEmail.includes('.')) {
         const db = getDb();
         if (db) {
+          setIsCheckingAuthMethod(true);
           try {
             const userSnap = await getDoc(doc(db as Firestore, "users", cleanEmail));
             if (userSnap.exists()) {
               const data = userSnap.data();
-              setAuthMethod(data.authMethod || 'pin');
+              // Fallback 'password': usuários sem authMethod explícito são antigos
+              // que ainda não migraram — PIN só aparece quando confirmado pelo Firestore
+              setAuthMethod(data.authMethod === 'pin' ? 'pin' : 'password');
+            } else {
+              // E-mail não encontrado — mantém 'password' como padrão
+              setAuthMethod('password');
             }
-          } catch (e) {}
+          } catch (e) {
+            // Erro de rede — mantém o estado atual sem alterar
+          } finally {
+            setIsCheckingAuthMethod(false);
+          }
         }
       }
     };
@@ -318,8 +340,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         try {
           const savedProfile = JSON.parse(savedProfileStr) as UserProfile;
           if (savedProfile.email.toLowerCase().trim() === email.toLowerCase().trim()) {
-            // Se for PIN, valida localmente
-            if (authMethod === 'pin') {
+            // Usa o authMethod do perfil salvo — mais confiável que o estado
+            // da tela que pode não ter sido verificado sem conexão
+            const savedAuthMethod = savedProfile.authMethod || 'password';
+            if (savedAuthMethod === 'pin') {
               if (savedProfile.pin === pin.toUpperCase().trim()) {
                 onAuthSuccess(savedProfile, true);
                 return;
@@ -328,8 +352,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 return;
               }
             } else {
-              // Se for senha, permitimos o acesso se o e-mail bater com o último logado,
-              // assumindo que o dispositivo é privado e o usuário já autenticou antes.
+              // Senha: permite acesso offline se o e-mail bater com o último logado
+              // (dispositivo privado, usuário já autenticou antes)
               onAuthSuccess(savedProfile, true);
               return;
             }
@@ -1055,6 +1079,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 <div className="flex items-center gap-2 ml-1">
                   <Lock size={16} className="text-blue-600" />
                   <label className="text-[13px] font-bold text-black leading-tight">Senha de acesso</label>
+                  {isCheckingAuthMethod && <Loader2 size={12} className="text-slate-400 animate-spin ml-1" />}
                 </div>
                 <Input 
                   type={showPassword ? "text" : "password"} 
@@ -1070,6 +1095,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 <div className="flex items-center gap-2 ml-1">
                   <Hash size={16} className="text-blue-600" />
                   <label className="text-[13px] font-bold text-black leading-tight">Pin de acesso</label>
+                  {isCheckingAuthMethod && <Loader2 size={12} className="text-slate-400 animate-spin ml-1" />}
                 </div>
                 <Input 
                   placeholder="•••••" 

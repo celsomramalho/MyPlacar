@@ -28,7 +28,7 @@ import { useAppLogger } from './hooks/useAppLogger';
 import { useInstallPwa } from './hooks/useInstallPwa';
 import { useOnlineSync } from './hooks/useOnlineSync';
 
-const CURRENT_DATA_VERSION = '3.0.0';
+const CURRENT_DATA_VERSION = '3.1.0'; // bumped: limpa SavedSettings_* para forçar novos defaults por esporte
 
 function safeJsonParse(key: string, fallback: any) {
   try {
@@ -212,6 +212,7 @@ const App: React.FC = () => {
       s.voiceScoring = localStorage.getItem('myPlacar_LocalVoiceScoring') !== 'false';
       s.actionCooldown = parseInt(localStorage.getItem('myPlacar_LocalActionCooldown') || '5');
       s.stateLockout = parseInt(localStorage.getItem('myPlacar_LocalStateLockout') || '10');
+      s.screenDimTimeout = (parseInt(localStorage.getItem('myPlacar_LocalScreenDimTimeout') || '10') as 10 | 15 | 20);
 
       if (!s.deviceLabel) {
         // Usa isWatchDevice para label mais preciso que apenas verificar UA
@@ -300,7 +301,7 @@ const App: React.FC = () => {
   const sanitizeForFirestore = (obj: any) => {
     if (!userProfile.email && !userProfile.pin) return null;
     const clean = JSON.parse(JSON.stringify(obj, (key, value) => value === undefined ? null : value));
-    const fieldsToRemove = ['isWatchMode', 'brightness', 'volume', 'deviceLabel', 'selectedVoiceURI', 'voiceEnabled', 'voiceScoring', 'actionCooldown', 'stateLockout', 'customSportIcon', 'customSportIcons', 'customCategoryIcons', 'cloudSportIcons', 'cloudCategoryIcons'];
+    const fieldsToRemove = ['isWatchMode', 'brightness', 'volume', 'deviceLabel', 'selectedVoiceURI', 'voiceEnabled', 'voiceScoring', 'actionCooldown', 'stateLockout', 'screenDimTimeout', 'customSportIcon', 'customSportIcons', 'customCategoryIcons', 'cloudSportIcons', 'cloudCategoryIcons'];
     const deepClean = (target: any) => {
       if (!target || typeof target !== 'object') return;
       fieldsToRemove.forEach(f => { if (target[f] !== undefined) delete target[f]; });
@@ -421,6 +422,11 @@ const App: React.FC = () => {
           localStorage.setItem('myPlacarHistory', JSON.stringify(cleanedHistory));
           localStorage.setItem('myPlacarAssets', JSON.stringify(assets));
         }
+        // Limpa configurações salvas por esporte para que os novos
+        // defaults (sets, noAd, gamesPerSet) sejam aplicados na próxima seleção
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('myPlacar_SavedSettings_')) localStorage.removeItem(key);
+        });
         localStorage.setItem('myPlacar_DataVersion', CURRENT_DATA_VERSION);
       } catch (e) {
         try { localStorage.setItem('myPlacar_DataVersion', CURRENT_DATA_VERSION); } catch(ex) {}
@@ -748,6 +754,7 @@ const App: React.FC = () => {
       localStorage.setItem('myPlacar_LocalVoiceScoring', matchSettings.voiceScoring ? 'true' : 'false');
       localStorage.setItem('myPlacar_LocalActionCooldown', matchSettings.actionCooldown.toString());
       localStorage.setItem('myPlacar_LocalStateLockout', matchSettings.stateLockout.toString());
+      localStorage.setItem('myPlacar_LocalScreenDimTimeout', (matchSettings.screenDimTimeout || 10).toString());
     } catch(e) {}
 
     if (gameState && !gameState.isConfirmedFinished) {
@@ -929,6 +936,21 @@ const App: React.FC = () => {
   }, [gameState, userProfile.pin, userProfile.email, currentFullDeviceName, deviceId]);
 
   const [historyStack, setHistoryStack] = useState<GameState[]>([]);
+  // Ref espelho do historyStack — garante que callbacks com closure stale
+  // (como onUndo passado como prop) sempre leiam o valor mais recente.
+  const historyStackRef = useRef<GameState[]>([]);
+  useEffect(() => { historyStackRef.current = historyStack; }, [historyStack]);
+
+  // Sempre inicializa gameState e historyStack juntos para garantir que
+  // o undo consiga voltar até o estado zero a zero.
+  const startGame = useCallback((state: GameState) => {
+    setGameState(state);
+    setHistoryStack([state]);
+    historyStackRef.current = [state];
+    try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(state)); } catch(e) {}
+  }, []);
+  const startGameRef = useRef(startGame);
+  useEffect(() => { startGameRef.current = startGame; }, [startGame]);
   const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>(() => {
     const list = safeJsonParse('myPlacarHistory', []);
     matchHistoryRef.current = list;
@@ -1323,18 +1345,30 @@ const App: React.FC = () => {
     };
     
     setMatchSettings(configToUse);
-    setGameState(newGameState); setHistoryStack([newGameState]);
-    try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(newGameState)); } catch(e) {}
+    startGame(newGameState);
     setCurrentScreen('scoreboard');
   };
 
   const handleScoreUpdate = async (player: 1 | 2, type: PointType = 'rally', source: string = 'cb') => {
-    if (!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed) return;
-    if (gameState.isMirroringActive && gameState.commandOwnerId !== deviceId) return;
+    // Guarda referência ao gameState atual para as verificações de guarda
+    const current = gameState;
+    if (!current || current.isConfirmedFinished || current.isMatchOver || current.isLiveClosed) return;
+    if (current.isMirroringActive && current.commandOwnerId !== deviceId) return;
     setIsRecoveryFromMatchOver(false);
-    const next = incrementScore(gameState, player, type, source);
-    next.isPaused = false; setGameState({ ...next });
-    setHistoryStack(prev => [...prev, JSON.parse(JSON.stringify(next))]);
+    // Usa setState funcional para garantir que incrementScore opera
+    // sempre sobre o estado mais recente, evitando closure stale
+    setGameState(prev => {
+      if (!prev || prev.isConfirmedFinished || prev.isMatchOver || prev.isLiveClosed) return prev;
+      const next = incrementScore(prev, player, type, source);
+      next.isPaused = false;
+      // Empilha na history dentro do mesmo ciclo de render
+      setHistoryStack(stack => {
+        const updated = [...stack, JSON.parse(JSON.stringify(next))];
+        historyStackRef.current = updated;
+        return updated;
+      });
+      return { ...next };
+    });
   };
 
   const handleCorrectScore = (type: 'game' | 'gameSet' | 'matchSet', value: string) => {
@@ -1827,6 +1861,7 @@ const App: React.FC = () => {
     nextState.matchConfig = { ...nextState.matchConfig, ...nextSettings };
     setMatchSettings(nextSettings);
     prevSettingsRef.current = { ...nextSettings };
+    // Não usa startGame aqui pois não é início de partida — apenas troca de saque
     setGameState(nextState);
     setIsSettingsInicialSaved(true);
     try { 
@@ -1894,9 +1929,13 @@ const App: React.FC = () => {
       matchDuration: 0,
       isPaused: false,
     };
-    setGameState(initialGameState);
+    startGame(initialGameState);
     setCurrentScreen('scoreboard');
-  }, [matchSettings]);
+    // Após o ScoreboardScreen montar e os closures serem criados,
+    // reinicia o historyStack com o estado zero a zero garantindo
+    // que o undo consiga voltar ao início.
+    setTimeout(() => startGame(initialGameState), 100);
+  }, [matchSettings, startGame]);
 
   const handleExitOffline = useCallback(() => {
     setIsOfflineMode(false);
@@ -1926,8 +1965,7 @@ const App: React.FC = () => {
           matchDuration: 0,
           isPaused: false,
         };
-        setGameState(resetState);
-        setHistoryStack([resetState]);
+        startGame(resetState);
         setModalConfig(null);
       },
       onCancel: () => setModalConfig(null)
@@ -2233,12 +2271,13 @@ const App: React.FC = () => {
         onDeleteJudge={() => { setConfirmDeleteJudge(true); setShowLiveControlOverlay(true); }}
         isJudgeOnline={isJudgeOnline}
         onSelectJudgeFromPartners={() => { setIsSelectingJudge(true); setCurrentScreen('partners'); }} onUndo={() => {         if (!gameState || !isCommandOwner) return;
-        const p = undoPoint(historyStack); 
+        const stack = historyStackRef.current;
+        const p = undoPoint(stack); 
         if (p) { 
           const s = gameState!; const isFinishedPending = (s.isMatchOver && !s.isConfirmedFinished);
-          if (isFinishedPending) { setHistoryStack(historyStack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false}); setIsRecoveryFromMatchOver(true); return; }
+          if (isFinishedPending) { setHistoryStack(stack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false}); setIsRecoveryFromMatchOver(true); return; }
           if (isRecoveryFromMatchOver) { const isCrossingGameOrSet = (p.p1.games !== s.p1.games) || (p.p2.games !== s.p2.games) || (p.p1.sets.length !== s.p1.sets.length); if (isCrossingGameOrSet) return; }
-          setHistoryStack(historyStack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false});
+          setHistoryStack(stack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false});
         } 
       }} onSwitchServer={handleSmartSwitchServer} onTogglePause={() => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner) return; 

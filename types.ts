@@ -237,6 +237,7 @@ export interface MatchSettings {
   cloudSync: boolean;
   actionCooldown: number;
   stateLockout: number;
+  screenDimTimeout: 10 | 15 | 20;
   goldenRuleEnabled: boolean;
   errorSoundType: ErrorSoundType;
   isWatchMode?: boolean;

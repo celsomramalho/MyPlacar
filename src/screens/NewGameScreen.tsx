@@ -97,7 +97,18 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
       stateLockout: settings.stateLockout,
       isWatchMode: settings.isWatchMode,
       errorSoundType: settings.errorSoundType,
-      goldenRuleEnabled: settings.goldenRuleEnabled
+      goldenRuleEnabled: settings.goldenRuleEnabled,
+      // Preserva nomes e cores ao trocar de esporte
+      p1Name: settings.p1Name,
+      p1Partner: settings.p1Partner,
+      p2Name: settings.p2Name,
+      p2Partner: settings.p2Partner,
+      p1Color: settings.p1Color,
+      p2Color: settings.p2Color,
+      p1Verified: settings.p1Verified,
+      p1PartnerVerified: settings.p1PartnerVerified,
+      p2Verified: settings.p2Verified,
+      p2PartnerVerified: settings.p2PartnerVerified,
     };
     if (settings.sportType) localStorage.setItem(`myPlacar_SavedSettings_${settings.sportType}`, JSON.stringify(settings));
     const def = dbSports.find(s => s.id === sportId);
@@ -111,7 +122,24 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
       nextSettings = { ...engineDefaults, sportType: sportId };
     }
     if (sportId === 'pickleball' && nextSettings.tieBreakPoints === 7) nextSettings.tieBreakPoints = 15;
-    const finalSettings = { ...nextSettings, ...globalSettings, sportType: sportId };
+
+    // Overrides por esporte — aplicados APÓS o globalSettings para garantir
+    // que sempre prevalecem sobre o localStorage e o estado anterior do usuário.
+    const sportOverrides: Partial<MatchSettings> = {};
+    if (sportId === 'tennis') {
+      sportOverrides.sets = 1;
+      sportOverrides.noAd = false;
+    }
+    if (sportId === 'beach-tennis') {
+      sportOverrides.sets = 1;
+      sportOverrides.noAd = true;
+    }
+    if (sportId === 'pickleball') {
+      sportOverrides.sets = 1;
+      sportOverrides.gamesPerSet = 21;
+    }
+
+    const finalSettings = { ...nextSettings, ...globalSettings, ...sportOverrides, sportType: sportId };
     setSettings(finalSettings);
     if (onSportChange) onSportChange(sportId);
   };
@@ -265,7 +293,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
                 </div>
               </div>
             )}
-            {settings.sportType !== 'pickleball' && <Toggle disabled={isReadOnly} id="toggle-noad" label="Sem vantagem (no-ad)" checked={settings.noAd} onChange={v => setSettings({...settings, noAd: v})} />}
+            {settings.sportType !== 'pickleball' && <Toggle disabled={isReadOnly || settings.sportType === 'beach-tennis'} id="toggle-noad" label="Sem vantagem (no-ad)" checked={settings.noAd} onChange={v => setSettings({...settings, noAd: v})} />}
             {settings.sportType !== 'pickleball' && <Toggle disabled={isReadOnly} id="toggle-switchside" label="Troca de lado no ímpar" checked={settings.switchSidesOdd} onChange={v => setSettings({...settings, switchSidesOdd: v})} />}
           </div>
         </div>
