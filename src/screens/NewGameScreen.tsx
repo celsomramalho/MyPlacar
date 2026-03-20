@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, User, HelpCircle, Watch, Target, Sparkles, Antenna, Check, Ticket, X, Loader2, Share2, Copy, QrCode, WifiOff, LogOut, Menu } from 'lucide-react';
+import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, User, HelpCircle, Watch, Target, Sparkles, Antenna, Check, Ticket, X, Loader2, Share2, Copy, QrCode, WifiOff, LogOut, Menu, Moon } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
 import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile } from '../types';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -364,7 +364,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
                 
                 <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-8">
                   <div className="space-y-4">
-                    <span className="text-sm font-black text-gray-700">Brilho da tela</span>
+                    <span className="text-sm font-black text-black">Brilho da tela</span>
                     <div className="flex items-center gap-4">
                       <Sun size={18} className="text-orange-400 shrink-0" />
                       <input 
@@ -377,7 +377,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
                     </div>
                   </div>
                   <div className="space-y-4">
-                    <span className="text-sm font-black text-gray-700">Volume do áudio</span>
+                    <span className="text-sm font-black text-black">Volume do áudio</span>
                     <div className="flex items-center gap-4">
                       <Volume2 size={18} className="text-emerald-500 shrink-0" />
                       <input 
@@ -389,22 +389,40 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
                       <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.volume}%</span>
                     </div>
                   </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Moon size={16} className="text-indigo-400 shrink-0" />
+                      <span className="text-sm font-black text-black">Escurecer tela</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {([10, 15, 20] as const).map(sec => (
+                        <button
+                          key={sec}
+                          onClick={() => setSettings({...settings, screenDimTimeout: sec})}
+                          className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${(settings.screenDimTimeout || 10) === sec ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-500'}`}
+                        >
+                          {sec}s
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] font-bold text-gray-400 leading-tight">Tempo sem interação até a tela escurecer no modo relógio.</p>
+                  </div>
                 </div>
 
                 <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
-                  <div className="flex items-center gap-3 mb-2"><Clock size={18} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Latência</h2></div>
+                  <div className="flex items-center gap-3 mb-2"><Clock size={18} className="text-indigo-600" /><span className="text-sm font-black text-black">Latência</span></div>
                   <div className="space-y-8">
                     <div className="space-y-4">
-                      <span className="text-sm font-black text-gray-700">Debounce de ação</span>
+                      <span className="text-sm font-black text-black">Debounce de ação</span>
                       <div className="flex items-center gap-4">
-                        <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.actionCooldown} onChange={e => setSettings({...settings, actionCooldown: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.actionCooldown}s</span>
+                        <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.actionCooldown} onChange={e => setSettings({...settings, actionCooldown: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-black text-gray-600 min-w-[20px]">{settings.actionCooldown}s</span>
                       </div>
                       <p className="text-[11px] font-bold text-gray-400 leading-tight">Tempo mínimo entre os pontos para evitar duplicação em redes lentas.</p>
                     </div>
                     <div className="space-y-4">
-                      <span className="text-sm font-black text-gray-700">Trava de estado</span>
+                      <span className="text-sm font-black text-black">Trava de estado</span>
                       <div className="flex items-center gap-4">
-                        <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.stateLockout} onChange={e => setSettings({...settings, stateLockout: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-bold text-gray-600 min-w-[20px]">{settings.stateLockout}s</span>
+                        <Clock size={16} className="text-gray-400" /><input type="range" min="1" max="10" value={settings.stateLockout} onChange={e => setSettings({...settings, stateLockout: parseInt(e.target.value)})} className="flex-1 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none" /><span className="text-xs font-black text-gray-600 min-w-[20px]">{settings.stateLockout}s</span>
                       </div>
                       <p className="text-[11px] font-bold text-gray-400 leading-tight">Bloqueio de voz após falar o placar para evitar eco.</p>
                     </div>

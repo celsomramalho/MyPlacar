@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Upload, Loader2, CheckCircle2, AlertCircle, Sparkles, Plus, Trash2, ChevronDown, Save, Clock, User, Settings as SettingsIcon, ArrowLeft, Edit2, Database, Wand2, X, ShieldCheck, LayoutGrid, Trophy, Mic, Type, HelpCircle, ChevronUp, Volume2, Info, Search, Star, Crown, Edit3, Download, HardDrive, Copy, ExternalLink, FileText, RotateCw, Check, Wifi, Ticket, Image as ImageIcon, Send, Menu } from 'lucide-react';
 import { getDb, getStorageInstance, clearFirestoreCache } from '../firebase';
 import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, writeBatch, query, where, serverTimestamp } from 'firebase/firestore';
+import { mirrorUser, mirrorMatches, mirrorIcon, deleteIcon } from '../services/supabaseMirror';
 import { ref, listAll, uploadBytes, getDownloadURL, deleteObject, StorageReference, getStorage, getMetadata } from 'firebase/storage';
 import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../constants';
 import { Button } from '../components/Button';
@@ -22,6 +23,7 @@ interface Props {
   onClearAllHistory?: () => void;
   initialTab?: 'configs' | 'users' | 'icons' | 'events' | 'comms';
   onOpenMenu?: () => void;
+  userProfile?: UserProfile;
 }
 
 interface StorageFile {
@@ -33,11 +35,13 @@ interface StorageFile {
   contentType: string;
 }
 
-export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory, initialTab, onOpenMenu }) => {
+export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory, initialTab, onOpenMenu, userProfile }) => {
   const [adminTab, setAdminTab] = useState<'configs' | 'users' | 'icons' | 'events' | 'comms'>(initialTab || 'configs');
   const [loading, setLoading] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
   const [showConfirmFix, setShowConfirmFix] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<{users: number, matches: number, icons: number} | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{type: 'category' | 'sport' | 'file' | 'bucket' | 'expired_lives' | 'event', id: string, path?: string} | null>(null);
   const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [goldenRule, setGoldenRule] = useState(true);
@@ -331,6 +335,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     try {
       const coll = type === 'category' ? "category_icons" : "sport_icons";
       await deleteDoc(doc(db, coll, id));
+      if (type === 'sport' || type === 'category') deleteIcon(type, id);
       if (type === 'category') { setCategories(prev => prev.filter(c => c.id !== id)); setSelectedCatId(""); }
       else { setSports(prev => prev.filter(s => s.id !== id)); setSelectedSportId(""); }
       setStatus({ type: 'success', msg: "Excluído com sucesso." });
@@ -399,10 +404,66 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const nextPlan = user.planType === 'premium' ? 'free' : 'premium';
     try {
       await setDoc(doc(db, "users", user.email), { planType: nextPlan }, { merge: true });
+      mirrorUser({ ...user, planType: nextPlan as any });
       setFoundUsers(prev => prev.map(u => u.email === user.email ? { ...u, planType: nextPlan as any } : u));
       setStatus({ type: 'success', msg: `Usuário ${user.nickname} agora é ${nextPlan === 'premium' ? 'premium' : 'free'}` });
       setTimeout(() => setStatus(null), 2000);
     } catch (e) { setStatus({ type: 'error', msg: "Falha ao atualizar plano." }); }
+  };
+
+  const executeMigrateToSupabase = async () => {
+    const db = getDb();
+    if (!db) return;
+    setIsMigrating(true);
+    setMigrationResult(null);
+    let usersCount = 0;
+    let matchesCount = 0;
+    let iconsCount = 0;
+    try {
+      // 1. Migrar users
+      const usersSnap = await getDocs(collection(db, 'users'));
+      for (const docSnap of usersSnap.docs) {
+        const data = docSnap.data() as UserProfile;
+        if (data.email && data.pin) {
+          mirrorUser(data);
+          usersCount++;
+        }
+      }
+      // 2. Migrar matches
+      const matchesSnap = await getDocs(collection(db, 'matches'));
+      const matchesByOwner = new Map<string, any[]>();
+      matchesSnap.forEach(docSnap => {
+        const data = { id: docSnap.id, ...docSnap.data() };
+        const ownerEmail = data.ownerEmail || '';
+        const ownerPin = data.ownerPin || '';
+        if (!ownerEmail) return;
+        if (!matchesByOwner.has(ownerEmail)) matchesByOwner.set(ownerEmail, []);
+        matchesByOwner.get(ownerEmail)!.push({ match: data, ownerPin });
+      });
+      for (const [ownerEmail, items] of matchesByOwner) {
+        const ownerPin = items[0].ownerPin;
+        const matches = items.map(i => i.match);
+        mirrorMatches(matches, ownerEmail, ownerPin);
+        matchesCount += matches.length;
+      }
+      // 3. Migrar sport_icons e category_icons
+      const sportSnap = await getDocs(collection(db, 'sport_icons'));
+      sportSnap.forEach(docSnap => {
+        mirrorIcon('sport', { id: docSnap.id, ...docSnap.data() });
+        iconsCount++;
+      });
+      const catSnap = await getDocs(collection(db, 'category_icons'));
+      catSnap.forEach(docSnap => {
+        mirrorIcon('category', { id: docSnap.id, ...docSnap.data() });
+        iconsCount++;
+      });
+      setMigrationResult({ users: usersCount, matches: matchesCount, icons: iconsCount });
+    } catch (e) {
+      console.error('Migração Supabase:', e);
+      setStatus({ type: 'error', msg: 'Erro durante a migração. Verifique o console.' });
+    } finally {
+      setIsMigrating(false);
+    }
   };
 
   const executeFixLegacyMatches = async () => {
@@ -419,7 +480,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       snap.forEach((docSnap) => {
         const data = docSnap.data();
         if (!data.ownerEmail || data.ownerEmail === "" || data.ownerEmail === null) {
-          batch.update(docSnap.ref, { ownerEmail: "celsomramalho@gmail.com" });
+          batch.update(docSnap.ref, { ownerEmail: userProfile?.email || '' });
           count++;
         }
       });
@@ -483,6 +544,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     try {
       const coll = type === 'category' ? "category_icons" : "sport_icons";
       await setDoc(doc(db, coll, item.id), { ...item, updatedAt: new Date().toISOString() });
+      mirrorIcon(type, { ...item, updatedAt: new Date().toISOString() });
       setStatus({ type: 'success', msg: "Salvo com sucesso!" });
       setIsEditingId(false);
       if (type === 'category') setIsCatSaved(true);
@@ -787,6 +849,29 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                     </div>
                   )}
                 </div>
+              </section>
+
+              <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-violet-100 rounded-2xl flex items-center justify-center text-violet-600"><Database size={24} /></div>
+                  <div className="text-left">
+                    <p className="text-base font-black text-black leading-tight">Migração Supabase</p>
+                    <p className="text-[11px] font-bold text-slate-400">Copia users, partidas e ícones do Firebase para o Supabase de uma vez</p>
+                  </div>
+                </div>
+                {migrationResult && (
+                  <div className="bg-green-50 border border-green-100 rounded-2xl p-4 space-y-1">
+                    <p className="text-xs font-black text-green-700">Migração concluída!</p>
+                    <p className="text-[11px] font-bold text-green-600">{migrationResult.users} usuários · {migrationResult.matches} partidas · {migrationResult.icons} ícones</p>
+                  </div>
+                )}
+                <button
+                  onClick={executeMigrateToSupabase}
+                  disabled={isMigrating}
+                  className="w-full py-4 bg-violet-600 text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isMigrating ? <><Loader2 size={16} className="animate-spin" /> Migrando...</> : <><Database size={16} /> Migrar Firebase → Supabase</>}
+                </button>
               </section>
             </div>
           </>

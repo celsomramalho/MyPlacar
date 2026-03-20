@@ -5,7 +5,8 @@ import { Button } from '../components/Button';
 import { Toggle } from '../components/Toggle';
 import { UserProfile } from '../types';
 import { getDb, getAuthInstance } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
+import { mirrorUser } from '../services/supabaseMirror';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { emailService } from '../services/emailService';
@@ -36,14 +37,14 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   const [oobCode, setOobCode] = useState(() => new URLSearchParams(window.location.search).get('oobCode') || '');
 
-  const [email, setEmail] = useState(() => localStorage.getItem('myPlacarSavedEmail') || '');
-  const [pin, setPin] = useState(() => localStorage.getItem('myPlacarSavedPin') || ''); 
+  const [email, setEmail] = useState(() => localStorage.getItem('MyPlacarSavedEmail') || '');
+  const [pin, setPin] = useState(() => localStorage.getItem('MyPlacarSavedPin') || ''); 
   const [password, setPassword] = useState('');
   const [authMethod, setAuthMethod] = useState<'pin' | 'password'>(() => {
     // Inicializa a partir do perfil salvo no localStorage quando disponível
     // (resolve offline e evita piscar de PIN → senha para usuários recorrentes)
     try {
-      const savedProfile = localStorage.getItem('myPlacarUserProfile');
+      const savedProfile = localStorage.getItem('MyPlacarUserProfile');
       if (savedProfile) {
         const profile = JSON.parse(savedProfile) as UserProfile;
         if (profile?.authMethod) return profile.authMethod;
@@ -55,9 +56,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [showPassword, setShowPassword] = useState(false);
   
   const [verificationCode, setVerificationCode] = useState('');
-  const [generatedVerifyCode, setGeneratedVerifyCode] = useState(() => localStorage.getItem('myPlacarPendingVerifyCode') || '');
+  const [generatedVerifyCode, setGeneratedVerifyCode] = useState(() => localStorage.getItem('MyPlacarPendingVerifyCode') || '');
   const [showPin, setShowPin] = useState(false);
-  const [name, setName] = useState(() => localStorage.getItem('myPlacarPendingName') || '');
+  const [name, setName] = useState(() => localStorage.getItem('MyPlacarPendingName') || '');
   
   const [referralPin, setReferralPin] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -122,10 +123,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const auth = getAuthInstance();
       if (auth) {
         auth.signOut().then(() => {
-          localStorage.removeItem('myPlacarSavedEmail');
-          localStorage.removeItem('myPlacarSavedPin');
-          localStorage.removeItem('myPlacarUser');
-          localStorage.removeItem('myPlacarRememberMe');
+          localStorage.removeItem('MyPlacarSavedEmail');
+          localStorage.removeItem('MyPlacarSavedPin');
+          localStorage.removeItem('MyPlacarUser');
+          localStorage.removeItem('MyPlacarRememberMe');
           
           setOobCode(codeParam);
           setMode('reset_password');
@@ -160,6 +161,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     }
   }, [isOnline]);
 
+  const handleConfirmEmailInternalRef = React.useRef<((email: string, code: string) => Promise<void>) | null>(null);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlEmail = params.get('email');
@@ -173,7 +176,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         setIsLoading(true);
         setStatusText('Verificando seu e-mail automaticamente...');
         
-        localStorage.setItem('myPlacarPendingVerifyCode', urlCode);
+        localStorage.setItem('MyPlacarPendingVerifyCode', urlCode);
         setGeneratedVerifyCode(urlCode);
 
         try {
@@ -184,7 +187,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
         const autoConfirmTimer = setTimeout(async () => {
             try {
-                await handleConfirmEmailInternal(urlEmail, urlCode);
+                if (handleConfirmEmailInternalRef.current) {
+                  await handleConfirmEmailInternalRef.current(urlEmail, urlCode);
+                }
             } catch (error) {
                 setError("Erro ao verificar automaticamente, tente digitar o código manualmente.");
             } finally {
@@ -335,7 +340,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
     // Lógica de Login Offline
     if (!isOnline) {
-      const savedProfileStr = localStorage.getItem('myPlacarUserProfile');
+      const savedProfileStr = localStorage.getItem('MyPlacarUserProfile');
       if (savedProfileStr) {
         try {
           const savedProfile = JSON.parse(savedProfileStr) as UserProfile;
@@ -377,15 +382,16 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         try {
           const cleanPassword = password.trim();
           await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
-          const userSnap = await getDoc(doc(db as Firestore, "users", cleanEmail));
+          const userSnap = await getDocFromServer(doc(db as Firestore, "users", cleanEmail));
           if (userSnap.exists()) {
             const userData = userSnap.data() as UserProfile;
+            const enriched = { ...userData, isAdmin: userData.isAdmin === true };
             if (rememberMe) {
-              localStorage.setItem('myPlacarSavedEmail', cleanEmail);
+              localStorage.setItem('MyPlacarSavedEmail', cleanEmail);
             } else {
-              localStorage.removeItem('myPlacarSavedEmail');
+              localStorage.removeItem('MyPlacarSavedEmail');
             }
-            onAuthSuccess(userData, rememberMe);
+            onAuthSuccess(enriched, rememberMe);
           }
         } catch (e: any) {
           console.error("Login error:", e);
@@ -398,18 +404,19 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           }
         }
       } else {
-        const userSnap = await getDoc(doc(db as Firestore, "users", cleanEmail));
+        const userSnap = await getDocFromServer(doc(db as Firestore, "users", cleanEmail));
         if (userSnap.exists()) {
           const userData = userSnap.data() as UserProfile;
           if (userData.pin === pin.toUpperCase().trim()) {
             if (rememberMe) {
-              localStorage.setItem('myPlacarSavedEmail', cleanEmail);
-              localStorage.setItem('myPlacarSavedPin', pin.toUpperCase().trim());
+              localStorage.setItem('MyPlacarSavedEmail', cleanEmail);
+              localStorage.setItem('MyPlacarSavedPin', pin.toUpperCase().trim());
             } else {
-              localStorage.removeItem('myPlacarSavedEmail');
-              localStorage.removeItem('myPlacarSavedPin');
+              localStorage.removeItem('MyPlacarSavedEmail');
+              localStorage.removeItem('MyPlacarSavedPin');
             }
-            onAuthSuccess(userData, rememberMe);
+            const enriched = { ...userData, isAdmin: userData.isAdmin === true };
+            onAuthSuccess(enriched, rememberMe);
           } else {
             setError("Pin incorreto, tente novamente.");
           }
@@ -460,10 +467,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       }
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       
-      localStorage.setItem('myPlacarPendingVerifyCode', code);
-      localStorage.setItem('myPlacarPendingName', name);
-      localStorage.setItem('myPlacarSavedEmail', cleanEmail);
-      localStorage.setItem('myPlacarPendingPassword', password);
+      localStorage.setItem('MyPlacarPendingVerifyCode', code);
+      localStorage.setItem('MyPlacarPendingName', name);
+      localStorage.setItem('MyPlacarSavedEmail', cleanEmail);
+      localStorage.setItem('MyPlacarPendingPassword', password);
       setGeneratedVerifyCode(code);
       
       setStatusText('Enviando seu código por e-mail...');
@@ -477,8 +484,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         pin_code: code,
         confirmation_link: confirmationLink,
         app_access_link: appBaseUrl,
-        subject: "Código de verificação - Myplacar",
-        from_name: "Myplacar",
+        subject: "Código de verificação - MyPlacar",
+        from_name: "MyPlacar",
         reply_to: "celsomramalho@gmail.com"
       });
 
@@ -495,7 +502,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handleConfirmEmailInternal = async (targetEmail: string, code: string) => {
-    const expectedCode = localStorage.getItem('myPlacarPendingVerifyCode') || generatedVerifyCode;
+    handleConfirmEmailInternalRef.current = handleConfirmEmailInternal;
+    const expectedCode = localStorage.getItem('MyPlacarPendingVerifyCode') || generatedVerifyCode;
     
     if (code !== expectedCode) {
       setError("Código de segurança incorreto.");
@@ -512,8 +520,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (!db) throw new Error("Erro de conexão.");
       
       const cleanEmail = targetEmail.toLowerCase().trim();
-      const storedName = localStorage.getItem('myPlacarPendingName') || name || "Jogador";
-      const storedPassword = localStorage.getItem('myPlacarPendingPassword') || password;
+      const storedName = localStorage.getItem('MyPlacarPendingName') || name || "Jogador";
+      const storedPassword = localStorage.getItem('MyPlacarPendingPassword') || password;
       const finalPin = Math.random().toString(36).substring(2, 7).toUpperCase();
       
       const auth = getAuthInstance();
@@ -543,25 +551,25 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       };
       
       await setDoc(doc(db as Firestore, "users", cleanEmail), newProfile);
-      
-      const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl; 
+      mirrorUser(newProfile as unknown as UserProfile);
+      const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
       await emailService.sendEmail('template_wn0f65h', {
         to_name: newProfile.nickname,
         email: cleanEmail,
         pin_code: finalPin,
         app_access_link: appBaseUrl,
-        subject: "Seu pin de acesso - Myplacar",
-        from_name: "Myplacar",
+        subject: "Seu pin de acesso - MyPlacar",
+        from_name: "MyPlacar",
         reply_to: "celsomramalho@gmail.com"
       });
 
-      localStorage.removeItem('myPlacarPendingPassword');
+      localStorage.removeItem('MyPlacarPendingPassword');
 
       setMode('verifying');
-      localStorage.removeItem('myPlacarPendingReferral');
-      localStorage.removeItem('myPlacarPendingReferralPin');
-      localStorage.removeItem('myPlacarPendingVerifyCode');
-      localStorage.removeItem('myPlacarPendingName');
+      localStorage.removeItem('MyPlacarPendingReferral');
+      localStorage.removeItem('MyPlacarPendingReferralPin');
+      localStorage.removeItem('MyPlacarPendingVerifyCode');
+      localStorage.removeItem('MyPlacarPendingName');
       
       setTimeout(() => onAuthSuccess(newProfile as unknown as UserProfile, rememberMe), 2500);
     } catch (e: any) {
@@ -637,8 +645,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           email: cleanEmail,
           pin_code: userPin,
           app_access_link: appBaseUrl,
-          subject: "Recuperação de acesso - Myplacar",
-          from_name: "Myplacar",
+          subject: "Recuperação de acesso - MyPlacar",
+          from_name: "MyPlacar",
           reply_to: "celsomramalho@gmail.com"
         });
 
@@ -706,7 +714,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         }
         
         const userData = querySnapshot.docs[0].data() as UserProfile;
-        onAuthSuccess(userData, rememberMe);
+        const enriched = { ...userData, isAdmin: userData.isAdmin === true };
+        onAuthSuccess(enriched, rememberMe);
       }
     } catch (err: any) {
       console.error(err);
@@ -769,11 +778,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (user && user.email) {
         const cleanEmail = user.email.toLowerCase().trim();
         const userRef = doc(db as Firestore, "users", cleanEmail);
-        const userSnap = await getDoc(userRef);
+        const userSnap = await getDocFromServer(userRef);
         
         if (userSnap.exists()) {
           const userData = userSnap.data() as UserProfile;
-          onAuthSuccess(userData, rememberMe);
+          const enriched = { ...userData, isAdmin: userData.isAdmin === true };
+          onAuthSuccess(enriched, rememberMe);
         } else {
           const finalPin = Math.random().toString(36).substring(2, 7).toUpperCase();
           const newProfile = {
@@ -790,6 +800,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           };
           
           await setDoc(userRef, newProfile);
+          mirrorUser(newProfile as unknown as UserProfile);
           onAuthSuccess(newProfile as unknown as UserProfile, rememberMe);
         }
       }
@@ -811,7 +822,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         <div className="relative z-10 flex flex-col items-center">
           <ScoreboardIcon className="w-56 h-56 mb-8 drop-shadow-[0_25px_50px_rgba(0,0,0,0.15)] animate-bounce" style={{animationDuration: '3s'}} />
           <div className="text-center space-y-4">
-            <h1 className="text-[48px] font-black text-black tracking-tighter leading-none font-display">Myplacar pro</h1>
+            <h1 className="text-[48px] font-black text-black tracking-tighter leading-none font-display">MyPlacar Pro</h1>
             <p className="text-[17px] font-bold text-black max-w-[280px]">O jogo em suas mãos</p>
           </div>
         </div>
@@ -823,7 +834,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     <div className="min-h-screen bg-white flex flex-col p-8 animate-in slide-in-from-bottom-6 duration-700 overflow-y-auto no-scrollbar">
       <div className="flex flex-col items-center justify-center mb-10 mt-6 text-center">
         <ScoreboardIcon className="w-32 h-32 mb-6 drop-shadow-2xl" />
-        <h1 className="text-[36px] font-black text-black tracking-tighter leading-none font-display">Myplacar pro</h1>
+        <h1 className="text-[36px] font-black text-black tracking-tighter leading-none font-display">MyPlacar Pro</h1>
         
         {/* Indicador de Status de Rede */}
         <div className={`mt-4 px-4 py-1.5 rounded-full flex items-center gap-2 border transition-all duration-500 ${isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-amber-50 border-amber-100 text-amber-600 animate-pulse'}`}>
@@ -856,7 +867,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             <div className="text-center">
               <h2 className="text-2xl font-black text-black tracking-tight">Bem-vindo de volta</h2>
               <p className="text-slate-500 font-bold text-sm mt-1">
-                {isOnline ? 'Acesse sua conta para continuar no Myplacar pro' : 'Acesse com seu perfil salvo localmente'}
+                {isOnline ? 'Acesse sua conta para continuar no MyPlacar Pro' : 'Acesse com seu perfil salvo localmente'}
               </p>
             </div>
           </div>
@@ -866,7 +877,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="text-center">
               <h2 className="text-2xl font-black text-black tracking-tight">Criar nova conta</h2>
-              <p className="text-slate-500 font-bold text-sm mt-1">Junte-se à comunidade Myplacar pro</p>
+              <p className="text-slate-500 font-bold text-sm mt-1">Junte-se à comunidade MyPlacar Pro</p>
             </div>
             
             <div className="space-y-2">
@@ -1165,7 +1176,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                {mode === 'login' ? <><LogIn size={24} /> Entrar no Myplacar</> : (
+                {mode === 'login' ? <><LogIn size={24} /> Entrar no MyPlacar</> : (
                   mode === 'confirm_email' ? 'Validar código de segurança' : <><UserPlus size={20} className="text-white" /> Solicitar cadastro</>
                 )}
               </div>

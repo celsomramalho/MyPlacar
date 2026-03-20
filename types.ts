@@ -2,6 +2,9 @@
 export type Screen = 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail' | 'communications';
 export type Tab = 'config' | 'history' | 'help' | 'profile';
 export type AdminTab = 'configs' | 'users' | 'icons' | 'events' | 'comms';
+export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros';
+export type SportType = string;
+export type PlanType = 'free' | 'premium';
 
 export interface ControllerRecord {
   label: string;
@@ -9,9 +12,6 @@ export interface ControllerRecord {
   isOwner?: boolean;
   nickname?: string;
 }
-export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros';
-export type SportType = string;
-export type PlanType = 'free' | 'premium';
 
 export interface TournamentPair {
   id: string;
@@ -105,10 +105,13 @@ export interface UserProfile {
   gender?: 'M' | 'F';
   isProfileComplete: boolean;
   emailVerified?: boolean;
+  authMethod?: 'pin' | 'password';
   qrCodeData?: string; 
   isAdmin?: boolean;
   planType?: PlanType;
   premiumUntil?: string; // ISO Date string
+  passkeyCredentialId?: string;
+  passkeyPublicKey?: string;
 }
 
 export interface PointEvent {
@@ -169,6 +172,8 @@ export interface GameState {
   isLiveClosed?: boolean;
   tournamentMatchId?: string;
   tournamentPin?: string;
+  judgePin?: string;
+  judgeNickname?: string;
 }
 
 export interface MatchHistoryItem {
@@ -237,7 +242,6 @@ export interface MatchSettings {
   cloudSync: boolean;
   actionCooldown: number;
   stateLockout: number;
-  screenDimTimeout: 10 | 15 | 20;
   goldenRuleEnabled: boolean;
   errorSoundType: ErrorSoundType;
   isWatchMode?: boolean;
@@ -256,4 +260,43 @@ export interface MatchSettings {
   volume: number;
   narratorGender: 'Masculina' | 'Feminina';
   winnersStay?: boolean;
+  screenDimTimeout?: 10 | 15 | 20;
+}
+
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: number;
+  voters?: string[];
+}
+
+export interface Reply {
+  id: string;
+  authorPin: string;
+  authorName: string;
+  content: string;
+  createdAt: number;
+}
+
+export interface Communication {
+  id: string;
+  type: 'message' | 'poll';
+  title: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  createdAt: number;
+  targetUserId?: string; // 'all' or specific PIN
+  isPinned?: boolean;
+  expiresAt?: number;
+  poll?: {
+    options: PollOption[];
+    totalVotes: number;
+    closed: boolean;
+  };
+  reactions?: Record<string, string[]>; // emoji -> [userIds]
+  readBy?: string[]; // [userIds]
+  replies?: Reply[];
+  pushSent?: boolean;
+  emailSent?: boolean;
 }

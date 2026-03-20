@@ -1,9 +1,17 @@
 
 export type Screen = 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail' | 'communications';
 export type Tab = 'config' | 'history' | 'help' | 'profile';
+export type AdminTab = 'configs' | 'users' | 'icons' | 'events' | 'comms';
 export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros';
 export type SportType = string;
 export type PlanType = 'free' | 'premium';
+
+export interface ControllerRecord {
+  label: string;
+  lastSeen: number;
+  isOwner?: boolean;
+  nickname?: string;
+}
 
 export interface TournamentPair {
   id: string;
@@ -104,6 +112,7 @@ export interface UserProfile {
   premiumUntil?: string; // ISO Date string
   passkeyCredentialId?: string;
   passkeyPublicKey?: string;
+  referredByPin?: string;
 }
 
 export interface PointEvent {
@@ -158,7 +167,7 @@ export interface GameState {
   liveSessionCounter?: number;
   commandOwner?: string;
   commandOwnerId?: string;
-  controllers?: Record<string, { label: string, nickname?: string, lastSeen: number }>;
+  controllers?: Record<string, ControllerRecord>;
   pingTimestamp?: number;
   pingConfirmed?: boolean;
   isLiveClosed?: boolean;
@@ -252,6 +261,7 @@ export interface MatchSettings {
   volume: number;
   narratorGender: 'Masculina' | 'Feminina';
   winnersStay?: boolean;
+  screenDimTimeout?: 10 | 15 | 20;
 }
 
 export interface PollOption {

@@ -244,7 +244,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           {remoteActionFeedback === 'P1_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
         </div>
         
-        <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10">
+        <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
           <button onClick={() => { resetDimTimer(); handleUndoWithLog(); }} disabled={!isCommandOwner} className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5"><RotateCcw size={32} strokeWidth={4} /></button>
           <button 
             disabled={!isCommandOwner} 
@@ -296,6 +296,11 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               <Settings size={28} />
             </button>
           )}
+          {dimProgress > 0 && !isDimmed && (
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 pointer-events-none">
+              <div className="h-full bg-white/40 transition-none" style={{ width: `${dimProgress}%` }} />
+            </div>
+          )}
         </div>
 
         <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 2); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
@@ -309,15 +314,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           {remoteActionFeedback === 'P2_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
         </div>
       </div>
-      {/* Barra de progresso do dim — aparece nos últimos 5s antes de escurecer */}
-      {dimProgress > 0 && !isDimmed && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/10 z-[99998] pointer-events-none">
-          <div
-            className="h-full bg-white/30 transition-none"
-            style={{ width: `${dimProgress}%` }}
-          />
-        </div>
-      )}
+
     </div>
   );
 };

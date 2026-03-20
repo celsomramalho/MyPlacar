@@ -604,13 +604,58 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
             {!isSelectionMode && pendingQueueIndex === null && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 px-1 text-blue-500"><Cloud size={18} /><h3 className="text-sm font-black text-black tracking-tight">Sincronização nuvem</h3></div>
-                <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 flex items-center justify-between">
-                    <div className="flex flex-wrap gap-2 flex-1">
-                      <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100"><Database size={12} className="text-blue-600" /><span className="text-[11px] font-black text-blue-800">{cloudCount} <span className="opacity-40 font-bold">Cloud</span></span></div>
-                      <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100"><Smartphone size={12} className="text-black" /><span className="text-[11px] font-black text-black">{partners.length} <span className="opacity-40 font-bold">Local</span></span></div>
-                      <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100"><Star size={12} className="text-amber-600" fill="currentColor" /><span className="text-[11px] font-black text-amber-800">{referralCount} <span className="opacity-40 font-bold">Indicados</span></span></div>
+                <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 space-y-4">
+
+                  {/* Cards de métricas */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 flex flex-col items-center gap-1">
+                      <Database size={14} className="text-blue-500" />
+                      <span className="text-2xl font-black text-blue-700">{cloudCount}</span>
+                      <span className="text-[9px] font-black text-blue-400 uppercase tracking-wide">Nuvem</span>
                     </div>
-                    <div className="flex gap-2 shrink-0"><button onClick={() => syncAllData()} disabled={isDownloading} className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 shadow-emerald-100">{isDownloading ? <Loader2 size={20} className="animate-spin" /> : <CloudDownload size={22} />}</button><button onClick={() => uploadToCloud(false)} disabled={isUploading} className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 shadow-blue-100">{isUploading ? <Loader2 size={20} className="animate-spin" /> : <CloudUpload size={22} />}</button></div>
+                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col items-center gap-1">
+                      <Smartphone size={14} className="text-slate-500" />
+                      <span className="text-2xl font-black text-slate-700">{partners.length}</span>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wide">Local</span>
+                    </div>
+                    <div className="bg-amber-50 p-3 rounded-2xl border border-amber-100 flex flex-col items-center gap-1">
+                      <Star size={14} className="text-amber-500" fill="currentColor" />
+                      <span className="text-2xl font-black text-amber-700">{referralCount}</span>
+                      <span className="text-[9px] font-black text-amber-400 uppercase tracking-wide">Indicados</span>
+                    </div>
+                  </div>
+
+                  {/* Alerta de pendente upload */}
+                  {partners.length > cloudCount && (
+                    <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100 flex items-center gap-3">
+                      <CloudUpload size={16} className="text-orange-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-orange-700 uppercase tracking-wide">Pendente envio</p>
+                        <p className="text-xs font-black text-orange-900">{partners.length - cloudCount} parceiro{partners.length - cloudCount !== 1 ? 's' : ''} ainda não enviado{partners.length - cloudCount !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botões de sync */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => syncAllData(false)}
+                      disabled={isDownloading || cloudCount === 0}
+                      className="flex items-center justify-center gap-2 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 font-black text-xs transition-all disabled:opacity-40 active:scale-95"
+                    >
+                      {isDownloading ? <Loader2 size={16} className="animate-spin" /> : <CloudDownload size={16} />}
+                      {isDownloading ? 'Baixando...' : 'Sincronizar'}
+                    </button>
+                    <button
+                      onClick={() => uploadToCloud(false)}
+                      disabled={isUploading || partners.length === 0}
+                      className="flex items-center justify-center gap-2 p-4 rounded-2xl border font-black text-xs transition-all disabled:opacity-40 active:scale-95 relative overflow-hidden ${partners.length > cloudCount ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' : 'bg-blue-50 text-blue-700 border-blue-100'}"
+                    >
+                      {isUploading ? <Loader2 size={16} className="animate-spin" /> : <CloudUpload size={16} />}
+                      {isUploading ? 'Enviando...' : `Enviar${partners.length > cloudCount ? ` (${partners.length - cloudCount})` : ''}`}
+                    </button>
+                  </div>
+
                 </div>
               </div>
             )}
