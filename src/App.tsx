@@ -261,18 +261,28 @@ const App: React.FC = () => {
     return isCurrentController;
   }, [gameState?.isMirroringActive, isCurrentController]);
 
-  const liveRole = useMemo(() => { 
-    if (!cloudLiveExists) return 'spectator'; 
+  // Helper centralizado: "este dispositivo específico é o controller ativo?"
+  // Usa deviceId em vez de pin para suportar múltiplos dispositivos do mesmo usuário.
+  const isActiveController = useMemo(() => {
+    if (!activeLives.length) return false;
+    return activeLives.some(l => l.commandOwnerId === deviceId);
+  }, [activeLives, deviceId]);
+
+  const liveRole = useMemo(() => {
+    if (!cloudLiveExists) return 'spectator';
     const myPin = userProfile.pin.toUpperCase();
-    if (activeLives.some(l => l.ownerPin?.toUpperCase() === myPin)) return 'owner';
-    if (activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
-    return 'observer'; 
-  }, [cloudLiveExists, userProfile.pin, activeLives]);
+    const isOwnerPin = activeLives.some(l => l.ownerPin?.toUpperCase() === myPin);
+    const isJudgePin = activeLives.some(l => l.judgePin?.toUpperCase() === myPin);
+    // Diferencia dispositivos do mesmo usuário pelo deviceId (commandOwnerId)
+    if (isOwnerPin) return isActiveController ? 'owner' : 'observer';
+    if (isJudgePin) return isActiveController ? 'judge' : 'observer';
+    return 'observer';
+  }, [cloudLiveExists, userProfile.pin, activeLives, isActiveController]);
 
   const indicatorRole = useMemo(() => {
-    if (!isCurrentController) return 'observer';
+    if (!isActiveController) return 'observer';
     return isOriginalOwner ? 'owner' : 'judge';
-  }, [isCurrentController, isOriginalOwner]);
+  }, [isActiveController, isOriginalOwner]);
 
   const [showLiveControlOverlay, setShowLiveControlOverlay] = useState(false);
   const [confirmDeleteLive, setConfirmDeleteLive] = useState(false);
@@ -811,21 +821,17 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!userProfile.pin) { setCloudLiveExists(false); return; }
-    const myPin = userProfile.pin.toUpperCase();
-    const isOwnerOrJudge = activeLives.some(live =>
-      (live.ownerPin?.toUpperCase() === myPin) ||
-      (live.judgePin?.toUpperCase() === myPin)
-    );
-    // Para observadores, considera live existente se houver qualquer live ativa
+    // Usa deviceId para detectar se ESTE dispositivo é o controller ativo
+    // (suporta múltiplos dispositivos do mesmo usuário)
+    const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
     const hasAnyLive = activeLives.length > 0;
-    const exists = isOwnerOrJudge || hasAnyLive;
-    setCloudLiveExists(exists);
-    if (!isOwnerOrJudge && !hasAnyLive && gameState?.isMirroringActive) {
+    setCloudLiveExists(hasAnyLive);
+    if (!hasAnyLive && gameState?.isMirroringActive) {
       setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
     }
 
-    // Registro automático como observador quando há live de terceiros disponível
-    if (!isOwnerOrJudge && hasAnyLive && navigator.onLine && userProfile.email) {
+    // Registro automático como observador: quando há live E este dispositivo NÃO é o controller
+    if (!thisDeviceIsController && hasAnyLive && navigator.onLine && userProfile.email) {
       const db = getDb();
       if (db) {
         const observerLive = activeLives.reduce((latest, l) =>
@@ -837,7 +843,6 @@ const App: React.FC = () => {
           getDoc(doc(db, "live_matches", ownerPin)).then(snap => {
             if (snap.exists() && !snap.data().isLiveClosed) {
               const nextControllers = { ...(snap.data().controllers || {}) };
-              // Só registra se ainda não está nos controllers
               if (!nextControllers[deviceId]) {
                 nextControllers[deviceId] = { label: currentFullDeviceName, nickname: myNickname, lastSeen: Date.now() };
                 updateDoc(doc(db, "live_matches", ownerPin), { controllers: nextControllers }).catch(() => {});
@@ -849,16 +854,14 @@ const App: React.FC = () => {
     }
   }, [activeLives, userProfile.pin, userProfile.email, userProfile.nickname, userProfile.name, gameState?.isMirroringActive, deviceId, currentFullDeviceName]);
 
-  // Detecta live disponível de terceiros e exibe overlay automaticamente
+  // Detecta live disponível e exibe overlay automaticamente para dispositivos não-controller
   const overlayShownForLiveRef = useRef<string | null>(null);
   useEffect(() => {
     if (!userProfile.pin || !userProfile.email) return;
-    const myPin = userProfile.pin.toUpperCase();
-    const isOwnerOrJudge = activeLives.some(l =>
-      l.ownerPin?.toUpperCase() === myPin || l.judgePin?.toUpperCase() === myPin
-    );
-    // Só mostra overlay automático para observadores fora da tela do placar
-    if (!isOwnerOrJudge && activeLives.length > 0 && currentScreen !== 'scoreboard') {
+    // Usa deviceId: este dispositivo NÃO é o controller ativo da live?
+    const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
+    // Mostra overlay quando há live E este dispositivo não é o controller
+    if (!thisDeviceIsController && activeLives.length > 0 && currentScreen !== 'scoreboard') {
       const observerLive = activeLives.reduce((latest, l) =>
         (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
       );
@@ -873,7 +876,7 @@ const App: React.FC = () => {
     if (activeLives.length === 0) {
       overlayShownForLiveRef.current = null;
     }
-  }, [activeLives, userProfile.pin, userProfile.email, currentScreen]);
+  }, [activeLives, userProfile.pin, userProfile.email, currentScreen, deviceId]);
 
   useEffect(() => {
     if (userProfile.email && navigator.onLine) {
