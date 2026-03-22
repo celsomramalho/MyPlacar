@@ -10,6 +10,22 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   partnerTerms?: string[];
 }
 
+// Carrega html5-qrcode dinamicamente apenas quando necessário
+// evitando que o iframe do Google apareça em contextos como o relógio
+const loadHtml5Qrcode = (): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    if ((window as any).Html5Qrcode) {
+      resolve((window as any).Html5Qrcode);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/html5-qrcode';
+    script.onload = () => resolve((window as any).Html5Qrcode);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+};
+
 export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVoice, enableCamera, className = '', onChange, value, onVoiceComplexResult, partnerTerms = ['mais', 'com'], ...props }, ref) => {
   const [isListening, setIsListening] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -95,7 +111,8 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
     }
 
     const scanImage = async (imageSource: File | HTMLCanvasElement) => {
-      const processor = new (window as any).Html5Qrcode("qr-reader", { verbose: false });
+      const Html5QrcodeLib = await loadHtml5Qrcode();
+      const processor = new Html5QrcodeLib("qr-reader", { verbose: false });
       return await processor.scanFile(imageSource, true);
     };
 
@@ -158,7 +175,8 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
       }
 
       try {
-        const html5QrCode = new (window as any).Html5Qrcode("qr-reader", { verbose: false });
+        const Html5QrcodeLib = await loadHtml5Qrcode();
+        const html5QrCode = new Html5QrcodeLib("qr-reader", { verbose: false });
         scannerRef.current = html5QrCode;
 
         const config = { 
@@ -183,7 +201,8 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
         console.error("Scanner error:", err);
         setIsCameraLoading(false);
         if (!scannerRef.current) {
-           scannerRef.current = new (window as any).Html5Qrcode("qr-reader", { verbose: false });
+           const Html5QrcodeFallback = await loadHtml5Qrcode();
+           scannerRef.current = new Html5QrcodeFallback("qr-reader", { verbose: false });
         }
       }
     }, 400);

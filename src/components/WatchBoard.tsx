@@ -135,8 +135,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           onClick={(e) => { e.stopPropagation(); setIsDimmed(false); resetDimTimer(); }}
           className="fixed inset-0 z-[100002] bg-black/75 backdrop-blur-none animate-in fade-in duration-500"
         >
-          {/* Indicador sutil de modo dim no canto superior direito */}
-          <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-white/30 animate-pulse" />
+
         </div>
       )}
       
@@ -194,8 +193,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           </div>
         </div>
         <div className="h-16 flex items-center justify-center bg-slate-800/40 rounded-2xl gap-1">
-          <span className="text-5xl font-black text-white leading-none">{gameState.currentSet + 1}</span>
-          <div className="flex flex-col items-center text-[11px] font-black text-slate-400 leading-[1.1] font-bold">
+          <span className={`text-5xl font-black leading-none transition-opacity ${isDimmed ? 'text-white/30 animate-pulse' : 'text-white'}`}>{gameState.currentSet + 1}</span>
+          <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold transition-opacity ${isDimmed ? 'text-slate-600 animate-pulse' : 'text-slate-400'}`}>
             <span>S</span>
             <span>e</span>
             <span>t</span>
