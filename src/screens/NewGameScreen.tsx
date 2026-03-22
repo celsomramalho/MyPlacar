@@ -57,7 +57,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
   useEffect(() => {
     const fetchData = async () => {
       const db = getDb();
-      if (!db) return;
+      if (!db || !userProfile?.email) return;
       try {
         const catSnap = await getDocs(collection(db, "category_icons"));
         const sportSnap = await getDocs(collection(db, "sport_icons"));
@@ -72,7 +72,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
       } catch (e) { console.error(e); }
     };
     fetchData();
-  }, []);
+  }, [userProfile?.email]);
 
   useEffect(() => {
     if (settings.gamesPerSet === 4 && settings.tieBreakAt !== '3-3') {

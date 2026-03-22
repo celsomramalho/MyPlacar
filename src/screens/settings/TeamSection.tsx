@@ -100,14 +100,18 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   useEffect(() => {
     const fetchIcons = async () => {
       const db = getDb();
-      if (!db) return;
-      const snap = await getDocs(collection(db, "sport_icons"));
-      const icons: Record<string, string> = {};
-      snap.forEach(d => { icons[d.id] = d.data().url; });
-      setDbSportsIcons(icons);
+      if (!db || !userProfile?.email) return;
+      try {
+        const snap = await getDocs(collection(db, "sport_icons"));
+        const icons: Record<string, string> = {};
+        snap.forEach(d => { icons[d.id] = d.data().url; });
+        setDbSportsIcons(icons);
+      } catch (e) {
+        // Silencia erros de permissão — ícones padrão já estão definidos nas constants
+      }
     };
     fetchIcons();
-  }, []);
+  }, [userProfile?.email]);
 
   const canStart = useMemo(() => {
     const hasP1 = settings.p1Name.trim().length > 0;

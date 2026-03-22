@@ -2,51 +2,112 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
     
+    // Usa token.email porque a coleção users é indexada por email, não por UID
     function isAdmin() {
-      return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
-         (request.auth.token.email == "celsomramalho@gmail.com" && request.auth.token.email_verified == true));
-    }
-    
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isAdmin == true ||
+        (request.auth.token.email == "celsomramalho@gmail.com" && request.auth.token.email_verified == true)
+      );
     }
 
-    // Communications collection
+    // Verifica se o email do token bate com o document ID
+    function isEmailOwner(userEmail) {
+      return isAuthenticated() && request.auth.token.email == userEmail;
+    }
+
+    // Communications
+    // Leitura: isAuthenticated() — filtro de targetUserId já feito pelo where no cliente
+    // Índice composto necessário: targetUserId ASC + createdAt DESC (firestore.indexes.json)
     match /communications/{commId} {
+      allow read: if isAuthenticated();
       allow create, delete: if isAdmin();
-      
-      allow read: if isAuthenticated() && (
-        resource.data.targetUserId == 'all' || 
-        resource.data.targetUserId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pin ||
-        isAdmin()
-      );
-      
       allow update: if isAuthenticated() && (
         isAdmin() || (
-          // Ensure they are the target or it's global
-          (resource.data.targetUserId == 'all' || resource.data.targetUserId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.pin) &&
-          // Validate that they only change specific fields
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'poll', 'readBy', 'replies']) &&
-          // If updating poll, ensure they only increment votes
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['poll']) || 
            request.resource.data.poll.totalVotes == resource.data.poll.totalVotes + 1) &&
-          // If updating replies, ensure they only append to the list
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['replies']) || 
            request.resource.data.replies.size() == (resource.data.keys().contains('replies') ? resource.data.replies.size() : 0) + 1)
         )
       );
     }
 
-    // Users collection
+    // Users — leitura pública para biometria e busca por PIN antes do login
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId) || isAdmin();
+      allow read: if true;
+      allow write: if isEmailOwner(userId) || isAdmin();
+
+      match /partners/{partnerId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    // Partidas — dono lê/escreve as suas, admin tudo
+    match /matches/{matchId} {
+      allow read: if isAuthenticated() && (
+        resource.data.ownerEmail == request.auth.token.email || isAdmin()
+      );
+      allow write: if isAuthenticated() && (
+        request.auth.token.email == request.resource.data.ownerEmail || isAdmin()
+      );
+    }
+
+    // Partidas ao vivo — leitura pública para evitar race condition no boot
+    match /live_matches/{pin} {
+      allow read, write: if true;
+    }
+
+    // Parceiros — fallback isAuthenticated() cobre usuários em transição PIN→senha
+    match /user_partners_metadata/{userEmail} {
+      allow read, write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
+    }
+
+    // Fila de jogadores
+    match /user_queue_metadata/{userEmail} {
+      allow read, write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
+    }
+
+    // Eventos
+    match /events/{eventPin} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /entries/{entryEmail} {
+        allow read: if isAuthenticated();
+        allow write: if isEmailOwner(entryEmail) || isAdmin();
+      }
+    }
+
+    // Inscrições em eventos — leitura pública para evitar race condition no boot
+    match /user_registrations/{userEmail} {
+      allow read: if true;
+      allow write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
+
+      match /events/{eventPin} {
+        allow read: if true;
+        allow write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
+      }
+    }
+
+    // Ícones — leitura pública, escrita admin
+    match /sport_icons/{iconId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /category_icons/{iconId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Configurações globais — leitura pública, escrita admin
+    match /system/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // Default deny

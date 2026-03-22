@@ -29,13 +29,13 @@ export const CommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) =
 
   useEffect(() => {
     const db = getDb();
-    if (!db) return;
+    if (!db || !adminProfile?.email) return;
     const q = query(collection(db, 'communications'), orderBy('createdAt', 'desc'), limit(10));
     const unsub = onSnapshot(q, (snap) => {
       setRecentComms(snap.docs.map(d => ({ id: d.id, ...d.data() } as Communication)));
     });
     return unsub;
-  }, []);
+  }, [adminProfile?.email]);
 
   const handleAddOption = () => {
     if (pollOptions.length < 5) {

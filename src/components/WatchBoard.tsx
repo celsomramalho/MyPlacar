@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { RotateCcw, Zap, Settings, X, Play, Trophy, VolumeX, Wifi, WifiOff } from 'lucide-react';
+import { RotateCcw, Zap, Settings, X, Trophy, VolumeX, Wifi, WifiOff } from 'lucide-react';
 import { GameState, PointType } from '../types';
 import { LiveIndicator } from './LiveIndicator';
 
@@ -131,11 +131,12 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   return (
     <div className={`${isEmbedded ? 'relative w-full aspect-[4/5] rounded-[2rem]' : 'fixed inset-0 h-full w-full z-[99999]'} bg-black flex select-none touch-none overflow-hidden ${gameState.isLiveClosed ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
       {isDimmed && (
-        <div onClick={(e) => { e.stopPropagation(); setIsDimmed(false); resetDimTimer(); }} className="fixed inset-0 z-[100002] bg-black/90 flex flex-col items-center justify-center animate-in fade-in duration-500">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-full border-2 border-white/20 flex items-center justify-center animate-pulse"><Play size={32} className="text-white fill-white ml-1" /></div>
-            <span className="text-[10px] font-black text-white/40 tracking-widest">Toque para acordar</span>
-          </div>
+        <div
+          onClick={(e) => { e.stopPropagation(); setIsDimmed(false); resetDimTimer(); }}
+          className="fixed inset-0 z-[100002] bg-black/75 backdrop-blur-none animate-in fade-in duration-500"
+        >
+          {/* Indicador sutil de modo dim no canto superior direito */}
+          <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-white/30 animate-pulse" />
         </div>
       )}
       
@@ -297,8 +298,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             </button>
           )}
           {dimProgress > 0 && !isDimmed && (
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 pointer-events-none">
-              <div className="h-full bg-white/40 transition-none" style={{ width: `${dimProgress}%` }} />
+            <div className="absolute bottom-0 left-0 right-0 h-2 bg-white/20 pointer-events-none">
+              <div className="h-full bg-white transition-none" style={{ width: `${dimProgress}%` }} />
             </div>
           )}
         </div>

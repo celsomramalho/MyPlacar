@@ -21,8 +21,7 @@ import { incrementScore, undoPoint } from './utils/tennisEngine';
 import { applyGoldenRule, maskPin } from './utils/formatters';
 import { isWatchDevice } from './utils/device';
 import { getDb, clearFirestoreCache } from './firebase';
-import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, getDocFromServer, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
-import { mirrorUser, mirrorMatches, mirrorPartners, deletePartners } from './services/supabaseMirror';
+import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
 import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Gavel, User, QrCode, Users } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator';
 import { useAppLogger } from './hooks/useAppLogger';
@@ -437,19 +436,17 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handleQuotaError = (e: Event) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const err = e as any;
-      const isQuotaError = err.name === 'QuotaExceededError' || 
-                          (err.reason && err.reason.name === 'QuotaExceededError') ||
-                          (err.message && err.message.includes('exceeded the quota'));
+    const handleQuotaError = (e: ErrorEvent & PromiseRejectionEvent) => {
+      const isQuotaError = e.name === 'QuotaExceededError' || 
+                          (e.reason && e.reason.name === 'QuotaExceededError') ||
+                          (e.message && e.message.includes('exceeded the quota'));
       
       if (isQuotaError) {
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
         });
 
-        if (err.message && err.message.includes('firestore_mutations')) {
+        if (e.message && e.message.includes('firestore_mutations')) {
           setModalConfig({
             title: "Erro de armazenamento",
             message: "O limite de espaço do navegador foi atingido. Deseja limpar o cache técnico e reiniciar?",
@@ -656,7 +653,19 @@ const App: React.FC = () => {
     if (!db) return;
     const myPin = userProfile.pin.toUpperCase();
     const myLive = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin || l.judgePin?.toUpperCase() === myPin);
-    const listenPin = myLive ? myLive.ownerPin?.toUpperCase() : myPin;
+
+    // Para observadores (não owner nem judge), escuta a live mais recente disponível
+    const observerLive = !myLive && activeLives.length > 0
+      ? activeLives.reduce((latest, l) =>
+          (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
+        )
+      : null;
+
+    const listenPin = myLive
+      ? myLive.ownerPin?.toUpperCase()
+      : observerLive
+        ? observerLive.ownerPin?.toUpperCase()
+        : myPin;
 
     if (!listenPin) return;
 
@@ -803,15 +812,68 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!userProfile.pin) { setCloudLiveExists(false); return; }
     const myPin = userProfile.pin.toUpperCase();
-    const exists = activeLives.some(live => 
-      (live.ownerPin?.toUpperCase() === myPin) || 
+    const isOwnerOrJudge = activeLives.some(live =>
+      (live.ownerPin?.toUpperCase() === myPin) ||
       (live.judgePin?.toUpperCase() === myPin)
     );
+    // Para observadores, considera live existente se houver qualquer live ativa
+    const hasAnyLive = activeLives.length > 0;
+    const exists = isOwnerOrJudge || hasAnyLive;
     setCloudLiveExists(exists);
-    if (!exists && gameState?.isMirroringActive) {
+    if (!isOwnerOrJudge && !hasAnyLive && gameState?.isMirroringActive) {
       setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
     }
-  }, [activeLives, userProfile.pin, gameState?.isMirroringActive]);
+
+    // Registro automático como observador quando há live de terceiros disponível
+    if (!isOwnerOrJudge && hasAnyLive && navigator.onLine && userProfile.email) {
+      const db = getDb();
+      if (db) {
+        const observerLive = activeLives.reduce((latest, l) =>
+          (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
+        );
+        const ownerPin = observerLive.ownerPin?.toUpperCase();
+        if (ownerPin) {
+          const myNickname = userProfile.nickname || userProfile.name?.split(' ')[0] || 'Observador';
+          getDoc(doc(db, "live_matches", ownerPin)).then(snap => {
+            if (snap.exists() && !snap.data().isLiveClosed) {
+              const nextControllers = { ...(snap.data().controllers || {}) };
+              // Só registra se ainda não está nos controllers
+              if (!nextControllers[deviceId]) {
+                nextControllers[deviceId] = { label: currentFullDeviceName, nickname: myNickname, lastSeen: Date.now() };
+                updateDoc(doc(db, "live_matches", ownerPin), { controllers: nextControllers }).catch(() => {});
+              }
+            }
+          }).catch(() => {});
+        }
+      }
+    }
+  }, [activeLives, userProfile.pin, userProfile.email, userProfile.nickname, userProfile.name, gameState?.isMirroringActive, deviceId, currentFullDeviceName]);
+
+  // Detecta live disponível de terceiros e exibe overlay automaticamente
+  const overlayShownForLiveRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userProfile.pin || !userProfile.email) return;
+    const myPin = userProfile.pin.toUpperCase();
+    const isOwnerOrJudge = activeLives.some(l =>
+      l.ownerPin?.toUpperCase() === myPin || l.judgePin?.toUpperCase() === myPin
+    );
+    // Só mostra overlay automático para observadores fora da tela do placar
+    if (!isOwnerOrJudge && activeLives.length > 0 && currentScreen !== 'scoreboard') {
+      const observerLive = activeLives.reduce((latest, l) =>
+        (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
+      );
+      const liveId = observerLive.ownerPin?.toUpperCase() || '';
+      // Evita mostrar o overlay múltiplas vezes para a mesma live
+      if (liveId && overlayShownForLiveRef.current !== liveId) {
+        overlayShownForLiveRef.current = liveId;
+        setShowLiveControlOverlay(true);
+      }
+    }
+    // Reseta o ref quando não há mais lives disponíveis
+    if (activeLives.length === 0) {
+      overlayShownForLiveRef.current = null;
+    }
+  }, [activeLives, userProfile.pin, userProfile.email, currentScreen]);
 
   useEffect(() => {
     if (userProfile.email && navigator.onLine) {
@@ -1063,7 +1125,6 @@ const App: React.FC = () => {
         if (dataToSave) batch.set(matchRef, dataToSave, { merge: true });
       });
       await batch.commit();
-      mirrorMatches(unsynced, cleanEmail, userProfile.pin);
       const syncedIds = new Set(unsynced.map(u => u.id));
       const updatedList = currentList.map(m => syncedIds.has(m.id) ? { ...m, isSynced: true } : m);
       persistHistory(updatedList);
@@ -1105,28 +1166,6 @@ const App: React.FC = () => {
       }
     } catch (e) {} finally { setIsDownloading(false); }
   }, [userProfile.email, persistHistory]);
-
-  // Remove parceiros do Firebase (user_partners_metadata + subcoleção users/{pin}/partners)
-  // Fire-and-forget: não bloqueia a UI
-  const deletePartnersFromFirebase = useCallback((deletedPins: string[], remainingPartners: Partner[]) => {
-    if (!navigator.onLine || !userProfile.email) return;
-    const db = getDb();
-    if (!db) return;
-    const cleanEmail = userProfile.email.toLowerCase().trim();
-    const ownerPin = userProfile.pin.toUpperCase();
-    // 1. Atualiza user_partners_metadata com a lista restante
-    setDoc(doc(db, 'user_partners_metadata', cleanEmail), {
-      partners_list: remainingPartners,
-      updatedAt: Date.now()
-    }, { merge: true }).catch(e => console.warn('deletePartnersFromFirebase: metadata', e));
-    // 2. Remove cada parceiro da subcoleção users/{ownerPin}/partners/{pin}
-    deletedPins.forEach(pin => {
-      deleteDoc(doc(db as Firestore, 'users', ownerPin, 'partners', pin.toUpperCase()))
-        .catch(e => console.warn('deletePartnersFromFirebase: subcollection', e));
-    });
-    // 3. Espelha deleção no Supabase
-    deletePartners(cleanEmail, deletedPins);
-  }, [userProfile.email, userProfile.pin]);
 
   const canStartMatch = useMemo(() => {
     const s = matchSettings;
@@ -1631,7 +1670,6 @@ const App: React.FC = () => {
             addedAt: Date.now(),
             origin: 'manual'
           }).catch(err => console.error("Erro ao salvar parceiro no Firestore:", err));
-          mirrorPartners(userProfile.email, updatedPartners);
         }
       }
 
@@ -1670,19 +1708,17 @@ const App: React.FC = () => {
   useEffect(() => { if (gameState?.isConfirmedFinished && !matchHistory.some(m => m.id === gameState.matchId)) finalizeMatchInternal(gameState); }, [gameState?.isConfirmedFinished, gameState?.matchId, finalizeMatchInternal, matchHistory]);
 
   const handleConfirmPartners = (team1: Partner[], team2: Partner[]) => {
-    // PIN real = verificado | 'VERIFIED' = da fila verificada | 'QUEUE_ANONYMOUS' = anônimo da fila
-    const isVerified = (pin: string) => !!pin && pin !== 'QUEUE_ANONYMOUS';
     setMatchSettings(prev => {
       const next = { ...prev };
       if (!prev.isDoubles) { 
-        if (team1.length > 0) { next.p1Name = team1[0].nickname; next.p1Verified = isVerified(team1[0].pin); } 
-        if (team2.length > 0) { next.p2Name = team2[0].nickname; next.p2Verified = isVerified(team2[0].pin); } 
+        if (team1.length > 0) { next.p1Name = team1[0].nickname; next.p1Verified = team1[0].pin === 'VERIFIED' || !!team1[0].pin; } 
+        if (team2.length > 0) { next.p2Name = team2[0].nickname; next.p2Verified = team2[0].pin === 'VERIFIED' || !!team2[0].pin; } 
       }
       else { 
-        if (team1.length >= 1) { next.p1Name = team1[0].nickname; next.p1Verified = isVerified(team1[0].pin); } 
-        if (team1.length >= 2) { next.p1Partner = team1[1].nickname; next.p1PartnerVerified = isVerified(team1[1].pin); } 
-        if (team2.length >= 1) { next.p2Name = team2[0].nickname; next.p2Verified = isVerified(team2[0].pin); } 
-        if (team2.length >= 2) { next.p2Partner = team2[1].nickname; next.p2PartnerVerified = isVerified(team2[1].pin); } 
+        if (team1.length >= 1) { next.p1Name = team1[0].nickname; next.p1Verified = team1[0].pin === 'VERIFIED' || !!team1[0].pin; } 
+        if (team1.length >= 2) { next.p1Partner = team1[1].nickname; next.p1PartnerVerified = team1[1].pin === 'VERIFIED' || !!team1[1].pin; } 
+        if (team2.length >= 1) { next.p2Name = team2[0].nickname; next.p2Verified = team2[0].pin === 'VERIFIED' || !!team2[0].pin; } 
+        if (team2.length >= 2) { next.p2Partner = team2[1].nickname; next.p2PartnerVerified = team2[1].pin === 'VERIFIED' || !!team2[1].pin; } 
       }
       return next;
     });
@@ -1729,17 +1765,7 @@ const App: React.FC = () => {
       if (navigator.onLine && userProfile.email) {
         const db = getDb();
         if (db) {
-          const cleanEmail = userProfile.email.toLowerCase().trim();
-          // Lê o documento atual para preservar campos gerenciados externamente
-          // (isAdmin, planType) que não devem ser sobrescritos pelo perfil local
-          const currentSnap = await getDocFromServer(doc(db as Firestore, "users", cleanEmail));
-          const currentData = currentSnap.exists() ? currentSnap.data() : {};
-          const resolvedIsAdmin = currentData.isAdmin === true;
-          const resolvedPlanType = currentData.planType || userProfile.planType || 'free';
-
-          // Campos base — nunca incluir isAdmin: false para não criar o campo
-          // onde não existe. O isAdmin só é escrito se já for true no Firebase.
-          const dataToSave: Record<string, any> = {
+          await setDoc(doc(db as Firestore, "users", userProfile.email.toLowerCase().trim()), {
             name: userProfile.name,
             nickname: userProfile.nickname,
             phone: userProfile.phone || '',
@@ -1749,23 +1775,8 @@ const App: React.FC = () => {
             isProfileComplete: userProfile.isProfileComplete,
             passkeyCredentialId: userProfile.passkeyCredentialId || null,
             passkeyPublicKey: userProfile.passkeyPublicKey || null,
-            planType: resolvedPlanType,
             updatedAt: serverTimestamp()
-          };
-          if (resolvedIsAdmin) dataToSave.isAdmin = true;
-
-          await setDoc(doc(db as Firestore, "users", cleanEmail), dataToSave, { merge: true });
-
-          const freshProfile: UserProfile = {
-            ...userProfile,
-            isAdmin: resolvedIsAdmin,
-            planType: resolvedPlanType as any,
-          };
-          mirrorUser(freshProfile);
-          // Atualiza o estado local se campos externos divergirem
-          if (resolvedIsAdmin !== userProfile.isAdmin || resolvedPlanType !== userProfile.planType) {
-            setUserProfile(freshProfile);
-          }
+          }, { merge: true });
         }
       }
     } catch (e) {
@@ -2192,7 +2203,7 @@ const App: React.FC = () => {
       )}
       <InstallPwaModal isOpen={showInstallPwa} onClose={() => setShowInstallPwa(false)} deferredPrompt={deferredPrompt} />
       {currentScreen === 'spectator' && (spectatorMatchId || spectatorPin) && <SpectatorScreen matchId={spectatorMatchId || ''} spectatorPin={spectatorPin || ''} onExit={handleExitSpectator} />}
-      {currentScreen === 'auth' && <AuthScreen appUrl={appUrl} onAuthSuccess={async (p, s) => { 
+      {currentScreen === 'auth' && <AuthScreen appUrl={appUrl} onAuthSuccess={(p, s) => { 
         setIsOfflineMode(false);
         if (s) { 
           try { 
@@ -2201,58 +2212,7 @@ const App: React.FC = () => {
             localStorage.setItem('myPlacarSavedEmail', p.email); 
           } catch(e) {} 
         } 
-        setUserProfile(p);
-        // Melhoria 2: se o novo usuário foi indicado, adicionar o indicador
-        // como parceiro automaticamente (dos dois lados da relação)
-        if (p.referredByPin && navigator.onLine) {
-          const db = getDb();
-          if (db) {
-            try {
-              const q = query(collection(db as Firestore, 'users'), where('pin', '==', p.referredByPin.toUpperCase()));
-              const snap = await getDocs(q);
-              if (!snap.empty) {
-                const referrerData = snap.docs[0].data();
-                const referrerPartner: Partner = {
-                  id: snap.docs[0].id,
-                  name: referrerData.name,
-                  nickname: referrerData.nickname || referrerData.name.split(' ')[0],
-                  pin: referrerData.pin.toUpperCase(),
-                  origin: 'referral',
-                  addedAt: Date.now(),
-                  gender: referrerData.gender || 'M'
-                };
-                // Adiciona o indicador na lista do novo usuário
-                setPartners(prev => {
-                  if (prev.some(x => x.pin.toUpperCase() === referrerPartner.pin)) return prev;
-                  const next = [referrerPartner, ...prev];
-                  // Persiste localmente e na nuvem
-                  localStorage.setItem('myPlacarPartners', JSON.stringify(next));
-                  setDoc(doc(db, 'user_partners_metadata', p.email.toLowerCase().trim()), { partners_list: next, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-                  mirrorPartners(p.email, next);
-                  return next;
-                });
-                // Adiciona o novo usuário na lista do indicador também
-                const newUserPartner: Partner = {
-                  id: p.email,
-                  name: p.name,
-                  nickname: p.nickname || p.name.split(' ')[0],
-                  pin: p.pin.toUpperCase(),
-                  origin: 'referral',
-                  addedAt: Date.now(),
-                  gender: p.gender || 'M'
-                };
-                const referrerMetaRef = doc(db, 'user_partners_metadata', referrerData.email.toLowerCase().trim());
-                const referrerMetaSnap = await getDoc(referrerMetaRef);
-                const referrerPartnersList: Partner[] = referrerMetaSnap.exists() ? (referrerMetaSnap.data().partners_list || []) : [];
-                if (!referrerPartnersList.some((x: Partner) => x.pin.toUpperCase() === p.pin.toUpperCase())) {
-                  const updatedReferrerList = [newUserPartner, ...referrerPartnersList];
-                  setDoc(referrerMetaRef, { partners_list: updatedReferrerList, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-                  mirrorPartners(referrerData.email, updatedReferrerList);
-                }
-              }
-            } catch(e) { console.warn('Auto-add referrer partner:', e); }
-          }
-        }
+        setUserProfile(p); 
       }} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} initialReferralPin={initialReferralPin} onOfflineMode={handleOfflineMode} />}
       {currentScreen === 'settings' && <SettingsScreen 
         appUrl={appUrl}
@@ -2272,9 +2232,7 @@ const App: React.FC = () => {
               const fullName = d.name;
               setPartners(prev => { 
                 if (prev.some(x => x.pin.toUpperCase() === p.toUpperCase())) return prev; 
-                const next = [...prev, { id: s.docs[0].id, name: fullName, nickname: nick, pin: p.toUpperCase(), addedAt: Date.now(), origin: 'qrcode' as const, gender: d.gender }];
-                mirrorPartners(userProfile.email, next);
-                return next;
+                return [...prev, { id: s.docs[0].id, name: fullName, nickname: nick, pin: p.toUpperCase(), addedAt: Date.now(), origin: 'qrcode', gender: d.gender }]; 
               }); 
               if (field) setMatchSettings(prev => ({ ...prev, [`${field}Verified`]: true })); 
               return nick; 
@@ -2284,9 +2242,7 @@ const App: React.FC = () => {
         }} 
         onDeletePartners={ids => setModalConfig({ title: "Excluir parceiros?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: () => {
           setPartners(prev => {
-            const deleted = prev.filter(p => ids.has(p.id));
             const next = prev.filter(p => !ids.has(p.id));
-            deletePartnersFromFirebase(deleted.map(p => p.pin), next);
             return next;
           });
         }, onCancel: () => setModalConfig(null) })}
@@ -2311,9 +2267,7 @@ const App: React.FC = () => {
           variant: 'danger', 
           onConfirm: () => {
             setPartners(prev => {
-              const deleted = prev.filter(p => ids.has(p.id));
               const next = prev.filter(p => !ids.has(p.id));
-              deletePartnersFromFirebase(deleted.map(p => p.pin), next);
               return next;
             });
             setPlayerQueue(prev => {
@@ -2416,7 +2370,7 @@ const App: React.FC = () => {
       }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as TournamentEvent); setCurrentScreen('event-detail'); }} />}
-      {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => { const next = [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual' as const, addedAt: Date.now(), gender }, ...prev]; mirrorPartners(userProfile.email, next); return next; }); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
+      {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
       {currentScreen === 'communications' && <CommunicationsScreen userProfile={userProfile} onBack={() => setCurrentScreen('settings')} />}
     </div>
     </ErrorBoundary>

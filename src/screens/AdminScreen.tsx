@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Upload, Loader2, CheckCircle2, AlertCircle, Sparkles, Plus, Trash2, ChevronDown, Save, Clock, User, Settings as SettingsIcon, ArrowLeft, Edit2, Database, Wand2, X, ShieldCheck, LayoutGrid, Trophy, Mic, Type, HelpCircle, ChevronUp, Volume2, Info, Search, Star, Crown, Edit3, Download, HardDrive, Copy, ExternalLink, FileText, RotateCw, Check, Wifi, Ticket, Image as ImageIcon, Send, Menu } from 'lucide-react';
 import { getDb, getStorageInstance, clearFirestoreCache } from '../firebase';
 import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, writeBatch, query, where, serverTimestamp } from 'firebase/firestore';
-import { mirrorUser, mirrorMatches, mirrorIcon, deleteIcon } from '../services/supabaseMirror';
+import { mirrorUser, mirrorMatches, mirrorPartners, mirrorIcon, deleteIcon } from '../services/supabaseMirror';
 import { ref, listAll, uploadBytes, getDownloadURL, deleteObject, StorageReference, getStorage, getMetadata } from 'firebase/storage';
 import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../constants';
 import { Button } from '../components/Button';
@@ -41,7 +41,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isFixing, setIsFixing] = useState(false);
   const [showConfirmFix, setShowConfirmFix] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<{users: number, matches: number, icons: number} | null>(null);
+  const [migrationResult, setMigrationResult] = useState<{users: number, matches: number, partners: number, icons: number} | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{type: 'category' | 'sport' | 'file' | 'bucket' | 'expired_lives' | 'event', id: string, path?: string} | null>(null);
   const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [goldenRule, setGoldenRule] = useState(true);
@@ -418,6 +418,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     setMigrationResult(null);
     let usersCount = 0;
     let matchesCount = 0;
+    let partnersCount = 0;
     let iconsCount = 0;
     try {
       // 1. Migrar users
@@ -446,7 +447,19 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         mirrorMatches(matches, ownerEmail, ownerPin);
         matchesCount += matches.length;
       }
-      // 3. Migrar sport_icons e category_icons
+      // 3. Migrar parceiros de cada usuário
+      const partnersSnap = await getDocs(collection(db, 'user_partners_metadata'));
+      for (const docSnap of partnersSnap.docs) {
+        const ownerEmail = docSnap.id; // document ID é o email do dono
+        const partnersList = docSnap.data().partners_list || [];
+        // Filtra parceiros sem PIN para evitar dados inconsistentes
+        const validPartners = partnersList.filter((p: any) => p.pin && p.pin.trim().length > 0);
+        if (ownerEmail && validPartners.length > 0) {
+          mirrorPartners(ownerEmail, validPartners);
+          partnersCount += validPartners.length;
+        }
+      }
+      // 4. Migrar sport_icons e category_icons
       const sportSnap = await getDocs(collection(db, 'sport_icons'));
       sportSnap.forEach(docSnap => {
         mirrorIcon('sport', { id: docSnap.id, ...docSnap.data() });
@@ -457,7 +470,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         mirrorIcon('category', { id: docSnap.id, ...docSnap.data() });
         iconsCount++;
       });
-      setMigrationResult({ users: usersCount, matches: matchesCount, icons: iconsCount });
+      setMigrationResult({ users: usersCount, matches: matchesCount, partners: partnersCount, icons: iconsCount });
     } catch (e) {
       console.error('Migração Supabase:', e);
       setStatus({ type: 'error', msg: 'Erro durante a migração. Verifique o console.' });
@@ -862,7 +875,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                 {migrationResult && (
                   <div className="bg-green-50 border border-green-100 rounded-2xl p-4 space-y-1">
                     <p className="text-xs font-black text-green-700">Migração concluída!</p>
-                    <p className="text-[11px] font-bold text-green-600">{migrationResult.users} usuários · {migrationResult.matches} partidas · {migrationResult.icons} ícones</p>
+                    <p className="text-[11px] font-bold text-green-600">{migrationResult.users} usuários · {migrationResult.matches} partidas · {migrationResult.partners} parceiros · {migrationResult.icons} ícones</p>
                   </div>
                 )}
                 <button

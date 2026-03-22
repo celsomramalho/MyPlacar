@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && cp sw.js dist/sw.js && cp manifest.json dist/manifest.json",
+    "build": "vite build && node -e \"const fs=require('fs');fs.copyFileSync('sw.js','dist/sw.js');fs.copyFileSync('manifest.json','dist/manifest.json');\"",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },

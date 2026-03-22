@@ -3,7 +3,8 @@ import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, L
 import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent, TournamentEntry } from '../types'; 
 import { Input } from '../components/Input'; 
 import { getDb } from '../firebase'; 
-import { collection, query, where, getDocs, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
+import { collection, query, where, getDocs, getDocsFromServer, getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
+import { mirrorUser, mirrorPartners } from '../services/supabaseMirror';
 import { LiveIndicator } from '../components/LiveIndicator'; 
 import { formatPortugueseName, maskPin } from '../utils/formatters'; 
 import { Toggle } from '../components/Toggle'; 
@@ -74,10 +75,22 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [cloudCount, setCloudCount] = useState(0);
-  const [referralCount, setReferralCount] = useState(0);
+  // Inicializa cloudCount do localStorage para ter referência mesmo sem rodar syncAllData
+  const [cloudCount, setCloudCount] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem('myPlacarPartnersCloudCount') || '0'); } catch { return 0; }
+  });
+  // Inicializa referralCount do localStorage para ter referência mesmo sem rodar syncAllData
+  const [referralCount, setReferralCount] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem('myPlacarPartnersReferralCount') || '0'); } catch { return 0; }
+  });
   const [navigationSource, setNavigationSource] = useState<'settings' | 'queue'>('settings');
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+
+  // Ref que guarda o length da lista no último upload — melhoria 4
+  const lastUploadedCountRef = useRef<number>(-1);
+  // Sync pendente: local tem mais parceiros que a nuvem
+  // Removida a condição && cloudCount > 0 — agora funciona mesmo antes do primeiro sync
+  const hasPendingSync = partners.length > cloudCount;
   
   const [pendingQueueIndex, setPendingQueueIndex] = useState<number | null>(null);
 
@@ -130,7 +143,13 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const canShowCourtFree = selectedInQueue.length > 0 && availableSlotsOnCourt > 0;
 
   useEffect(() => {
-    syncAllData(true);
+    // Melhoria 3: throttle — só sincroniza se passou mais de 5 minutos desde o último sync
+    const SYNC_THROTTLE_MS = 5 * 60 * 1000;
+    const lastSync = parseInt(localStorage.getItem('myPlacarPartnersSyncAt') || '0');
+    if (Date.now() - lastSync > SYNC_THROTTLE_MS) {
+      syncAllData(true);
+      localStorage.setItem('myPlacarPartnersSyncAt', Date.now().toString());
+    }
   }, []);
 
   useEffect(() => {
@@ -176,21 +195,36 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     try {
       const updatedPartners = [...partners];
       let changed = false;
-      for (let i = 0; i < updatedPartners.length; i++) {
-        const p = updatedPartners[i];
-        const q = query(collection(db as any, "users"), where("pin", "==", p.pin.toUpperCase().trim()));
+
+      // Busca todos os parceiros em batches de 30 (limite do Firestore 'in')
+      // substitui o loop N queries sequenciais anterior
+      const pinToIndex = new Map<string, number>();
+      updatedPartners.forEach((p, i) => { if (p.pin) pinToIndex.set(p.pin.toUpperCase().trim(), i); });
+      const allPins = Array.from(pinToIndex.keys());
+
+      const chunks: string[][] = [];
+      for (let i = 0; i < allPins.length; i += 30) chunks.push(allPins.slice(i, i + 30));
+
+      for (const chunk of chunks) {
+        const q = query(collection(db as any, "users"), where("pin", "in", chunk));
         const snap = await getDocs(q);
-        if (!snap.empty) {
-          const userData = snap.docs[0].data();
-          const newNick = userData.nickname || userData.name.split(' ')[0];
-          const newName = userData.name;
-          if (newNick !== p.nickname || newName !== p.name) { 
-            updatedPartners[i] = { ...p, nickname: newNick, name: newName }; 
-            changed = true; 
+        snap.forEach(d => {
+          const userData = d.data();
+          const pin = userData.pin?.toUpperCase().trim();
+          const idx = pin ? pinToIndex.get(pin) : undefined;
+          if (idx !== undefined) {
+            const newNick = userData.nickname || userData.name.split(' ')[0];
+            const newName = userData.name;
+            if (newNick !== updatedPartners[idx].nickname || newName !== updatedPartners[idx].name) {
+              updatedPartners[idx] = { ...updatedPartners[idx], nickname: newNick, name: newName };
+              changed = true;
+            }
           }
-        }
+        });
       }
-      if (changed) { setPartners(updatedPartners); (window as any).alert("Apelidos e nomes atualizados com sucesso!"); } else { (window as any).alert("Todos os dados já estão atualizados."); }
+
+      if (changed) { setPartners(updatedPartners); (window as any).alert("Apelidos e nomes atualizados com sucesso!"); }
+      else { (window as any).alert("Todos os dados já estão atualizados."); }
     } catch (e) { console.error(e); } finally { setIsRefreshing(false); }
   };
 
@@ -248,61 +282,111 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     if (!silent) setIsDownloading(true);
     try {
       const docRef = doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim());
-      const snap = await getDoc(docRef);
+      // getDocFromServer ignora cache — garante lista atualizada da nuvem
+      const snap = await getDocFromServer(docRef);
       let cloudList: Partner[] = snap.exists() ? (snap.data().partners_list || []) : [];
-      
-      // Validação de existência de parceiros na coleção users para evitar "fantasmas"
-      const verifiedList: Partner[] = [];
-      let ghostCount = 0;
-      for (const p of cloudList) {
-        if (p.pin) {
-          const q = query(collection(db as Firestore, "users"), where("pin", "==", p.pin.toUpperCase().trim()));
-          const s = await getDocs(q);
-          if (!s.empty) {
-            verifiedList.push(p);
-          } else {
-            ghostCount++;
-          }
-        } else {
-          verifiedList.push(p);
+
+      // Verificação de fantasmas em batches de 30 (limite do Firestore 'in')
+      // substitui o loop N queries sequenciais anterior
+      if (cloudList.length > 0) {
+        const pinsWithPin = cloudList.filter(p => p.pin);
+        const pinsWithoutPin = cloudList.filter(p => !p.pin);
+        const validPins = new Set<string>();
+
+        const chunks: string[][] = [];
+        for (let i = 0; i < pinsWithPin.length; i += 30) {
+          chunks.push(pinsWithPin.slice(i, i + 30).map(p => p.pin.toUpperCase().trim()));
         }
+        for (const chunk of chunks) {
+          const q = query(collection(db as Firestore, "users"), where("pin", "in", chunk));
+          const s = await getDocs(q);
+          s.forEach(d => validPins.add(d.data().pin?.toUpperCase().trim()));
+        }
+
+        const verifiedList: Partner[] = [
+          ...pinsWithoutPin,
+          ...pinsWithPin.filter(p => validPins.has(p.pin.toUpperCase().trim()))
+        ];
+        const ghostCount = cloudList.length - verifiedList.length;
+
+        if (ghostCount > 0) {
+          await setDoc(doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim()), { partners_list: verifiedList, updatedAt: Date.now() }, { merge: true });
+        }
+        cloudList = verifiedList;
       }
-      
-      // Atualizar metadado se fantasmas foram encontrados
-      if (ghostCount > 0) {
-         await setDoc(doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim()), { partners_list: verifiedList, updatedAt: Date.now() }, { merge: true });
-      }
-      
-      cloudList = verifiedList;
+
       setCloudCount(cloudList.length);
+      localStorage.setItem('myPlacarPartnersCloudCount', cloudList.length.toString());
 
       let referralList: Partner[] = [];
       if (userProfile.pin) {
+        // getDocsFromServer garante contagem real, ignorando cache do Firestore
         const q = query(collection(db, "users"), where("referredByPin", "==", userProfile.pin.toUpperCase()));
-        const rSnap = await getDocs(q);
+        const rSnap = await getDocsFromServer(q);
         setReferralCount(rSnap.size);
+        localStorage.setItem('myPlacarPartnersReferralCount', rSnap.size.toString());
         rSnap.forEach(d => {
           const ud = d.data();
-          referralList.push({ id: d.id, name: ud.name, nickname: ud.nickname || ud.name.split(' ')[0], pin: ud.pin.toUpperCase(), origin: 'referral', addedAt: Date.now(), gender: ud.gender });
+          referralList.push({
+            id: d.id,
+            name: ud.name,
+            nickname: ud.nickname || ud.name.split(' ')[0],
+            pin: ud.pin.toUpperCase(),
+            origin: 'referral',
+            // Usa joinedAt/createdAt do documento para addedAt estável entre sessões
+            // Date.now() causava reordenação da lista a cada syncAllData
+            addedAt: ud.createdAt?.toMillis?.() || ud.joinedAt || ud.addedAt || 0,
+            gender: ud.gender
+          });
         });
       }
       setPartners(prev => {
         const pinMap = new Map<string, Partner>();
         const myPin = userProfile.pin.toUpperCase();
-        prev.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
-        cloudList.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
+        // Ordem: referral → cloud → prev
+        // prev vence porque tem dados mais atualizados (gender, nickname editados pelo usuário)
         referralList.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
-        return Array.from(pinMap.values()).sort((a,b) => b.addedAt - a.addedAt);
+        cloudList.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
+        prev.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
+        return Array.from(pinMap.values()).sort((a, b) => b.addedAt - a.addedAt);
       });
       if (!silent) (window as any).alert("Dados sincronizados!");
+      // Melhoria 3: atualiza timestamp do último sync
+      localStorage.setItem('myPlacarPartnersSyncAt', Date.now().toString());
     } catch (e) {} finally { if (!silent) setIsDownloading(false); }
   };
 
   const uploadToCloud = async (silent = false) => {
     const db = getDb();
-    if (!db || !userProfile.email || partners.length === 0) return;
+    if (!db || !userProfile.email) return;
+    // Captura o estado atual de parceiros no momento da chamada
+    // para evitar problemas de closure com estado desatualizado
+    const currentPartners = partners;
+    if (currentPartners.length === 0) {
+      if (!silent) (window as any).alert("Nenhum parceiro para fazer backup.");
+      return;
+    }
     if (!silent) setIsUploading(true);
-    try { await setDoc(doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim()), { partners_list: partners, updatedAt: Date.now() }, { merge: true }); if (!silent) (window as any).alert("Backup realizado!"); } catch (e) {} finally { if (!silent) setIsUploading(false); }
+    try {
+      // Envia a lista completa incluindo indicados (origin: 'referral')
+      // que já estão no estado mas nunca eram persistidos na nuvem
+      await setDoc(doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim()), {
+        partners_list: currentPartners,
+        updatedAt: Date.now()
+      }, { merge: true });
+      mirrorUser(userProfile);
+      mirrorPartners(userProfile.email, currentPartners);
+      // Atualiza o contador e persiste no localStorage para referência no próximo load
+      setCloudCount(currentPartners.length);
+      localStorage.setItem('myPlacarPartnersCloudCount', currentPartners.length.toString());
+      // Melhoria 4: registra o count do último upload para evitar uploads redundantes
+      lastUploadedCountRef.current = currentPartners.length;
+      if (!silent) (window as any).alert("Backup realizado!");
+    } catch (e) {
+      if (!silent) (window as any).alert("Erro ao fazer backup. Tente novamente.");
+    } finally {
+      if (!silent) setIsUploading(false);
+    }
   };
 
   const handleAddPartner = (pin: string, nickname: string, origin: 'qrcode' | 'manual', gender?: 'M' | 'F', name?: string) => {
@@ -310,12 +394,17 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     if (!cleanPin || cleanPin === userProfile.pin.toUpperCase()) return;
     setPartners(prev => {
       const existingIdx = prev.findIndex(p => p.pin.toUpperCase() === cleanPin);
-      if (existingIdx !== -1) { 
-        const updated = [...prev]; 
-        updated[existingIdx] = { ...updated[existingIdx], nickname: nickname || cleanPin, name: name || updated[existingIdx].name }; 
-        return updated; 
+      let next: Partner[];
+      if (existingIdx !== -1) {
+        next = [...prev];
+        next[existingIdx] = { ...next[existingIdx], nickname: nickname || cleanPin, name: name || next[existingIdx].name };
+      } else {
+        next = [{ id: `p_${Date.now()}`, name, nickname: nickname || cleanPin, pin: cleanPin, origin, addedAt: Date.now(), gender }, ...prev];
       }
-      return [{ id: `p_${Date.now()}`, name, nickname: nickname || cleanPin, pin: cleanPin, origin, addedAt: Date.now(), gender }, ...prev];
+      // Espelha imediatamente no Supabase — mirrorUser garante que o owner existe na tabela users
+      mirrorUser(userProfile);
+      mirrorPartners(userProfile.email, next);
+      return next;
     });
     setPinInput(''); setLookupName(''); setLookupFullName('');
     if (origin === 'manual') (window as any).alert(`Parceiro ${nickname} adicionado à sua lista.`);
@@ -324,7 +413,12 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const handlePartnerGenderToggle = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (id === 'me') return;
-    setPartners(prev => prev.map(p => p.id === id ? { ...p, gender: p.gender === 'M' ? 'F' : 'M' } : p));
+    setPartners(prev => {
+      const next = prev.map(p => p.id === id ? { ...p, gender: p.gender === 'M' ? 'F' : 'M' } : p);
+      mirrorUser(userProfile);
+      mirrorPartners(userProfile.email, next);
+      return next;
+    });
   };
 
   const filteredPartners = useMemo(() => [meAsPartner, ...partners].filter(p => 
@@ -353,7 +447,9 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
          id: p.id, 
          name: p.name,
          nickname: p.name, 
-         pin: p.verified ? 'VERIFIED' : '', 
+         // PIN real se verificado, QUEUE_ANONYMOUS se jogador anônimo da fila
+         // Separa explicitamente parceiros verificados (têm PIN real) de anônimos
+         pin: p.verified ? 'VERIFIED' : 'QUEUE_ANONYMOUS', 
          origin: 'manual' as const, 
          addedAt: Date.now(), 
          gender: p.gender 
@@ -388,7 +484,10 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
        onConfirmSelection(list.filter(p => selections[p.id] === 1), list.filter(p => selections[p.id] === 2));
     }
 
-    await uploadToCloud(true);
+    // Melhoria 4: só faz upload se a lista mudou desde o último upload
+    if (partners.length !== lastUploadedCountRef.current) {
+      await uploadToCloud(true);
+    }
     handleClearSelection(); 
     onBackProp();
   };
@@ -603,60 +702,40 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
             )}
             {!isSelectionMode && pendingQueueIndex === null && (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 px-1 text-blue-500"><Cloud size={18} /><h3 className="text-sm font-black text-black tracking-tight">Sincronização nuvem</h3></div>
-                <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 space-y-4">
-
-                  {/* Cards de métricas */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 flex flex-col items-center gap-1">
-                      <Database size={14} className="text-blue-500" />
-                      <span className="text-2xl font-black text-blue-700">{cloudCount}</span>
-                      <span className="text-[9px] font-black text-blue-400 uppercase tracking-wide">Nuvem</span>
+                <div className="flex items-center gap-2 px-1 text-blue-500">
+                  <Cloud size={18} />
+                  <h3 className="text-sm font-black text-black tracking-tight">Sincronização nuvem</h3>
+                  {hasPendingSync && <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" title="Há parceiros locais não sincronizados" />}
+                </div>
+                <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+                    <div className="flex flex-wrap gap-2 flex-1">
+                      <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100"><Database size={12} className="text-blue-600" /><span className="text-[11px] font-black text-blue-800">{cloudCount} <span className="opacity-40 font-bold">Cloud</span></span></div>
+                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${hasPendingSync ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
+                        <Smartphone size={12} className={hasPendingSync ? 'text-orange-500' : 'text-black'} />
+                        <span className={`text-[11px] font-black ${hasPendingSync ? 'text-orange-700' : 'text-black'}`}>
+                          {partners.length} <span className="opacity-40 font-bold">Local</span>
+                          {hasPendingSync && <span className="ml-1 text-orange-500">↑</span>}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100"><Star size={12} className="text-amber-600" fill="currentColor" /><span className="text-[11px] font-black text-amber-800">{referralCount} <span className="opacity-40 font-bold">Indicados</span></span></div>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col items-center gap-1">
-                      <Smartphone size={14} className="text-slate-500" />
-                      <span className="text-2xl font-black text-slate-700">{partners.length}</span>
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wide">Local</span>
-                    </div>
-                    <div className="bg-amber-50 p-3 rounded-2xl border border-amber-100 flex flex-col items-center gap-1">
-                      <Star size={14} className="text-amber-500" fill="currentColor" />
-                      <span className="text-2xl font-black text-amber-700">{referralCount}</span>
-                      <span className="text-[9px] font-black text-amber-400 uppercase tracking-wide">Indicados</span>
-                    </div>
-                  </div>
-
-                  {/* Alerta de pendente upload */}
-                  {partners.length > cloudCount && (
-                    <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100 flex items-center gap-3">
-                      <CloudUpload size={16} className="text-orange-500 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-orange-700 uppercase tracking-wide">Pendente envio</p>
-                        <p className="text-xs font-black text-orange-900">{partners.length - cloudCount} parceiro{partners.length - cloudCount !== 1 ? 's' : ''} ainda não enviado{partners.length - cloudCount !== 1 ? 's' : ''}</p>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => { syncAllData(); localStorage.setItem('myPlacarPartnersSyncAt', Date.now().toString()); }} disabled={isDownloading} className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 shadow-emerald-100">{isDownloading ? <Loader2 size={20} className="animate-spin" /> : <CloudDownload size={22} />}</button>
+                      <div className="relative shrink-0">
+                        <button onClick={() => uploadToCloud(false)} disabled={isUploading} className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${hasPendingSync ? 'bg-orange-500 shadow-orange-100' : 'bg-blue-600 shadow-blue-100'} text-white`}>{isUploading ? <Loader2 size={20} className="animate-spin" /> : <CloudUpload size={22} />}</button>
+                        {hasPendingSync && <span className="absolute -top-1 -right-1 w-3 h-3 bg-orange-400 rounded-full border-2 border-white animate-pulse" />}
                       </div>
                     </div>
-                  )}
-
-                  {/* Botões de sync */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => syncAllData(false)}
-                      disabled={isDownloading || cloudCount === 0}
-                      className="flex items-center justify-center gap-2 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 font-black text-xs transition-all disabled:opacity-40 active:scale-95"
-                    >
-                      {isDownloading ? <Loader2 size={16} className="animate-spin" /> : <CloudDownload size={16} />}
-                      {isDownloading ? 'Baixando...' : 'Sincronizar'}
-                    </button>
-                    <button
-                      onClick={() => uploadToCloud(false)}
-                      disabled={isUploading || partners.length === 0}
-                      className="flex items-center justify-center gap-2 p-4 rounded-2xl border font-black text-xs transition-all disabled:opacity-40 active:scale-95 relative overflow-hidden ${partners.length > cloudCount ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' : 'bg-blue-50 text-blue-700 border-blue-100'}"
-                    >
-                      {isUploading ? <Loader2 size={16} className="animate-spin" /> : <CloudUpload size={16} />}
-                      {isUploading ? 'Enviando...' : `Enviar${partners.length > cloudCount ? ` (${partners.length - cloudCount})` : ''}`}
-                    </button>
-                  </div>
-
                 </div>
+                {hasPendingSync && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+                    <CloudUpload size={16} className="text-orange-500 shrink-0" />
+                    <div>
+                      <p className="text-[11px] font-black text-orange-700 uppercase tracking-wide">Pendente envio</p>
+                      <p className="text-[11px] font-bold text-orange-600">{partners.length - cloudCount} {partners.length - cloudCount === 1 ? 'parceiro ainda não enviado' : 'parceiros ainda não enviados'}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {!isSelectionMode && pendingQueueIndex === null && (
