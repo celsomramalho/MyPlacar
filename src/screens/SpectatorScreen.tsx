@@ -106,55 +106,102 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
         <div className="w-10" />
       </header>
 
-      <main className="flex-1 flex flex-col p-6 gap-8 max-w-md mx-auto w-full">
-        <div className="bg-white/5 rounded-[3rem] p-8 border border-white/10 shadow-2xl space-y-10">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1 text-center space-y-3">
-              <div className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center shadow-lg ${SOLID_COLORS[gameState.p1.color || 'azul']}`}>
-                <span className="text-3xl font-black">{gameState.p1.sets.filter((s, i) => s > gameState.p2.sets[i]).length}</span>
-              </div>
-              <p className="text-sm font-black leading-tight">{gameState.p1.name}</p>
-              {gameState.p1.partnerName && <p className="text-[10px] font-bold text-white/40">{gameState.p1.partnerName}</p>}
-            </div>
+      <main className="flex-1 flex flex-col p-6 gap-6 max-w-md mx-auto w-full">
 
-            <div className="flex flex-col items-center gap-2">
-              <div className="bg-white/10 px-3 py-1 rounded-full">
-                <span className="text-[10px] font-black text-white/60">SET {gameState.currentSet + 1}</span>
-              </div>
-              <div className="text-4xl font-black text-blue-500">:</div>
-            </div>
+        {/* Placar principal — layout em coluna por jogador */}
+        <div className="bg-white/5 rounded-[3rem] p-6 border border-white/10 shadow-2xl">
 
-            <div className="flex-1 text-center space-y-3">
-              <div className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center shadow-lg ${SOLID_COLORS[gameState.p2.color || 'vermelho']}`}>
-                <span className="text-3xl font-black">{gameState.p2.sets.filter((s, i) => s > gameState.p1.sets[i]).length}</span>
-              </div>
-              <p className="text-sm font-black leading-tight">{gameState.p2.name}</p>
-              {gameState.p2.partnerName && <p className="text-[10px] font-bold text-white/40">{gameState.p2.partnerName}</p>}
+          {/* Cabeçalho: set atual e indicador de saque */}
+          <div className="flex justify-center mb-6">
+            <div className="bg-white/10 px-4 py-1.5 rounded-full flex items-center gap-2">
+              <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Set {gameState.currentSet + 1}</span>
+              {gameState.server && (
+                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                  · Saque: {gameState.server === 1 ? gameState.p1.name.split(' ')[0] : gameState.p2.name.split(' ')[0]}
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-8 py-6 border-y border-white/5">
-            <div className="text-center">
-              <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Game</p>
-              <span className={`text-7xl font-black tabular-nums ${gameState.server === 1 ? 'text-blue-400' : 'text-white'}`}>{gameState.p1.score}</span>
+          {/* Duas colunas — uma por jogador */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Jogador 1 */}
+            <div className="flex flex-col items-center gap-3">
+              {/* Nome */}
+              <p className="text-sm font-black leading-tight text-center">{gameState.p1.name}</p>
+              {gameState.p1.partnerName && (
+                <p className="text-[10px] font-bold text-white/40 text-center -mt-2">{gameState.p1.partnerName}</p>
+              )}
+              {/* Sets ganhos */}
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${SOLID_COLORS[gameState.p1.color || 'azul']}`}>
+                <span className="text-2xl font-black">{gameState.p1.sets.filter((s, i) => s > gameState.p2.sets[i]).length}</span>
+              </div>
+              {/* Games no set atual */}
+              <div className="bg-white/10 w-full rounded-2xl py-3 flex flex-col items-center">
+                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Games</p>
+                <span className="text-3xl font-black tabular-nums">{gameState.p1.games}</span>
+              </div>
+              {/* Score do game atual */}
+              <div className="w-full rounded-2xl py-4 flex flex-col items-center border border-white/10">
+                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Ponto</p>
+                <span className={`text-5xl font-black tabular-nums ${gameState.server === 1 ? 'text-blue-400' : 'text-white'}`}>
+                  {gameState.p1.score}
+                </span>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Game</p>
-              <span className={`text-7xl font-black tabular-nums ${gameState.server === 2 ? 'text-blue-400' : 'text-white'}`}>{gameState.p2.score}</span>
+
+            {/* Jogador 2 */}
+            <div className="flex flex-col items-center gap-3">
+              {/* Nome */}
+              <p className="text-sm font-black leading-tight text-center">{gameState.p2.name}</p>
+              {gameState.p2.partnerName && (
+                <p className="text-[10px] font-bold text-white/40 text-center -mt-2">{gameState.p2.partnerName}</p>
+              )}
+              {/* Sets ganhos */}
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${SOLID_COLORS[gameState.p2.color || 'vermelho']}`}>
+                <span className="text-2xl font-black">{gameState.p2.sets.filter((s, i) => s > gameState.p1.sets[i]).length}</span>
+              </div>
+              {/* Games no set atual */}
+              <div className="bg-white/10 w-full rounded-2xl py-3 flex flex-col items-center">
+                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Games</p>
+                <span className="text-3xl font-black tabular-nums">{gameState.p2.games}</span>
+              </div>
+              {/* Score do game atual */}
+              <div className="w-full rounded-2xl py-4 flex flex-col items-center border border-white/10">
+                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Ponto</p>
+                <span className={`text-5xl font-black tabular-nums ${gameState.server === 2 ? 'text-blue-400' : 'text-white'}`}>
+                  {gameState.p2.score}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-center gap-4">
-            <div className="bg-white/5 px-6 py-3 rounded-2xl border border-white/5 text-center">
-              <p className="text-[9px] font-black text-white/20 uppercase mb-1">Games no set</p>
-              <p className="text-xl font-black">{gameState.p1.games} - {gameState.p2.games}</p>
+          {/* Histórico de sets disputados (Sugestão C) */}
+          {gameState.p1.sets.length > 0 && (
+            <div className="mt-6 pt-5 border-t border-white/5">
+              <p className="text-[9px] font-black text-white/30 uppercase tracking-widest text-center mb-3">Histórico de sets</p>
+              <div className="flex justify-center gap-2 flex-wrap">
+                {gameState.p1.sets.map((s1, i) => {
+                  const s2 = gameState.p2.sets[i] ?? 0;
+                  const p1Won = s1 > s2;
+                  const p2Won = s2 > s1;
+                  return (
+                    <div key={i} className="flex items-center gap-1 bg-white/5 px-3 py-2 rounded-xl border border-white/10">
+                      <span className={`text-sm font-black tabular-nums ${p1Won ? SOLID_COLORS[gameState.p1.color || 'azul'].split(' ')[1] : 'text-white/40'}`}>{s1}</span>
+                      <span className="text-white/20 font-black">-</span>
+                      <span className={`text-sm font-black tabular-nums ${p2Won ? SOLID_COLORS[gameState.p2.color || 'vermelho'].split(' ')[1] : 'text-white/40'}`}>{s2}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        <div className="bg-blue-600 rounded-[2rem] p-6 flex items-center gap-4 shadow-xl shadow-blue-900/20">
-          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-            <Wifi className="text-white animate-pulse" />
+        {/* Status da conexão */}
+        <div className="bg-blue-600 rounded-[2rem] p-5 flex items-center gap-4 shadow-xl shadow-blue-900/20">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+            <Wifi className="text-white animate-pulse" size={20} />
           </div>
           <div>
             <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Status da conexão</p>
