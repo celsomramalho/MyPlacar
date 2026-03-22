@@ -133,7 +133,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       {isDimmed && (
         <div
           onClick={(e) => { e.stopPropagation(); setIsDimmed(false); resetDimTimer(); }}
-          className="fixed inset-0 z-[100002] bg-black/75 backdrop-blur-none animate-in fade-in duration-500"
+          className="fixed inset-0 z-[100002] bg-black/50 backdrop-blur-none animate-in fade-in duration-500"
         >
 
         </div>
@@ -192,9 +192,9 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             <span className="text-5xl font-black text-black relative z-10">{gameState.p1.games}</span>
           </div>
         </div>
-        <div className="h-16 flex items-center justify-center bg-slate-800/40 rounded-2xl gap-1">
-          <span className={`text-5xl font-black leading-none transition-opacity ${isDimmed ? 'text-white/30 animate-pulse' : 'text-white'}`}>{gameState.currentSet + 1}</span>
-          <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold transition-opacity ${isDimmed ? 'text-slate-600 animate-pulse' : 'text-slate-400'}`}>
+        <div className={`h-16 flex items-center justify-center rounded-2xl gap-1 transition-all ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}>
+          <span className="text-5xl font-black leading-none text-white">{gameState.currentSet + 1}</span>
+          <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold ${isDimmed ? 'text-white/70' : 'text-slate-400'}`}>
             <span>S</span>
             <span>e</span>
             <span>t</span>

@@ -62,6 +62,7 @@ interface Props {
   appUrl: string;
   cloudLiveExists?: boolean;
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
+  indicatorRole?: 'owner' | 'judge' | 'observer' | 'spectator';
   isOriginalOwner?: boolean;
   judgePinInput?: string;
   setJudgePinInput?: (val: string) => void;
@@ -252,7 +253,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners } = props;
 
   if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
     return (
@@ -670,7 +671,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
         handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
         cloudLiveExists={cloudLiveExists}
-        role={role}
+        role={indicatorRole || role}
       />
     );
   }
@@ -741,7 +742,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           </button>
           {isLiveActive && (
             <LiveIndicator 
-              role={role || (isCommandOwner ? 'owner' : 'observer')} 
+              role={role || 'observer'}
               onClick={onOpenLiveControl} 
               onPointerDown={startResetPress}
               onPointerUp={stopResetPress}
@@ -828,7 +829,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
              isEmbedded={true}
              scorePressProgress={scorePressProgress}
              cloudLiveExists={cloudLiveExists}
-             role={role}
+             role={indicatorRole || role}
            />
         </div>
         {!isOfflineMode && (
@@ -907,10 +908,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                      <div className={`w-12 h-12 rounded-2xl transition-all duration-500 flex items-center justify-center shadow-lg ${gameState.isMirroringActive && !gameState.isLiveClosed ? 'bg-sky-500' : 'bg-slate-800'}`}><QrCode size={24} className="text-white" /></div>
-                     <div className="flex flex-col min-w-0"><h3 className="text-white font-black text-lg tracking-tight leading-none mb-1">Abrir Live</h3><p className="text-[10px] font-bold text-slate-400 truncate tracking-tight">Compartilhe a partida com a torcida e controles remotos.</p></div>
+                     <div className="flex flex-col min-w-0"><h3 className="text-white font-black text-lg tracking-tight leading-none mb-1">Abrir live</h3><p className="text-[10px] font-bold text-slate-400 truncate tracking-tight">Compartilhe o placar em tempo real com qualquer dispositivo.</p></div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                     <button onClick={() => setIsMirrorExpanded(!isMirrorExpanded)} className="w-10 h-10 bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-90 transition-all border border-white/50">{isMirrorExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
+                     {isLiveActive && <button onClick={() => setIsMirrorExpanded(!isMirrorExpanded)} className="w-10 h-10 bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-90 transition-all border border-white/50">{isMirrorExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>}
                      <div className="flex items-center h-7 px-0.5">
                        <div className="relative inline-block w-12 h-7 align-middle select-none transition duration-200 ease-in">
                          <input type="checkbox" id="toggle-mirroring" checked={isLiveActive || false} onChange={(e) => handleToggleMirroringLocal(e.target.checked)} disabled={gameState.isConfirmedFinished || gameState.isLiveClosed} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out shadow-sm top-[2px] left-[2px] checked:translate-x-full" />
@@ -926,7 +927,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                  </div>
                )}
             </div>
-            {/* Bloco Live — aparece quando live está ativa (inclui cloudLiveExists para espectadores) */}
             {isLiveActive && (
             <div className={`bg-white rounded-[2.5rem] p-4 pl-7 pr-7 shadow-sm border border-gray-100 w-full animate-in fade-in transition-all duration-500 ${gameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
                <div className="flex items-center justify-between mb-4">
