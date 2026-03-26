@@ -7,6 +7,7 @@ import { Input } from '../components/Input';
 import { GameState, PointType, PointEvent, UserProfile } from '../types';
 import { useGeminiReferee } from '../hooks/useGeminiReferee';
 import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../hooks/useScoreAnnouncer';
+import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { isTennisTieBreak } from '../utils/tennisEngine';
 import { SPORT_LIST } from '../constants';
@@ -46,6 +47,7 @@ interface Props {
   isSettingsInicialSaved: boolean;
   isSettingsRegrasSaved: boolean;
   onToggleMirroring: (active: boolean) => void;
+  onToggleWatchMode?: () => void;
   onToggleLiveCollapse?: (isCollapsed: boolean) => void;
   onCorrectScore?: (type: 'game' | 'gameSet' | 'matchSet', value: string) => void;
   isAdmin?: boolean;
@@ -253,7 +255,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners } = props;
 
   if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
     return (
@@ -269,7 +271,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const resetProgressIntervalRef = useRef<any>(null);
 
   const startResetPress = () => {
-    if (!onResetMatch || role === 'observer') return;
+    if (!onResetMatch || !isCommandOwner) return;
     setResetPressProgress(0);
     const startTime = Date.now();
     resetProgressIntervalRef.current = setInterval(() => {
@@ -490,7 +492,18 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const watchLink = useMemo(() => `${mirrorLink}&viewMode=watch`, [mirrorLink]);
   const qrCodeUrl = useMemo(() => `https://quickchart.io/qr?text=${encodeURIComponent(mirrorLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`, [mirrorLink]);
 
-  const { announceFullScore, isAnnouncing } = useScoreAnnouncer(gameState);
+  // Tênis e beach tênis
+  const { announceFullScore: announceFullScoreTennis, isAnnouncing: isAnnouncingTennis } =
+    useScoreAnnouncer(gameState);
+
+  // Pickleball — hook dedicado, isolado do motor de tênis
+  const { announceFullScore: announceFullScorePickleball, isAnnouncing: isAnnouncingPickle } =
+    usePickleballAnnouncer(gameState);
+
+  // Dispatcher: encaminha para o hook correto conforme o esporte
+  const isPickleball = gameState.matchConfig.sportType === 'pickleball';
+  const announceFullScore = isPickleball ? announceFullScorePickleball : announceFullScoreTennis;
+  const isAnnouncing = isPickleball ? isAnnouncingPickle : isAnnouncingTennis;
 
   const { isListening, start, stop } = useGeminiReferee({
     onScoreP1: (type, text) => { if(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed && isCommandOwner) { createCommandLog(text || `Ponto ${currentGameStateRef.current.p1.name}`, 'cv', false, 1); onScoreUpdate(1, type, 'cv'); } },
@@ -633,8 +646,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
     setScorePressProgress(null);
     
-    if (!isLongPressActive.current && !hasDraggedRef.current && correctionMode === 'none' && !gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) {
-      if (gameState.isMirroringActive && gameState.commandOwnerId !== currentDeviceId) return;
+    if (!isLongPressActive.current && !hasDraggedRef.current && correctionMode === 'none' && !currentGameStateRef.current.isConfirmedFinished && !currentGameStateRef.current.isMatchOver && !currentGameStateRef.current.isLiveClosed) {
+      if (currentGameStateRef.current.isMirroringActive && currentGameStateRef.current.commandOwnerId !== currentDeviceId) return;
       
       // Item 8: Retirar incremento do placar do game nos botões de set (matchSet) e gameSet
       if (type === 'matchSet' || type === 'gameSet') return;
@@ -753,13 +766,21 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         </div>
         <div className="flex items-center gap-2">
           {isWatchConnected && <div className="p-2 bg-sky-100 text-sky-600 rounded-xl animate-pulse flex items-center gap-2 px-3 border border-sky-200" title="Relógio conectado"><Watch size={18} /><span className="text-[9px] font-black tracking-tight hidden md:inline">Relógio conectado</span></div>}
+          {/* Botão modo relógio — disponível para qualquer dispositivo incluindo observador */}
+          <button
+            onClick={onToggleWatchMode}
+            className={`p-2 rounded-xl flex items-center gap-1 px-3 border transition-all active:scale-90 ${gameState.matchConfig.isWatchMode ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
+            title={gameState.matchConfig.isWatchMode ? 'Sair do modo relógio' : 'Modo relógio'}
+          >
+            <Watch size={16} />
+          </button>
           <button onClick={onBack} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
             <Settings size={22} />
             {isSettingsRegrasSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
           </button>
         </div>
       </header>
-      <main className={`flex-1 p-4 max-w-2xl mx-auto w-full pb-36 overflow-y-auto no-scrollbar transition-all duration-700 ${gameState.isLiveClosed ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
+      <main className={`flex-1 p-4 max-w-2xl mx-auto w-full pb-36 overflow-y-auto no-scrollbar transition-all duration-700 ${gameState.isLiveClosed && !isOfflineMode ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
         <div className={`bg-white rounded-[2rem] shadow-sm border ${gameState.isConfirmedFinished ? 'border-emerald-400 ring-4 ring-emerald-50' : isTieBreak ? 'border-amber-300 ring-4 ring-amber-100' : 'border-gray-100'} p-4 md:p-8 flex flex-col items-center gap-4 relative`}>
            <div className="flex flex-col w-full mb-4">
              <div className="flex items-center justify-between w-full mb-2 px-2">
@@ -1005,7 +1026,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       </div>
                     )}
 
-                    {gameState.judgeNickname && !isOriginalOwner && (
+                    {gameState.judgeNickname && !isCommandOwner && (
                       <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
                         <div className="flex items-center gap-2.5">
                           <Gavel size={16} className="text-gray-400" />

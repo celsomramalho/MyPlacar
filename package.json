@@ -23,6 +23,7 @@
     "react-dom": "18.x"
   },
   "devDependencies": {
+    "@dyad-sh/react-vite-component-tagger": "^0.8.0",
     "@tailwindcss/postcss": "latest",
     "@types/leaflet": "latest",
     "@types/react": "latest",

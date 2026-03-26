@@ -1,5 +1,6 @@
 
 import { GameState, PointType } from '../types';
+import { incrementScorePickleball } from './pickleballEngine';
 
 export const incrementScore = (state: GameState, rallyWinner: 1 | 2, pointType: PointType = 'rally', source: string = 'cb'): GameState => {
   if (state.isMatchOver) return state;
@@ -21,65 +22,7 @@ export const incrementScore = (state: GameState, rallyWinner: 1 | 2, pointType: 
   }
 };
 
-const incrementScorePickleball = (state: GameState, rallyWinner: 1 | 2): GameState => {
-    const isRallyScoring = state.matchConfig.pickleballScoringMode === 'rally';
-    const isAlternateServer = state.matchConfig.pickleballServiceMode === 'alternate-server';
-    const currentServerTeam = state.server;
-    
-    if (isRallyScoring) {
-        const scorer = rallyWinner === 1 ? state.p1 : state.p2;
-        const currentScore = parseInt(scorer.score) || 0;
-        scorer.score = (currentScore + 1).toString();
-        
-        if (rallyWinner !== currentServerTeam) {
-            rotatePickleballServerGlobal(state);
-        } else {
-            if (isAlternateServer && state.matchConfig.isDoubles) {
-                state.servingOrderOffset = (state.servingOrderOffset + 2) % 4;
-            }
-        }
-    } else {
-        if (rallyWinner === currentServerTeam) {
-            const scorer = currentServerTeam === 1 ? state.p1 : state.p2;
-            const currentScore = parseInt(scorer.score) || 0;
-            scorer.score = (currentScore + 1).toString();
-            
-            if (isAlternateServer && state.matchConfig.isDoubles) {
-                state.servingOrderOffset = (state.servingOrderOffset + 2) % 4;
-            }
-        } else {
-            rotatePickleballServerGlobal(state);
-        }
-    }
-
-    const p1Score = parseInt(state.p1.score) || 0;
-    const p2Score = parseInt(state.p2.score) || 0;
-    const targetPoints = Number(state.matchConfig.gamesPerSet) || 11;
-    const winByTwo = state.matchConfig.tieBreakWinByTwo;
-
-    let finished = false;
-    if (winByTwo) {
-        if ((p1Score >= targetPoints || p2Score >= targetPoints) && Math.abs(p1Score - p2Score) >= 2) {
-            finished = true;
-        }
-    } else {
-        if (p1Score >= targetPoints || p2Score >= targetPoints) {
-            finished = true;
-        }
-    }
-
-    if (finished) {
-        winSet(state, rallyWinner);
-    }
-
-    return state;
-};
-
-const rotatePickleballServerGlobal = (state: GameState) => {
-    const maxOffset = state.matchConfig.isDoubles ? 4 : 2;
-    state.servingOrderOffset = (state.servingOrderOffset + 1) % maxOffset;
-    state.server = (state.servingOrderOffset % 2 === 0) ? 1 : 2;
-};
+// Pickleball: lógica movida para src/utils/pickleballEngine.ts
 
 export const isTennisTieBreak = (state: GameState): boolean => {
     if (state.matchConfig.sportType !== 'tennis' && state.matchConfig.sportType !== 'beach-tennis') return false;

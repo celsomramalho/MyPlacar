@@ -145,6 +145,49 @@ export interface Player {
   color?: string; 
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pickleball — tipos isolados
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Lado da quadra do sacador: par → direita (even), ímpar → esquerda (odd) */
+export type CourtSide = 'even' | 'odd';
+
+export interface PickleballServerState {
+  team: 1 | 2;
+  /** Qual jogador do time está sacando. Em simples sempre 1. */
+  serverNumber: 1 | 2;
+  /** Nome já resolvido do sacador atual */
+  serverName: string;
+  /** Lado da quadra onde o sacador está posicionado */
+  side: CourtSide;
+}
+
+export interface PickleballWinner {
+  team: 1 | 2;
+  /** Nomes formatados prontos para exibição e anúncio (ex: "João e Ana") */
+  names: string;
+}
+
+/**
+ * Estado isolado do pickleball.
+ * Não duplica campos de matchConfig (scoringMode, isDoubles) —
+ * esses são sempre lidos via state.matchConfig.
+ */
+export interface PickleballState {
+  score: {
+    team1: number;
+    team2: number;
+  };
+  server: PickleballServerState;
+  /** Transitório: true apenas durante o batch de encerramento do game.
+   *  O announcer captura o evento e o motor já reseta para false
+   *  antes do próximo render. */
+  isGameOver: boolean;
+  /** Permanente: true até reset da partida. */
+  isMatchOver: boolean;
+  winner: PickleballWinner | null;
+}
+
 export interface GameState {
   matchId: string; 
   startTime: number; 
@@ -175,6 +218,8 @@ export interface GameState {
   tournamentPin?: string;
   judgePin?: string;
   judgeNickname?: string;
+  /** Estado isolado do pickleball. Presente apenas quando sportType === 'pickleball'. */
+  pickleball?: PickleballState;
 }
 
 export interface MatchHistoryItem {

@@ -18,6 +18,7 @@ import { isValidGameState, isValidMatchSettings } from './utils/validation';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants';
 import { incrementScore, undoPoint } from './utils/tennisEngine';
+import { initPickleballState } from './utils/pickleballEngine';
 import { applyGoldenRule, maskPin } from './utils/formatters';
 import { isWatchDevice } from './utils/device';
 import { getDb, clearFirestoreCache } from './firebase';
@@ -1412,6 +1413,13 @@ const App: React.FC = () => {
       ...tournamentMeta
     };
     
+    // Inicializa sub-estado do pickleball antes de iniciar o jogo,
+    // garantindo que state.pickleball exista desde o primeiro render
+    // (o announcer precisa dele para o anúncio de início da partida).
+    if (configToUse.sportType === 'pickleball') {
+      newGameState.pickleball = initPickleballState(newGameState);
+    }
+    
     setMatchSettings(configToUse);
     startGame(newGameState);
     setCurrentScreen('scoreboard');
@@ -1997,6 +2005,11 @@ const App: React.FC = () => {
       matchDuration: 0,
       isPaused: false,
     };
+    
+    // Mesmo tratamento do fluxo online: garante state.pickleball desde o início.
+    if (offlineSettings.sportType === 'pickleball') {
+      initialGameState.pickleball = initPickleballState(initialGameState);
+    }
     startGame(initialGameState);
     setCurrentScreen('scoreboard');
     // Após o ScoreboardScreen montar e os closures serem criados,
@@ -2018,22 +2031,29 @@ const App: React.FC = () => {
       message: "Deseja zerar a partida? Esta ação não pode ser desfeita.",
       confirmLabel: "Sim, zerar",
       onConfirm: () => {
-        const resetState: GameState = {
-          ...gameState,
-          startTime: Date.now(),
-          p1: { ...gameState.p1, score: '0', games: 0, sets: [] },
-          p2: { ...gameState.p2, score: '0', games: 0, sets: [] },
-          server: 1,
-          servingOrderOffset: 0,
-          pointHistory: [],
-          history: [],
-          currentSet: 0,
-          isMatchOver: false,
-          isConfirmedFinished: false,
-          matchDuration: 0,
-          isPaused: false,
-        };
-        startGame(resetState);
+        setGameState(current => {
+          if (!current) return current;
+          const resetState: GameState = {
+            ...current,
+            startTime: Date.now(),
+            p1: { ...current.p1, score: '0', games: 0, sets: [] },
+            p2: { ...current.p2, score: '0', games: 0, sets: [] },
+            server: current.matchConfig.initialServer ?? 1,
+            servingOrderOffset: 0,
+            pointHistory: [],
+            history: [],
+            currentSet: 0,
+            isMatchOver: false,
+            isConfirmedFinished: false,
+            matchDuration: 0,
+            isPaused: false,
+            isLiveClosed: false,
+          };
+          setHistoryStack([resetState]);
+          historyStackRef.current = [resetState];
+          try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(resetState)); } catch(e) {}
+          return resetState;
+        });
         setModalConfig(null);
       },
       onCancel: () => setModalConfig(null)
@@ -2370,7 +2390,7 @@ const App: React.FC = () => {
         const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
         if (db && targetPin && navigator.onLine) try { await updateDoc(doc(db, "live_matches", targetPin), { isConfirmedFinished: true, isLiveClosed: true }); } catch (e) {} 
         setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false} : null);
-      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} indicatorRole={indicatorRole} />}
+      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}

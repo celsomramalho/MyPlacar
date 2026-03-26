@@ -1,0 +1,8 @@
+"models": [
+  {
+    "title": "LM Studio",
+    "provider": "openai",
+    "model": "nome-do-seu-modelo",
+    "apiBase": "http://localhost:1234"
+  }
+]

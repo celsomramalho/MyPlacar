@@ -80,7 +80,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   const progressIntervalRef = React.useRef<any>(null);
 
   const startPress = () => {
-    if (!onResetMatch || role === 'observer') return;
+    if (!onResetMatch || !isCommandOwner) return;
     setPressProgress(0);
     const startTime = Date.now();
     progressIntervalRef.current = setInterval(() => {
@@ -129,7 +129,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
 
   return (
-    <div className={`${isEmbedded ? 'relative w-full aspect-[4/5] rounded-[2rem]' : 'fixed inset-0 h-full w-full z-[99999]'} bg-black flex select-none touch-none overflow-hidden ${gameState.isLiveClosed ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
+    <div className={`${isEmbedded ? 'relative w-full aspect-[4/5] rounded-[2rem]' : 'fixed inset-0 h-full w-full z-[99999]'} bg-black flex select-none touch-none overflow-hidden ${gameState.isLiveClosed && !isOfflineMode ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
       {isDimmed && (
         <div
           onClick={(e) => { e.stopPropagation(); setIsDimmed(false); resetDimTimer(); }}
@@ -193,7 +193,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           </div>
         </div>
         <div className={`h-16 flex items-center justify-center rounded-2xl gap-1 transition-all ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}>
-          <span className="text-5xl font-black leading-none text-white">{gameState.currentSet + 1}</span>
+          <span className={`text-5xl font-black leading-none ${isDimmed ? 'text-black' : 'text-white'}`}>{gameState.currentSet + 1}</span>
           <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold ${isDimmed ? 'text-white/70' : 'text-slate-400'}`}>
             <span>S</span>
             <span>e</span>
