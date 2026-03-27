@@ -18,11 +18,11 @@ import { isValidGameState, isValidMatchSettings } from './utils/validation';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants';
 import { incrementScore, undoPoint } from './utils/tennisEngine';
+import { initPickleballState } from './utils/pickleballEngine';
 import { applyGoldenRule, maskPin } from './utils/formatters';
 import { isWatchDevice } from './utils/device';
 import { getDb, clearFirestoreCache } from './firebase';
-import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, getDocFromServer, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
-import { mirrorUser, mirrorMatches, mirrorPartners, deletePartners } from './services/supabaseMirror';
+import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
 import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Gavel, User, QrCode, Users } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator';
 import { useAppLogger } from './hooks/useAppLogger';
@@ -229,7 +229,15 @@ const App: React.FC = () => {
     return s;
   });
 
-  const [gameState, setGameState] = useState<GameState | null>(() => safeJsonParse('myPlacarActiveGameState', null));
+  const [gameState, setGameState] = useState<GameState | null>(() => {
+    const saved = safeJsonParse('myPlacarActiveGameState', null) as GameState | null;
+    // Se o estado restaurado é pickleball mas não tem o sub-objeto pickleball
+    // (salvo por versão anterior), reinicializa para evitar bugs de serverNumber.
+    if (saved && saved.matchConfig?.sportType === 'pickleball' && !saved.pickleball) {
+      saved.pickleball = initPickleballState(saved);
+    }
+    return saved;
+  });
 
   const isOriginalOwner = useMemo(() => {
     if (!gameState || !userProfile.pin) return false;
@@ -262,18 +270,28 @@ const App: React.FC = () => {
     return isCurrentController;
   }, [gameState?.isMirroringActive, isCurrentController]);
 
-  const liveRole = useMemo(() => { 
-    if (!cloudLiveExists) return 'spectator'; 
+  // Helper centralizado: "este dispositivo específico é o controller ativo?"
+  // Usa deviceId em vez de pin para suportar múltiplos dispositivos do mesmo usuário.
+  const isActiveController = useMemo(() => {
+    if (!activeLives.length) return false;
+    return activeLives.some(l => l.commandOwnerId === deviceId);
+  }, [activeLives, deviceId]);
+
+  const liveRole = useMemo(() => {
+    if (!cloudLiveExists) return 'spectator';
     const myPin = userProfile.pin.toUpperCase();
-    if (activeLives.some(l => l.ownerPin?.toUpperCase() === myPin)) return 'owner';
-    if (activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
-    return 'observer'; 
-  }, [cloudLiveExists, userProfile.pin, activeLives]);
+    const isOwnerPin = activeLives.some(l => l.ownerPin?.toUpperCase() === myPin);
+    const isJudgePin = activeLives.some(l => l.judgePin?.toUpperCase() === myPin);
+    // Diferencia dispositivos do mesmo usuário pelo deviceId (commandOwnerId)
+    if (isOwnerPin) return isActiveController ? 'owner' : 'observer';
+    if (isJudgePin) return isActiveController ? 'judge' : 'observer';
+    return 'observer';
+  }, [cloudLiveExists, userProfile.pin, activeLives, isActiveController]);
 
   const indicatorRole = useMemo(() => {
-    if (!isCurrentController) return 'observer';
+    if (!isActiveController) return 'observer';
     return isOriginalOwner ? 'owner' : 'judge';
-  }, [isCurrentController, isOriginalOwner]);
+  }, [isActiveController, isOriginalOwner]);
 
   const [showLiveControlOverlay, setShowLiveControlOverlay] = useState(false);
   const [confirmDeleteLive, setConfirmDeleteLive] = useState(false);
@@ -296,10 +314,8 @@ const App: React.FC = () => {
   const prevSettingsRef = useRef<MatchSettings | null>(null);
   const prevProfileRef = useRef<UserProfile | null>(null);
   const finalizationTimerRef = useRef<any>(null);
+  
   const lastSentStateRef = useRef<string>("");
-  // Timestamp do momento em que o toggle de live foi ativado
-  // Protege contra race condition no onSnapshot que revertia o estado antes do setDoc chegar ao Firebase
-  const mirrorActivatedAtRef = useRef<number>(0);
 
   const sanitizeForFirestore = (obj: any) => {
     if (!userProfile.email && !userProfile.pin) return null;
@@ -349,8 +365,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const db = getDb();
-    // userProfile.email garante que há sessão Auth ativa antes de criar o listener
-    if (!db || !userProfile.pin || !userProfile.email || !navigator.onLine) return;
+    if (!db || !userProfile.pin || !navigator.onLine) return;
 
     const q = query(
       collection(db as Firestore, 'communications'),
@@ -366,7 +381,7 @@ const App: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [userProfile.pin, userProfile.email]);
+  }, [userProfile.pin]);
 
   useEffect(() => {
     const handleAppExit = () => {
@@ -440,19 +455,17 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handleQuotaError = (e: Event) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const err = e as any;
-      const isQuotaError = err.name === 'QuotaExceededError' || 
-                          (err.reason && err.reason.name === 'QuotaExceededError') ||
-                          (err.message && err.message.includes('exceeded the quota'));
+    const handleQuotaError = (e: ErrorEvent & PromiseRejectionEvent) => {
+      const isQuotaError = e.name === 'QuotaExceededError' || 
+                          (e.reason && e.reason.name === 'QuotaExceededError') ||
+                          (e.message && e.message.includes('exceeded the quota'));
       
       if (isQuotaError) {
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
         });
 
-        if (err.message && err.message.includes('firestore_mutations')) {
+        if (e.message && e.message.includes('firestore_mutations')) {
           setModalConfig({
             title: "Erro de armazenamento",
             message: "O limite de espaço do navegador foi atingido. Deseja limpar o cache técnico e reiniciar?",
@@ -659,7 +672,19 @@ const App: React.FC = () => {
     if (!db) return;
     const myPin = userProfile.pin.toUpperCase();
     const myLive = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin || l.judgePin?.toUpperCase() === myPin);
-    const listenPin = myLive ? myLive.ownerPin?.toUpperCase() : myPin;
+
+    // Para observadores (não owner nem judge), escuta a live mais recente disponível
+    const observerLive = !myLive && activeLives.length > 0
+      ? activeLives.reduce((latest, l) =>
+          (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
+        )
+      : null;
+
+    const listenPin = myLive
+      ? myLive.ownerPin?.toUpperCase()
+      : observerLive
+        ? observerLive.ownerPin?.toUpperCase()
+        : myPin;
 
     if (!listenPin) return;
 
@@ -677,20 +702,6 @@ const App: React.FC = () => {
             if (!prev) return null;
             return { ...prev, isMirroringActive: false, isLiveClosed: true, isConfirmedFinished: cloudData.isConfirmedFinished || prev.isConfirmedFinished };
           });
-          // Notifica espectadores e controladores remotos que a live foi encerrada
-          if (matchSettings.isWatchMode) {
-            setModalConfig({
-              title: "Partida encerrada",
-              message: "A transmissão ao vivo foi encerrada pelo organizador.",
-              confirmLabel: "Ok",
-              variant: 'info',
-              onConfirm: () => {
-                setModalConfig(null);
-                setGameState(null);
-                setCurrentScreen('settings');
-              }
-            });
-          }
           return;
         }
         setCloudLiveExists(true);
@@ -732,10 +743,6 @@ const App: React.FC = () => {
         setCloudLiveExists(false);
         setGameState(prev => {
           if (!prev) return null;
-          // Proteção contra race condition: ignora reversão se o toggle foi ativado
-          // há menos de 5 segundos — o setDoc ainda pode não ter chegado ao Firebase
-          const msSinceActivation = Date.now() - mirrorActivatedAtRef.current;
-          if (prev.isMirroringActive && msSinceActivation < 5000) return prev;
           if (prev.isMirroringActive) {
             return { ...prev, isMirroringActive: false, isLiveClosed: false };
           }
@@ -810,29 +817,75 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const db = getDb();
-    // userProfile.email garante sessão Auth ativa antes de criar o listener
-    if (!db || !userProfile.email) return;
-    const q = query(collection(db, "live_matches"), where("isLiveClosed", "==", false));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const lives: GameState[] = [];
-      snap.forEach(d => lives.push(d.data() as GameState));
-      setActiveLives(lives);
-    });
-    return () => unsubscribe();
-  }, [userProfile.email]);
+    if (db) {
+      const q = query(collection(db, "live_matches"), where("isLiveClosed", "==", false));
+      const unsubscribe = onSnapshot(q, (snap) => {
+        const lives: GameState[] = [];
+        snap.forEach(d => lives.push(d.data() as GameState));
+        setActiveLives(lives);
+      });
+      return () => unsubscribe();
+    }
+  }, []);
 
   useEffect(() => {
     if (!userProfile.pin) { setCloudLiveExists(false); return; }
-    const myPin = userProfile.pin.toUpperCase();
-    const exists = activeLives.some(live => 
-      (live.ownerPin?.toUpperCase() === myPin) || 
-      (live.judgePin?.toUpperCase() === myPin)
-    );
-    setCloudLiveExists(exists);
-    if (!exists && gameState?.isMirroringActive) {
+    // Usa deviceId para detectar se ESTE dispositivo é o controller ativo
+    // (suporta múltiplos dispositivos do mesmo usuário)
+    const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
+    const hasAnyLive = activeLives.length > 0;
+    setCloudLiveExists(hasAnyLive);
+    if (!hasAnyLive && gameState?.isMirroringActive) {
       setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
     }
-  }, [activeLives, userProfile.pin, gameState?.isMirroringActive]);
+
+    // Registro automático como observador: quando há live E este dispositivo NÃO é o controller
+    if (!thisDeviceIsController && hasAnyLive && navigator.onLine && userProfile.email) {
+      const db = getDb();
+      if (db) {
+        const observerLive = activeLives.reduce((latest, l) =>
+          (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
+        );
+        const ownerPin = observerLive.ownerPin?.toUpperCase();
+        if (ownerPin) {
+          const myNickname = userProfile.nickname || userProfile.name?.split(' ')[0] || 'Observador';
+          getDoc(doc(db, "live_matches", ownerPin)).then(snap => {
+            if (snap.exists() && !snap.data().isLiveClosed) {
+              const nextControllers = { ...(snap.data().controllers || {}) };
+              if (!nextControllers[deviceId]) {
+                nextControllers[deviceId] = { label: currentFullDeviceName, nickname: myNickname, lastSeen: Date.now() };
+                updateDoc(doc(db, "live_matches", ownerPin), { controllers: nextControllers }).catch(() => {});
+              }
+            }
+          }).catch(() => {});
+        }
+      }
+    }
+  }, [activeLives, userProfile.pin, userProfile.email, userProfile.nickname, userProfile.name, gameState?.isMirroringActive, deviceId, currentFullDeviceName]);
+
+  // Detecta live disponível e exibe overlay automaticamente para dispositivos não-controller
+  const overlayShownForLiveRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userProfile.pin || !userProfile.email) return;
+    // Usa deviceId: este dispositivo NÃO é o controller ativo da live?
+    const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
+    // Mostra overlay quando há live E este dispositivo não é o controller
+    if (!thisDeviceIsController && activeLives.length > 0 && currentScreen !== 'scoreboard') {
+      const observerLive = activeLives.reduce((latest, l) =>
+        (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
+      );
+      const liveId = observerLive.ownerPin?.toUpperCase() || '';
+      // Evita mostrar o overlay múltiplas vezes para a mesma live
+      if (liveId && overlayShownForLiveRef.current !== liveId) {
+        overlayShownForLiveRef.current = liveId;
+        setShowLiveControlOverlay(true);
+      }
+    }
+    // Reseta o ref quando não há mais lives disponíveis
+    if (activeLives.length === 0) {
+      overlayShownForLiveRef.current = null;
+    }
+  }, [activeLives, userProfile.pin, userProfile.email, currentScreen, deviceId]);
 
   useEffect(() => {
     if (userProfile.email && navigator.onLine) {
@@ -1061,7 +1114,7 @@ const App: React.FC = () => {
       let count = 0;
       snap.forEach(docSnap => { if (!localIds.has(docSnap.id)) count++; });
       setCloudMatchesCount(count);
-    } catch (e) { console.error('[FIREBASE_ERR] fetchCloudMatchesCount:', e); }
+    } catch (e) {}
   }, [userProfile.email]);
 
   useEffect(() => { if (userProfile.email) fetchCloudMatchesCount(true); }, [userProfile.email, matchHistory.length, fetchCloudMatchesCount]);
@@ -1084,12 +1137,11 @@ const App: React.FC = () => {
         if (dataToSave) batch.set(matchRef, dataToSave, { merge: true });
       });
       await batch.commit();
-      mirrorMatches(unsynced, cleanEmail, userProfile.pin);
       const syncedIds = new Set(unsynced.map(u => u.id));
       const updatedList = currentList.map(m => syncedIds.has(m.id) ? { ...m, isSynced: true } : m);
       persistHistory(updatedList);
       await fetchCloudMatchesCount(true);
-    } catch (e) { console.error('[FIREBASE_ERR] syncHistoryToFirebase:', e); } finally { 
+    } catch (e) {} finally { 
       clearTimeout(safetyTimeout);
       setIsSyncing(false); 
     }
@@ -1126,28 +1178,6 @@ const App: React.FC = () => {
       }
     } catch (e) {} finally { setIsDownloading(false); }
   }, [userProfile.email, persistHistory]);
-
-  // Remove parceiros do Firebase (user_partners_metadata + subcoleção users/{pin}/partners)
-  // Fire-and-forget: não bloqueia a UI
-  const deletePartnersFromFirebase = useCallback((deletedPins: string[], remainingPartners: Partner[]) => {
-    if (!navigator.onLine || !userProfile.email) return;
-    const db = getDb();
-    if (!db) return;
-    const cleanEmail = userProfile.email.toLowerCase().trim();
-    const ownerPin = userProfile.pin.toUpperCase();
-    // 1. Atualiza user_partners_metadata com a lista restante
-    setDoc(doc(db, 'user_partners_metadata', cleanEmail), {
-      partners_list: remainingPartners,
-      updatedAt: Date.now()
-    }, { merge: true }).catch(e => console.warn('deletePartnersFromFirebase: metadata', e));
-    // 2. Remove cada parceiro da subcoleção users/{ownerPin}/partners/{pin}
-    deletedPins.forEach(pin => {
-      deleteDoc(doc(db as Firestore, 'users', ownerPin, 'partners', pin.toUpperCase()))
-        .catch(e => console.warn('deletePartnersFromFirebase: subcollection', e));
-    });
-    // 3. Espelha deleção no Supabase
-    deletePartners(cleanEmail, deletedPins);
-  }, [userProfile.email, userProfile.pin]);
 
   const canStartMatch = useMemo(() => {
     const s = matchSettings;
@@ -1390,6 +1420,18 @@ const App: React.FC = () => {
       controllers: { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now() } },
       ...tournamentMeta
     };
+    
+    // Inicializa sub-estado do pickleball antes de iniciar o jogo,
+    // garantindo que state.pickleball exista desde o primeiro render
+    // (o announcer precisa dele para o anúncio de início da partida).
+    if (configToUse.sportType === 'pickleball') {
+      newGameState.pickleball = initPickleballState(newGameState);
+      // Sincroniza servingOrderOffset com pkl.server para o marcador visual
+      // (o GameState base inicia sempre com offset 0 ou 1, ignorando serverNumber=2)
+      newGameState.servingOrderOffset =
+        (newGameState.pickleball.server.team === 1 ? 0 : 1) +
+        (newGameState.pickleball.server.serverNumber === 2 ? 2 : 0);
+    }
     
     setMatchSettings(configToUse);
     startGame(newGameState);
@@ -1652,8 +1694,6 @@ const App: React.FC = () => {
             addedAt: Date.now(),
             origin: 'manual'
           }).catch(err => console.error("Erro ao salvar parceiro no Firestore:", err));
-          mirrorUser(userProfile);
-          mirrorPartners(userProfile.email, updatedPartners);
         }
       }
 
@@ -1692,19 +1732,17 @@ const App: React.FC = () => {
   useEffect(() => { if (gameState?.isConfirmedFinished && !matchHistory.some(m => m.id === gameState.matchId)) finalizeMatchInternal(gameState); }, [gameState?.isConfirmedFinished, gameState?.matchId, finalizeMatchInternal, matchHistory]);
 
   const handleConfirmPartners = (team1: Partner[], team2: Partner[]) => {
-    // PIN real = verificado | 'VERIFIED' = da fila verificada | 'QUEUE_ANONYMOUS' = anônimo da fila
-    const isVerified = (pin: string) => !!pin && pin !== 'QUEUE_ANONYMOUS';
     setMatchSettings(prev => {
       const next = { ...prev };
       if (!prev.isDoubles) { 
-        if (team1.length > 0) { next.p1Name = team1[0].nickname; next.p1Verified = isVerified(team1[0].pin); } 
-        if (team2.length > 0) { next.p2Name = team2[0].nickname; next.p2Verified = isVerified(team2[0].pin); } 
+        if (team1.length > 0) { next.p1Name = team1[0].nickname; next.p1Verified = team1[0].pin === 'VERIFIED' || !!team1[0].pin; } 
+        if (team2.length > 0) { next.p2Name = team2[0].nickname; next.p2Verified = team2[0].pin === 'VERIFIED' || !!team2[0].pin; } 
       }
       else { 
-        if (team1.length >= 1) { next.p1Name = team1[0].nickname; next.p1Verified = isVerified(team1[0].pin); } 
-        if (team1.length >= 2) { next.p1Partner = team1[1].nickname; next.p1PartnerVerified = isVerified(team1[1].pin); } 
-        if (team2.length >= 1) { next.p2Name = team2[0].nickname; next.p2Verified = isVerified(team2[0].pin); } 
-        if (team2.length >= 2) { next.p2Partner = team2[1].nickname; next.p2PartnerVerified = isVerified(team2[1].pin); } 
+        if (team1.length >= 1) { next.p1Name = team1[0].nickname; next.p1Verified = team1[0].pin === 'VERIFIED' || !!team1[0].pin; } 
+        if (team1.length >= 2) { next.p1Partner = team1[1].nickname; next.p1PartnerVerified = team1[1].pin === 'VERIFIED' || !!team1[1].pin; } 
+        if (team2.length >= 1) { next.p2Name = team2[0].nickname; next.p2Verified = team2[0].pin === 'VERIFIED' || !!team2[0].pin; } 
+        if (team2.length >= 2) { next.p2Partner = team2[1].nickname; next.p2PartnerVerified = team2[1].pin === 'VERIFIED' || !!team2[1].pin; } 
       }
       return next;
     });
@@ -1751,17 +1789,7 @@ const App: React.FC = () => {
       if (navigator.onLine && userProfile.email) {
         const db = getDb();
         if (db) {
-          const cleanEmail = userProfile.email.toLowerCase().trim();
-          // Lê o documento atual para preservar campos gerenciados externamente
-          // (isAdmin, planType) que não devem ser sobrescritos pelo perfil local
-          const currentSnap = await getDocFromServer(doc(db as Firestore, "users", cleanEmail));
-          const currentData = currentSnap.exists() ? currentSnap.data() : {};
-          const resolvedIsAdmin = currentData.isAdmin === true;
-          const resolvedPlanType = currentData.planType || userProfile.planType || 'free';
-
-          // Campos base — nunca incluir isAdmin: false para não criar o campo
-          // onde não existe. O isAdmin só é escrito se já for true no Firebase.
-          const dataToSave: Record<string, any> = {
+          await setDoc(doc(db as Firestore, "users", userProfile.email.toLowerCase().trim()), {
             name: userProfile.name,
             nickname: userProfile.nickname,
             phone: userProfile.phone || '',
@@ -1771,23 +1799,8 @@ const App: React.FC = () => {
             isProfileComplete: userProfile.isProfileComplete,
             passkeyCredentialId: userProfile.passkeyCredentialId || null,
             passkeyPublicKey: userProfile.passkeyPublicKey || null,
-            planType: resolvedPlanType,
             updatedAt: serverTimestamp()
-          };
-          if (resolvedIsAdmin) dataToSave.isAdmin = true;
-
-          await setDoc(doc(db as Firestore, "users", cleanEmail), dataToSave, { merge: true });
-
-          const freshProfile: UserProfile = {
-            ...userProfile,
-            isAdmin: resolvedIsAdmin,
-            planType: resolvedPlanType as any,
-          };
-          mirrorUser(freshProfile);
-          // Atualiza o estado local se campos externos divergirem
-          if (resolvedIsAdmin !== userProfile.isAdmin || resolvedPlanType !== userProfile.planType) {
-            setUserProfile(freshProfile);
-          }
+          }, { merge: true });
         }
       }
     } catch (e) {
@@ -1872,7 +1885,7 @@ const App: React.FC = () => {
           if (stateToSync && targetPin) setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
         }
       }
-    } catch (e) { console.error('[FIREBASE_ERR] syncEffect:', e); }
+    } catch (e) {}
   }, [matchSettings, gameState, userProfile.pin, userProfile.email, deviceId]);
 
   const handleExitTournament = () => {
@@ -2005,6 +2018,15 @@ const App: React.FC = () => {
       matchDuration: 0,
       isPaused: false,
     };
+    
+    // Mesmo tratamento do fluxo online: garante state.pickleball desde o início.
+    if (offlineSettings.sportType === 'pickleball') {
+      initialGameState.pickleball = initPickleballState(initialGameState);
+      // Mesma sincronização do fluxo online
+      initialGameState.servingOrderOffset =
+        (initialGameState.pickleball.server.team === 1 ? 0 : 1) +
+        (initialGameState.pickleball.server.serverNumber === 2 ? 2 : 0);
+    }
     startGame(initialGameState);
     setCurrentScreen('scoreboard');
     // Após o ScoreboardScreen montar e os closures serem criados,
@@ -2026,22 +2048,29 @@ const App: React.FC = () => {
       message: "Deseja zerar a partida? Esta ação não pode ser desfeita.",
       confirmLabel: "Sim, zerar",
       onConfirm: () => {
-        const resetState: GameState = {
-          ...gameState,
-          startTime: Date.now(),
-          p1: { ...gameState.p1, score: '0', games: 0, sets: [] },
-          p2: { ...gameState.p2, score: '0', games: 0, sets: [] },
-          server: 1,
-          servingOrderOffset: 0,
-          pointHistory: [],
-          history: [],
-          currentSet: 0,
-          isMatchOver: false,
-          isConfirmedFinished: false,
-          matchDuration: 0,
-          isPaused: false,
-        };
-        startGame(resetState);
+        setGameState(current => {
+          if (!current) return current;
+          const resetState: GameState = {
+            ...current,
+            startTime: Date.now(),
+            p1: { ...current.p1, score: '0', games: 0, sets: [] },
+            p2: { ...current.p2, score: '0', games: 0, sets: [] },
+            server: current.matchConfig.initialServer ?? 1,
+            servingOrderOffset: 0,
+            pointHistory: [],
+            history: [],
+            currentSet: 0,
+            isMatchOver: false,
+            isConfirmedFinished: false,
+            matchDuration: 0,
+            isPaused: false,
+            isLiveClosed: false,
+          };
+          setHistoryStack([resetState]);
+          historyStackRef.current = [resetState];
+          try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(resetState)); } catch(e) {}
+          return resetState;
+        });
         setModalConfig(null);
       },
       onCancel: () => setModalConfig(null)
@@ -2214,7 +2243,7 @@ const App: React.FC = () => {
       )}
       <InstallPwaModal isOpen={showInstallPwa} onClose={() => setShowInstallPwa(false)} deferredPrompt={deferredPrompt} />
       {currentScreen === 'spectator' && (spectatorMatchId || spectatorPin) && <SpectatorScreen matchId={spectatorMatchId || ''} spectatorPin={spectatorPin || ''} onExit={handleExitSpectator} />}
-      {currentScreen === 'auth' && <AuthScreen appUrl={appUrl} onAuthSuccess={async (p, s) => { 
+      {currentScreen === 'auth' && <AuthScreen appUrl={appUrl} onAuthSuccess={(p, s) => { 
         setIsOfflineMode(false);
         if (s) { 
           try { 
@@ -2223,60 +2252,7 @@ const App: React.FC = () => {
             localStorage.setItem('myPlacarSavedEmail', p.email); 
           } catch(e) {} 
         } 
-        setUserProfile(p);
-        // Melhoria 2: se o novo usuário foi indicado, adicionar o indicador
-        // como parceiro automaticamente (dos dois lados da relação)
-        if (p.referredByPin && navigator.onLine) {
-          const db = getDb();
-          if (db) {
-            try {
-              const q = query(collection(db as Firestore, 'users'), where('pin', '==', p.referredByPin.toUpperCase()));
-              const snap = await getDocs(q);
-              if (!snap.empty) {
-                const referrerData = snap.docs[0].data();
-                const referrerPartner: Partner = {
-                  id: snap.docs[0].id,
-                  name: referrerData.name,
-                  nickname: referrerData.nickname || referrerData.name.split(' ')[0],
-                  pin: referrerData.pin.toUpperCase(),
-                  origin: 'referral',
-                  addedAt: Date.now(),
-                  gender: referrerData.gender || 'M'
-                };
-                // Adiciona o indicador na lista do novo usuário
-                setPartners(prev => {
-                  if (prev.some(x => x.pin.toUpperCase() === referrerPartner.pin)) return prev;
-                  const next = [referrerPartner, ...prev];
-                  // Persiste localmente e na nuvem
-                  localStorage.setItem('myPlacarPartners', JSON.stringify(next));
-                  setDoc(doc(db, 'user_partners_metadata', p.email.toLowerCase().trim()), { partners_list: next, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-                  mirrorUser(p);
-                  mirrorPartners(p.email, next);
-                  return next;
-                });
-                // Adiciona o novo usuário na lista do indicador também
-                const newUserPartner: Partner = {
-                  id: p.email,
-                  name: p.name,
-                  nickname: p.nickname || p.name.split(' ')[0],
-                  pin: p.pin.toUpperCase(),
-                  origin: 'referral',
-                  addedAt: Date.now(),
-                  gender: p.gender || 'M'
-                };
-                const referrerMetaRef = doc(db, 'user_partners_metadata', referrerData.email.toLowerCase().trim());
-                const referrerMetaSnap = await getDoc(referrerMetaRef);
-                const referrerPartnersList: Partner[] = referrerMetaSnap.exists() ? (referrerMetaSnap.data().partners_list || []) : [];
-                if (!referrerPartnersList.some((x: Partner) => x.pin.toUpperCase() === p.pin.toUpperCase())) {
-                  const updatedReferrerList = [newUserPartner, ...referrerPartnersList];
-                  setDoc(referrerMetaRef, { partners_list: updatedReferrerList, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-                  mirrorUser(referrerData as UserProfile);
-                  mirrorPartners(referrerData.email, updatedReferrerList);
-                }
-              }
-            } catch(e) { console.warn('Auto-add referrer partner:', e); }
-          }
-        }
+        setUserProfile(p); 
       }} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} initialReferralPin={initialReferralPin} onOfflineMode={handleOfflineMode} />}
       {currentScreen === 'settings' && <SettingsScreen 
         appUrl={appUrl}
@@ -2296,10 +2272,7 @@ const App: React.FC = () => {
               const fullName = d.name;
               setPartners(prev => { 
                 if (prev.some(x => x.pin.toUpperCase() === p.toUpperCase())) return prev; 
-                const next = [...prev, { id: s.docs[0].id, name: fullName, nickname: nick, pin: p.toUpperCase(), addedAt: Date.now(), origin: 'qrcode' as const, gender: d.gender }];
-                mirrorUser(userProfile);
-                mirrorPartners(userProfile.email, next);
-                return next;
+                return [...prev, { id: s.docs[0].id, name: fullName, nickname: nick, pin: p.toUpperCase(), addedAt: Date.now(), origin: 'qrcode', gender: d.gender }]; 
               }); 
               if (field) setMatchSettings(prev => ({ ...prev, [`${field}Verified`]: true })); 
               return nick; 
@@ -2309,9 +2282,7 @@ const App: React.FC = () => {
         }} 
         onDeletePartners={ids => setModalConfig({ title: "Excluir parceiros?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: () => {
           setPartners(prev => {
-            const deleted = prev.filter(p => ids.has(p.id));
             const next = prev.filter(p => !ids.has(p.id));
-            deletePartnersFromFirebase(deleted.map(p => p.pin), next);
             return next;
           });
         }, onCancel: () => setModalConfig(null) })}
@@ -2336,9 +2307,7 @@ const App: React.FC = () => {
           variant: 'danger', 
           onConfirm: () => {
             setPartners(prev => {
-              const deleted = prev.filter(p => ids.has(p.id));
               const next = prev.filter(p => !ids.has(p.id));
-              deletePartnersFromFirebase(deleted.map(p => p.pin), next);
               return next;
             });
             setPlayerQueue(prev => {
@@ -2420,16 +2389,15 @@ const App: React.FC = () => {
         setGameState(p => p ? {...p, isPaused: !p.isPaused} : null); 
       }} onBack={() => setCurrentScreen('new-game')} onHome={() => setCurrentScreen('settings')} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={a => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isLiveClosed) return; 
+        if (a) { const isStarted = (gameState.pointHistory?.length ?? 0) > 0 || gameState.p1.games > 0 || gameState.p2.games > 0 || (gameState.p1.score !== '0' && gameState.p1.score !== '') || (gameState.p2.score !== '0' && gameState.p2.score !== ''); if (isStarted) { setModalConfig({ title: "Atenção", message: "Não é possível iniciar a live com a partida em andamento.", onConfirm: () => setModalConfig(null) }); return; } }
         const db = getDb();
         if (a && db && navigator.onLine) {
-          mirrorActivatedAtRef.current = Date.now();
           const myPin = userProfile.pin?.toUpperCase();
           const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
           const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
           const nextControllers = { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now() } };
           const stateToSave = sanitizeForFirestore({...gameState, isMirroringActive: true, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false});
-          if (stateToSave && targetPin) { setDoc(doc(db, "live_matches", targetPin), stateToSave).catch((e) => console.error("live_matches setDoc error:", e, {targetPin, stateToSave: !!stateToSave})); }
-          else { console.error("live_matches setDoc skipped:", {stateToSave: !!stateToSave, targetPin, userProfileEmail: userProfile.email, userProfilePin: userProfile.pin}); }
+          if (stateToSave && targetPin) { setDoc(doc(db, "live_matches", targetPin), stateToSave).catch(() => {}); }
         }
         setGameState(p => p ? {...p, isMirroringActive: a, isLiveClosed: false, commandOwnerId: a ? deviceId : p.commandOwnerId} : null); 
       }} onCorrectScore={handleCorrectScore} isAdmin={isAdmin} onConfirmMatch={async () => {
@@ -2439,10 +2407,10 @@ const App: React.FC = () => {
         const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
         if (db && targetPin && navigator.onLine) try { await updateDoc(doc(db, "live_matches", targetPin), { isConfirmedFinished: true, isLiveClosed: true }); } catch (e) {} 
         setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false} : null);
-      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} />}
+      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as TournamentEvent); setCurrentScreen('event-detail'); }} />}
-      {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => { const next = [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual' as const, addedAt: Date.now(), gender }, ...prev]; mirrorUser(userProfile); mirrorPartners(userProfile.email, next); return next; }); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
+      {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={async (pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
       {currentScreen === 'communications' && <CommunicationsScreen userProfile={userProfile} onBack={() => setCurrentScreen('settings')} />}
     </div>
     </ErrorBoundary>
