@@ -2,13 +2,23 @@
 
 [![Vercel](https://img.shields.io/badge/deploy-vercel-blue)](https://vercel.com/) [![issues](https://img.shields.io/github/issues/celsomramalho/MyPlacar)](https://github.com/celsomramalho/MyPlacar/issues) [![license](https://img.shields.io/github/license/celsomramalho/MyPlacar)](https://github.com/celsomramalho/MyPlacar)
 
+## Run Locally
+
+**Prerequisites:**  Node.js
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
+
 Descrição
 ---------
 MyPlacar é um aplicativo para gerenciar placares de partidas em tempo real. Esta aplicação é uma PWA (Progressive Web App) escrita em TypeScript/React, com backend de dados no Firebase (Firestore) e possibilidade de empacotamento com Capacitor.
 
 Principais funcionalidades
 - Criar/editar partidas e placares em tempo real.
-- Persistência em Firestore para histórico e múltiplos dispositivos.
+- Persistência de dados com Firestore.
 - PWA com suporte offline básico (service worker).
 - Estrutura para empacotamento mobile com Capacitor.
 
@@ -37,3 +47,4 @@ Licença
 Contato
 -------
 Autor: celsomramalho — ver histórico de commits para contato direto.
+

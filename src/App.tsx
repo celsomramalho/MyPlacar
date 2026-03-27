@@ -229,7 +229,15 @@ const App: React.FC = () => {
     return s;
   });
 
-  const [gameState, setGameState] = useState<GameState | null>(() => safeJsonParse('myPlacarActiveGameState', null));
+  const [gameState, setGameState] = useState<GameState | null>(() => {
+    const saved = safeJsonParse('myPlacarActiveGameState', null) as GameState | null;
+    // Se o estado restaurado é pickleball mas não tem o sub-objeto pickleball
+    // (salvo por versão anterior), reinicializa para evitar bugs de serverNumber.
+    if (saved && saved.matchConfig?.sportType === 'pickleball' && !saved.pickleball) {
+      saved.pickleball = initPickleballState(saved);
+    }
+    return saved;
+  });
 
   const isOriginalOwner = useMemo(() => {
     if (!gameState || !userProfile.pin) return false;
