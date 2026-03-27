@@ -116,6 +116,10 @@ export const initPickleballState = (state: GameState): PickleballState => {
   const serverNumber: 1 | 2 = applyFirstServer ? 2 : 1;
   const serverName = resolveServerName(state, team, serverNumber);
 
+  // rallyOffset inicial: alinha com o team inicial
+  // team=1 → offset=0 (J1), team=2 → offset=1 (J2)
+  const rallyOffset = team === 1 ? 0 : 1;
+
   return {
     score: { team1: 0, team2: 0 },
     server: {
@@ -123,6 +127,7 @@ export const initPickleballState = (state: GameState): PickleballState => {
       serverNumber,
       serverName,
       side: 'even', // placar 0 → par → direita (sempre no início)
+      rallyOffset,
     },
     isGameOver:          false,
     isMatchOver:         false,
@@ -175,6 +180,27 @@ const rotateWithinTeam = (pkl: PickleballState, state: GameState): void => {
   );
   const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
   pkl.server.side = resolveSide(teamScore);
+};
+
+/**
+ * Avança o sacador na sequência circular fixa para rally scoring duplas:
+ *   offset 0 = J1 (team=1, serverNumber=1)
+ *   offset 1 = J2 (team=2, serverNumber=1)
+ *   offset 2 = J3 (team=1, serverNumber=2)
+ *   offset 3 = J4 (team=2, serverNumber=2)
+ *
+ * Chamado quando o sacador PERDE o rally em modo rally scoring duplas.
+ * Independente de quem ganhou — a sequência é fixa e circular.
+ */
+const rotateRallyServer = (pkl: PickleballState, state: GameState): void => {
+  const nextOffset = (pkl.server.rallyOffset + 1) % 4;
+  pkl.server.rallyOffset  = nextOffset;
+  pkl.server.team         = nextOffset % 2 === 0 ? 1 : 2;
+  pkl.server.serverNumber = nextOffset < 2 ? 1 : 2;
+  pkl.server.serverName   = resolveServerName(state, pkl.server.team, pkl.server.serverNumber);
+  // side: paridade do placar do novo time sacador
+  const newTeamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
+  pkl.server.side = resolveSide(newTeamScore);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -255,6 +281,8 @@ const processGameWin = (
     pkl.server.serverName        = resolveServerName(state, nextTeam, 1);
     pkl.server.side              = 'even'; // placar 0 → sempre direita
     pkl.isFirstServerActive      = false;  // desativa first server rule
+    // rallyOffset: alinha com o novo time sacador (nextTeam=1→0, nextTeam=2→1)
+    pkl.server.rallyOffset       = nextTeam === 1 ? 0 : 1;
 
     // Sincroniza server global
     // serverNumber sempre 1 no início do novo game → sem +2
@@ -377,45 +405,42 @@ const processSideOut = (
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Rally scoring — simples e duplas:
+ * Rally scoring:
  *
- *   Qualquer time pontua a qualquer rally.
+ *   Simples:
+ *     Sacador ganha  → pontua, mantém saque, atualiza side
+ *     Sacador perde  → pontua o recebedor, performSideOut (troca direta)
  *
- *   Sacador ganha
- *     → pontua
- *     → alternate-server (duplas)? rotateWithinTeam (já atualiza side)
- *     → senão: side = paridade do placar do time sacador (acabou de aumentar)
+ *   Duplas:
+ *     Sacador ganha  → pontua, mantém saque, atualiza side
+ *     Sacador perde  → pontua o recebedor, rotateRallyServer()
+ *                      (sequência fixa circular J1→J2→J3→J4→J1)
  *
- *   Recebedor ganha
- *     → pontua
- *     → performSideOut: muda team, serverNumber=1, serverName e side do novo time
- *
- *   Nota: side é sempre atualizado aqui — updateSide() foi removido do entry point.
+ *   Nota: side sempre atualizado aqui — updateSide() removido do entry point.
  */
 const processRallyScoring = (
   pkl: PickleballState,
   state: GameState,
   rallyWinner: 1 | 2
 ): void => {
-  const isAlternateServer =
-    state.matchConfig.pickleballServiceMode === 'alternate-server';
+  const isDoubles = state.matchConfig.isDoubles;
 
   // Sempre pontua
   if (rallyWinner === 1) pkl.score.team1++;
   else pkl.score.team2++;
 
   if (rallyWinner !== pkl.server.team) {
-    // ── Recebedor ganhou → assume o saque ────────────────────────────────────
-    // performSideOut atualiza team, serverNumber, serverName e side do novo time
-    performSideOut(pkl, state);
-
-  } else if (isAlternateServer && state.matchConfig.isDoubles) {
-    // ── Sacador ganhou, duplas, alternate-server → rotaciona dentro do time ──
-    // rotateWithinTeam já atualiza serverNumber, serverName e side
-    rotateWithinTeam(pkl, state);
+    // ── Recebedor ganhou → troca o saque ─────────────────────────────────────
+    if (isDoubles) {
+      // Duplas: sequência fixa circular J1→J2→J3→J4
+      rotateRallyServer(pkl, state);
+    } else {
+      // Simples: troca direta para o outro jogador
+      performSideOut(pkl, state);
+    }
 
   } else {
-    // ── Sacador ganhou, sem rotação ──────────────────────────────────────────
+    // ── Sacador ganhou → mantém saque ────────────────────────────────────────
     // side: paridade do placar do time sacador após o ponto
     const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
     pkl.server.side = resolveSide(teamScore);
@@ -442,10 +467,16 @@ export const incrementScorePickleball = (
   if (!state.pickleball) {
     state.pickleball = initPickleballState(state);
   }
-  // Garante que isFirstServerActive existe mesmo em estados restaurados
-  // de versões que não tinham esse campo — default seguro: false.
+  // Garante que campos adicionados em versões posteriores existem
+  // em estados restaurados do localStorage — defaults seguros.
   if (state.pickleball.isFirstServerActive === undefined) {
     state.pickleball.isFirstServerActive = false;
+  }
+  if (state.pickleball.server.rallyOffset === undefined) {
+    // Deriva do team/serverNumber atual para manter consistência
+    state.pickleball.server.rallyOffset =
+      (state.pickleball.server.team === 1 ? 0 : 1) +
+      (state.pickleball.server.serverNumber === 2 ? 2 : 0);
   }
 
   const pkl = state.pickleball;

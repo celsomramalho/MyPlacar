@@ -1426,6 +1426,11 @@ const App: React.FC = () => {
     // (o announcer precisa dele para o anúncio de início da partida).
     if (configToUse.sportType === 'pickleball') {
       newGameState.pickleball = initPickleballState(newGameState);
+      // Sincroniza servingOrderOffset com pkl.server para o marcador visual
+      // (o GameState base inicia sempre com offset 0 ou 1, ignorando serverNumber=2)
+      newGameState.servingOrderOffset =
+        (newGameState.pickleball.server.team === 1 ? 0 : 1) +
+        (newGameState.pickleball.server.serverNumber === 2 ? 2 : 0);
     }
     
     setMatchSettings(configToUse);
@@ -2017,6 +2022,10 @@ const App: React.FC = () => {
     // Mesmo tratamento do fluxo online: garante state.pickleball desde o início.
     if (offlineSettings.sportType === 'pickleball') {
       initialGameState.pickleball = initPickleballState(initialGameState);
+      // Mesma sincronização do fluxo online
+      initialGameState.servingOrderOffset =
+        (initialGameState.pickleball.server.team === 1 ? 0 : 1) +
+        (initialGameState.pickleball.server.serverNumber === 2 ? 2 : 0);
     }
     startGame(initialGameState);
     setCurrentScreen('scoreboard');
