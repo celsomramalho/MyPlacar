@@ -22,6 +22,27 @@ const SOLID_COLORS: Record<string, string> = {
   roxo: 'bg-purple-600 text-white',
 };
 
+const ServerIndicator: React.FC<{
+  serverNumber: number;
+  side: 'even' | 'odd';
+  teamColor: string;
+  position: 'top' | 'bottom';
+}> = ({ serverNumber, side, teamColor, position }) => {
+  const bgColor = SOLID_COLORS[teamColor] || 'bg-blue-600 text-white';
+  const posClass = position === 'top' ? 'top-2' : 'bottom-2';
+  const alignClass = side === 'even' ? 'right-2' : 'left-2';
+
+  return (
+    <div className={`absolute ${posClass} ${alignClass} z-20 flex items-center justify-center`}>
+      <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg p-0.5">
+        <div className={`w-full h-full rounded-full flex items-center justify-center ${bgColor} font-black text-[10px] shadow-inner`}>
+          S{serverNumber}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,7 +163,15 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
                 <span className="text-3xl font-black tabular-nums">{gameState.p1.games}</span>
               </div>
               {/* Score do game atual */}
-              <div className="w-full rounded-2xl py-4 flex flex-col items-center border border-white/10">
+              <div className="w-full rounded-2xl py-4 flex flex-col items-center border border-white/10 relative">
+                {gameState.matchConfig.sportType === 'pickleball' && gameState.pickleball?.server.team === 1 && (
+                  <ServerIndicator 
+                    serverNumber={gameState.pickleball.server.serverNumber}
+                    side={gameState.pickleball.server.side}
+                    teamColor={gameState.p1.color || 'azul'}
+                    position="bottom"
+                  />
+                )}
                 <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Ponto</p>
                 <span className={`text-5xl font-black tabular-nums ${gameState.server === 1 ? 'text-blue-400' : 'text-white'}`}>
                   {gameState.p1.score}
@@ -167,7 +196,15 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
                 <span className="text-3xl font-black tabular-nums">{gameState.p2.games}</span>
               </div>
               {/* Score do game atual */}
-              <div className="w-full rounded-2xl py-4 flex flex-col items-center border border-white/10">
+              <div className="w-full rounded-2xl py-4 flex flex-col items-center border border-white/10 relative">
+                {gameState.matchConfig.sportType === 'pickleball' && gameState.pickleball?.server.team === 2 && (
+                  <ServerIndicator 
+                    serverNumber={gameState.pickleball.server.serverNumber}
+                    side={gameState.pickleball.server.side}
+                    teamColor={gameState.p2.color || 'vermelho'}
+                    position="top"
+                  />
+                )}
                 <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Ponto</p>
                 <span className={`text-5xl font-black tabular-nums ${gameState.server === 2 ? 'text-blue-400' : 'text-white'}`}>
                   {gameState.p2.score}

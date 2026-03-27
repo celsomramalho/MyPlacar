@@ -128,60 +128,6 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
 
-  // ── Indicador de saque ────────────────────────────────────────────────────
-  // Renderiza para pickleball, tênis e beach tênis.
-  // team 1 → ancorado no bottom do card; team 2 → ancorado no top do card.
-  // Pickleball: posição horizontal por pkl.server.side (even=direita, odd=esquerda).
-  // Tênis / beach: sempre centralizado (sem regra de lado).
-  // opacity 0 quando não saca — espaço reservado, sem deslocar layout.
-  const renderServerIndicator = (team: 1 | 2) => {
-    const sport = gameState.matchConfig.sportType;
-    if (sport !== 'pickleball' && sport !== 'tennis' && sport !== 'beach-tennis') return null;
-
-    const isServing   = gameState.server === team;
-    const isDoubles   = gameState.matchConfig.isDoubles;
-    const pkl         = gameState.pickleball;
-
-    // Número do servidor: pickleball usa pkl.server; tênis deriva do servingOrderOffset
-    const srvNum: 1 | 2 = pkl
-      ? pkl.server.serverNumber
-      : (gameState.servingOrderOffset >= 2 ? 2 : 1);
-    const label = isDoubles ? `S${srvNum}` : 'S';
-
-    // Posição horizontal via style inline (evita purge do Tailwind)
-    const side = (sport === 'pickleball' && pkl) ? pkl.server.side : null;
-    const justifyContent =
-      side === 'even' ? 'flex-end' :
-      side === 'odd'  ? 'flex-start' :
-      'center';
-
-    // Posição vertical
-    const posClass = team === 1 ? 'bottom-2' : 'top-2';
-
-    // Cor do texto = cor do time sacador
-    const textColorClass = team === 1
-      ? TEXT_COLORS[gameState.p1.color || 'azul']
-      : TEXT_COLORS[gameState.p2.color || 'vermelho'];
-
-    return (
-      <div
-        className={`absolute ${posClass} left-3 right-3 flex z-20 pointer-events-none`}
-        style={{ justifyContent }}
-      >
-        <div
-          className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
-          style={{
-            boxShadow: '0 1px 6px rgba(0,0,0,0.4)',
-            opacity: isServing ? 1 : 0,
-            transition: 'opacity 150ms',
-          }}
-        >
-          <span className={`text-[11px] font-black leading-none ${textColorClass}`}>{label}</span>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className={`${isEmbedded ? 'relative w-full aspect-[4/5] rounded-[2rem]' : 'fixed inset-0 h-full w-full z-[99999]'} bg-black flex select-none touch-none overflow-hidden ${gameState.isLiveClosed && !isOfflineMode ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
       {isDimmed && (
@@ -296,7 +242,27 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           )}
           <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 ${gameState.server === 1 ? 'text-[#bef264]' : 'text-white'}`}>{gameState.p1.score}</span>
           {remoteActionFeedback === 'P1_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
-          {renderServerIndicator(1)}
+          {/* Indicador de saque — time 1: posição bottom, lado por paridade (pickleball) ou centralizado (tênis) */}
+          {(() => {
+            const sport = gameState.matchConfig.sportType;
+            const showSrv = sport === 'pickleball' || sport === 'tennis' || sport === 'beach-tennis';
+            if (!showSrv) return null;
+            const isServing = gameState.server === 1;
+            const isDoubles = gameState.matchConfig.isDoubles;
+            const pkl = gameState.pickleball;
+            const srvNum = pkl ? pkl.server.serverNumber : (gameState.servingOrderOffset >= 2 ? 2 : 1);
+            const label = isDoubles ? `S${srvNum}` : 'S';
+            const side = (sport === 'pickleball' && pkl) ? pkl.server.side : null;
+            const justify = side === 'even' ? 'justify-end' : side === 'odd' ? 'justify-start' : 'justify-center';
+            const colorClass = WATCH_COLORS[gameState.p1.color || 'azul'];
+            return (
+              <div className={`absolute bottom-2 left-2 right-2 flex ${justify} z-10 pointer-events-none`}>
+                <div className={`w-8 h-8 rounded-full bg-white flex items-center justify-center ring-1 ring-white/30 ${isServing ? 'visible' : 'invisible'}`}>
+                  <span className={`text-xs font-black ${TEXT_COLORS[gameState.p1.color || 'azul']}`}>{label}</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
         
         <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
@@ -367,7 +333,26 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           )}
           <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 ${gameState.server === 2 ? 'text-[#bef264]' : 'text-white'}`}>{gameState.p2.score}</span>
           {remoteActionFeedback === 'P2_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
-          {renderServerIndicator(2)}
+          {/* Indicador de saque — time 2: posição top, lado por paridade (pickleball) ou centralizado (tênis) */}
+          {(() => {
+            const sport = gameState.matchConfig.sportType;
+            const showSrv = sport === 'pickleball' || sport === 'tennis' || sport === 'beach-tennis';
+            if (!showSrv) return null;
+            const isServing = gameState.server === 2;
+            const isDoubles = gameState.matchConfig.isDoubles;
+            const pkl = gameState.pickleball;
+            const srvNum = pkl ? pkl.server.serverNumber : (gameState.servingOrderOffset >= 2 ? 2 : 1);
+            const label = isDoubles ? `S${srvNum}` : 'S';
+            const side = (sport === 'pickleball' && pkl) ? pkl.server.side : null;
+            const justify = side === 'even' ? 'justify-end' : side === 'odd' ? 'justify-start' : 'justify-center';
+            return (
+              <div className={`absolute top-2 left-2 right-2 flex ${justify} z-10 pointer-events-none`}>
+                <div className={`w-8 h-8 rounded-full bg-white flex items-center justify-center ring-1 ring-white/30 ${isServing ? 'visible' : 'invisible'}`}>
+                  <span className={`text-xs font-black ${TEXT_COLORS[gameState.p2.color || 'vermelho']}`}>{label}</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

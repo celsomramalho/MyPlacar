@@ -104,16 +104,16 @@ const updateSide = (pkl: PickleballState): void => {
  * facilitando anúncio e exibição sem recalcular a cada render.
  */
 export const initPickleballState = (state: GameState): PickleballState => {
-  const { matchConfig, currentSet, pointHistory } = state;
+  const { matchConfig } = state;
   const isDoubles  = matchConfig.isDoubles;
   const isSideOut  = matchConfig.pickleballScoringMode !== 'rally';
   const team       = (matchConfig.initialServer ?? 1) as 1 | 2;
 
-  // First server rule: duplas + side-out + game inicial
-  const isFirstGame  = currentSet === 0 && pointHistory.length === 0;
-  const serverNumber: 1 | 2 =
-    isDoubles && isSideOut && isFirstGame ? 2 : 1;
-
+  // First server rule: duplas + side-out.
+  // Em vez de inferir pelo pointHistory.length (falha após restauração de sessão),
+  // usamos isFirstServerActive como flag explícito persistido no estado.
+  const applyFirstServer = isDoubles && isSideOut;
+  const serverNumber: 1 | 2 = applyFirstServer ? 2 : 1;
   const serverName = resolveServerName(state, team, serverNumber);
 
   return {
@@ -124,9 +124,10 @@ export const initPickleballState = (state: GameState): PickleballState => {
       serverName,
       side: 'even', // placar 0 → par → direita (sempre no início)
     },
-    isGameOver:  false,
-    isMatchOver: false,
-    winner:      null,
+    isGameOver:          false,
+    isMatchOver:         false,
+    winner:              null,
+    isFirstServerActive: applyFirstServer, // true = first server rule em vigor
   };
 };
 
@@ -158,6 +159,8 @@ const performSideOut = (pkl: PickleballState, state: GameState): void => {
   // side: paridade do placar do novo time sacador
   const newTeamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
   pkl.server.side = resolveSide(newTeamScore);
+  // Primeiro side-out desativa a first-server rule para o restante da partida
+  pkl.isFirstServerActive = false;
 };
 
 /**
@@ -245,11 +248,13 @@ const processGameWin = (
     state.p2.games   = 0;
 
     // Sacador do próximo game: time que PERDEU (regra convencional de torneios)
+    // First server rule não se aplica a games subsequentes — só ao primeiro game.
     const nextTeam: 1 | 2       = winner === 1 ? 2 : 1;
     pkl.server.team              = nextTeam;
     pkl.server.serverNumber      = 1;
     pkl.server.serverName        = resolveServerName(state, nextTeam, 1);
     pkl.server.side              = 'even'; // placar 0 → sempre direita
+    pkl.isFirstServerActive      = false;  // desativa first server rule
 
     // Sincroniza server global
     // serverNumber sempre 1 no início do novo game → sem +2
@@ -431,9 +436,16 @@ export const incrementScorePickleball = (
   state: GameState,
   rallyWinner: 1 | 2
 ): GameState => {
-  // Inicializa sub-estado se ainda não existe
+  // Inicializa sub-estado se ainda não existe (nova partida)
+  // ou se foi restaurado do localStorage sem o campo pickleball
+  // (versão antiga salva antes de esta estrutura existir).
   if (!state.pickleball) {
     state.pickleball = initPickleballState(state);
+  }
+  // Garante que isFirstServerActive existe mesmo em estados restaurados
+  // de versões que não tinham esse campo — default seguro: false.
+  if (state.pickleball.isFirstServerActive === undefined) {
+    state.pickleball.isFirstServerActive = false;
   }
 
   const pkl = state.pickleball;

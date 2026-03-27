@@ -186,6 +186,14 @@ export interface PickleballState {
   /** Permanente: true até reset da partida. */
   isMatchOver: boolean;
   winner: PickleballWinner | null;
+  /**
+   * Flag explícito: true enquanto a first-server rule ainda está ativa
+   * (primeiro time ainda não cedeu o saque pela primeira vez).
+   * Persiste no localStorage — não é inferido pelo pointHistory.length,
+   * que falharia após restauração de sessão.
+   * Setado false no primeiro side-out ou no início do segundo game.
+   */
+  isFirstServerActive: boolean;
 }
 
 export interface GameState {
