@@ -1,28 +1,21 @@
+/**
+ * tennisEngine.ts — Motor dedicado ao Tênis e Beach Tênis
+ *
+ * Responsabilidades:
+ *   - Progressão de pontos: 0 / 15 / 30 / 40 / Ad / winGame
+ *   - Tie-break (com ou sem win-by-two, pontos configuráveis)
+ *   - Rotação de saque por game e por tie-break
+ *   - Encerramento de set e partida
+ *
+ * NÃO importa pickleballEngine. NÃO conhece o sportType 'pickleball'.
+ * O roteamento entre motores é responsabilidade de scoreEngine.ts.
+ */
 
-import { GameState, PointType } from '../types';
-import { incrementScorePickleball } from './pickleballEngine';
+import { GameState } from '../types';
 
-export const incrementScore = (state: GameState, rallyWinner: 1 | 2, pointType: PointType = 'rally', source: string = 'cb'): GameState => {
-  if (state.isMatchOver) return state;
-
-  const newState = JSON.parse(JSON.stringify(state)) as GameState;
-  
-  newState.pointHistory.push({
-      winner: rallyWinner,
-      type: pointType,
-      server: newState.server,
-      scoreBefore: `${newState.p1.score}-${newState.p2.score}`,
-      source
-  });
-
-  if (newState.matchConfig.sportType === 'pickleball') {
-    return incrementScorePickleball(newState, rallyWinner);
-  } else {
-    return incrementScoreTennis(newState, rallyWinner);
-  }
-};
-
-// Pickleball: lógica movida para src/utils/pickleballEngine.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// Consulta de estado — exportada para uso em UI e announcers
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const isTennisTieBreak = (state: GameState): boolean => {
     if (state.matchConfig.sportType !== 'tennis' && state.matchConfig.sportType !== 'beach-tennis') return false;
@@ -38,7 +31,11 @@ export const isTennisTieBreak = (state: GameState): boolean => {
     return state.p1.games === t1 && state.p2.games === t2;
 };
 
-const incrementScoreTennis = (state: GameState, player: 1 | 2): GameState => {
+// ─────────────────────────────────────────────────────────────────────────────
+// Motor principal — exportado para scoreEngine.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const incrementScoreTennis = (state: GameState, player: 1 | 2): GameState => {
   const scorer = player === 1 ? state.p1 : state.p2;
   const opponent = player === 1 ? state.p2 : state.p1;
 
@@ -142,9 +139,8 @@ const rotateServer = (state: GameState) => {
 };
 
 const winSet = (state: GameState, winner: 1 | 2) => {
-  const isPickle = state.matchConfig.sportType === 'pickleball';
-  const p1Final = isPickle ? (parseInt(state.p1.score) || 0) : state.p1.games;
-  const p2Final = isPickle ? (parseInt(state.p2.score) || 0) : state.p2.games;
+  const p1Final = state.p1.games;
+  const p2Final = state.p2.games;
   
   const lastPoint = state.pointHistory[state.pointHistory.length - 1];
   if (lastPoint) lastPoint.resultingScore = `${p1Final}-${p2Final}`;
@@ -169,6 +165,10 @@ const winSet = (state: GameState, winner: 1 | 2) => {
     rotateServer(state);
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Undo — reexportado via scoreEngine
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const undoPoint = (historyStack: GameState[]): GameState | null => {
     if (historyStack.length > 1) return historyStack[historyStack.length - 2];
