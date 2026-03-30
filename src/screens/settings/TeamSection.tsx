@@ -100,7 +100,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   useEffect(() => {
     const fetchIcons = async () => {
       const db = getDb();
-      if (!db || !userProfile?.email) return;
+      if (!db) return;
       try {
         const snap = await getDocs(collection(db, "sport_icons"));
         const icons: Record<string, string> = {};
@@ -111,7 +111,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
       }
     };
     fetchIcons();
-  }, [userProfile?.email]);
+  }, []);
 
   const canStart = useMemo(() => {
     const hasP1 = settings.p1Name.trim().length > 0;

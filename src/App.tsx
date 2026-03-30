@@ -606,6 +606,10 @@ const App: React.FC = () => {
         }
 
         if (!remoteVersion || remoteVersion === localVersion) return false;
+
+        // Evita reabrir o modal se o usuário já confirmou a atualização nesta sessão
+        const alreadyTriggered = sessionStorage.getItem('myPlacarUpdateTriggered');
+        if (alreadyTriggered === remoteVersion) return false;
         
         if (isNewer(remoteVersion, localVersion)) {
           setModalConfig({
@@ -613,32 +617,27 @@ const App: React.FC = () => {
             message: `Uma nova versão (${remoteVersion}) está disponível. Deseja atualizar agora?`,
             confirmLabel: "Sim, atualizar",
             onConfirm: async () => {
+              sessionStorage.setItem('myPlacarUpdateTriggered', remoteVersion);
               setModalConfig(null);
-              // 1. Sinaliza ao SW em espera para assumir imediatamente
-              if ('serviceWorker' in navigator) {
-                try {
-                  const reg = await navigator.serviceWorker.getRegistration();
-                  if (reg?.waiting) {
-                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                    // Aguarda o novo SW assumir antes de recarregar
-                    await new Promise<void>(resolve => {
-                      navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
-                      setTimeout(resolve, 2000); // fallback se não receber evento
-                    });
-                  }
-                } catch (e) {}
-              }
-              // 2. Limpa todos os caches para garantir assets novos
+
+              // Limpa todos os caches do browser para garantir assets novos
               if ('caches' in window) {
                 try {
                   const keys = await caches.keys();
                   await Promise.all(keys.map(k => caches.delete(k)));
                 } catch (e) {}
               }
-              // 3. Recarrega com parâmetro de cache-bust
-              const url = new URL(window.location.href);
-              url.searchParams.set('v', remoteVersion);
-              window.location.href = url.toString();
+
+              // Desregistra o SW para forçar o browser a buscar tudo da rede
+              if ('serviceWorker' in navigator) {
+                try {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(regs.map(r => r.unregister()));
+                } catch (e) {}
+              }
+
+              // Recarrega sem cache (hard reload equivalente)
+              window.location.href = window.location.origin + window.location.pathname + '?v=' + remoteVersion;
             },
             onCancel: () => setModalConfig(null)
           });

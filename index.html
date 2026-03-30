@@ -58,7 +58,7 @@
 
     <script>
       (function() {
-        const CURRENT_VERSION = '2.5.06';
+        const CURRENT_VERSION = '2.5.08';
         const lastVersion = localStorage.getItem('myPlacar_AppVersion');
         
         if (lastVersion !== CURRENT_VERSION) {
@@ -66,6 +66,10 @@
           localStorage.setItem('myPlacar_AppVersion', CURRENT_VERSION);
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+          }
+          // Limpa caches do browser para garantir que os assets novos sejam buscados da rede
+          if ('caches' in window) {
+            caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))));
           }
         }
 
