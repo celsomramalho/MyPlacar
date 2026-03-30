@@ -1,4 +1,4 @@
-const CACHE_NAME = 'myplacar-v2.5.06';
+const CACHE_NAME = 'myplacar-v2.5.07';
 
 // Assets essenciais que sempre devem estar em cache
 const PRECACHE_URLS = [
@@ -92,20 +92,16 @@ self.addEventListener('fetch', (event) => {
 
   // Navegação e index.html: Stale-While-Revalidate
   // Entrega o cache instantaneamente e atualiza em segundo plano.
-  // Exceção: se a URL tiver ?v= (cache-bust de atualização), força busca na rede.
   if (event.request.mode === 'navigate' ||
       url.pathname === '/' ||
       url.pathname === '/index.html') {
-    const isCacheBust = url.searchParams.has('v');
     event.respondWith(
       caches.match(event.request).then((cached) => {
         const networkFetch = fetch(event.request).then((res) => {
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, res.clone()));
           return res;
         }).catch(() => cached); // se falhar na rede, usa o cache
-        // Se for um reload forçado de atualização, vai direto para a rede
-        if (isCacheBust || !cached) return networkFetch;
-        return cached;
+        return cached || networkFetch;
       })
     );
     return;

@@ -17,7 +17,7 @@ import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointT
 import { isValidGameState, isValidMatchSettings } from './utils/validation';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants';
-import { incrementScore, undoPoint } from './utils/scoreEngine';
+import { incrementScore, undoPoint } from './utils/tennisEngine';
 import { initPickleballState } from './utils/pickleballEngine';
 import { applyGoldenRule, maskPin } from './utils/formatters';
 import { isWatchDevice } from './utils/device';

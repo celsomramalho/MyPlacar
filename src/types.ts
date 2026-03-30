@@ -160,6 +160,13 @@ export interface PickleballServerState {
   serverName: string;
   /** Lado da quadra onde o sacador está posicionado */
   side: CourtSide;
+  /**
+   * Posição na sequência circular de sacadores para rally scoring duplas.
+   * 0=J1(p1), 1=J2(p2), 2=J3(p1.partner), 3=J4(p2.partner)
+   * Avança a cada rally perdido pelo sacador atual.
+   * Ignorado em simples e em side-out scoring.
+   */
+  rallyOffset: number;
 }
 
 export interface PickleballWinner {
