@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <script type="module">import { injectIntoGlobalHook } from "/@react-refresh";
+injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;</script>
+
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>MyPlacar Pro</title>
+    
+    <!-- Pwa primary meta tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="My placar" />
+    <meta name="application-name" content="My placar" />
+    <meta name="theme-color" content="#ffffff" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='6' width='28' height='20' rx='4' fill='%231e293b'/%3E%3Cpath d='M2 10c0-2.209 1.791-4 4-4h20c2.209 0 4 1.791 4 4v1H2v-1z' fill='%23334155'/%3E%3Crect x='8' y='4' width='2' height='4' rx='1' fill='%2394a3b8'/%3E%3Crect x='22' y='4' width='2' height='4' rx='1' fill='%2394a3b8'/%3E%3Crect x='5' y='13' width='10' height='10' rx='1' fill='%23ef4444'/%3E%3Crect x='9' y='15' width='2' height='6' rx='1' stroke='white' stroke-width='1.5' fill='none'/%3E%3Crect x='17' y='13' width='10' height='10' rx='1' fill='%233b82f6'/%3E%3Cpath d='M21 16h2l-2 4h2' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    
+    <link rel="manifest" href="manifest.json" />
+
+    
+    <style>
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: white;
+        z-index: 99999;
+        transition: opacity 0.5s ease-out;
+      }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+</head>
+  <body>
+    <div id="app-loader">
+      <div class="spinner"></div>
+      <p style="margin-top: 16px; font-family: sans-serif; font-weight: bold; color: #64748b; font-size: 14px;">Iniciando MyPlacar...</p>
+    </div>
+
+    <script>
+      (function() {
+        const CURRENT_VERSION = '2.5.06';
+        const lastVersion = localStorage.getItem('myPlacar_AppVersion');
+        
+        if (lastVersion !== CURRENT_VERSION) {
+          localStorage.removeItem('myPlacarActiveGameState');
+          localStorage.setItem('myPlacar_AppVersion', CURRENT_VERSION);
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+          }
+        }
+
+        window.addEventListener('app-ready', () => {
+          const loader = document.getElementById('app-loader');
+          if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 500);
+          }
+        });
+      })();
+    </script>
+    <div id="brightness-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; pointer-events: none; z-index: 9999; opacity: 0;"></div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

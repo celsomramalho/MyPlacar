@@ -1048,7 +1048,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       <SettingsTabs 
         activeTab="none"
         setActiveTab={(tab) => onNavigateToTab?.(tab)}
-        onOpenRules={() => onNavigateToTab?.('help')}
+        onOpenRules={() => onBack()}
         isSettingsInicialSaved={isSettingsInicialSaved}
         isSettingsRegrasSaved={isSettingsRegrasSaved}
         isMirroringActive={isLiveActive}

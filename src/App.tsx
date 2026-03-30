@@ -2047,34 +2047,58 @@ const App: React.FC = () => {
       message: "Deseja zerar a partida? Esta ação não pode ser desfeita.",
       confirmLabel: "Sim, zerar",
       onConfirm: () => {
-        setGameState(current => {
-          if (!current) return current;
-          const resetState: GameState = {
-            ...current,
-            startTime: Date.now(),
-            p1: { ...current.p1, score: '0', games: 0, sets: [] },
-            p2: { ...current.p2, score: '0', games: 0, sets: [] },
-            server: current.matchConfig.initialServer ?? 1,
-            servingOrderOffset: 0,
-            pointHistory: [],
-            history: [],
-            currentSet: 0,
-            isMatchOver: false,
-            isConfirmedFinished: false,
-            matchDuration: 0,
-            isPaused: false,
-            isLiveClosed: false,
-          };
-          setHistoryStack([resetState]);
-          historyStackRef.current = [resetState];
-          try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(resetState)); } catch(e) {}
-          return resetState;
-        });
+        const current = gameState;
+        const initialServer = current.matchConfig.initialServer ?? 1;
+
+        const resetState: GameState = {
+          ...current,
+          matchId: `match_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          startTime: Date.now(),
+          p1: {
+            ...current.p1,
+            name: current.matchConfig.p1Name,
+            partnerName: current.matchConfig.p1Partner,
+            color: current.matchConfig.p1Color,
+            score: '0',
+            games: 0,
+            sets: []
+          },
+          p2: {
+            ...current.p2,
+            name: current.matchConfig.p2Name,
+            partnerName: current.matchConfig.p2Partner,
+            color: current.matchConfig.p2Color,
+            score: '0',
+            games: 0,
+            sets: []
+          },
+          server: initialServer,
+          servingOrderOffset: initialServer === 1 ? 0 : 1,
+          pointHistory: [],
+          history: [],
+          currentSet: 0,
+          isMatchOver: false,
+          isConfirmedFinished: false,
+          matchDuration: 0,
+          isPaused: false,
+          isLiveClosed: false,
+          pickleball: undefined,
+        };
+
+        if (resetState.matchConfig.sportType === 'pickleball') {
+          resetState.pickleball = initPickleballState(resetState);
+          resetState.server = resetState.pickleball.server.team;
+          resetState.servingOrderOffset =
+            (resetState.pickleball.server.team === 1 ? 0 : 1) +
+            (resetState.pickleball.server.serverNumber === 2 ? 2 : 0);
+        }
+
+        startGame(resetState);
         setModalConfig(null);
       },
       onCancel: () => setModalConfig(null)
     });
-  }, [gameState]);
+  }, [gameState, startGame]);
 
   return (
     <ErrorBoundary>
