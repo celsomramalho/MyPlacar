@@ -115,6 +115,13 @@ const NUM_WORDS: Record<number, string> = {
 };
 const numToWord = (n: number): string => NUM_WORDS[n] ?? n.toString();
 
+/**
+ * Fonética pt-BR de "tie-break" para engines TTS.
+ * "tái-breique" é pronunciado corretamente pelo Google, Microsoft e Apple TTS pt-BR.
+ * Mude aqui para ajustar a pronúncia globalmente.
+ */
+export const TIE_BREAK_TTS = 'tái-breique';
+
 /** "saque do Joao" ou "saque de Ana" — heuristica por terminacao do nome */
 const saquePrep = (name: string): string => {
   const feminine = /[aáàãâéèêíìîóòõôúùû]$/i.test(name.trim());
@@ -366,7 +373,7 @@ export const buildAnnouncementTennis = (
     const [gamesServ, gamesRecv] = getGamesFromServer(state);
     return (
       `Placar do set ${numToWord(gamesServ)} a ${numToWord(gamesRecv)}, ` +
-      `inicio do tie break, zero a zero, saque ${saquePrep(serverName)}.`
+      `inicio do ${TIE_BREAK_TTS}, zero a zero, saque ${saquePrep(serverName)}.`
     );
   }
 
@@ -468,7 +475,7 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     let text: string;
     if (isTB) {
       const tbScore = getTieBreakScoreText(gameState);
-      text = `Tie break, ${tbScore}, saque ${saquePrep(serverName)}.`;
+      text = `${TIE_BREAK_TTS}, ${tbScore}, saque ${saquePrep(serverName)}.`;
     } else {
       const gameScore = getGameScoreText(gameState);
       text = (

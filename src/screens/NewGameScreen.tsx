@@ -82,6 +82,13 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
     }
   }, [settings.gamesPerSet, settings.tieBreakAt, setSettings]);
 
+  // Zera tie-break automaticamente quando sets muda para 1 (melhor de 1 não tem tie-break)
+  useEffect(() => {
+    if (settings.sets === 1 && settings.tieBreak) {
+      setSettings(prev => ({ ...prev, tieBreak: false }));
+    }
+  }, [settings.sets, settings.tieBreak, setSettings]);
+
   const handleSportSelect = (sportId: string) => {
     if (isReadOnly) return;
     const globalSettings = {
@@ -281,17 +288,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
             )}
             {settings.sportType === 'pickleball' && <Toggle disabled={isReadOnly} id="toggle-winbytwo-main" label="Diferença de 2 pontos" checked={settings.tieBreakWinByTwo} onChange={v => setSettings({...settings, tieBreakWinByTwo: v})} />}
             {settings.sportType === 'pickleball' && (
-              <div className="space-y-3 pt-2 border-t border-gray-50">
-                <span className="text-sm font-black text-black block">Tipo de saque</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button 
-                    disabled={isReadOnly}
-                    onClick={() => setSettings({...settings, pickleballServiceMode: 'switch-side'})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballServiceMode === 'switch-side' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Sacador troca de lado</button>
-                  <button 
-                    disabled={isReadOnly}
-                    onClick={() => setSettings({...settings, pickleballServiceMode: 'alternate-server'})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballServiceMode === 'alternate-server' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Sacador não troca de lado</button>
-                </div>
-              </div>
+              <Toggle disabled={isReadOnly} id="toggle-pickleball-service-mode" label="Tipo de sacador: sacador troca de lado" checked={settings.pickleballServiceMode === 'switch-side'} onChange={v => setSettings({...settings, pickleballServiceMode: v ? 'switch-side' : 'alternate-server'})} />
             )}
             {settings.sportType !== 'pickleball' && <Toggle disabled={isReadOnly || settings.sportType === 'beach-tennis'} id="toggle-noad" label="Sem vantagem (no-ad)" checked={settings.noAd} onChange={v => setSettings({...settings, noAd: v})} />}
             {settings.sportType !== 'pickleball' && <Toggle disabled={isReadOnly} id="toggle-switchside" label="Troca de lado no ímpar" checked={settings.switchSidesOdd} onChange={v => setSettings({...settings, switchSidesOdd: v})} />}
@@ -300,7 +297,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
 
         <div className={`bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-6 ${isReadOnly ? 'opacity-70 pointer-events-none' : ''}`}>
           <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><Target size={20} /></div><h2 className="text-sm font-black text-black">Tie break</h2></div>
-          <Toggle disabled={isReadOnly} id="toggle-tb" label="Habilitar tie break" checked={settings.tieBreak} onChange={v => setSettings({...settings, tieBreak: v})} />
+          <Toggle disabled={isReadOnly || settings.sets === 1} id="toggle-tb" label="Habilitar tie break" checked={settings.tieBreak} onChange={v => setSettings({...settings, tieBreak: v})} />
           {settings.tieBreak && (
             <div className="space-y-6 animate-in slide-in-from-top-4">
               {settings.sportType !== 'pickleball' && (

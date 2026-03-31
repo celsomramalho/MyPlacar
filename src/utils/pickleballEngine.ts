@@ -203,6 +203,56 @@ const rotateRallyServer = (pkl: PickleballState, state: GameState): void => {
   pkl.server.side = resolveSide(newTeamScore);
 };
 
+/**
+ * Atribui o sacador correto ao time que acabou de ganhar o saque (alternate-server).
+ *
+ * Regra: o placar do time após o ponto determina qual jogador saca e de que lado:
+ *   par  → serverNumber 1 → side 'even' (direita)
+ *   ímpar → serverNumber 2 → side 'odd'  (esquerda)
+ *
+ * Garante que sacador 1 saca sempre à direita e sacador 2 sempre à esquerda.
+ * rallyOffset atualizado para manter sincronismo com o marcador visual.
+ */
+const assignServerByScore = (
+  pkl: PickleballState,
+  state: GameState,
+  team: 1 | 2
+): void => {
+  const teamScore       = team === 1 ? pkl.score.team1 : pkl.score.team2;
+  const serverNumber: 1 | 2 = teamScore % 2 === 0 ? 1 : 2;
+  pkl.server.team         = team;
+  pkl.server.serverNumber = serverNumber;
+  pkl.server.side         = resolveSide(teamScore);
+  pkl.server.serverName   = resolveServerName(state, team, serverNumber);
+  // rallyOffset: team=1 + srvNum=1→0 | team=2 + srvNum=1→1 | team=1 + srvNum=2→2 | team=2 + srvNum=2→3
+  pkl.server.rallyOffset  = (team === 1 ? 0 : 1) + (serverNumber === 2 ? 2 : 0);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Detecção de tie-break
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retorna true quando a partida está em modo tie-break.
+ * Condições:
+ *   1. matchConfig.tieBreak === true
+ *   2. Melhor de N sets com N > 1 (tie-break em melhor de 1 não faz sentido)
+ *   3. Sets empatados em (setsToWin - 1) × cada lado
+ *      Ex: melhor de 3 → setsNeeded=2 → empate em 1-1
+ *
+ * Exportada para ser reutilizada pelo announcer sem duplicar lógica.
+ */
+export const isPickleballTieBreak = (state: GameState): boolean => {
+  const { tieBreak, setsToWin } = state.matchConfig;
+  if (!tieBreak) return false;
+  const totalSets = Number(setsToWin) || 1;
+  if (totalSets <= 1) return false; // melhor de 1 não há tie-break de set
+  const setsNeeded = Math.ceil(totalSets / 2);
+  const p1SetsWon = state.p1.sets.filter((s, i) => s > (state.p2.sets[i] ?? 0)).length;
+  const p2SetsWon = state.p2.sets.filter((s, i) => s > (state.p1.sets[i] ?? 0)).length;
+  return p1SetsWon === setsNeeded - 1 && p2SetsWon === setsNeeded - 1;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Verificação de vitória do game
 // ─────────────────────────────────────────────────────────────────────────────
@@ -211,8 +261,12 @@ const checkGameWinner = (
   pkl: PickleballState,
   state: GameState
 ): 1 | 2 | null => {
-  const target    = Number(state.matchConfig.gamesPerSet) || 11;
-  const winByTwo  = state.matchConfig.tieBreakWinByTwo ?? true;
+  // Em tie-break, usa tieBreakPoints e tieBreakWinByTwo independentemente
+  const isTB     = isPickleballTieBreak(state);
+  const target   = isTB
+    ? (Number(state.matchConfig.tieBreakPoints) || 15)
+    : (Number(state.matchConfig.gamesPerSet) || 11);
+  const winByTwo = state.matchConfig.tieBreakWinByTwo ?? true;
   const { team1, team2 } = pkl.score;
 
   const wins = (mine: number, theirs: number): boolean =>
@@ -429,21 +483,35 @@ const processRallyScoring = (
   if (rallyWinner === 1) pkl.score.team1++;
   else pkl.score.team2++;
 
+  const isAlternateServer =
+    isDoubles && state.matchConfig.pickleballServiceMode === 'alternate-server';
+
   if (rallyWinner !== pkl.server.team) {
     // ── Recebedor ganhou → troca o saque ─────────────────────────────────────
     if (isDoubles) {
-      // Duplas: sequência fixa circular J1→J2→J3→J4
-      rotateRallyServer(pkl, state);
+      if (isAlternateServer) {
+        // alternate-server: sacador definido pela paridade do placar do time vencedor
+        assignServerByScore(pkl, state, rallyWinner);
+      } else {
+        // switch-side: sequência fixa circular J1→J2→J3→J4
+        rotateRallyServer(pkl, state);
+      }
     } else {
       // Simples: troca direta para o outro jogador
       performSideOut(pkl, state);
     }
 
   } else {
-    // ── Sacador ganhou → mantém saque ────────────────────────────────────────
-    // side: paridade do placar do time sacador após o ponto
-    const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-    pkl.server.side = resolveSide(teamScore);
+    // ── Sacador ganhou ────────────────────────────────────────────────────────
+    const isSwitchSide = !isAlternateServer;
+    if (isSwitchSide) {
+      // switch-side: mesmo jogador continua, só troca de lado pela paridade
+      const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
+      pkl.server.side = resolveSide(teamScore);
+    } else {
+      // alternate-server: parceiro assume o saque, side pela paridade do novo placar
+      rotateWithinTeam(pkl, state);
+    }
   }
 };
 
@@ -521,7 +589,11 @@ export const whoHasPickleballGamePoint = (
   state: GameState
 ): 1 | 2 | null => {
   if (pkl.isMatchOver || pkl.isGameOver) return null;
-  const target   = Number(state.matchConfig.gamesPerSet) || 11;
+  // Em tie-break usa tieBreakPoints como alvo; game normal usa gamesPerSet
+  const isTB     = isPickleballTieBreak(state);
+  const target   = isTB
+    ? (Number(state.matchConfig.tieBreakPoints) || 15)
+    : (Number(state.matchConfig.gamesPerSet) || 11);
   const winByTwo = state.matchConfig.tieBreakWinByTwo ?? true;
 
   const isGP = (mine: number, theirs: number): boolean =>
@@ -540,6 +612,29 @@ export const whoHasPickleballMatchPoint = (
   state: GameState
 ): 1 | 2 | null => {
   if (pkl.isMatchOver) return null;
+
+  // ── Tie-break: branch separada com condição de "penúltimo ponto exato" ────
+  // Anuncia match point APENAS quando o placar atinge exatamente target-1
+  // (primeira vez que um time pode vencer). Evita repetir o anúncio nas
+  // rodadas estendidas além do target (ex: 15-14, 16-15 com target=15).
+  const isTB = isPickleballTieBreak(state);
+  if (isTB) {
+    const target   = Number(state.matchConfig.tieBreakPoints) || 15;
+    const winByTwo = state.matchConfig.tieBreakWinByTwo ?? true;
+    const { team1, team2 } = pkl.score;
+
+    const isMP = (mine: number, theirs: number): boolean =>
+      winByTwo
+        ? mine === target - 1 && mine > theirs   // ex: 14 a 12 com target=15
+        : mine === target - 1;                   // ex: 14 a X com target=15
+
+    // No tie-break ambos os lados já estão a um set da vitória (implícito)
+    if (isMP(team1, team2)) return 1;
+    if (isMP(team2, team1)) return 2;
+    return null;
+  }
+
+  // ── Game normal: delega para whoHasPickleballGamePoint ───────────────────
   const setsNeeded =
     Math.ceil((Number(state.matchConfig.setsToWin) || 1) / 2) || 1;
   const p1SetsWon = state.p1.sets.filter(

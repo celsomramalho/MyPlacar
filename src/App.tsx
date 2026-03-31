@@ -1896,10 +1896,62 @@ const App: React.FC = () => {
     if (!gameState || !isCommandOwner || gameState.isMatchOver) return;
     setIsSettingsInicialSaved(true);
     persistMatchSettings();
-    const totalGames = gameState.p1.games + gameState.p2.games;
-    const expectedServingTeam = (totalGames % 2 === 0) ? 1 : 2;
     let nextState = JSON.parse(JSON.stringify(gameState)) as GameState;
     let nextSettings = { ...matchSettings };
+
+    // ── Pickleball rally scoring: lógica própria ──────────────────────────────
+    const isPickleballRally =
+      nextState.matchConfig.sportType === 'pickleball' &&
+      nextState.matchConfig.pickleballScoringMode === 'rally';
+
+    if (isPickleballRally && nextState.pickleball) {
+      // rallyOffset: team=1 principal→0, team=2 principal→1, team=1 parceiro→2, team=2 parceiro→3
+      const newOffset = (team === 1 ? 0 : 1) + (isPartner ? 2 : 0);
+      const newServerNumber: 1 | 2 = isPartner ? 2 : 1;
+      const sacadorScore = team === 1 ? nextState.pickleball.score.team1 : nextState.pickleball.score.team2;
+      const newSide = sacadorScore % 2 === 0 ? 'even' : 'odd';
+
+      nextState.pickleball.server.team         = team;
+      nextState.pickleball.server.serverNumber = newServerNumber;
+      nextState.pickleball.server.rallyOffset  = newOffset;
+      nextState.pickleball.server.side         = newSide;
+      // serverName: resolve pelo nome atual no estado (p1.name / p1.partnerName etc.)
+      if (team === 1) {
+        nextState.pickleball.server.serverName = isPartner
+          ? (nextState.p1.partnerName || nextState.p1.name)
+          : nextState.p1.name;
+      } else {
+        nextState.pickleball.server.serverName = isPartner
+          ? (nextState.p2.partnerName || nextState.p2.name)
+          : nextState.p2.name;
+      }
+
+      nextState.server             = team;
+      nextState.servingOrderOffset = newOffset;
+      nextState.matchConfig = { ...nextState.matchConfig, ...nextSettings };
+      setMatchSettings(nextSettings);
+      prevSettingsRef.current = { ...nextSettings };
+      setGameState(nextState);
+      setIsSettingsInicialSaved(true);
+      try {
+        localStorage.setItem('myPlacarSettings', JSON.stringify(nextSettings));
+        localStorage.setItem('myPlacarActiveGameState', JSON.stringify(nextState));
+      } catch(e) {}
+      if (nextState.isMirroringActive && userProfile.email && navigator.onLine && nextState.commandOwnerId === deviceId) {
+        const db = getDb();
+        if (db) {
+          const targetPin = isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState.ownerPin?.toUpperCase();
+          const stateToSync = sanitizeForFirestore(nextState);
+          if (stateToSync && targetPin) setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
+        }
+      }
+      if (navigator.vibrate) navigator.vibrate(30);
+      return;
+    }
+
+    // ── Outros modos (tennis, side-out, simples) ──────────────────────────────
+    const totalGames = gameState.p1.games + gameState.p2.games;
+    const expectedServingTeam = (totalGames % 2 === 0) ? 1 : 2;
 
     if (team !== expectedServingTeam) {
       const p1Tmp = { ...nextState.p1 };

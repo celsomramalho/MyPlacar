@@ -18,8 +18,9 @@ import {
   whoHasPickleballGamePoint,
   whoHasPickleballMatchPoint,
   shouldSwitchSidesMidGame,
+  isPickleballTieBreak,
 } from '../utils/pickleballEngine';
-import { speakSystem, speakGemini, unlockAudio } from './useScoreAnnouncer';
+import { speakSystem, speakGemini, unlockAudio, TIE_BREAK_TTS } from './useScoreAnnouncer';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilitários de texto
@@ -112,10 +113,21 @@ export const buildAnnouncementPickleball = (
     const finishedIdx = state.currentSet - 1;
     const s1 = state.p1.sets[finishedIdx] ?? 0;
     const s2 = state.p2.sets[finishedIdx] ?? 0;
-    return (
-      `Game encerrado! ${numWord(s1)} a ${numWord(s2)}. ` +
-      `Próximo game, ${score}.`
-    );
+    const gameEndPrefix = `Game encerrado! ${numWord(s1)} a ${numWord(s2)}. `;
+
+    // Se após o game os sets ficaram empatados e tie-break está habilitado,
+    // anuncia início do tie-break em vez de "próximo game"
+    if (isPickleballTieBreak(state)) {
+      const serverStr = isDoubles
+        ? `, servidor ${SERVER_NUMBER_TEXT[pkl.server.serverNumber]},`
+        : ',';
+      return (
+        gameEndPrefix +
+        `${TIE_BREAK_TTS}! Zero a zero${serverStr} ${pkl.server.serverName}.`
+      );
+    }
+
+    return gameEndPrefix + `Próximo game, ${score}.`;
   }
 
   // C) Troca de lado no meio do game decisivo
