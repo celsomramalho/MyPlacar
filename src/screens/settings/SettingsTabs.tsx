@@ -33,7 +33,7 @@ export const SettingsTabs: React.FC<Props> = ({
   // Layout simplificado para o modo Offline
   if (isOfflineMode) {
     return (
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-12 pt-3 pb-10 flex justify-around items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-12 pt-3 pb-safe flex justify-around items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
         <button onClick={onExitOffline} className={getBtnClass(false)}>
           <div className="w-10 h-10 rounded-full flex items-center justify-center text-red-500 bg-red-50 shadow-sm border border-red-100">
             <LogOut size={22} />
@@ -57,7 +57,7 @@ export const SettingsTabs: React.FC<Props> = ({
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-4 pt-3 pb-10 flex justify-between items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-4 pt-3 pb-safe flex justify-between items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
       <button onClick={() => setActiveTab('config')} className={getBtnClass(activeTab === 'config')}>
         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors duration-500 relative ${activeTab === 'config' ? (isSettingsInicialSaved ? 'bg-emerald-500 shadow-md' : 'bg-amber-500 shadow-md') : (isSettingsInicialSaved ? 'bg-emerald-500 shadow-md opacity-50' : 'bg-amber-500 shadow-md opacity-50')}`}>
           <ScoreboardIcon className="w-6 h-6 text-white" />

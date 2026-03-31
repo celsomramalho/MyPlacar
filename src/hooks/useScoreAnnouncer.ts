@@ -122,6 +122,13 @@ const numToWord = (n: number): string => NUM_WORDS[n] ?? n.toString();
  */
 export const TIE_BREAK_TTS = 'tái-breique';
 
+/**
+ * Fonética pt-BR de "ace" para engines TTS.
+ * "éis" reproduz a pronúncia inglesa usada pelos narradores esportivos brasileiros.
+ * Mude aqui para ajustar globalmente.
+ */
+export const ACE_TTS = 'éis';
+
 /** "saque do Joao" ou "saque de Ana" — heuristica por terminacao do nome */
 const saquePrep = (name: string): string => {
   const feminine = /[aáàãâéèêíìîóòõôúùû]$/i.test(name.trim());
@@ -417,7 +424,7 @@ export const buildAnnouncementTennis = (
   const lastPoint = state.pointHistory?.[state.pointHistory.length - 1];
   const gameScore = getGameScoreText(state);
   const sportType = state.matchConfig.sportType;
-  if (lastPoint?.type === 'ace')   return `Ace! Placar do game ${gameScore}.`;
+  if (lastPoint?.type === 'ace')   return `${ACE_TTS}! Placar do game ${gameScore}.`;
   if (lastPoint?.type === 'fault') {
     const faultLabel = sportType === 'beach-tennis' ? 'Erro de saque' : 'Dupla falta';
     return `${faultLabel}, placar do game ${gameScore}.`;

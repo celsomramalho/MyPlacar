@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Safe-area padding para rodapés — respeita barra de gestos do celular.
+   Com viewport-fit=cover ativo, env(safe-area-inset-bottom) retorna
+   o recuo real do dispositivo (0 em botões físicos, ~20-34px em gesture nav). */
+.pb-safe {
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+
 /* Animação de pulso lento e dramático para o indicador de dim no relógio */
 @keyframes dim-pulse {
   0%, 100% { opacity: 1; }

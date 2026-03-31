@@ -20,7 +20,7 @@ import {
   shouldSwitchSidesMidGame,
   isPickleballTieBreak,
 } from '../utils/pickleballEngine';
-import { speakSystem, speakGemini, unlockAudio, TIE_BREAK_TTS } from './useScoreAnnouncer';
+import { speakSystem, speakGemini, unlockAudio, TIE_BREAK_TTS, ACE_TTS } from './useScoreAnnouncer';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilitários de texto
@@ -149,7 +149,10 @@ export const buildAnnouncementPickleball = (
     return `Game point ${name}! ${score}.`;
   }
 
-  // B) Ponto normal
+  // B) Ponto normal — com detecção de ace/erro de saque
+  const lastPoint = state.pointHistory?.[state.pointHistory.length - 1];
+  if (lastPoint?.type === 'ace')   return `${ACE_TTS}! ${score}.`;
+  if (lastPoint?.type === 'fault') return `Erro de saque. ${score}.`;
   return `${score}.`;
 };
 

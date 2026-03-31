@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { RotateCcw, Zap, Settings, X, Trophy, VolumeX, Wifi, WifiOff } from 'lucide-react';
+import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw } from 'lucide-react';
 import { GameState, PointType } from '../types';
 import { LiveIndicator } from './LiveIndicator';
 
@@ -75,29 +75,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
   isEmbedded, scorePressProgress, cloudLiveExists, role
 }) => {
-  const [pressProgress, setPressProgress] = React.useState(0);
-  const pressTimerRef = React.useRef<any>(null);
-  const progressIntervalRef = React.useRef<any>(null);
-
-  const startPress = () => {
-    if (!onResetMatch || !isCommandOwner) return;
-    setPressProgress(0);
-    const startTime = Date.now();
-    progressIntervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      setPressProgress(Math.min((elapsed / 3000) * 100, 100));
-    }, 50);
-    pressTimerRef.current = setTimeout(() => {
-      stopPress();
-      onResetMatch();
-    }, 3000);
-  };
-
-  const stopPress = () => {
-    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    setPressProgress(0);
-  };
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
 
   const renderWatchInitial = (team: 1 | 2, isPartner: boolean) => {
@@ -300,63 +278,95 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         </div>
         
         <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
-          <button onClick={() => { resetDimTimer(); handleUndoWithLog(); }} disabled={!isCommandOwner} className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5"><RotateCcw size={32} strokeWidth={4} /></button>
+          <button onClick={() => { resetDimTimer(); handleUndoWithLog(); }} disabled={!isCommandOwner} className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5"><RotateCcw size={34} strokeWidth={4} /></button>
           <button 
             disabled={!isCommandOwner} 
             onClick={() => onScoreUpdate(gameState.server, 'ace', 'cb')} 
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
               SOLID_COLORS[gameState.server === 1 ? (gameState.p1.color || 'azul') : (gameState.p2.color || 'vermelho')]
             }`}
           >
-            <Zap size={28} fill="currentColor" />
+            <Zap size={30} fill="currentColor" />
           </button>
-          {isLiveActive ? (
-            <LiveIndicator 
-              role={role || (isCommandOwner ? 'owner' : 'observer')} 
-              variant="header" 
-              onClick={onOpenLiveControl}
-              onPointerDown={startPress}
-              onPointerUp={stopPress}
-              onPointerLeave={stopPress}
-              progress={pressProgress}
-              className="w-14 h-14 bg-white/5 rounded-2xl border border-white/10 shadow-lg" 
-            />
-          ) : (
-            <button 
-              onPointerDown={startPress}
-              onPointerUp={stopPress}
-              onPointerLeave={stopPress}
-              className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 border-white relative overflow-hidden ${isOfflineMode ? 'bg-yellow-500 text-black' : 'bg-emerald-500 text-white'}`}
-            >
-              {pressProgress > 0 && (
-                <div 
-                  className="absolute inset-0 bg-black/10 origin-left transition-all duration-75" 
-                  style={{ transform: `scaleX(${pressProgress / 100})` }} 
-                />
-              )}
-              {isOfflineMode ? <WifiOff size={28} className="relative z-10" /> : <Wifi size={28} className="relative z-10" />}
-            </button>
-          )}
+          <button
+            onClick={() => { resetDimTimer(); setIsMenuOpen(true); }}
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden ${
+              isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
+              isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
+              'border-white bg-emerald-500 text-white'
+            }`}
+          >
+            {isLiveActive
+              ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-full h-full" />
+              : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
+            }
+          </button>
           <button 
             disabled={!isCommandOwner} 
             onClick={() => onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb')} 
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
               SOLID_COLORS[gameState.server === 1 ? (gameState.p2.color || 'vermelho') : (gameState.p1.color || 'azul')]
             }`}
           >
-            <X size={32} strokeWidth={5} />
+            <X size={34} strokeWidth={5} />
           </button>
-          {!isEmbedded && (
-            <button onClick={onBack} className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5">
-              <Settings size={28} />
-            </button>
-          )}
           {dimProgress > 0 && !isDimmed && (
             <div className="absolute bottom-0 left-0 right-0 h-2 bg-white/20 pointer-events-none">
               <div className="h-full bg-white transition-none" style={{ width: `${dimProgress}%` }} />
             </div>
           )}
         </div>
+
+        {/* Bottom sheet — menu do botão wifi/live */}
+        {isMenuOpen && (
+          <div
+            className="fixed inset-0 z-[999999] flex flex-col justify-end"
+            onPointerDown={() => setIsMenuOpen(false)}
+          >
+            <div
+              className="bg-[#1e293b] rounded-t-3xl border-t border-white/10 p-4 space-y-2"
+              onPointerDown={e => e.stopPropagation()}
+            >
+              {/* Handle visual */}
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3" />
+
+              {/* Live / Controle — só se live ativo */}
+              {isLiveActive && (
+                <button
+                  onClick={() => { setIsMenuOpen(false); onOpenLiveControl?.(); }}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
+                >
+                  <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-8 h-8 shrink-0" />
+                  <span className="font-black text-sm">Live / Controle</span>
+                </button>
+              )}
+
+              {/* Regras */}
+              <button
+                onClick={() => { setIsMenuOpen(false); onBack(); }}
+                className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
+              >
+                <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl">
+                  <Settings size={18} />
+                </div>
+                <span className="font-black text-sm">Regras</span>
+              </button>
+
+              {/* Zerar partida — só se commandOwner */}
+              {isCommandOwner && onResetMatch && (
+                <button
+                  onClick={() => { setIsMenuOpen(false); onResetMatch(); }}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-red-500/20 active:bg-red-500/30 text-red-400 transition-colors"
+                >
+                  <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-red-500/30 rounded-xl">
+                    <RefreshCw size={18} />
+                  </div>
+                  <span className="font-black text-sm">Zerar partida</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 2); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
           {scorePressProgress?.player === 2 && scorePressProgress?.type === 'game' && (
