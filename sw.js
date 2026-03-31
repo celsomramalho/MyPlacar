@@ -1,4 +1,4 @@
-const CACHE_NAME = 'myplacar-v2.5.08';
+const CACHE_NAME = 'myplacar-v2.5.09';
 
 // Assets essenciais que sempre devem estar em cache
 const PRECACHE_URLS = [
