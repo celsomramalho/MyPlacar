@@ -1,3 +1,12 @@
+// Guard global: evita que erros não capturados matem a avaliação do SW
+self.addEventListener('error', (e) => {
+  console.warn('MyPlacar SW: erro global interceptado:', e.message);
+});
+self.addEventListener('unhandledrejection', (e) => {
+  console.warn('MyPlacar SW: promise rejeitada não tratada:', e.reason);
+  e.preventDefault();
+});
+
 const CACHE_NAME = 'myplacar-v2.5.10';
 
 // Assets essenciais que sempre devem estar em cache
