@@ -55,9 +55,14 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
   }, [cloudLiveExists, role]);
 
   useEffect(() => {
+    if (isOfflineMode || !userProfile?.email) {
+      setDbCategories(SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true })));
+      setDbSports(SPORT_LIST.map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true })));
+      return;
+    }
     const fetchData = async () => {
       const db = getDb();
-      if (!db || !userProfile?.email) return;
+      if (!db) return;
       try {
         const catSnap = await getDocs(collection(db, "category_icons"));
         const sportSnap = await getDocs(collection(db, "sport_icons"));
@@ -72,7 +77,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
       } catch (e) { console.error(e); }
     };
     fetchData();
-  }, [userProfile?.email]);
+  }, [userProfile?.email, isOfflineMode]);
 
   useEffect(() => {
     if (settings.gamesPerSet === 4 && settings.tieBreakAt !== '3-3') {
@@ -346,6 +351,16 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         )}
 
         {!isOfflineMode && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 px-2"><Mic size={20} className="text-blue-500" /><h2 className="text-sm font-black text-black">Voz e narração</h2></div>
+            <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
+              <Toggle id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
+              <Toggle id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
+            </div>
+          </div>
+        )}
+
+        {!isOfflineMode && (
           <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-2 shadow-sm border border-white space-y-2">
             <button onClick={() => setIsGeneralOpen(!isGeneralOpen)} className="w-full flex items-center justify-between p-4 px-6 text-black">
                <div className="flex items-center gap-3"><Settings size={20} /><span className="text-sm font-black">Configurações locais</span></div>
@@ -353,12 +368,6 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
             </button>
             {isGeneralOpen && (
               <div className="px-4 pb-6 space-y-6 animate-in slide-in-from-top-2">
-                <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
-                   <div className="flex items-center gap-3 mb-2"><Mic size={18} className="text-blue-500" /><span className="text-sm font-black text-black">Voz e narração</span></div>
-                   <Toggle id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
-                   <Toggle id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
-                </div>
-                
                 <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-8">
                   <div className="space-y-4">
                     <span className="text-sm font-black text-black">Brilho da tela</span>

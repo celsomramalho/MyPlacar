@@ -26,7 +26,15 @@ import type { UserProfile, MatchHistoryItem, Partner } from '../types';
 const isDev = import.meta.env.DEV;
 
 const warn = (fn: string, err: unknown) => {
+  // Sempre loga em dev para facilitar diagnóstico do espelho Supabase
   if (isDev) console.warn(`[supabaseMirror] ${fn}:`, err);
+  // Em produção, loga apenas se for erro crítico (não PostgrestError de conflito)
+  else {
+    const msg = (err as any)?.message || '';
+    if (!msg.includes('duplicate') && !msg.includes('conflict')) {
+      console.warn(`[supabaseMirror] ${fn}:`, msg);
+    }
+  }
 };
 
 // ─── tipos internos de ícone ────────────────────────────────────────────────

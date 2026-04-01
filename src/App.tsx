@@ -21,8 +21,9 @@ import { incrementScore, undoPoint } from './utils/tennisEngine';
 import { initPickleballState } from './utils/pickleballEngine';
 import { applyGoldenRule, maskPin } from './utils/formatters';
 import { isWatchDevice } from './utils/device';
-import { getDb, clearFirestoreCache } from './firebase';
+import { getDb, getAuthInstance, clearFirestoreCache } from './firebase';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Gavel, User, QrCode, Users } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator';
 import { useAppLogger } from './hooks/useAppLogger';
@@ -173,6 +174,22 @@ const App: React.FC = () => {
   });
 
   const { logs, clearLogs } = useAppLogger();
+
+  // isAuthReady: true assim que o Firebase Auth resolver a sessão (ou confirmar ausência).
+  // O auto-login pelo localStorage pula o AuthScreen, então request.auth chega null
+  // no Firestore até o SDK restaurar a sessão do IndexedDB — o que é assíncrono.
+  // Sem esse guard, uploadToCloud e syncAllData disparam antes do auth estar pronto
+  // e recebem "Missing or insufficient permissions" mesmo com usuário logado.
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  useEffect(() => {
+    const auth = getAuthInstance();
+    if (!auth) { setIsAuthReady(true); return; } // sem auth, libera sem bloquear
+    const unsub = onAuthStateChanged(auth, () => {
+      setIsAuthReady(true);
+      unsub(); // só precisa da primeira resolução
+    });
+    return () => unsub();
+  }, []);
   const [showLogViewer, setShowLogViewer] = useState(false);
   const [versionTapCount, setVersionTapCount] = useState(0);
 
@@ -1796,8 +1813,11 @@ const App: React.FC = () => {
             pin: userProfile.pin,
             authMethod: userProfile.authMethod || 'pin',
             isProfileComplete: userProfile.isProfileComplete,
-            passkeyCredentialId: userProfile.passkeyCredentialId || null,
-            passkeyPublicKey: userProfile.passkeyPublicKey || null,
+            // Omite os campos de passkey quando ausentes — evita gravar null e
+            // sobrescrever um valor existente em cadastros que já têm passkey.
+            // Com merge:true, campos omitidos do payload não são tocados no Firestore.
+            ...(userProfile.passkeyCredentialId ? { passkeyCredentialId: userProfile.passkeyCredentialId } : {}),
+            ...(userProfile.passkeyPublicKey    ? { passkeyPublicKey: userProfile.passkeyPublicKey }       : {}),
             updatedAt: serverTimestamp()
           }, { merge: true });
         }
@@ -2089,6 +2109,11 @@ const App: React.FC = () => {
   const handleExitOffline = useCallback(() => {
     setIsOfflineMode(false);
     setGameState(null);
+    setMatchSettings(prev => ({
+      ...prev,
+      voiceEnabled: localStorage.getItem('myPlacar_LocalVoiceEnabled') !== 'false',
+      voiceScoring: localStorage.getItem('myPlacar_LocalVoiceScoring') !== 'false',
+    }));
     setCurrentScreen('auth');
   }, []);
 
@@ -2327,7 +2352,12 @@ const App: React.FC = () => {
             localStorage.setItem('myPlacarSavedEmail', p.email); 
           } catch(e) {} 
         } 
-        setUserProfile(p); 
+        setUserProfile(p);
+        setMatchSettings(prev => ({
+          ...prev,
+          voiceEnabled: localStorage.getItem('myPlacar_LocalVoiceEnabled') !== 'false',
+          voiceScoring: localStorage.getItem('myPlacar_LocalVoiceScoring') !== 'false',
+        }));
       }} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} initialReferralPin={initialReferralPin} onOfflineMode={handleOfflineMode} />}
       {currentScreen === 'settings' && <SettingsScreen 
         appUrl={appUrl}
@@ -2396,6 +2426,7 @@ const App: React.FC = () => {
         })} 
         matchSettings={matchSettings} 
         activeEvent={activeEvent}
+        isAuthReady={isAuthReady}
       />}
       {currentScreen === 'new-game' && <NewGameScreen 
         baseSettings={DEFAULT_TENNIS_SETTINGS} 

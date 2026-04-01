@@ -127,7 +127,7 @@ export const TIE_BREAK_TTS = 'tái-breique';
  * "éis" reproduz a pronúncia inglesa usada pelos narradores esportivos brasileiros.
  * Mude aqui para ajustar globalmente.
  */
-export const ACE_TTS = 'éis';
+export const ACE_TTS = 'eisse';
 
 /** "saque do Joao" ou "saque de Ana" — heuristica por terminacao do nome */
 const saquePrep = (name: string): string => {

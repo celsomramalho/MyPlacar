@@ -15,10 +15,10 @@ export const SPORT_GROUPS = [
 
 export const SPORT_LIST: SportDefinition[] = [
   { id: 'tennis', group: 'raquetes', name: 'Tênis', defaultIcon: '🎾', engine: 'tennis' },
-  { id: 'beach-tennis', group: 'raquetes', name: 'Beach tênis', defaultIcon: '🏖️', engine: 'tennis' },
-  { id: 'pickleball', group: 'raquetes', name: 'Pickleball', defaultIcon: '🥒', engine: 'rally' },
+  { id: 'beach-tennis', group: 'raquetes', name: 'Beach tênis', defaultIcon: '🏓', engine: 'tennis' },
+  { id: 'pickleball', group: 'raquetes', name: 'Pickleball', defaultIcon: '🟡', engine: 'rally' },
   { id: 'voley', group: 'coletivos', name: 'Vôlei', defaultIcon: '🏐', engine: 'rally' },
-  { id: 'voley-praia', group: 'coletivos', name: 'Vôlei de praia', defaultIcon: '⛱️', engine: 'rally' },
+  { id: 'voley-praia', group: 'coletivos', name: 'Vôlei de praia', defaultIcon: '🏐', engine: 'rally' },
   { id: 'pingpong', group: 'mesa', name: 'Tênis de mesa', defaultIcon: '🏓', engine: 'rally' },
   { id: 'truco', group: 'cartas', name: 'Truco', defaultIcon: '🃏', engine: 'points-fixed' }
 ];

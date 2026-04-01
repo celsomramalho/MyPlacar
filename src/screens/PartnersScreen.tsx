@@ -29,6 +29,7 @@ interface Props {
   matchSettings: MatchSettings;
   activeEvent: TournamentEvent | null;
   appUrl: string;
+  isAuthReady?: boolean;
 }
 
 const SOLID_COLORS_BG: Record<string, string> = {
@@ -64,7 +65,7 @@ const VenusIcon = ({ size = 14 }) => (
   </svg>
 );
 
-export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, userProfile, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, matchSettings, activeEvent, appUrl }) => {
+export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, userProfile, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, matchSettings, activeEvent, appUrl, isAuthReady = false }) => {
   const [activeTab, setActiveTab] = useState<'list' | 'queue'>('list');
   const [isShuffling, setIsShuffling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,14 +144,15 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const canShowCourtFree = selectedInQueue.length > 0 && availableSlotsOnCourt > 0;
 
   useEffect(() => {
-    // Melhoria 3: throttle — só sincroniza se passou mais de 5 minutos desde o último sync
-    const SYNC_THROTTLE_MS = 5 * 60 * 1000;
+    if (!isAuthReady) return; // espera auth antes de sincronizar
+    // Throttle — só sincroniza se passou mais de 60s desde o último sync (era 5min)
+    const SYNC_THROTTLE_MS = 60 * 1000;
     const lastSync = parseInt(localStorage.getItem('myPlacarPartnersSyncAt') || '0');
     if (Date.now() - lastSync > SYNC_THROTTLE_MS) {
       syncAllData(true);
       localStorage.setItem('myPlacarPartnersSyncAt', Date.now().toString());
     }
-  }, []);
+  }, [isAuthReady]);
 
   useEffect(() => {
     const fetchNick = async () => {
@@ -279,6 +281,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const syncAllData = async (silent = false) => {
     const db = getDb();
     if (!db || !userProfile.email) return;
+    if (!isAuthReady) return; // Auth ainda restaurando — tenta de novo no próximo ciclo
     if (!silent) setIsDownloading(true);
     try {
       const docRef = doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim());
@@ -359,6 +362,12 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const uploadToCloud = async (silent = false) => {
     const db = getDb();
     if (!db || !userProfile.email) return;
+    // Guard: aguarda o Firebase Auth restaurar a sessão após auto-login pelo localStorage.
+    // Sem isso, request.auth chega null no Firestore e a regra isAuthenticated() falha.
+    if (!isAuthReady) {
+      if (!silent) (window as any).alert("Autenticação em andamento. Tente novamente em instantes.");
+      return;
+    }
     // Captura o estado atual de parceiros no momento da chamada
     // para evitar problemas de closure com estado desatualizado
     const currentPartners = partners;
@@ -369,11 +378,30 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     if (!silent) setIsUploading(true);
     try {
       // Envia a lista completa incluindo indicados (origin: 'referral')
-      // que já estão no estado mas nunca eram persistidos na nuvem
-      await setDoc(doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim()), {
-        partners_list: currentPartners,
-        updatedAt: Date.now()
-      }, { merge: true });
+      // que já estão no estado mas nunca eram persistidos na nuvem.
+      // Sanitiza undefined: Firestore rejeita qualquer campo undefined explicitamente
+      // (name e gender são opcionais no tipo Partner e podem chegar undefined).
+      const sanitizedPartners = currentPartners.map(p => ({
+        id:       p.id,
+        pin:      p.pin,
+        nickname: p.nickname || p.pin,
+        name:     p.name     || '',
+        origin:   p.origin   || 'manual',
+        addedAt:  p.addedAt  ?? 0,
+        gender:   p.gender   || 'M',
+      }));
+      const docRef = doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim());
+      const payload = { partners_list: sanitizedPartners, updatedAt: Date.now() };
+
+      // Tenta o setDoc com 1 retry automático (cobre reconexão após background no PWA)
+      try {
+        await setDoc(docRef, payload, { merge: true });
+      } catch (firstError) {
+        console.warn("Myplacar: uploadToCloud — primeira tentativa falhou, retentando em 1.5s.", firstError);
+        await new Promise(res => setTimeout(res, 1500));
+        await setDoc(docRef, payload, { merge: true }); // lança se falhar de novo
+      }
+
       mirrorUser(userProfile);
       mirrorPartners(userProfile.email, currentPartners);
       // Atualiza o contador e persiste no localStorage para referência no próximo load
@@ -383,6 +411,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       lastUploadedCountRef.current = currentPartners.length;
       if (!silent) (window as any).alert("Backup realizado!");
     } catch (e) {
+      console.error("Myplacar: uploadToCloud falhou após retry.", e);
       if (!silent) (window as any).alert("Erro ao fazer backup. Tente novamente.");
     } finally {
       if (!silent) setIsUploading(false);
@@ -789,7 +818,19 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
                   return (
                     <div key={p.id} onClick={() => handleToggleSelect(p.id)} className={`bg-white rounded-[2.5rem] p-5 shadow-sm border-2 transition-all duration-300 flex items-center gap-4 relative active:scale-[0.98] ${team ? `${BORDER_COLORS[teamColor]} ${LIGHT_BG_COLORS[teamColor]}` : 'border-white'}`}>
                       {team && ( <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-3xl font-black text-[10px] !text-white shadow-sm animate-in slide-in-from-right-2 ${SOLID_COLORS_BG[teamColor]}`}> Time {team} </div> )}
-                      <div className="relative shrink-0"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${p.id === 'me' ? 'bg-[#4B0082] text-white shadow-lg' : 'bg-green-100 text-green-600'}`}><User size={24} fill={p.id === 'me' ? "currentColor" : "none"} /></div></div>
+                      <div className="relative shrink-0">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${p.id === 'me' ? 'bg-[#4B0082] text-white shadow-lg' : 'bg-green-100 text-green-600'}`}>
+                          <User size={24} fill={p.id === 'me' ? "currentColor" : "none"} />
+                        </div>
+                        {p.id !== 'me' && (
+                          <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-sm border-2 border-white
+                            ${p.origin === 'referral' ? 'bg-amber-400' : p.origin === 'qrcode' ? 'bg-emerald-500' : 'bg-blue-400'}`}>
+                            {p.origin === 'referral' && <Star size={9} className="text-white" fill="currentColor" />}
+                            {p.origin === 'qrcode'   && <QrCode size={9} className="text-white" />}
+                            {p.origin === 'manual'   && <Keyboard size={9} className="text-white" />}
+                          </div>
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <h4 className={`font-black text-[15px] truncate transition-colors ${team ? 'text-black' : 'text-slate-900'}`}>{p.name || p.nickname} {p.id === 'me' && <span className="text-[10px] opacity-40 ml-1">(você)</span>}</h4>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.nickname} - {maskPin(p.pin)}</p>

@@ -100,7 +100,10 @@ self.addEventListener('fetch', (event) => {
         const networkFetch = fetch(event.request).then((res) => {
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, res.clone()));
           return res;
-        }).catch(() => cached); // se falhar na rede, usa o cache
+        })
+		//.catch(() => cached); // se falhar na rede, usa o cache
+		.catch(() => cached || caches.match('/index.html') || new Response('<html>...</html>', {headers: {'Content-Type': 'text/html'}}))
+
         return cached || networkFetch;
       })
     );
