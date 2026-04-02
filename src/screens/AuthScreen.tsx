@@ -163,6 +163,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   const handleConfirmEmailInternalRef = React.useRef<((email: string, code: string) => Promise<void>) | null>(null);
 
+  // CORREÇÃO: mantém o ref sempre atualizado com a versão mais recente da função
+  // sem precisar da auto-atribuição dentro dela (que causava loop)
+  useEffect(() => {
+    handleConfirmEmailInternalRef.current = handleConfirmEmailInternal;
+  });
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlEmail = params.get('email');
@@ -185,6 +191,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             console.warn("History API not available or blocked:", e);
         }
 
+        // Delay maior para garantir que o ref já foi populado após o primeiro render
         const autoConfirmTimer = setTimeout(async () => {
             try {
                 if (handleConfirmEmailInternalRef.current) {
@@ -192,11 +199,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 }
             } catch (error) {
                 setError("Erro ao verificar automaticamente, tente digitar o código manualmente.");
-            } finally {
                 setIsAutoConfirming(false);
                 setIsLoading(false);
             }
-        }, 300);
+        }, 800);
         return () => clearTimeout(autoConfirmTimer);
     }
   }, []);
@@ -502,7 +508,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handleConfirmEmailInternal = async (targetEmail: string, code: string) => {
-    handleConfirmEmailInternalRef.current = handleConfirmEmailInternal;
+    // CORREÇÃO: removida auto-atribuição ao ref (causava loop por re-render)
     const expectedCode = localStorage.getItem('MyPlacarPendingVerifyCode') || generatedVerifyCode;
     
     if (code !== expectedCode) {
@@ -530,10 +536,20 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           await createUserWithEmailAndPassword(auth, cleanEmail, storedPassword);
         } catch (e: any) {
           console.log("Firebase Register Error Details:", { code: e.code, message: e.message, full: e });
-          if (e.message?.includes('signup-are-blocked') || e.code === 'auth/operation-not-allowed') {
+          // CORREÇÃO: email-already-in-use = usuário tentou cadastrar antes mas não concluiu.
+          // Tenta login com a senha salva para recuperar a sessão e continuar o fluxo.
+          if (e.code === 'auth/email-already-in-use') {
+            try {
+              await signInWithEmailAndPassword(auth, cleanEmail, storedPassword);
+              // Login OK — continua o fluxo abaixo normalmente
+            } catch {
+              throw new Error("Este e-mail já está cadastrado. Volte e faça login, ou use 'Esqueci minha senha'.");
+            }
+          } else if (e.message?.includes('signup-are-blocked') || e.code === 'auth/operation-not-allowed') {
             throw new Error(`O cadastro de novos usuários está temporariamente desativado. Entre em contato com o suporte. (Erro: ${e.code})`);
+          } else {
+            throw new Error(`${e.message} (Código: ${e.code})`);
           }
-          throw new Error(`${e.message} (Código: ${e.code})`);
         }
       }
 
@@ -563,17 +579,21 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         reply_to: "celsomramalho@gmail.com"
       });
 
+      // CORREÇÃO: limpa localStorage só após sucesso total (antes estava espalhado)
       localStorage.removeItem('MyPlacarPendingPassword');
-
-      setMode('verifying');
       localStorage.removeItem('MyPlacarPendingReferral');
       localStorage.removeItem('MyPlacarPendingReferralPin');
       localStorage.removeItem('MyPlacarPendingVerifyCode');
       localStorage.removeItem('MyPlacarPendingName');
-      
+
+      setMode('verifying');
       setTimeout(() => onAuthSuccess(newProfile as unknown as UserProfile, rememberMe), 2500);
     } catch (e: any) {
-      setError("Erro ao salvar seus dados. Tente novamente.");
+      // CORREÇÃO: exibe mensagem real do erro para o usuário entender o que houve
+      // e não ficar clicando em loop sem feedback
+      const msg = e.message || "Erro ao salvar seus dados. Tente novamente.";
+      setError(msg);
+      setIsAutoConfirming(false);
     } finally {
       setIsLoading(false);
     }
