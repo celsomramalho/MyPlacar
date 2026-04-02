@@ -1,44 +1,48 @@
 {
   "headers": [
-    { 
-		"source": "/sw.js", 
-		"headers": [
-		  { 
-			"key": "Cache-Control", 
-			"value": "public, max-age=31536000, immutable" }, 
-		  { 
-			"key": "Service-Worker-Allowed", 
-			"value": "/" 
-		  }] 
-	},
-	{ 
-	    "source": "/manifest.json", 
-		"headers": [
-		  { 
-		    "key": "Cache-Control", 
-		    "value": "public, max-age=31536000" 
-		  }] 
-	},
-    { 
-	    "source": "/assets/**", 
-		"headers": [
-		  { 
-		    "key": "Cache-Control", 
-			"value": "public, max-age=31536000, immutable" 
-		  }] 
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "unsafe-none"
+        }
+      ]
     }
   ],
   "rewrites": [
     {
-      "source": "/sw.js",
-      "destination": "/sw.js"
-    },
-    {
-      "source": "/manifest.json",
-      "destination": "/manifest.json"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!sw.js|manifest.json|assets/|favicon.ico|robots.txt).*)",
       "destination": "/index.html"
     }
   ]
