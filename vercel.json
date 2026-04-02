@@ -42,7 +42,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!sw.js|manifest.json|assets/|favicon.ico|robots.txt).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
