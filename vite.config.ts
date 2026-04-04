@@ -1,33 +1,22 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
+// Lê APP_VERSION direto de constants.ts para injetar no sw.js sem duplicar
+const constantsRaw = readFileSync(resolve(__dirname, 'src/constants.ts'), 'utf-8');
+const versionMatch = constantsRaw.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+const APP_VERSION  = versionMatch ? versionMatch[1] : Date.now().toString();
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [ 
+  // Expõe APP_VERSION e CACHE_NAME para o código do app via import.meta.env
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __CACHE_NAME__:  JSON.stringify(`myplacar-v${APP_VERSION}`),
+  },
+  plugins: [
     react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      manifest: {
-        name: 'MyPlacar - Placar Esportivo',
-        short_name: 'Placar',
-        description: 'App de placar esportivo PWA offline',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
-        display: 'standalone',
-        start_url: '/',
-        icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' }
-        ]
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,ico}']
-      },
-      devOptions: { enabled: true }
-    })
   ],
   optimizeDeps: {
     include: [
@@ -37,8 +26,8 @@ export default defineConfig({
       'firebase/storage',
       '@google/genai',
       'lucide-react',
-      'leaflet'
-    ]
+      'leaflet',
+    ],
   },
   build: {
     outDir: 'dist',
@@ -47,8 +36,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('firebase')) return 'vendor-firebase';
-            if (id.includes('leaflet')) return 'vendor-leaflet';
+            if (id.includes('firebase'))    return 'vendor-firebase';
+            if (id.includes('leaflet'))     return 'vendor-leaflet';
             if (id.includes('@google/genai')) return 'vendor-gemini';
             if (id.includes('lucide-react')) return 'vendor-icons';
             return 'vendor';

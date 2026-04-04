@@ -1,4 +1,6 @@
-const CACHE_NAME = 'myplacar-v2.5.12';
+// CACHE_NAME é injetado pelo Vite no build (vite.config.ts → define.__CACHE_NAME__).
+// Muda automaticamente a cada nova versão em constants.ts — sem edição manual.
+const CACHE_NAME = self.__CACHE_NAME__ || 'myplacar-fallback';
 
 // Assets essenciais que sempre devem estar em cache
 const PRECACHE_URLS = [
@@ -113,9 +115,8 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('emailjs')
   ) return;
 
-  // Probe de conectividade do AuthScreen — deixa passar sem cache
-  if (url.pathname === '/manifest.json' &&
-      event.request.cache === 'no-store') return;
+  // Probe de conectividade usa URL externa (google.com/generate_204) — não passa pelo SW.
+  // Requisições no-cors para origens externas são ignoradas automaticamente acima.
 
   // ── Navegação (index.html / SPA routes): Network-first com fallback seguro ──
   // Tenta a rede primeiro; se falhar entrega o cache; se não houver cache,
