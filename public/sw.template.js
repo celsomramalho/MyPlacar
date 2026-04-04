@@ -1,6 +1,4 @@
-// CACHE_NAME é injetado pelo Vite no build (vite.config.ts → define.__CACHE_NAME__).
-// Muda automaticamente a cada nova versão em constants.ts — sem edição manual.
-const CACHE_NAME = self.__CACHE_NAME__ || 'myplacar-fallback';
+const CACHE_NAME = '%%CACHE_NAME%%';
 
 // Assets essenciais que sempre devem estar em cache
 const PRECACHE_URLS = [
