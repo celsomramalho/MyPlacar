@@ -50,6 +50,7 @@ const guessGender = (name: string): 'M' | 'F' | undefined => {
 export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, onLogout, onGoAdmin, onCheckUpdate, setIsUpdatingVersion, settings, setSettings, onVersionTap }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
+  const [confirmResetPasskey, setConfirmResetPasskey] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
   const [isTestingLat, setIsTestingLat] = useState(false);
   const [latency, setLatency] = useState<number | null>(null);
@@ -347,17 +348,34 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
     { id: 'passkey', label: 'Biometria', sublabel: 'Login sem senha', icon: <Fingerprint size={22} />, color: 'bg-blue-50 text-blue-500' }
   ];
 
-  const handleRegisterPasskey = async () => {
+  const handleRegisterPasskey = async (isReset = false) => {
     if (!window.PublicKeyCredential) {
       alert("Seu navegador ou dispositivo não suporta biometria.");
       return;
     }
-    
+
     setIsRegisteringPasskey(true);
+    setConfirmResetPasskey(false);
     try {
+      // Se for recadastro, limpa a chave antiga do Firestore antes de gerar uma nova
+      if (isReset && profile.email) {
+        try {
+          const db = getDb();
+          if (db) {
+            const userDocRef = doc(db as Firestore, "users", profile.email.toLowerCase().trim());
+            await updateDoc(userDocRef, {
+              passkeyCredentialId: "",
+              passkeyPublicKey: ""
+            });
+          }
+        } catch (clearErr) {
+          console.warn("Myplacar: Não foi possível limpar chave antiga.", clearErr);
+        }
+      }
+
       const challenge = new Uint8Array(32);
       window.crypto.getRandomValues(challenge);
-      
+
       const userId = profile.email || 'user';
       const userHandle = new TextEncoder().encode(userId);
 
@@ -391,10 +409,10 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         const updatedProfile = {
           ...profile,
           passkeyCredentialId: rawId,
-          passkeyPublicKey: "registered" 
+          passkeyPublicKey: "registered"
         };
         setProfile(updatedProfile);
-        
+
         // Salvamento imediato para garantir persistência
         try {
           localStorage.setItem('myPlacarUserProfile', JSON.stringify(updatedProfile));
@@ -409,12 +427,18 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         } catch (saveErr) {
           console.error("Myplacar: Erro ao salvar biometria imediatamente.", saveErr);
         }
-        
-        alert("Biometria cadastrada e salva com sucesso!");
+
+        alert(isReset ? "Biometria recadastrada com sucesso!" : "Biometria cadastrada e salva com sucesso!");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Não foi possível habilitar a biometria neste dispositivo.");
+      if (err.name === 'InvalidStateError') {
+        alert("Esta chave já está cadastrada neste dispositivo. Tente usar outro método de autenticação biométrica.");
+      } else if (err.name === 'NotAllowedError') {
+        alert("Recadastro cancelado pelo usuário.");
+      } else {
+        alert("Não foi possível habilitar a biometria neste dispositivo.");
+      }
     } finally {
       setIsRegisteringPasskey(false);
     }
@@ -534,14 +558,40 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
                 <div className="flex justify-end">
                   {item.id === 'passkey' ? (
                     profile.passkeyCredentialId ? (
-                      <div className="flex items-center gap-1 text-blue-500">
-                        <CheckCircle2 size={20} />
-                        <span className="text-[10px] font-black uppercase">Ativo</span>
-                      </div>
+                      confirmResetPasskey ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setConfirmResetPasskey(false)}
+                            className="text-[10px] font-black text-slate-500 px-3 py-2 border border-slate-200 rounded-xl active:scale-95 transition-all"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => handleRegisterPasskey(true)}
+                            disabled={isRegisteringPasskey}
+                            className="text-[10px] font-black text-white px-3 py-2 bg-red-500 rounded-xl active:scale-95 shadow-sm transition-all"
+                          >
+                            {isRegisteringPasskey ? <Loader2 size={12} className="animate-spin" /> : 'Confirmar'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 text-blue-500">
+                            <CheckCircle2 size={16} />
+                            <span className="text-[10px] font-black uppercase">Ativo</span>
+                          </div>
+                          <button
+                            onClick={() => setConfirmResetPasskey(true)}
+                            className="text-[10px] font-black text-slate-500 px-3 py-2 border border-slate-200 rounded-xl active:scale-95 transition-all"
+                          >
+                            Recadastrar
+                          </button>
+                        </div>
+                      )
                     ) : (
-                      <button 
-                        onClick={handleRegisterPasskey} 
-                        disabled={isRegisteringPasskey} 
+                      <button
+                        onClick={() => handleRegisterPasskey(false)}
+                        disabled={isRegisteringPasskey}
                         className="text-[10px] font-black text-white px-4 py-2 bg-blue-600 rounded-xl active:scale-95 shadow-sm transition-all"
                       >
                         {isRegisteringPasskey ? <Loader2 size={12} className="animate-spin" /> : 'Habilitar'}
