@@ -27,7 +27,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
   const [remoteVersionFound, setRemoteVersionFound] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -82,20 +82,29 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     userUid?: string
   }>({ type: 'pin', value: '' });
 
-  // Monitor de conexão real — faz probe ativo ignorando o cache do SW
+  // Monitor de conexão real — probe ativo em URL externa (não interceptada pelo SW)
   useEffect(() => {
     let cancelled = false;
     const checkConnection = async () => {
       try {
-        await fetch('/manifest.json', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+        // generate_204 é um endpoint do Google criado para detecção de conectividade.
+        // Por ser externo, o SW da aplicação nunca o intercepta, garantindo resultado real.
+        await fetch('https://www.google.com/generate_204', {
+          cache: 'no-store',
+          mode: 'no-cors',
+          signal: AbortSignal.timeout(4000),
+        });
         if (!cancelled) setIsOnline(true);
       } catch {
-        if (!cancelled) setIsOnline(false);
+        // probe falhou; usa navigator.onLine como desempate para não
+        // marcar offline em redes lentas que atingem o timeout
+        if (!cancelled) setIsOnline(navigator.onLine);
       }
     };
     checkConnection();
-    const interval = setInterval(checkConnection, 10000);
-    const handleOnline  = () => checkConnection();
+    const interval = setInterval(checkConnection, 15000);
+    // eventos nativos atualizam imediatamente; probe confirma em seguida
+    const handleOnline  = () => { setIsOnline(true); checkConnection(); };
     const handleOffline = () => { if (!cancelled) setIsOnline(false); };
     window.addEventListener('online',  handleOnline);
     window.addEventListener('offline', handleOffline);
