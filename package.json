@@ -10,9 +10,11 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.1023.0",
     "@google/genai": "1.34.0",
     "@shoelace-style/shoelace": "^2.20.1",
     "@supabase/supabase-js": "^2.100.1",
+    "dotenv": "^17.4.0",
     "firebase": "12.9.0",
     "leaflet": "1.9.4",
     "lucide-react": "0.460.0",
@@ -35,5 +37,21 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
-  }
+  },
+  "description": "[![Vercel](https://img.shields.io/badge/deploy-vercel-blue)](https://vercel.com/) [![issues](https://img.shields.io/github/issues/celsomramalho/MyPlacar)](https://github.com/celsomramalho/MyPlacar/issues) [![license](https://img.shields.io/github/license/celsomramalho/MyPlacar)](https://github.com/celsomramalho/MyPlacar)",
+  "main": "postcss.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/celsomramalho/MyPlacar.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/celsomramalho/MyPlacar/issues"
+  },
+  "homepage": "https://github.com/celsomramalho/MyPlacar#readme"
 }

@@ -113,6 +113,10 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('emailjs')
   ) return;
 
+  // Probe de conectividade do AuthScreen — deixa passar sem cache
+  if (url.pathname === '/manifest.json' &&
+      event.request.cache === 'no-store') return;
+
   // ── Navegação (index.html / SPA routes): Network-first com fallback seguro ──
   // Tenta a rede primeiro; se falhar entrega o cache; se não houver cache,
   // exibe a página offline embutida (evita tela de erro nativa do browser).
