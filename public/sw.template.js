@@ -87,18 +87,27 @@ self.addEventListener('install', (event) => {
 // 2. Remove TODOS os caches que não sejam o CACHE_NAME atual.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    self.clients.claim().then(() =>
-      caches.keys().then(cacheNames =>
-        Promise.all(
-          cacheNames
-            .filter(name => name !== CACHE_NAME)
-            .map(name => {
-              console.log(`Myplacar SW: removendo cache antigo "${name}"`);
-              return caches.delete(name);
-            })
+    self.clients.claim()
+      .then(() => {
+        // Notifica todos os clientes para recarregar após o SW assumir
+        return self.clients.matchAll({ type: 'window' }).then(clients => {
+          clients.forEach(client => {
+            client.postMessage({ type: 'SW_ACTIVATED', cacheName: CACHE_NAME });
+          });
+        });
+      })
+      .then(() =>
+        caches.keys().then(cacheNames =>
+          Promise.all(
+            cacheNames
+              .filter(name => name !== CACHE_NAME)
+              .map(name => {
+                console.log(`Myplacar SW: removendo cache antigo "${name}"`);
+                return caches.delete(name);
+              })
+          )
         )
       )
-    )
   );
 });
 
