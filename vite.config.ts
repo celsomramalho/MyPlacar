@@ -11,21 +11,48 @@ const CACHE_NAME    = `myplacar-v${APP_VERSION}`;
 
 console.log(`\n🔖 MyPlacar build — versão: ${APP_VERSION} | cache: ${CACHE_NAME}\n`);
 
-// ── Plugin: substitui %%CACHE_NAME%% no sw.js após o build ─────────────────
+// ── Plugin: gera dist/sw.js (build) e public/sw.js (dev) a partir do template ──
+// O public/sw.js gerado aqui NÃO deve ser commitado (.gitignore).
+// É necessário em dev porque o Vite serve /public diretamente sem passar pelo bundle.
 function swInjectPlugin(): Plugin {
   return {
     name: 'sw-inject-cache-name',
-    closeBundle() {
-      const templatePath = resolve(__dirname, 'public/sw.template.js');
-      const outputPath   = resolve(__dirname, 'dist/sw.js');
+
+    // Roda no início do servidor de dev → gera public/sw.js para o Vite servir
+    buildStart() {
+      const templatePath  = resolve(__dirname, 'public/sw.template.js');
+      const devOutputPath = resolve(__dirname, 'public/sw.js');
       try {
         const template = readFileSync(templatePath, 'utf-8');
         const output   = template.replace(/%%CACHE_NAME%%/g, CACHE_NAME);
-        writeFileSync(outputPath, output, 'utf-8');
-        console.log(`✅ sw.js gerado com CACHE_NAME = "${CACHE_NAME}"`);
+        writeFileSync(devOutputPath, output, 'utf-8');
+        console.log(`✅ sw.js (dev) gerado com CACHE_NAME = "${CACHE_NAME}"`);
       } catch (e) {
-        console.error('❌ Erro ao gerar sw.js:', e);
+        console.error('❌ Erro ao gerar sw.js (dev):', e);
       }
+    },
+
+    // Roda ao fim do build de produção → sobrescreve dist/sw.js
+    closeBundle() {
+      const templatePath   = resolve(__dirname, 'public/sw.template.js');
+      const distOutputPath = resolve(__dirname, 'dist/sw.js');
+      try {
+        const template = readFileSync(templatePath, 'utf-8');
+        const output   = template.replace(/%%CACHE_NAME%%/g, CACHE_NAME);
+        writeFileSync(distOutputPath, output, 'utf-8');
+        console.log(`✅ sw.js (dist) gerado com CACHE_NAME = "${CACHE_NAME}"`);
+      } catch (e) {
+        console.error('❌ Erro ao gerar sw.js (dist):', e);
+      }
+    },
+  };
+}
+
+function htmlVersionPlugin(): Plugin {
+  return {
+    name: 'html-inject-app-version',
+    transformIndexHtml(html) {
+      return html.replace(/%%APP_VERSION%%/g, APP_VERSION);
     },
   };
 }
@@ -34,11 +61,14 @@ function swInjectPlugin(): Plugin {
 export default defineConfig({
   plugins: [
     react(),
+    htmlVersionPlugin(),
     swInjectPlugin(),
   ],
   define: {
     // Disponível no código React via import.meta.env ou como constante
     __APP_VERSION__: JSON.stringify(APP_VERSION),
+    // Garante fallback correto caso o sw.js seja processado pelo bundler
+    'self.__CACHE_NAME__': JSON.stringify(CACHE_NAME),
   },
   optimizeDeps: {
     include: [

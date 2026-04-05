@@ -19,4 +19,4 @@ const injected = sw.replace('__APP_CACHE_NAME__', cacheName);
 fs.mkdirSync('./dist', { recursive: true });
 fs.writeFileSync('./dist/sw.js', injected);
 
-console.log(`[inject-sw] dist/sw.js gerado com CACHE_NAME='${cacheName}'`);
+console.log(`[inject-sw] dist/sw.tempalte.js gerado com CACHE_NAME='${cacheName}'`);
