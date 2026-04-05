@@ -2,6 +2,23 @@
   "outputDirectory": "dist",
   "headers": [
     {
+      "source": "/registerSW.js",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
       "source": "/sw.js",
       "headers": [
         {
@@ -73,7 +90,7 @@
       "destination": "/assets/$1"
     },
     {
-      "source": "/((?!sw\\.js|manifest\\.json|assets/).*)",
+      "source": "/((?!sw\\.js|registerSW\\.js|manifest\\.json|assets/).*)",
       "destination": "/index.html"
     }
   ]
