@@ -300,23 +300,25 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
       const confirmUpdate = window.confirm(`Nova versão ${remoteVersionFound} disponível. Deseja atualizar agora?`);
       if (confirmUpdate) {
         setIsUpdatingVersion(true);
+        // 1. Desregistra SW primeiro
         if ('serviceWorker' in navigator) {
           try {
             const regs = await navigator.serviceWorker.getRegistrations();
             for (const r of regs) await r.unregister();
           } catch (e) {}
         }
+        // 2. Limpa todos os caches após SW fora
         if ('caches' in window) {
           try {
             const keys = await caches.keys();
             for (const k of keys) await caches.delete(k);
           } catch (e) {}
         }
-        setTimeout(() => {
-          const url = new URL(window.location.href);
-          url.searchParams.set('v', remoteVersionFound);
-          window.location.href = url.toString();
-        }, 1000);
+        // 3. Hard reload com ?v= para bypass do CDN
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('v', remoteVersionFound);
+        window.location.replace(url.toString());
       }
       return;
     }

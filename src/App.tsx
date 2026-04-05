@@ -620,15 +620,8 @@ const App: React.FC = () => {
               sessionStorage.setItem('myPlacarUpdateTriggered', remoteVersion);
               setModalConfig(null);
 
-              // Limpa todos os caches do browser para garantir assets novos
-              if ('caches' in window) {
-                try {
-                  const keys = await caches.keys();
-                  await Promise.all(keys.map(k => caches.delete(k)));
-                } catch (e) {}
-              }
-
-              // Desregistra o SW para forçar o browser a buscar tudo da rede
+              // 1. Desregistra o SW primeiro — garante que o novo install
+              //    não seja interceptado por um SW em estado inconsistente
               if ('serviceWorker' in navigator) {
                 try {
                   const regs = await navigator.serviceWorker.getRegistrations();
@@ -636,8 +629,17 @@ const App: React.FC = () => {
                 } catch (e) {}
               }
 
-              // Recarrega sem cache (hard reload equivalente)
-              window.location.href = window.location.origin + window.location.pathname + '?v=' + remoteVersion;
+              // 2. Limpa TODOS os caches após o SW estar fora
+              if ('caches' in window) {
+                try {
+                  const keys = await caches.keys();
+                  await Promise.all(keys.map(k => caches.delete(k)));
+                } catch (e) {}
+              }
+
+              // 3. Hard reload com ?v= para forçar bypass do CDN do Vercel
+              const cleanUrl = window.location.origin + window.location.pathname + '?v=' + remoteVersion;
+              window.location.replace(cleanUrl);
             },
             onCancel: () => setModalConfig(null)
           });
