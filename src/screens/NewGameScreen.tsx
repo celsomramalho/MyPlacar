@@ -87,12 +87,13 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
     }
   }, [settings.gamesPerSet, settings.tieBreakAt, setSettings]);
 
-  // Zera tie-break automaticamente quando sets muda para 1 (melhor de 1 não tem tie-break)
+  // Zera tie-break automaticamente quando sets muda para 1 (apenas para esportes que não são tênis/beach-tênis)
   useEffect(() => {
-    if (settings.sets === 1 && settings.tieBreak) {
+    const isTennisSport = settings.sportType === 'tennis' || settings.sportType === 'beach-tennis';
+    if (settings.sets === 1 && settings.tieBreak && !isTennisSport) {
       setSettings(prev => ({ ...prev, tieBreak: false }));
     }
-  }, [settings.sets, settings.tieBreak, setSettings]);
+  }, [settings.sets, settings.tieBreak, settings.sportType, setSettings]);
 
   const handleSportSelect = (sportId: string) => {
     if (isReadOnly) return;
@@ -302,7 +303,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
 
         <div className={`bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-6 ${isReadOnly ? 'opacity-70 pointer-events-none' : ''}`}>
           <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><Target size={20} /></div><h2 className="text-sm font-black text-black">Tie break</h2></div>
-          <Toggle disabled={isReadOnly || settings.sets === 1} id="toggle-tb" label="Habilitar tie break" checked={settings.tieBreak} onChange={v => setSettings({...settings, tieBreak: v})} />
+          <Toggle disabled={isReadOnly || (settings.sets === 1 && settings.sportType !== 'tennis' && settings.sportType !== 'beach-tennis')} id="toggle-tb" label="Habilitar tie break" checked={settings.tieBreak} onChange={v => setSettings({...settings, tieBreak: v})} />
           {settings.tieBreak && (
             <div className="space-y-6 animate-in slide-in-from-top-4">
               {settings.sportType !== 'pickleball' && (

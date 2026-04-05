@@ -14,7 +14,7 @@
         },
         {
           "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
+          "value": "no-store, no-cache, must-revalidate"
         }
       ]
     },
@@ -61,7 +61,19 @@
   ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
+      "source": "/manifest.json",
+      "destination": "/manifest.json"
+    },
+    {
+      "source": "/assets/(.*)",
+      "destination": "/assets/$1"
+    },
+    {
+      "source": "/((?!sw\\.js|manifest\\.json|assets/).*)",
       "destination": "/index.html"
     }
   ]
