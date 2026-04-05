@@ -1,14 +1,11 @@
 const CACHE_NAME = '%%CACHE_NAME%%';
 
-// Assets essenciais que sempre devem estar em cache
 const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json',
 ];
 
-// Página de fallback exibida quando não há cache E não há rede,
-// evitando que o browser mostre a tela de erro nativa do sistema.
 const OFFLINE_FALLBACK = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -34,8 +31,6 @@ const OFFLINE_FALLBACK = `<!DOCTYPE html>
 </html>`;
 
 // ─── SKIP WAITING ───────────────────────────────────────────────────────────
-// Mantém compatibilidade com o sinal do app, mas o SW já faz skipWaiting
-// automaticamente no install para garantir ativação imediata após deploy.
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
@@ -43,35 +38,43 @@ self.addEventListener('message', (event) => {
 });
 
 // ─── INSTALL ────────────────────────────────────────────────────────────────
-// 1. Cacheia os arquivos essenciais.
-// 2. Descobre e cacheia todos os assets JS/CSS gerados pelo Vite (com hash).
-// 3. Chama skipWaiting() imediatamente para que o novo SW assuma sem esperar
-//    o usuário fechar todas as abas — evita ficar preso em "waiting".
+// CRÍTICO: sempre busca da rede com cache: 'no-store' para garantir
+// que o install nunca usa assets do CDN cacheado ou de versões anteriores.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      // 1. Arquivos essenciais conhecidos
-      await cache.addAll(PRECACHE_URLS);
+      // 1. Arquivos essenciais — sempre da rede, nunca do cache HTTP
+      await Promise.all(
+        PRECACHE_URLS.map(url =>
+          fetch(url, { cache: 'no-store' })
+            .then(res => { if (res.ok) cache.put(url, res); })
+            .catch(() => {})
+        )
+      );
 
-      // 2. Extrai e cacheia assets do Vite dinamicamente
+      // 2. Extrai e cacheia assets do Vite dinamicamente a partir do index.html novo
       try {
-        const response = await fetch('/index.html');
+        const response = await fetch('/index.html', { cache: 'no-store' });
         const html = await response.text();
 
-        const assetRegex = /(?:src|href)=["'](\/?assets\/[^"']+)["']/g;
+        // Guarda o index.html no cache com a chave canônica
+        cache.put('/index.html', new Response(html, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        }));
+
+        const assetRegex = /(?:src|href)=["'](\/assets\/[^"']+)["']/g;
         const assetUrls = new Set();
         let match;
         while ((match = assetRegex.exec(html)) !== null) {
-          assetUrls.add(match[1].startsWith('/') ? match[1] : '/' + match[1]);
+          assetUrls.add(match[1]);
         }
 
-        const fetchPromises = [...assetUrls].map(url =>
-          fetch(url)
+        await Promise.all([...assetUrls].map(url =>
+          fetch(url, { cache: 'no-store' })
             .then(res => { if (res.ok) cache.put(url, res); })
             .catch(() => {})
-        );
-        await Promise.all(fetchPromises);
-        console.log(`Myplacar SW: ${assetUrls.size} assets cacheados.`);
+        ));
+        console.log(`Myplacar SW ${CACHE_NAME}: ${assetUrls.size} assets cacheados.`);
       } catch (e) {
         console.warn('Myplacar SW: Não foi possível pré-cachear assets.', e);
       }
@@ -80,18 +83,22 @@ self.addEventListener('install', (event) => {
 });
 
 // ─── ACTIVATE ───────────────────────────────────────────────────────────────
-// Remove caches de versões antigas e assume o controle de todas as abas.
+// 1. Assume controle imediato de todas as abas (clients.claim antes de limpar).
+// 2. Remove TODOS os caches que não sejam o CACHE_NAME atual.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) =>
+    self.clients.claim().then(() =>
+      caches.keys().then(cacheNames =>
         Promise.all(
           cacheNames
-            .filter((name) => name !== CACHE_NAME)
-            .map((name) => caches.delete(name))
+            .filter(name => name !== CACHE_NAME)
+            .map(name => {
+              console.log(`Myplacar SW: removendo cache antigo "${name}"`);
+              return caches.delete(name);
+            })
         )
       )
-      .then(() => self.clients.claim())
+    )
   );
 });
 
@@ -104,7 +111,7 @@ self.addEventListener('fetch', (event) => {
   // Ignora tráfego de desenvolvimento
   if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return;
 
-  // Nunca cachear Firebase / Firestore / Auth / EmailJS
+  // Nunca interceptar Firebase / Firestore / Auth / EmailJS
   if (
     url.hostname.includes('firestore.googleapis.com') ||
     url.hostname.includes('firebase') ||
@@ -113,51 +120,57 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('emailjs')
   ) return;
 
-  // Probe de conectividade usa URL externa (google.com/generate_204) — não passa pelo SW.
-  // Requisições no-cors para origens externas são ignoradas automaticamente acima.
-
-  // ── Navegação (index.html / SPA routes): Network-first com fallback seguro ──
-  // Tenta a rede primeiro; se falhar entrega o cache; se não houver cache,
-  // exibe a página offline embutida (evita tela de erro nativa do browser).
+  // ── Navegação (index.html / SPA routes): Network-first ──
+  // CRÍTICO: busca sempre da rede primeiro para garantir index.html atualizado.
+  // O ?v=X.X.X adicionado pelo processo de update força bypass do CDN.
   if (
     event.request.mode === 'navigate' ||
     url.pathname === '/' ||
     url.pathname === '/index.html'
   ) {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { cache: 'no-store' })
         .then((res) => {
+          // Atualiza o cache com o index.html mais recente (chave sem querystring)
           const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put('/index.html', clone);
+            cache.put('/', clone.clone());
+          });
           return res;
         })
         .catch(() =>
-          caches.match(event.request)
-            .then((cached) =>
+          // Offline: tenta cache, senão exibe página offline embutida
+          caches.open(CACHE_NAME).then(cache =>
+            cache.match('/index.html').then(cached =>
               cached ||
-              caches.match('/index.html') ||
               new Response(OFFLINE_FALLBACK, {
                 headers: { 'Content-Type': 'text/html; charset=utf-8' },
               })
             )
+          )
         )
     );
     return;
   }
 
-  // ── Assets JS/CSS/imagens: Cache First ──
+  // ── Assets JS/CSS/imagens com hash do Vite: Cache First ──
+  // Busca APENAS no CACHE_NAME atual (não contamina com caches de outras versões).
+  // Assets com hash mudam a cada build — se não estiver no cache, busca da rede.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
+    caches.open(CACHE_NAME).then(cache =>
+      cache.match(event.request).then(cached => {
+        if (cached) return cached;
 
-      return fetch(event.request)
-        .then((res) => {
-          if (!res || res.status !== 200 || res.type !== 'basic') return res;
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return res;
-        })
-        .catch(() => new Response('', { status: 408, statusText: 'Offline' }));
-    })
+        return fetch(event.request)
+          .then((res) => {
+            if (res && res.status === 200 && res.type === 'basic') {
+              cache.put(event.request, res.clone());
+            }
+            return res;
+          })
+          .catch(() => new Response('', { status: 408, statusText: 'Offline' }));
+      })
+    )
   );
 });
