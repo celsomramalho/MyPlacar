@@ -62,7 +62,7 @@ const getDb = (): Firestore | null => {
     }
     
     return dbInstance;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Myplacar: Erro fatal ao inicializar firestore.", e);
     return null;
   }
@@ -97,7 +97,7 @@ const getAuthInstance = (): Auth | null => {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     authInstance = getAuth(app);
     return authInstance;
-  } catch (e) {
+  } catch (_e) {
     console.error("Myplacar: Erro ao conectar com auth.");
     return null;
   }
@@ -109,7 +109,7 @@ const getStorageInstance = (): FirebaseStorage | null => {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     storageInstance = getStorage(app);
     return storageInstance;
-  } catch (e) {
+  } catch (_e) {
     console.error("Myplacar: Erro ao conectar com storage.");
     return null;
   }
