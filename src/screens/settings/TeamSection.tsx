@@ -1,11 +1,11 @@
 import React, { useState, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react';
 import { ArrowUpDown, Play, User, Users, ChevronDown, Camera, Dices, UserPlus, Loader2, Mic, ArrowRightLeft, Disc, ShieldCheck, Check, Antenna, Eraser, History, Trophy, Ticket, X, Share2, Copy } from 'lucide-react';
-import { Input } from '../../components/Input';
-import { Button } from '../../components/Button';
-import { MatchSettings, GameState, Partner, UserProfile, TournamentEvent, QueuePlayer } from '../../types';
-import { formatPortugueseName } from '../../utils/formatters';
-import { SPORT_LIST } from '../../constants';
-import { getDb } from '../../firebase';
+import { Input } from '../../components/Input.tsx';
+import { Button } from '../../components/Button.tsx';
+import { MatchSettings, GameState, Partner, UserProfile, TournamentEvent, QueuePlayer } from '../../types.ts';
+import { formatPortugueseName } from '../../utils/formatters.ts';
+import { SPORT_LIST } from '../../constants.ts';
+import { getDb } from '../../firebase.ts';
 import { collection, getDocs } from 'firebase/firestore';
 
 type Gender = 'M' | 'F';
@@ -389,8 +389,8 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
         <div className="flex-1">
           <Input 
             label={label} 
-            enableVoice={true} 
-            enableCamera={true} 
+            enableVoice 
+            enableCamera 
             partnerTerms={settings.voiceCommands.partnerTerm} 
             value={currentName} 
             onChange={e => handleNameChange(field, e.target.value)} 

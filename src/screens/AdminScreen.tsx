@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Upload, Loader2, CheckCircle2, AlertCircle, Sparkles, Plus, Trash2, ChevronDown, Save, Clock, User, Settings as SettingsIcon, ArrowLeft, Edit2, Database, Wand2, X, ShieldCheck, LayoutGrid, Trophy, Mic, Type, HelpCircle, ChevronUp, Volume2, Info, Search, Star, Crown, Edit3, Download, HardDrive, Copy, ExternalLink, FileText, RotateCw, Check, Wifi, Ticket, Image as ImageIcon, Send, Menu } from 'lucide-react';
-import { getDb, getStorageInstance, clearFirestoreCache } from '../firebase';
+import { getDb, getStorageInstance, clearFirestoreCache } from '../firebase.ts';
 import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, writeBatch, query, where, serverTimestamp } from 'firebase/firestore';
-import { mirrorUser, mirrorMatches, mirrorPartners, mirrorIcon, deleteIcon } from '../services/supabaseMirror';
+import { mirrorUser, mirrorMatches, mirrorPartners, mirrorIcon, deleteIcon } from '../services/supabaseMirror.ts';
 import { ref, listAll, uploadBytes, getDownloadURL, deleteObject, StorageReference, getStorage, getMetadata } from 'firebase/storage';
-import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../constants';
-import { Button } from '../components/Button';
-import { Toggle } from '../components/Toggle';
-import { applyGoldenRule, formatPortugueseName } from '../utils/formatters';
-import { ScoreboardIcon } from '../components/ScoreboardIcon';
-import { VoiceCommands, ErrorSoundType, UserProfile, TournamentEvent } from '../types';
-import { playErrorBeep, unlockAudio } from '../hooks/useScoreAnnouncer';
+import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../constants.ts';
+import { Button } from '../components/Button.tsx';
+import { Toggle } from '../components/Toggle.tsx';
+import { applyGoldenRule, formatPortugueseName } from '../utils/formatters.ts';
+import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
+import { VoiceCommands, ErrorSoundType, UserProfile, TournamentEvent } from '../types.ts';
+import { playErrorBeep, unlockAudio } from '../hooks/useScoreAnnouncer.ts';
 
-import { CommunicationsPanel } from '../components/CommunicationsPanel';
+import { CommunicationsPanel } from '../components/CommunicationsPanel.tsx';
 
 interface Props {
   onBack: () => void;

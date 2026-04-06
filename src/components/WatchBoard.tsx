@@ -1,8 +1,8 @@
 
 import React from 'react';
 import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw } from 'lucide-react';
-import { GameState, PointType } from '../types';
-import { LiveIndicator } from './LiveIndicator';
+import { GameState, PointType } from '../types.ts';
+import { LiveIndicator } from './LiveIndicator.tsx';
 
 interface WatchBoardProps {
   gameState: GameState;

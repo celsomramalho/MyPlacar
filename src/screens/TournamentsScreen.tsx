@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
 import { ArrowLeft, Search, Trophy, Calendar, Ticket, Loader2, X, ChevronRight } from 'lucide-react';
-import { Button } from '../components/Button';
-import { ScoreboardIcon } from '../components/ScoreboardIcon';
+import { Button } from '../components/Button.tsx';
+import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
 
 interface Props {
   registrations: any[];

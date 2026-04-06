@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Clock, MapPin, Info, ShieldCheck, Loader2, Target, AlertTriangle } from 'lucide-react';
 import { getFirestore, collection, getDocs, query, orderBy, QueryDocumentSnapshot } from 'firebase/firestore';
 import L from 'leaflet';
-import { MatchHistoryItem } from '../types';
+import { MatchHistoryItem } from '../types.ts';
 
 interface Props {
   history: MatchHistoryItem[];

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { GameState, GeminiVoiceName, GeminiPersona, ErrorSoundType } from '../types';
-import { isTennisTieBreak } from '../utils/tennisEngine';
+import { GameState, GeminiVoiceName, GeminiPersona, ErrorSoundType } from '../types.ts';
+import { isTennisTieBreak } from '../utils/tennisEngine.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared audio infra (unchanged)
@@ -21,7 +21,7 @@ export const getSharedAudioContext = () => {
 
 export const unlockAudio = async () => {
   const ctx = getSharedAudioContext();
-  const synth = window.speechSynthesis || (window as any).webkitSynthesis;
+  const synth = globalThis.speechSynthesis || (window as any).webkitSynthesis;
   try {
     if (ctx && ctx.state === 'suspended') await ctx.resume();
     if (synth) {
@@ -73,7 +73,7 @@ export const speakSystem = (text: string, voiceURI: string | undefined, volume: 
       setTimeout(resolve, text.length * 80 + 500);
       return;
     }
-    const synth = window.speechSynthesis || (window as any).webkitSpeechSynthesis;
+    const synth = globalThis.speechSynthesis || (window as any).webkitSpeechSynthesis;
     if (!synth) { resolve(); return; }
     synth.cancel();
     setTimeout(() => {

@@ -1,23 +1,23 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu, Gavel, Trash2, Users } from 'lucide-react';
-import { SettingsTabs } from './settings/SettingsTabs';
-import { Button } from '../components/Button';
-import { ScoreboardIcon } from '../components/ScoreboardIcon';
-import { Input } from '../components/Input';
-import { GameState, PointType, PointEvent, UserProfile } from '../types';
-import { useGeminiReferee } from '../hooks/useGeminiReferee';
-import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../hooks/useScoreAnnouncer';
-import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer';
-import { useWakeLock } from '../hooks/useWakeLock';
-import { isTennisTieBreak } from '../utils/tennisEngine';
-import { SPORT_LIST } from '../constants';
-import { Toggle } from '../components/Toggle';
-import { getDb } from '../firebase';
+import { SettingsTabs } from './settings/SettingsTabs.tsx';
+import { Button } from '../components/Button.tsx';
+import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
+import { Input } from '../components/Input.tsx';
+import { GameState, PointType, PointEvent, UserProfile } from '../types.ts';
+import { useGeminiReferee } from '../hooks/useGeminiReferee.ts';
+import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../hooks/useScoreAnnouncer.ts';
+import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer.ts';
+import { useWakeLock } from '../hooks/useWakeLock.ts';
+import { isTennisTieBreak } from '../utils/tennisEngine.ts';
+import { SPORT_LIST } from '../constants.ts';
+import { Toggle } from '../components/Toggle.tsx';
+import { getDb } from '../firebase.ts';
 import { doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
-import { LazySportIcon } from '../components/LazySportIcon';
-import { LiveIndicator } from '../components/LiveIndicator';
-import { applyGoldenRule, maskPin } from '../utils/formatters';
-import { WatchBoard } from '../components/WatchBoard';
+import { LazySportIcon } from '../components/LazySportIcon.tsx';
+import { LiveIndicator } from '../components/LiveIndicator.tsx';
+import { applyGoldenRule, maskPin } from '../utils/formatters.ts';
+import { WatchBoard } from '../components/WatchBoard.tsx';
 
 interface CommandLogEntry {
   id: string;
@@ -583,7 +583,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const handleShareWhatsApp = () => {
     const currentSportDef = SPORT_LIST.find(s => s.id === gameState.matchConfig.sportType) || SPORT_LIST[0];
     const text = `Acompanhe meu jogo de ${currentSportDef.name} ao vivo no my placar. 🎾\n\n${mirrorLink}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const isTieBreak = isTennisTieBreak(gameState);
@@ -847,7 +847,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
              correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
              pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
              handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
-             isEmbedded={true}
+             isEmbedded
              scorePressProgress={scorePressProgress}
              cloudLiveExists={cloudLiveExists}
              role={indicatorRole || role}
@@ -991,8 +991,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                               value={judgePinInput || ''}
                               onChange={(e) => setJudgePinInput?.(e.target.value.toUpperCase().slice(0, 5))}
                               placeholder="PIN do Juiz"
-                              enableVoice={true}
-                              enableCamera={true}
+                              enableVoice
+                              enableCamera
                               className="bg-white border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all"
                               rightAction={
                                 <div className="flex items-center gap-1">

@@ -1,8 +1,8 @@
 
 import React, { useMemo } from 'react';
 import { LogOut, Play, User, X, Clock, Trash2, Share2, Check, Bell } from 'lucide-react';
-import { ScoreboardIcon } from '../../components/ScoreboardIcon';
-import { LiveIndicator } from '../../components/LiveIndicator';
+import { ScoreboardIcon } from '../../components/ScoreboardIcon.tsx';
+import { LiveIndicator } from '../../components/LiveIndicator.tsx';
 
 interface Props {
   isSelectionMode: boolean;

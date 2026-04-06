@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle } from 'lucide-react';
-import { TournamentEvent, TournamentEntry, UserProfile, Partner, TournamentPair, TournamentMatch, TournamentConfig } from '../types';
-import { getDb } from '../firebase';
+import { TournamentEvent, TournamentEntry, UserProfile, Partner, TournamentPair, TournamentMatch, TournamentConfig } from '../types.ts';
+import { getDb } from '../firebase.ts';
 import { collection, query, where, getDocs, doc, setDoc, onSnapshot, updateDoc, getDoc, deleteDoc, Firestore, writeBatch } from 'firebase/firestore';
-import { SPORT_LIST } from '../constants';
-import { formatPortugueseName } from '../utils/formatters';
-import { Toggle } from '../components/Toggle';
-import { Input } from '../components/Input';
+import { SPORT_LIST } from '../constants.ts';
+import { formatPortugueseName } from '../utils/formatters.ts';
+import { Toggle } from '../components/Toggle.tsx';
+import { Input } from '../components/Input.tsx';
 
 interface Props {
   event: TournamentEvent;
@@ -675,7 +675,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                     <div className="space-y-3 w-full">
                       <button onClick={() => {
                         const text = `Participe do evento ${event.name} comigo no MyPlacar! Acompanhe os resultados e inscreva-se pelo link: ${inviteLink}`;
-                        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                        globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                       }} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all">
                         <Share2 size={18} /> WhatsApp
                       </button>
@@ -704,7 +704,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                 <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 space-y-5 animate-in slide-in-from-top-4">
                    <Input 
                       label="Nome completo" 
-                      enableVoice={true}
+                      enableVoice
                       value={manualEntry.name} 
                       onChange={e => setManualEntry({...manualEntry, name: formatPortugueseName(e.target.value)})} 
                    />
@@ -712,7 +712,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                       <div className="flex-1">
                          <Input 
                             label="Apelido do atleta" 
-                            enableVoice={true}
+                            enableVoice
                             value={manualEntry.nickname} 
                             onChange={e => setManualEntry({...manualEntry, nickname: formatPortugueseName(e.target.value)})} 
                          />
@@ -726,7 +726,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                    </div>
                    <Input 
                       label="E-mail para convite" 
-                      enableVoice={true}
+                      enableVoice
                       type="email" 
                       value={manualEntry.email} 
                       onChange={e => setManualEntry({...manualEntry, email: e.target.value})} 

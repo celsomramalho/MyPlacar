@@ -9,7 +9,7 @@ export const isWatchDevice = (): boolean => {
   const isWatchUA = /watch|wear os|applewatch|samsungbrowser.*wearable/i.test(ua);
   
   // Relógios geralmente têm telas menores que 450px em ambas as dimensões
-  const isSmallScreen = window.innerWidth < 450 && window.innerHeight < 450;
+  const isSmallScreen = globalThis.innerWidth < 450 && globalThis.innerHeight < 450;
   
   return isWatchUA || isSmallScreen;
 };

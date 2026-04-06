@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { VoiceCommands, PointType } from '../types';
+import { VoiceCommands, PointType } from '../types.ts';
 
 interface UseGeminiRefereeProps {
   onScoreP1: (type: PointType, text: string) => void;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getDbLite } from '../firebaseLite';
+import { getDbLite } from '../firebaseLite.ts';
 import { doc, getDoc } from 'firebase/firestore/lite';
 
 interface Props {

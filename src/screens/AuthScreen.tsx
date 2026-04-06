@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint, Wifi } from 'lucide-react';
-import { Input } from '../components/Input';
-import { Button } from '../components/Button';
-import { Toggle } from '../components/Toggle';
-import { UserProfile } from '../types';
-import { getDb, getAuthInstance } from '../firebase';
+import { Input } from '../components/Input.tsx';
+import { Button } from '../components/Button.tsx';
+import { Toggle } from '../components/Toggle.tsx';
+import { UserProfile } from '../types.ts';
+import { getDb, getAuthInstance } from '../firebase.ts';
 import { doc, getDoc, getDocFromServer, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
-import { mirrorUser } from '../services/supabaseMirror';
+import { mirrorUser } from '../services/supabaseMirror.ts';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
-import { ScoreboardIcon } from '../components/ScoreboardIcon';
-import { emailService } from '../services/emailService';
-import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
-import { APP_VERSION } from '../constants';
+import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
+import { emailService } from '../services/emailService.ts';
+import { formatPortugueseName, applyGoldenRule } from '../utils/formatters.ts';
+import { APP_VERSION } from '../constants.ts';
 
 interface Props {
   onAuthSuccess: (profile: UserProfile, stayConnected: boolean) => void;
@@ -30,12 +30,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password'>(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     if (params.get('mode') === 'resetPassword' && params.get('oobCode')) return 'reset_password';
     return (params.get('ref') || params.get('pin_ref') || params.get('joinEvent')) ? 'register' : 'login';
   });
 
-  const [oobCode, setOobCode] = useState(() => new URLSearchParams(window.location.search).get('oobCode') || '');
+  const [oobCode, setOobCode] = useState(() => new URLSearchParams(globalThis.location.search).get('oobCode') || '');
 
   const [email, setEmail] = useState(() => localStorage.getItem('MyPlacarSavedEmail') || '');
   const [pin, setPin] = useState(() => localStorage.getItem('MyPlacarSavedPin') || ''); 
@@ -61,7 +61,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [name, setName] = useState(() => localStorage.getItem('MyPlacarPendingName') || '');
   
   const [referralPin, setReferralPin] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     return initialReferralPin || params.get('refPin') || params.get('pin_ref') || params.get('ref') || '';
   });
   const [lookupName, setLookupName] = useState('');
@@ -106,13 +106,13 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     // eventos nativos atualizam imediatamente; probe confirma em seguida
     const handleOnline  = () => { setIsOnline(true); checkConnection(); };
     const handleOffline = () => { if (!cancelled) setIsOnline(false); };
-    window.addEventListener('online',  handleOnline);
-    window.addEventListener('offline', handleOffline);
+    globalThis.addEventListener('online',  handleOnline);
+    globalThis.addEventListener('offline', handleOffline);
     return () => {
       cancelled = true;
       clearInterval(interval);
-      window.removeEventListener('online',  handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      globalThis.removeEventListener('online',  handleOnline);
+      globalThis.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -137,7 +137,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   }, [onCheckUpdate, isOnline]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     const modeParam = params.get('mode');
     const codeParam = params.get('oobCode');
 
@@ -166,7 +166,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     const eventPin = params.get('joinEvent');
     if (eventPin && isOnline) {
         const db = getDb();
@@ -186,7 +186,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const handleConfirmEmailInternalRef = React.useRef<((email: string, code: string) => Promise<void>) | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     const urlEmail = params.get('email');
     const urlCode = params.get('code');
 
@@ -202,7 +202,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         setGeneratedVerifyCode(urlCode);
 
         try {
-            window.history.replaceState(null, '', window.location.pathname);
+            globalThis.history.replaceState(null, '', globalThis.location.pathname);
         } catch (e) {
             console.warn("History API not available or blocked:", e);
         }
@@ -283,9 +283,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         } catch (e) {}
       }
       // 3. Recarrega com cache-bust
-      const url = new URL(window.location.href);
+      const url = new URL(globalThis.location.href);
       url.searchParams.set('v', remoteVersionFound);
-      window.location.href = url.toString();
+      globalThis.location.href = url.toString();
       return;
     }
 
@@ -697,7 +697,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handlePasskeyLogin = async () => {
-    if (!window.PublicKeyCredential) {
+    if (!globalThis.PublicKeyCredential) {
       setError("Seu navegador não suporta biometria.");
       return;
     }
@@ -708,11 +708,11 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
     try {
       const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
+      globalThis.crypto.getRandomValues(challenge);
 
       const options: any = {
         challenge,
-        rpId: window.location.hostname,
+        rpId: globalThis.location.hostname,
         userVerification: "required",
         timeout: 60000,
       };
@@ -772,7 +772,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       setMode('login');
       setError(null);
       alert("Senha redefinida com sucesso! Agora você pode entrar.");
-      window.history.replaceState(null, '', window.location.pathname);
+      globalThis.history.replaceState(null, '', globalThis.location.pathname);
     } catch (e: any) {
       setError("Erro ao redefinir senha. O link pode ter expirado.");
     } finally {
@@ -1214,7 +1214,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               <div className="h-[1px] flex-1 bg-slate-100" />
             </div>
 
-            {window.PublicKeyCredential && (
+            {globalThis.PublicKeyCredential && (
               <button 
                 onClick={handlePasskeyLogin}
                 disabled={isLoading}

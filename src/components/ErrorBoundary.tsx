@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
   private handleReset = () => {
     try {
       localStorage.removeItem('myPlacarActiveGameState');
-      window.location.reload();
+      globalThis.location.reload();
     } catch (e) {}
   };
 
@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
           
           <div className="flex flex-col w-full gap-3 max-w-xs">
             <button 
-              onClick={() => window.location.reload()} 
+              onClick={() => globalThis.location.reload()} 
               className="w-full py-4 bg-blue-600 text-white rounded-3xl font-black text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               <RotateCw size={18} />

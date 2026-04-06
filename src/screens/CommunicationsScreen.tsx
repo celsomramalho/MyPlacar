@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, User, Loader2 } from 'lucide-react';
-import { Communication, UserProfile, Reply } from '../types';
-import { getDb } from '../firebase';
+import { Communication, UserProfile, Reply } from '../types.ts';
+import { getDb } from '../firebase.ts';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
-import { Button } from '../components/Button';
-import { Input } from '../components/Input';
+import { Button } from '../components/Button.tsx';
+import { Input } from '../components/Input.tsx';
 
 interface Props {
   userProfile: UserProfile;

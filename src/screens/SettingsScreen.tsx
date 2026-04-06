@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent, QueuePlayer } from '../types';
-import { ProfileScreen } from './ProfileScreen';
-import { HelpScreen } from './HelpScreen';
-import { SettingsHeader } from './settings/SettingsHeader';
-import { TeamSection } from './settings/TeamSection';
-import { HistorySection } from './settings/HistorySection';
-import { SettingsTabs } from './settings/SettingsTabs';
+import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent, QueuePlayer } from '../types.ts';
+import { ProfileScreen } from './ProfileScreen.tsx';
+import { HelpScreen } from './HelpScreen.tsx';
+import { SettingsHeader } from './settings/SettingsHeader.tsx';
+import { TeamSection } from './settings/TeamSection.tsx';
+import { HistorySection } from './settings/HistorySection.tsx';
+import { SettingsTabs } from './settings/SettingsTabs.tsx';
 
 interface Props {
   history: MatchHistoryItem[];

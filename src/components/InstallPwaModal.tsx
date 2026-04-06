@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Share, MoreVertical, PlusSquare, Smartphone, CheckCircle2, MonitorDown } from 'lucide-react';
-import { Toggle } from './Toggle';
-import { ScoreboardIcon } from './ScoreboardIcon';
+import { Toggle } from './Toggle.tsx';
+import { ScoreboardIcon } from './ScoreboardIcon.tsx';
 
 interface Props {
   isOpen: boolean;
@@ -14,7 +14,7 @@ export const InstallPwaModal: React.FC<Props> = ({ isOpen, onClose, deferredProm
   const [dontShowAgain, setDontShowAgain] = useState(false);
 
   useEffect(() => {
-    const userAgent = window.navigator.userAgent.toLowerCase();
+    const userAgent = globalThis.navigator.userAgent.toLowerCase();
     if (/iphone|ipad|ipod/.test(userAgent)) {
       setActiveTab('ios');
     } else {

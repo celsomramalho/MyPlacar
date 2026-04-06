@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, ShieldCheck, Plus, Play, Info, CloudDownload, CloudUpload, RotateCw, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Antenna, Wifi, Dices, UserCheck, ArrowRightLeft, UserX, History, Check, CheckSquare, Eraser, Mic, Clock, Trophy, Gavel } from 'lucide-react';
-import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent, TournamentEntry } from '../types'; 
-import { Input } from '../components/Input'; 
-import { getDb } from '../firebase'; 
+import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent, TournamentEntry } from '../types.ts'; 
+import { Input } from '../components/Input.tsx'; 
+import { getDb } from '../firebase.ts'; 
 import { collection, query, where, getDocs, getDocsFromServer, getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
-import { mirrorUser, mirrorPartners } from '../services/supabaseMirror';
-import { LiveIndicator } from '../components/LiveIndicator'; 
-import { formatPortugueseName, maskPin } from '../utils/formatters'; 
-import { Toggle } from '../components/Toggle'; 
-import { ScoreboardIcon } from '../components/ScoreboardIcon'; 
+import { mirrorUser, mirrorPartners } from '../services/supabaseMirror.ts';
+import { LiveIndicator } from '../components/LiveIndicator.tsx'; 
+import { formatPortugueseName, maskPin } from '../utils/formatters.ts'; 
+import { Toggle } from '../components/Toggle.tsx'; 
+import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx'; 
 
 interface Props {
   partners: Partner[];
@@ -185,7 +185,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
   const handleShareWhatsApp = () => {
     const text = `Participe comigo no my placar. Clique no link para se cadastrar e me adicionar como parceiro: ${shareLink}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
   const handleCopyShareLink = () => navigator.clipboard.writeText(shareLink).then(() => (window as any).alert("Link de indicação copiado com sucesso!"));
 
@@ -785,7 +785,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
               <div className="space-y-4">
                 <div className="flex items-center gap-2 px-1 text-emerald-500"><UserPlus size={18} /><h3 className="text-sm font-black text-black tracking-tight">Novo parceiro</h3></div>
                 <div className="space-y-3">
-                    <div className="relative" onClick={() => scannerInputRef.current?.startScanner()}><div className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 z-10 pointer-events-none"><QrCode size={20} /></div><Input ref={scannerInputRef} enableCamera={true} readOnly placeholder="Escanear qr code" onVoiceComplexResult={(n, p) => handleAddPartner(p, n, 'qrcode')} className="h-[56px] pl-12 text-[14px] font-bold border-2 border-emerald-500 rounded-2xl shadow-sm cursor-pointer" /></div>
+                    <div className="relative" onClick={() => scannerInputRef.current?.startScanner()}><div className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 z-10 pointer-events-none"><QrCode size={20} /></div><Input ref={scannerInputRef} enableCamera readOnly placeholder="Escanear qr code" onVoiceComplexResult={(n, p) => handleAddPartner(p, n, 'qrcode')} className="h-[56px] pl-12 text-[14px] font-bold border-2 border-emerald-500 rounded-2xl shadow-sm cursor-pointer" /></div>
                     <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-gray-100 space-y-4">
                       <div className="flex gap-2">
                           <div className="relative w-28 shrink-0"><div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300"><Hash size={14} /></div><input type="text" placeholder="Pin" maxLength={5} value={pinInput} onChange={e => setPinInput(e.target.value.toUpperCase())} className="w-full h-14 pl-8 pr-2 bg-slate-50 border border-slate-100 rounded-2xl text-base font-black outline-none focus:ring-2 focus:ring-emerald-500/20" />{isSearchingPin && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 animate-spin" />}</div>

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Send, MessageSquare, PieChart, Users, User, Pin, Trash2, Loader2, Plus, X, ChevronDown, ChevronUp, Mail } from 'lucide-react';
-import { Communication, UserProfile, Reply } from '../types';
-import { getDb } from '../firebase';
+import { Communication, UserProfile, Reply } from '../types.ts';
+import { getDb } from '../firebase.ts';
 import { collection, addDoc, serverTimestamp, query, getDocs, deleteDoc, doc, where, orderBy, limit, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
-import { Button } from './Button';
-import { Input } from './Input';
-import { notificationService } from '../services/notificationService';
+import { Button } from './Button.tsx';
+import { Input } from './Input.tsx';
+import { notificationService } from '../services/notificationService.ts';
 
 interface Props {
   adminProfile: UserProfile;

@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, ShieldCheck, Save, Loader2, LogOut, Settings, Smartphone, CheckCircle2, AlertCircle, Mic, MapPin, Camera, Wifi, RotateCw, Zap, Crown, Star, ArrowRight, HelpCircle, Eye, EyeOff, Hash, Lock, Check as CheckIcon, Shield, Fingerprint } from 'lucide-react';
-import { Input } from '../components/Input';
-import { Button } from '../components/Button';
-import { UserProfile, MatchSettings } from '../types';
-import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
-import { APP_VERSION } from '../constants';
-import { getAuthInstance, getDb } from '../firebase';
+import { Input } from '../components/Input.tsx';
+import { Button } from '../components/Button.tsx';
+import { UserProfile, MatchSettings } from '../types.ts';
+import { formatPortugueseName, applyGoldenRule } from '../utils/formatters.ts';
+import { APP_VERSION } from '../constants.ts';
+import { getAuthInstance, getDb } from '../firebase.ts';
 import { createUserWithEmailAndPassword, updatePassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, updateDoc, Firestore } from 'firebase/firestore';
 
@@ -187,7 +187,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   };
 
   useEffect(() => {
-    const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    const isStandaloneMode = globalThis.matchMedia('(display-mode: standalone)').matches || (globalThis.navigator as any).standalone === true;
     setIsStandalone(isStandaloneMode);
   }, []);
 
@@ -297,7 +297,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
     if (isCheckingUpdate || !onCheckUpdate) return;
     
     if (remoteVersionFound && setIsUpdatingVersion) {
-      const confirmUpdate = window.confirm(`Nova versão ${remoteVersionFound} disponível. Deseja atualizar agora?`);
+      const confirmUpdate = globalThis.confirm(`Nova versão ${remoteVersionFound} disponível. Deseja atualizar agora?`);
       if (confirmUpdate) {
         setIsUpdatingVersion(true);
         // 1. Desregistra SW primeiro
@@ -315,10 +315,10 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
           } catch (e) {}
         }
         // 3. Hard reload com ?v= para bypass do CDN
-        const url = new URL(window.location.href);
+        const url = new URL(globalThis.location.href);
         url.search = '';
         url.searchParams.set('v', remoteVersionFound);
-        window.location.replace(url.toString());
+        globalThis.location.replace(url.toString());
       }
       return;
     }
@@ -351,7 +351,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   ];
 
   const handleRegisterPasskey = async (isReset = false) => {
-    if (!window.PublicKeyCredential) {
+    if (!globalThis.PublicKeyCredential) {
       alert("Seu navegador ou dispositivo não suporta biometria.");
       return;
     }
@@ -376,7 +376,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
       }
 
       const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
+      globalThis.crypto.getRandomValues(challenge);
 
       const userId = profile.email || 'user';
       const userHandle = new TextEncoder().encode(userId);
@@ -385,7 +385,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         challenge,
         rp: {
           name: "MyPlacar",
-          id: window.location.hostname,
+          id: globalThis.location.hostname,
         },
         user: {
           id: userHandle,

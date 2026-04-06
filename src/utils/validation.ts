@@ -1,4 +1,4 @@
-import { GameState, MatchSettings, Player, PointEvent } from '../types';
+import { GameState, MatchSettings, Player, PointEvent } from '../types.ts';
 
 export function isValidPlayer(p: any): p is Player {
   return (

@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Loader2, Clock, Trophy, ChevronDown, ChevronUp, MapPin, Cloud, Trash2, CloudUpload, CloudDownload, Calendar, Smartphone, Share2 } from 'lucide-react';
-import { Input } from '../../components/Input';
-import { MatchHistoryItem } from '../../types';
-import { MatchTimeline } from '../ScoreboardScreen';
-import { LazySportIcon } from '../../components/LazySportIcon';
+import { Input } from '../../components/Input.tsx';
+import { MatchHistoryItem } from '../../types.ts';
+import { MatchTimeline } from '../ScoreboardScreen.tsx';
+import { LazySportIcon } from '../../components/LazySportIcon.tsx';
 
 const COLOR_MAP: Record<string, string> = {
   azul: 'text-blue-600',

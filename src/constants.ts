@@ -1,5 +1,5 @@
 
-import { MatchSettings, VoiceCommands, SportDefinition } from './types';
+import { MatchSettings, VoiceCommands, SportDefinition } from './types.ts';
 
 // ATENÇÃO: Esta é a versão deste arquivo de código. 
 // Se você mudar no Admin para um número DIFERENTE deste, todos os usuários serão forçados a atualizar.

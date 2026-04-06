@@ -1,5 +1,5 @@
-import { emailService } from './emailService';
-import { Communication, UserProfile } from '../types';
+import { emailService } from './emailService.ts';
+import { Communication, UserProfile } from '../types.ts';
 
 /**
  * Serviço híbrido de notificações (Push + E-mail)
@@ -48,7 +48,7 @@ export const notificationService = {
   /**
    * Orquestra o envio híbrido baseado no tipo de comunicado
    */
-  triggerHybridNotifications: async (comm: Partial<Communication>, users: { email: string, pushToken?: string }[], sendEmail: boolean = true, appUrl: string = window.location.origin) => {
+  triggerHybridNotifications: async (comm: Partial<Communication>, users: { email: string, pushToken?: string }[], sendEmail: boolean = true, appUrl: string = globalThis.location.origin) => {
     const emails = users.map(u => u.email).filter(Boolean);
     const tokens = users.map(u => u.pushToken).filter(Boolean) as string[];
 

@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, User, HelpCircle, Watch, Target, Sparkles, Antenna, Check, Ticket, X, Loader2, Share2, Copy, QrCode, WifiOff, LogOut, Menu, Moon } from 'lucide-react';
-import { Toggle } from '../components/Toggle';
-import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile } from '../types';
-import { ScoreboardIcon } from '../components/ScoreboardIcon';
-import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants';
-import { applyGoldenRule } from '../utils/formatters';
-import { getDb } from '../firebase';
+import { Toggle } from '../components/Toggle.tsx';
+import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile } from '../types.ts';
+import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
+import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants.ts';
+import { applyGoldenRule } from '../utils/formatters.ts';
+import { getDb } from '../firebase.ts';
 import { collection, getDocs } from 'firebase/firestore';
-import { LazySportIcon } from '../components/LazySportIcon';
-import { Button } from '../components/Button';
-import { LiveIndicator } from '../components/LiveIndicator';
-import { SettingsTabs } from './settings/SettingsTabs';
+import { LazySportIcon } from '../components/LazySportIcon.tsx';
+import { Button } from '../components/Button.tsx';
+import { LiveIndicator } from '../components/LiveIndicator.tsx';
+import { SettingsTabs } from './settings/SettingsTabs.tsx';
 
 interface Props {
   baseSettings: MatchSettings; 

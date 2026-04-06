@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Trophy, Loader2, ChevronRight, CheckCircle2, Wifi, AlertTriangle, Watch, RotateCcw, X, Smartphone, Settings, Play, ArrowLeft } from 'lucide-react';
-import { getDb } from '../firebase';
+import { getDb } from '../firebase.ts';
 import { doc, onSnapshot, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
-import { GameState, MatchHistoryItem } from '../types';
-import { SPORT_LIST } from '../constants';
+import { GameState, MatchHistoryItem } from '../types.ts';
+import { SPORT_LIST } from '../constants.ts';
 
 interface Props {
   matchId: string;

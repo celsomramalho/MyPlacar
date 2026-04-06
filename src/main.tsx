@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import App from './App.tsx';
 import './index.css';
 
 // Registro do Service Worker para suporte PWA/Offline
@@ -13,12 +13,12 @@ if ('serviceWorker' in navigator) {
       // Só recarrega se a página não foi carregada pelo próprio SW nesta sessão
       if (!sessionStorage.getItem('sw-reload-done')) {
         sessionStorage.setItem('sw-reload-done', '1');
-        window.location.reload();
+        globalThis.location.reload();
       }
     }
   });
 
-  window.addEventListener('load', async () => {
+  globalThis.addEventListener('load', async () => {
     // Limpa o flag de reload ao carregar (permite reload na próxima atualização)
     sessionStorage.removeItem('sw-reload-done');
     try {

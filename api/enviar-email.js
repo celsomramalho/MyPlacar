@@ -1,4 +1,5 @@
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import process from "node:process";
 
 const ses = new SESClient({
   region: process.env.AWS_REGION,

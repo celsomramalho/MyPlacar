@@ -14,10 +14,10 @@
  * tennisEngine e pickleballEngine NÃO se importam mutuamente.
  */
 
-import { GameState, PointType } from '../types';
-import { SPORT_LIST } from '../constants';
-import { incrementScoreTennis, undoPoint as undoPointTennis } from './tennisEngine';
-import { incrementScorePickleball, initPickleballState } from './pickleballEngine';
+import { GameState, PointType } from '../types.ts';
+import { SPORT_LIST } from '../constants.ts';
+import { incrementScoreTennis, undoPoint as undoPointTennis } from './tennisEngine.ts';
+import { incrementScorePickleball, initPickleballState } from './pickleballEngine.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

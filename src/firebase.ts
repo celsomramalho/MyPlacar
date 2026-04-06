@@ -82,11 +82,11 @@ export const clearFirestoreCache = async () => {
       });
       
       console.log("Myplacar: Cache do firestore limpo com sucesso.");
-      window.location.reload();
+      globalThis.location.reload();
     } catch (e) {
       console.error("Myplacar: Erro ao limpar cache do firestore.", e);
       // Força reload mesmo com erro
-      window.location.reload();
+      globalThis.location.reload();
     }
   }
 };

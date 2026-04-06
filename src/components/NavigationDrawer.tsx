@@ -3,7 +3,7 @@ import React from 'react';
 import { 
   X, Home, Trophy, Users, Bell, History, User, Settings, ShieldAlert, LogOut, Play, Menu, HelpCircle, User as UserIcon, Clock, Settings as SettingsIcon, MapPin, Ticket, Send, LayoutGrid
 } from 'lucide-react';
-import { UserProfile, Screen } from '../types';
+import { UserProfile, Screen } from '../types.ts';
 
 interface Props {
   isOpen: boolean;

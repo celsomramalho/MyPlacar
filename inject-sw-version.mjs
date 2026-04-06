@@ -2,6 +2,7 @@
 // Lê APP_VERSION de src/constants.ts, substitui __APP_CACHE_NAME__ no sw.js
 // e copia o resultado para dist/sw.js. Roda após o vite build.
 import fs from 'fs';
+import process from "node:process";
 
 const constants = fs.readFileSync('./src/constants.ts', 'utf-8');
 const match = constants.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);

@@ -13,8 +13,8 @@ export function useInstallPwa() {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    globalThis.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => globalThis.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
   return { deferredPrompt };

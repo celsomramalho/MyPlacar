@@ -1,6 +1,6 @@
 import React from 'react';
 import { HelpCircle, Zap, Cloud, MapPin, Mic, Play, Activity } from 'lucide-react';
-import { UserProfile } from '../types';
+import { UserProfile } from '../types.ts';
 
 interface Props {
   profile: UserProfile;

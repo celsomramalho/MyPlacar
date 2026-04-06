@@ -1,39 +1,39 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AuthScreen } from './screens/AuthScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
-import { ScoreboardScreen } from './screens/ScoreboardScreen';
-import { NewGameScreen } from './screens/NewGameScreen';
-import { AdminScreen } from './screens/AdminScreen';
-import { LocationScreen } from './screens/LocationScreen';
-import { SpectatorScreen } from './screens/SpectatorScreen';
-import { PartnersScreen } from './screens/PartnersScreen';
-import { TournamentsScreen } from './screens/TournamentsScreen';
-import { EventDetailScreen } from './screens/EventDetailScreen';
-import { CommunicationsScreen } from './screens/CommunicationsScreen';
-import { InstallPwaModal } from './components/InstallPwaModal';
-import { NavigationDrawer } from './components/NavigationDrawer';
-import { Input } from './components/Input';
-import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointType, Partner, PointEvent, QueuePlayer, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab } from './types';
-import { isValidGameState, isValidMatchSettings } from './utils/validation';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants';
-import { incrementScore, undoPoint } from './utils/tennisEngine';
-import { initPickleballState } from './utils/pickleballEngine';
-import { applyGoldenRule, maskPin } from './utils/formatters';
-import { isWatchDevice } from './utils/device';
-import { getDb, clearFirestoreCache } from './firebase';
+import { AuthScreen } from './screens/AuthScreen.tsx';
+import { SettingsScreen } from './screens/SettingsScreen.tsx';
+import { ScoreboardScreen } from './screens/ScoreboardScreen.tsx';
+import { NewGameScreen } from './screens/NewGameScreen.tsx';
+import { AdminScreen } from './screens/AdminScreen.tsx';
+import { LocationScreen } from './screens/LocationScreen.tsx';
+import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
+import { PartnersScreen } from './screens/PartnersScreen.tsx';
+import { TournamentsScreen } from './screens/TournamentsScreen.tsx';
+import { EventDetailScreen } from './screens/EventDetailScreen.tsx';
+import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
+import { InstallPwaModal } from './components/InstallPwaModal.tsx';
+import { NavigationDrawer } from './components/NavigationDrawer.tsx';
+import { Input } from './components/Input.tsx';
+import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointType, Partner, PointEvent, QueuePlayer, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab } from './types.ts';
+import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
+import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
+import { initPickleballState } from './utils/pickleballEngine.ts';
+import { applyGoldenRule, maskPin } from './utils/formatters.ts';
+import { isWatchDevice } from './utils/device.ts';
+import { getDb, clearFirestoreCache } from './firebase.ts';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, orderBy, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
 import { AlertCircle, Smartphone, Download, Trash2, RotateCw, Wifi, X, Antenna, Check, Settings, CheckCircle, ShieldCheck, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Gavel, User, QrCode, Users } from 'lucide-react';
-import { LiveIndicator } from './components/LiveIndicator';
-import { useAppLogger } from './hooks/useAppLogger';
-import { useInstallPwa } from './hooks/useInstallPwa';
-import { useOnlineSync } from './hooks/useOnlineSync';
+import { LiveIndicator } from './components/LiveIndicator.tsx';
+import { useAppLogger } from './hooks/useAppLogger.ts';
+import { useInstallPwa } from './hooks/useInstallPwa.ts';
+import { useOnlineSync } from './hooks/useOnlineSync.ts';
 
 const CURRENT_DATA_VERSION = '3.1.0'; // bumped: limpa SavedSettings_* para forçar novos defaults por esporte
 
 function safeJsonParse(key: string, fallback: any) {
   try {
-    if (typeof window === 'undefined' || !window.localStorage) return fallback;
+    if (typeof window === 'undefined' || !globalThis.localStorage) return fallback;
     const saved = localStorage.getItem(key);
     if (saved && saved !== "undefined" && saved !== "null" && saved.trim() !== "") {
       const parsed = JSON.parse(saved);
@@ -54,7 +54,7 @@ function safeJsonParse(key: string, fallback: any) {
   return fallback;
 }
 
-const getUrlParams = () => new URLSearchParams(window.location.search);
+const getUrlParams = () => new URLSearchParams(globalThis.location.search);
 const getDeviceId = () => {
   try {
     let id = localStorage.getItem('myPlacar_DeviceId');
@@ -129,7 +129,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Sinaliza que o app carregou IMEDIATAMENTE
-    window.dispatchEvent(new CustomEvent('app-ready'));
+    globalThis.dispatchEvent(new CustomEvent('app-ready'));
     
     const db = getDb();
     if (!db) return;
@@ -408,8 +408,8 @@ const App: React.FC = () => {
         }
       }
     };
-    window.addEventListener('beforeunload', handleAppExit);
-    return () => window.removeEventListener('beforeunload', handleAppExit);
+    globalThis.addEventListener('beforeunload', handleAppExit);
+    return () => globalThis.removeEventListener('beforeunload', handleAppExit);
   }, [gameState, userProfile.pin, userProfile.email, deviceId, isOriginalOwner]);
 
   useEffect(() => {
@@ -479,11 +479,11 @@ const App: React.FC = () => {
         }
       }
     };
-    window.addEventListener('error', handleQuotaError);
-    window.addEventListener('unhandledrejection', handleQuotaError);
+    globalThis.addEventListener('error', handleQuotaError);
+    globalThis.addEventListener('unhandledrejection', handleQuotaError);
     return () => {
-      window.removeEventListener('error', handleQuotaError);
-      window.removeEventListener('unhandledrejection', handleQuotaError);
+      globalThis.removeEventListener('error', handleQuotaError);
+      globalThis.removeEventListener('unhandledrejection', handleQuotaError);
     };
   }, []);
 
@@ -530,7 +530,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (userProfile.email && currentScreen === 'settings' && !installPromptShownSession) {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+      const isStandalone = globalThis.matchMedia('(display-mode: standalone)').matches || (globalThis.navigator as any).standalone === true;
       try {
         const isHidden = localStorage.getItem('myPlacarHideInstallPrompt') === 'true';
         if (!isStandalone && !isHidden) {
@@ -638,8 +638,8 @@ const App: React.FC = () => {
               }
 
               // 3. Hard reload com ?v= para forçar bypass do CDN do Vercel
-              const cleanUrl = window.location.origin + window.location.pathname + '?v=' + remoteVersion;
-              window.location.replace(cleanUrl);
+              const cleanUrl = globalThis.location.origin + globalThis.location.pathname + '?v=' + remoteVersion;
+              globalThis.location.replace(cleanUrl);
             },
             onCancel: () => setModalConfig(null)
           });
@@ -1099,7 +1099,7 @@ const App: React.FC = () => {
       if (data.settings) localStorage.setItem('myPlacarSettings', JSON.stringify(data.settings));
       if (data.partners) localStorage.setItem('myPlacarPartners', JSON.stringify(data.partners));
       if (data.playerQueue) localStorage.setItem('myPlacarPlayerQueue', JSON.stringify(data.playerQueue));
-      setModalConfig({ title: "Backup restaurado", message: "O aplicativo será reiniciado.", onConfirm: () => window.location.reload() });
+      setModalConfig({ title: "Backup restaurado", message: "O aplicativo será reiniciado.", onConfirm: () => globalThis.location.reload() });
     } catch (e) { setModalConfig({ title: "Erro", message: "Falha ao processar arquivo.", onConfirm: () => setModalConfig(null) }); }
   };
 
@@ -1728,7 +1728,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleExitSpectator = () => window.location.href = window.location.pathname;
+  const handleExitSpectator = () => globalThis.location.href = globalThis.location.pathname;
 
   useEffect(() => { if (gameState?.isConfirmedFinished && !matchHistory.some(m => m.id === gameState.matchId)) finalizeMatchInternal(gameState); }, [gameState?.isConfirmedFinished, gameState?.matchId, finalizeMatchInternal, matchHistory]);
 
@@ -1776,7 +1776,7 @@ const App: React.FC = () => {
       localStorage.removeItem('myPlacarUserProfile'); localStorage.removeItem('myPlacarActiveGameState'); localStorage.removeItem('myPlacarHistory'); localStorage.removeItem('myPlacarPartners'); localStorage.removeItem('myPlacarAssets'); localStorage.removeItem('myPlacarSettings'); localStorage.removeItem('myPlacar_DataVersion'); localStorage.removeItem('myPlacarPendingReferral'); localStorage.removeItem('myPlacarPendingReferralPin'); localStorage.removeItem('myPlacarPlayerQueue'); localStorage.removeItem('myPlacarActiveEvent'); localStorage.removeItem('myPlacarRegisteredEvents');
       Object.keys(localStorage).forEach(key => { if (key.startsWith('myPlacar_SavedSettings_')) localStorage.removeItem(key); });
     } catch(e) {}
-    setCurrentScreen('auth'); setIsRecoveryFromMatchOver(false); window.history.replaceState({}, document.title, window.location.pathname);
+    setCurrentScreen('auth'); setIsRecoveryFromMatchOver(false); globalThis.history.replaceState({}, document.title, globalThis.location.pathname);
     setIsMenuOpen(false);
     setModalConfig({ title: "Sessão finalizada", message: "Limpando dados da sessão anterior.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
     setTimeout(() => setModalConfig(null), 2500);
@@ -2194,7 +2194,7 @@ const App: React.FC = () => {
             </div>
             <div className="pt-4">
               <button 
-                onClick={() => window.location.href = newAppUrl}
+                onClick={() => globalThis.location.href = newAppUrl}
                 className="w-full py-5 bg-blue-600 text-white rounded-3xl font-black text-base shadow-xl shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3"
               >
                 Acessar novo endereço <ArrowLeftRight size={20} />

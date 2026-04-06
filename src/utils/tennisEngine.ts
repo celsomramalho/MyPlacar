@@ -1,6 +1,6 @@
 
-import { GameState, PointType } from '../types';
-import { incrementScorePickleball } from './pickleballEngine';
+import { GameState, PointType } from '../types.ts';
+import { incrementScorePickleball } from './pickleballEngine.ts';
 
 export const incrementScore = (state: GameState, rallyWinner: 1 | 2, pointType: PointType = 'rally', source: string = 'cb'): GameState => {
   if (state.isMatchOver) return state;

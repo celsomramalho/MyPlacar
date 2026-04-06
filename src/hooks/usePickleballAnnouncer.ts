@@ -13,14 +13,14 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { GameState, PickleballState } from '../types';
+import { GameState, PickleballState } from '../types.ts';
 import {
   whoHasPickleballGamePoint,
   whoHasPickleballMatchPoint,
   shouldSwitchSidesMidGame,
   isPickleballTieBreak,
-} from '../utils/pickleballEngine';
-import { speakSystem, speakGemini, unlockAudio, TIE_BREAK_TTS, ACE_TTS } from './useScoreAnnouncer';
+} from '../utils/pickleballEngine.ts';
+import { speakSystem, speakGemini, unlockAudio, TIE_BREAK_TTS, ACE_TTS } from './useScoreAnnouncer.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilitários de texto
