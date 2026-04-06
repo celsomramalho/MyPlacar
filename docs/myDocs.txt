@@ -1,0 +1,626 @@
+0. >> arquivo 00-overview.md <<
+# Visão Geral
+
+MyPlacar é uma aplicação para gerenciar placares de partidas em tempo real, voltada para partidas esportivas ou jogos informais. A aplicação é pensada como uma PWA, permitindo instalação em dispositivos móveis e atuação offline parcial.
+
+Objetivos
+- Fornecer uma interface simples para iniciar partidas, marcar pontos e finalizar.
+- Persistência em Firestore para histórico e múltiplos dispositivos.
+- Suporte a build mobile via Capacitor.
+
+Tecnologias principais
+- Frontend: React + TypeScript (App.tsx é o entry)
+- Build/Dev: Vite
+- Estilo: Tailwind CSS, PostCSS
+- Backend (Data): Firebase Firestore, Realtime Rules
+- PWA: manifest.json, service worker (sw.js)
+- Mobile: Capacitor (capacitor.config.ts)
+
+1. >> arquivo 01-quickstart.md <<
+# Quickstart — Instalação e execução local
+
+Requisitos
+- Node.js (LTS recomendado)
+- npm ou pnpm (o repositório contém package.json)
+- Conta no Firebase (para testes com Firestore)
+- (Opcional) Capacitor instalado globalmente para builds mobile
+
+Clonar o repositório
+```bash
+git clone https://github.com/celsomramalho/MyPlacar.git
+cd MyPlacar
+```
+
+Instalar dependências
+```bash
+# npm
+npm install
+
+# ou pnpm
+pnpm install
+```
+
+Variáveis de ambiente
+- Verifique firebase.ts para quais variáveis são usadas. Normalmente você precisa de:
+  - FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET, FIREBASE_MESSAGING_SENDER_ID, FIREBASE_APP_ID
+- Para testes locais, crie um arquivo `.env.local` na raiz com:
+```
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+```
+(Os nomes exatos podem variar conforme `firebase.ts` — confirme o prefixo VITE_ no código.)
+
+Executar em modo desenvolvimento (web)
+```bash
+npm run dev
+# ou
+pnpm dev
+```
+O Vite hospeda localmente (por padrão em http://localhost:5173).
+
+Build para produção (web)
+```bash
+npm run build
+# ou
+pnpm build
+```
+
+Rodando como PWA / testes do service worker
+- Após build, sirva a pasta `dist` (ou use Vercel/Firebase Hosting).
+- Para testar service worker localmente, use um servidor HTTPS ou Vite com suporte (consulte docs do Vite).
+
+Build mobile (Capacitor) — resumo
+1. `npm run build`
+2. `npx cap add android` / `npx cap add ios` (se ainda não tiver adicionado)
+3. `npx cap sync`
+4. Abrir projeto no Android Studio / Xcode e buildar.
+
+Observações
+- Antes de fazer deploy que usa Firestore em produção, valide `firestore.rules` e `firestore.indexes.json`.
+
+2. >> arquivo 02-architecture.md <<
+# Arquitetura do projeto
+
+Visão geral das pastas e arquivos principais
+- App.tsx — ponto de entrada principal da aplicação React
+- src/ — código-fonte da aplicação (componentes, páginas, utilitários)
+- types.ts — tipos e interfaces TypeScript compartilhadas (modelos de domínio)
+- firebase.ts — inicialização e helpers do Firebase
+- public/ / index.html — PWA e HTML base
+- sw.js — service worker (offline / caching)
+- manifest.json — manifesto PWA
+- vite.config.ts — configuração do Vite
+- tailwind.config.js / postcss.config.js — configuração de estilo
+
+Fluxo de dados
+- Estado local e componentes React para UI.
+- Persistência e sincronização via Firestore (coleções descritas em docs/05-api-and-data-models.md).
+- Autenticação (se adicionada) via Firebase Auth (planejado no roadmap).
+
+Observações sobre App.tsx
+- App.tsx contém a composição das rotas e componentes principais; é o melhor ponto para entender os fluxos de inicialização (carregamento de config, inicialização do Firebase, providers).
+- Types e modelos centrais ficam em types.ts — consulte para entender os shape dos documentos Firestore.
+
+(Atualização: mapeamento de tipos)
+
+Fonte de verdade dos tipos
+- O arquivo `src/types.ts` contém todas as interfaces e tipos usados para modelar partidas, usuários, torneios e comunicações.
+- Consulte `src/types.ts` para:
+  - GameState, MatchSettings, MatchHistoryItem
+  - UserProfile
+  - TournamentEvent / TournamentMatch / TournamentPair / TournamentEntry
+  - Communication, PollOption, Reply
+- docs/05-api-and-data-models.md descreve como esses tipos mapeiam para coleções Firestore.
+
+Pontos importantes
+- Ao alterar a shape de dados em `src/types.ts`, atualize também `docs/05-api-and-data-models.md` e as regras do Firestore (`firestore.rules`).
+- Para auditoria rápida: pesquise leituras/escritas no repo (ex.: queries de `collection('matches')`) para validar nomes de coleção usados em produção.
+
+3. >> arquivo 03-firebase.md <<
+# Firebase — configuração e deploy
+
+Arquivos importantes
+- firebase.ts — inicialização do SDK (veja os nomes das variáveis VITE_ usadas)
+- firebase.json — configuração local do Firebase CLI / hosting
+- .firebaserc — aliases de projetos
+- firestore.rules — regras de segurança (verificar antes do deploy)
+- firestore.indexes.json — índices do Firestore (se aplicável)
+
+Recomendações
+1. Crie um projeto no Firebase (Console).
+2. Atualize as variáveis em `.env.local` conforme docs/01-quickstart.md.
+3. Teste regras localmente com o Firebase Emulator:
+```bash
+npm i -g firebase-tools
+firebase emulators:start --only firestore,auth
+```
+
+Deploy para Hosting (se usar Firebase Hosting)
+```bash
+firebase deploy --only hosting
+```
+
+Deploy de database / regras
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
+Segurança
+- Revise `firestore.rules` e limite acessos indevidos.
+- Se for usar Firebase Auth, ajuste regras para validar `request.auth.uid`.
+
+Observação
+- O projeto atualmente inclui `firestore.rules` e `firestore.indexes.json`. Antes de enviar para produção, confirme que as regras refletem as políticas desejadas.
+
+4. >> arquivo 04-deploy.md <<
+# Deploy
+
+Opções de deploy suportadas
+- Vercel (recomendado para a versão web)
+- Firebase Hosting
+- Builds mobile via Capacitor (Android / iOS)
+
+Deploy para Vercel
+1. Conectar repositório no Vercel.
+2. Configurar variáveis de ambiente no painel do Vercel (mesmos nomes do `.env.local`).
+3. Deploy automático a cada push na branch main.
+
+Deploy para Firebase Hosting
+1. Conectar com `firebase init` e escolher hosting.
+2. Configurar `public` para a pasta gerada pelo build (ex.: dist).
+3. `firebase deploy --only hosting`
+
+Build mobile com Capacitor
+1. `npm run build`
+2. `npx cap sync`
+3. Abrir projeto com Android Studio / Xcode e publicar via lojas (configurar keystore / certificados).
+
+Notas
+- Verifique performance e caching: service worker está em `sw.js`.
+- Adicionar badges de CI (se houver) no README após configurar pipelines.
+
+5. >> 05-api-and-data-models.md <<
+# API e Modelos de Dados (Firestore)
+
+Este documento mapeia as estruturas TypeScript definidas em `src/types.ts` para coleções e documentos do Firestore. Use `src/types.ts` como fonte de verdade; toda alteração no shape do dado deve ser refletida ali.
+
+Observação de nomenclatura
+- Os nomes das coleções indicados abaixo são sugeridos com base nas interfaces; confirme no código (busque leituras/escritas no repo) e adapte se sua base de dados usar nomes diferentes.
+
+Coleções principais
+1) users
+- Documento por usuário (ID preferencialmente: uid ou pin)
+- Modelo (corresponde a `UserProfile`):
+{
+  "name": string,
+  "nickname": string,
+  "email": string,
+  "phone": string,
+  "pin": string,
+  "gender": "M" | "F" | null,
+  "isProfileComplete": boolean,
+  "emailVerified": boolean,
+  "authMethod": "pin" | "password",
+  "qrCodeData": string | null,
+  "isAdmin": boolean,
+  "planType": "free" | "premium" | null,
+  "premiumUntil": string | null, // ISO date
+  "passkeyCredentialId": string | null,
+  "passkeyPublicKey": string | null,
+  "referredByPin": string | null
+}
+- Índices recomendados:
+  - email (único)
+  - pin
+- Regras de segurança:
+  - Usuário pode ler/escrever seu próprio documento (request.auth.uid === resource.id) a menos que seja isAdmin.
+
+2) matches (partidas)
+- Cada documento representa o estado atual de uma partida — corresponde a `GameState`.
+- Campos principais (resumido):
+{
+  "matchId": string,
+  "startTime": number, // timestamp ms
+  "p1": { name, partnerName?, score, games, sets: number[], color? },
+  "p2": { ... },
+  "server": 1 | 2,
+  "servingOrderOffset": number,
+  "pointHistory": PointEvent[],
+  "matchConfig": MatchSettings & { setsToWin: number },
+  "history": [{ p1: string, p2: string, setScores: string }],
+  "currentSet": number,
+  "isMatchOver": boolean,
+  "matchDuration": number,
+  "isPaused": boolean,
+  "controllers": { [controllerId]: ControllerRecord },
+  "ownerPin": string,
+  "tournamentMatchId": string?,
+  "tournamentPin": string?,
+  "pickleball": PickleballState?      // presente se sportType === 'pickleball'
+}
+- Exemplo mínimo:
+{
+  "matchId": "m_abc123",
+  "startTime": 1680000000000,
+  "p1": { "name": "João", "score": "15", "games": 0, "sets": [0] },
+  "p2": { "name": "Maria", "score": "30", "games": 0, "sets": [0] },
+  "server": 1,
+  "pointHistory": [],
+  "matchConfig": { "sportType": "tennis", "sets": 3, "gamesPerSet": 6, "voiceEnabled": false, "setsToWin": 2, ... },
+  "currentSet": 1,
+  "isMatchOver": false,
+  "ownerPin": "1234"
+}
+- Índices recomendados:
+  - ownerPin + startTime (para listar partidas de um dono)
+  - tournamentPin + tournamentMatchId (para consultar partidas por torneio)
+- Regras:
+  - Escrita somente por controllers autorizados (controlada por ownerPin / controllers map e validação de request.auth quando houver)
+
+3) match_history (ou history / matches_archive)
+- Armazena resultados finais — corresponde a `MatchHistoryItem`.
+- Campos principais:
+{
+  "id": string,
+  "date": string, // legível
+  "time": string,
+  "sportType": string,
+  "p1Name": string,
+  "p1Partner": string?,
+  "p2Name": string,
+  "p2Partner": string?,
+  "p1Color": string,
+  "p2Color": string,
+  "scoreSummary": string,
+  "p1Sets": number[],
+  "p2Sets": number[],
+  "winner": string,
+  "winnerTeam": 1 | 2,
+  "duration": number,
+  "isSynced": boolean,
+  "ownerEmail": string?,
+  "ownerPin": string?,
+  "location": { lat: number, lng: number }?,
+  "stats": { p1Aces, p2Aces, p1Faults, p2Faults, totalPoints },
+  "pointHistory": PointEvent[],
+  "involvedPins": string[]
+}
+- Índices recomendados:
+  - ownerPin + date
+  - sportType + date (se houver buscas por modalidade)
+
+4) tournaments (ou events)
+- Documentos do tipo `TournamentEvent` com arrays de `matches`, `pairs` e `config`.
+{
+  "pin": string,
+  "name": string,
+  "bannerUrl": string?,
+  "active": boolean,
+  "createdAt": number,
+  "config": { ...TournamentConfig },
+  "pairs": [ TournamentPair ],
+  "matches": [ TournamentMatch ],
+  "coAdminPins": [ string ]
+}
+- Campos internos:
+  - TournamentConfig: { sportType, sets: 1|3|5, gamesPerSet, noAd, isLocked }
+  - TournamentMatch: { id, pair1Id, pair2Id, status:'waiting'|'live'|'finished', result?, winnerPairId?, ownerPin? }
+- Índices:
+  - pin (principal)
+  - createdAt
+
+5) partners
+- Mapeado para `Partner`
+{
+  "id": string,
+  "name": string?,
+  "nickname": string,
+  "pin": string,
+  "origin": "referral" | "qrcode" | "manual",
+  "addedAt": number,
+  "isSelected": boolean?,
+  "gender": "M" | "F"?
+}
+
+6) communications (mensagens / enquetes)
+- Modela `Communication` (mensagens/polls), com replies, reactions e flags de push/email.
+{
+  "id": string,
+  "type": "message" | "poll",
+  "title": string,
+  "content": string,
+  "authorId": string,
+  "authorName": string,
+  "createdAt": number,
+  "targetUserId": string | "all",
+  "isPinned": boolean,
+  "expiresAt": number?,
+  "poll": {
+    "options": [PollOption],
+    "totalVotes": number,
+    "closed": boolean
+  }?,
+  "reactions": { [emoji]: [userIds] },
+  "readBy": [userIds],
+  "replies": [Reply],
+  "pushSent": boolean,
+  "emailSent": boolean
+}
+
+Coleções auxiliares / recomendadas
+- settings (configurações globais / por dispositivo)
+- controllers (mapa de controles remotos, se usado separadamente)
+- icons / assets (metadados de icons/custom assets)
+- queues (se o app usar filas de jogadores — `QueuePlayer`)
+
+Recomendações de modelagem
+- Use serverTimestamp() para campos createdAt / updatedAt quando apropriado.
+- Para arrays grandes (pointHistory, matches em torneios), avalie se manter em subcoleções em vez de arrays embutidos (evita limites de tamanho de documento).
+- Normalize quando precisar consultar por campos específicos (ex.: ter coleção matches e uma collection match_history em vez de depender só de arrays aninhados).
+
+Índices Firestore sugeridos (exemplos)
+- matches: ownerPin ASC, startTime DESC
+- match_history: ownerPin ASC, date DESC
+- tournaments: pin ASC, createdAt DESC
+- communications: targetUserId ASC, createdAt DESC
+
+Segurança e validação
+- Regras devem:
+  - Validar shapes (types) esperados para cada coleção.
+  - Garantir que writes que alteram partidas venham de controllers autorizados ou do ownerPin.
+  - Proteger campos administrativos (ex.: isAdmin, planType, premiumUntil).
+  - Evitar exposição de dados sensíveis (passkeyPublicKey pode ser exposto; passkeyCredentialId deve ser protegido).
+
+Como sincronizar documentação com código
+- `src/types.ts` é a fonte de verdade. Ao alterar interfaces, atualize também este documento.
+- Antes do deploy, execute validações manuais (ou testes) que garantam compatibilidade entre o cliente (App.tsx / componentes) e a modelagem Firestore.
+
+Se quiser, gero:
+- Regras de validação Firestore (exemplos de regras por coleção) baseadas nesses shapes.
+- JSON de exemplo para import (seed) com 2–3 documentos por coleção.
+
+6. >> 06-contributing.md <<
+# Como Contribuir
+
+Obrigado por considerar contribuir! Algumas diretrizes para colaborar de forma eficiente:
+
+Fluxo de trabalho
+1. Fork + branch: crie uma branch com nome `feature/<descrição>` ou `fix/<descrição>`.
+2. Faça commits pequenos e com mensagens claras.
+3. Abra PR para `main` com descrição e passos para testar.
+
+Padrões de código
+- TypeScript: seguir os tipos em `types.ts`.
+- Formatação: use Prettier / ESLint se o projeto tiver — execute `npm run lint` / `npm run format` (confirme scripts em package.json).
+- Testes: adicionar testes unitários quando aplicar mudanças significativas.
+
+Templates de Issue
+- Use os templates em `.github/ISSUE_TEMPLATE` para reportar bugs e solicitar features.
+
+Revisão
+- PRs terão revisão de código: descreva o que foi feito, como testar e o impacto esperado.
+
+7. >> 07-security.md <<
+# Segurança — resumo prático
+
+Principais pontos
+- Regras do Firestore: mantenha `firestore.rules` restritivo por padrão.
+- Não coloque chaves sensíveis no código — use variáveis de ambiente.
+- Use validação de dados no backend e no cliente (não confiar só no cliente).
+- Deployment: revisar permissões de projeto no Firebase (acesso a usuários e serviços).
+
+Arquivo de referência
+- Consulte SECURITY.md para procedimentos e contatos para report de vulnerabilidades.
+
+8. >> 08-faq.md <<
+# FAQ e troubleshooting rápido
+
+Q: A aplicação não conecta ao Firebase em desenvolvimento.
+A: Verifique `.env.local`, os nomes das variáveis (prefixo VITE_) e se o projeto Firebase está ativo. Teste com o emulator.
+
+Q: Os dados não aparecem em tempo real.
+A: Confirme regras do Firestore (leitura permitida) e checar logs do console para erros de permissão.
+
+Q: Como testar o service worker localmente?
+A: Use um servidor HTTPS ou as ferramentas de preview do Vite / build + servidor estático com https.
+
+Q: Build falha por falta de módulo/typings.
+A: Rode `npm install` e cheque `tsconfig.json` para paths e opções.
+
+9. >> 09-roadmap.md <<
+# Roadmap
+
+v0.1.0 — Lançamento inicial
+- Placar em tempo real
+- Criação/edição de partidas
+- Persistência em Firestore
+- PWA e deploy em Vercel
+- Documentação inicial
+
+v0.2.0 — Primeiro ciclo de melhorias
+- Autenticação com Firebase Auth
+- Histórico de partidas por usuário
+- Melhorias de UX e acessibilidade
+
+v0.3.0 — Recursos sociais e offline avançado
+- Compartilhamento de partidas
+- Notificações push
+- Suporte offline robusto e sincronização de conflito
+
+Backlog / ideias
+- Estatísticas por jogador/time
+- Integração com APIs externas
+- Suporte multilíngue
+
+10. >> AI_RULES.md <<
+# MyPlacar Pro - AI Development Rules
+
+## 🧠 Filosofia de Desenvolvimento (CRÍTICO)
+1. **Respeito ao Legado**: O app já veio funcional. Nunca reescreva uma lógica existente sem antes entendê-la completamente.
+2. **Análise Cirúrgica**: Antes de qualquer alteração, localize as variáveis e funções existentes nos arquivos `types.ts`, `constants.ts` e nos hooks.
+3. **Não Duplicação**: Só crie novas variáveis, estados ou lógicas se for comprovado que não existe nada similar no código.
+4. **Ajustes Pontuais**: Para correções e melhorias, foque apenas no trecho necessário. Não altere o que não foi solicitado.
+5. **Recursos Novos**: Para funcionalidades inéditas, siga o padrão de arquitetura do projeto (Interface -> Componente -> Tela).
+6. **Memória Permanente**: Este arquivo é a memória do AI. Regras combinadas em chat devem ser registradas aqui para persistirem entre sessões.
+
+## 🛠 Tech Stack
+- **Framework**: React 18.x com TypeScript.
+- **Styling**: Tailwind CSS v4 (Utility-first).
+- **Build Tool**: Vite.
+- **Backend/Database**: Firebase (Firestore) + Supabase (Auth/Edge Functions).
+- **Icons**: Lucide React (Exclusivo).
+- **AI Integration**: Google Gemini AI (@google/genai).
+
+## 📐 Diretrizes de Código
+- **Types First**: Sempre verifique `src/types.ts` antes de manipular estados.
+- **Motor de Jogo**: A lógica de pontuação reside em `src/utils/tennisEngine.ts`. Não a duplique em componentes.
+- **Mobile-First**: O design deve ser responsivo e focado em dispositivos móveis/relógios.
+- **Voz**: Use `useGeminiReferee` e `useScoreAnnouncer` para toda interação sonora.
+
+## 🗣 Como solicitar alterações
+- **Para Corrigir/Melhorar**: "No arquivo [X], ajuste a função [Y] para que [Z]. Use a variável [W] que já existe."
+- **Para Novo Recurso**: "Crie o recurso [A]. Pode criar novos tipos e componentes seguindo o padrão do app."
+
+## 🎨 UI/UX Guidelines
+- **Escrita (Sentence Case)**: Todo novo texto, label ou mensagem deve usar obrigatoriamente "Sentence case" (ex: "Configurações do sistema", "Novo jogador").
+- **Exceção de Marca**: O nome do app **MyPlacar** é a única exceção e deve manter sempre essa grafia exata.
+- **Golden Rule**: Aplicar a lógica de Sentence Case programaticamente via `applyGoldenRule` sempre que possível.
+- **Feedback**: Usar modais e toasts para estados de sucesso/erro.
+- **Performance**: Usar `LazySportIcon` para ícones de esportes.
+
+11. >> CHANGELOG.md <<.md <<
+# CHANGELOG
+
+## [Unreleased]
+- Documentação inicial adicionada (docs/)
+
+12. >> github_ISSUE_TEMPLATE_bug_report.md <<.md <<
+---
+name: Bug report
+about: Reportar um bug
+title: '[bug] '
+labels: bug
+assignees: ''
+
+---
+
+## Descrição do bug
+Explique o problema observado.
+
+## Passos para reproduzir
+1. Passo 1
+2. Passo 2
+
+## Comportamento esperado
+O que deveria acontecer?
+
+## Logs / Erros
+Cole mensagens de erro relevantes (console / network / stacktrace).
+
+## Ambiente
+- Sistema operacional:
+- Versão do navegador:
+- Versão do app (commit/branch):
+
+13. >> github_ISSUE_TEMPLATE_feature_request.md <<.md <<
+---
+name: Feature request
+about: Sugestão de nova funcionalidade
+title: '[feature] '
+labels: enhancement
+assignees: ''
+
+---
+
+## Descrição
+Descreva a funcionalidade desejada.
+
+## Motivo
+Por que essa funcionalidade é importante?
+
+## Proposta de solução (opcional)
+Como você imagina que isso poderia ser implementado?
+
+## Critérios de aceitação
+- [ ] Critério 1
+- [ ] Critério 2
+
+14. >> README.md <<.md <<
+# MyPlacar
+
+[![Vercel](https://img.shields.io/badge/deploy-vercel-blue)](https://vercel.com/) [![issues](https://img.shields.io/github/issues/celsomramalho/MyPlacar)](https://github.com/celsomramalho/MyPlacar/issues) [![license](https://img.shields.io/github/license/celsomramalho/MyPlacar)](https://github.com/celsomramalho/MyPlacar)
+
+## Run Locally
+
+**Prerequisites:**  Node.js
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
+
+Descrição
+---------
+MyPlacar é um aplicativo para gerenciar placares de partidas em tempo real. Esta aplicação é uma PWA (Progressive Web App) escrita em TypeScript/React, com backend de dados no Firebase (Firestore) e possibilidade de empacotamento com Capacitor.
+
+Principais funcionalidades
+- Criar/editar partidas e placares em tempo real.
+- Persistência de dados com Firestore.
+- PWA com suporte offline básico (service worker).
+- Estrutura para empacotamento mobile com Capacitor.
+
+Sumário de documentação
+- docs/00-overview.md — Visão geral do projeto
+- docs/01-quickstart.md — Instalação e execução local
+- docs/02-architecture.md — Arquitetura do projeto
+- docs/03-firebase.md — Configuração e deploy do Firebase
+- docs/04-deploy.md — Deploy (Vercel / Firebase / Capacitor)
+- docs/05-api-and-data-models.md — Modelos de dados (Firestore & types.ts)
+- docs/06-contributing.md — Guia de contribuição
+- docs/07-security.md — Segurança resumida
+- docs/08-faq.md — Perguntas frequentes / troubleshooting
+- docs/09-roadmap.md — Roadmap do projeto
+- CHANGELOG.md — Histórico de releases
+
+Onde começar
+1. Leia docs/01-quickstart.md para configurar o ambiente local.
+2. Confira docs/03-firebase.md para preparar o Firebase antes de rodar a aplicação.
+3. Depois de ajustes, abra um PR e solicite revisão.
+
+Licença
+-------
+(Se houver licença no repositório, mantener. Caso não, adicionar informação.)
+
+Contato
+-------
+Autor: celsomramalho — ver histórico de commits para contato direto.
+
+15. >> SECURITY.md <<.md <<
+# Security Policy
+
+## Supported Versions
+
+Use this section to tell people about which versions of your project are
+currently being supported with security updates.
+
+| Version | Supported          |
+| ------- | ------------------ |
+| 5.1.x   | :white_check_mark: |
+| 5.0.x   | :x:                |
+| 4.0.x   | :white_check_mark: |
+| < 4.0   | :x:                |
+
+## Reporting a Vulnerability
+
+Use this section to tell people how to report a vulnerability.
+
+Tell them where to go, how often they can expect to get an update on a
+reported vulnerability, what to expect if the vulnerability is accepted or
+declined, etc.
+
+

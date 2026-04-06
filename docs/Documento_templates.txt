@@ -1,0 +1,371 @@
+MyPlacar-Docs
+
+Templates de Documentação Técnica
+
+Modelos Markdown para Obsidian
+
+30 de março de 2026
+
+---
+
+### 1. Template de Feature
+
+markdown
+---
+type: feature
+lastUpdated: [[YYYY-MM-DD]]
+tags: [feature, [nome-da-feature], [modulo]]
+---
+
+# 🚀 Feature: [Nome da Feature]
+
+## 📌 Resumo
+[Descreva brevemente a funcionalidade, seu propósito e o valor que ela agrega ao aplicativo. Máximo 2 parágrafos.]
+
+## 🎯 Objetivo
+[Qual problema esta feature resolve? Quais são os resultados esperados e os critérios de sucesso?]
+
+## 📈 Status Atual
+**Prioridade:** [alta | média | baixa]
+**Responsável:** [Nome do Desenvolvedor/Equipe]
+
+## 🔧 Implementação Técnica
+
+### Componentes Envolvidos
+- [Liste os principais componentes, módulos ou arquivos que esta feature afeta ou utiliza. Ex: `src/components/Scoreboard.tsx`, `src/hooks/useVoiceRecognition.ts`.]
+- [Componente A]
+- [Componente B]
+
+### Fluxo de Dados
+[Descreva o fluxo de dados da feature. Use um diagrama Mermaid para visualização, se aplicável.]
+
+```mermaid
+graph TD
+    A[Usuário Interage] --> B{Lógica da Feature};
+    B --> C[Atualiza Estado/Dados];
+    C --> D[Renderiza UI];
+    D --> E[Persiste no Backend];
+
+### Código Exemplo
+[Forneça snippets de código relevantes para a feature, como um hook, uma função utilitária ou um trecho de componente. Especifique a linguagem.]
+
+```typescript
+// Exemplo: src/hooks/useFeatureName.ts
+import { useState, useEffect } from 'react';
+
+export function useFeatureName(initialValue: string) {
+  const [value, setValue] = useState(initialValue);
+
+  useEffect(() => {
+    // Lógica da feature aqui
+    console.log('Feature [Nome da Feature] inicializada com:', value);
+  }, [value]);
+
+  const updateValue = (newValue: string) => {
+    setValue(newValue);
+  };
+
+  return { value, updateValue };
+}
+```
+
+### Considerações de Performance/Segurança
+[Quais são os pontos críticos de performance? Há alguma preocupação de segurança específica para esta feature?]
+
+## 🧪 Como Testar
+[Liste os passos para testar a funcionalidade, incluindo casos de sucesso e falha.]
+- [ ] **Cenário 1:** [Descrição do cenário de teste]
+    - [ ] Passo 1: [Ação]
+    - [ ] Passo 2: [Resultado esperado]
+- [ ] **Cenário 2:** [Descrição do cenário de teste]
+    - [ ] Passo 1: [Ação]
+    - [ ] Passo 2: [Resultado esperado]
+
+## 🔗 Referências
+- [[ADR-XXX: Decisão sobre [Nome da Feature]]]
+- [[API/Dados: [Nome da Coleção/Endpoint]]]
+- [Link para o Figma/Wireframes](https://link-do-figma.com)
+- [Link para a Issue no GitHub/Jira](https://link-da-issue.com)
+
+#feature #[nome-da-feature]
+```
+
+---
+
+### 2. Template de How-To/Procedimento
+
+```markdown
+---
+type: how-to
+difficulty: easy | medium | hard
+estimatedTime: "X minutos"
+lastUpdated: [[YYYY-MM-DD]]
+tags: [how-to, procedure, [ferramenta-ou-processo]]
+---
+
+# 📝 Como: [Título do Procedimento]
+
+## 📌 Resumo
+[Descreva brevemente o que este procedimento ensina a fazer e por que ele é importante.]
+
+## 🎯 Objetivo
+[Qual é o resultado final esperado ao seguir este procedimento?]
+
+## 📊 Dificuldade e Tempo Estimado
+**Dificuldade:** [easy | medium | hard]
+**Tempo Estimado:** [X minutos | Y horas]
+
+## ✅ Pré-requisitos
+[Liste tudo o que é necessário antes de iniciar o procedimento.]
+- [ ] [Ferramenta instalada ou acesso necessário. Ex: Node.js v18+, Acesso ao console Firebase.]
+- [ ] [Conhecimento prévio necessário. Ex: Familiaridade com Git.]
+- [ ] [Outros procedimentos concluídos. Ex: [[Como: Configurar Ambiente Local]]]
+
+## 👣 Passos
+
+### Passo 1: [Título do Primeiro Passo]
+[Descreva o primeiro passo de forma clara e concisa. Inclua capturas de tela ou GIFs se ajudar.]
+
+```bash
+# Exemplo de comando a ser executado
+git clone https://github.com/myuser/myplacar.git
+```
+
+### Passo 2: [Título do Segundo Passo]
+[Descreva o segundo passo. Use listas para sub-passos, se necessário.]
+1. [Sub-passo 2.1]
+2. [Sub-passo 2.2]
+
+### Passo 3: [Título do Terceiro Passo]
+[Continue com os passos até a conclusão do procedimento.]
+
+## 🔍 Verificação
+[Como saber se o procedimento foi concluído com sucesso?]
+- [ ] [Indicador de sucesso. Ex: "O aplicativo deve estar rodando na porta 3000."]
+- [ ] [Mensagem de console esperada. Ex: "Build completed successfully."]
+
+## ⚠️ Troubleshooting
+[Liste problemas comuns que podem ocorrer durante o procedimento e suas soluções.]
+
+| [Erro A]       | [Causa B]      | [Fazer C] |
+
+## 🔗 Referências
+- [[Documento Relacionado.md]]
+- [Link para documentação oficial](https://docs.example.com)
+
+#how-to #[ferramenta-ou-processo]
+```
+
+---
+
+### 3. Template de ADR (Architecture Decision Record)
+
+```markdown
+---
+type: adr
+status: accepted | rejected | superseded
+date: [[YYYY-MM-DD]]
+lastUpdated: [[YYYY-MM-DD]]
+tags: [adr, architecture, decision, [area-afetada]]
+---
+
+# 🏛️ ADR-###: [Título da Decisão]
+
+## 📌 Contexto
+[Descreva o problema ou a questão técnica que precisa de uma decisão. Explique o cenário atual, as limitações e os requisitos que levaram a essa discussão.]
+
+## 🎯 Decisão
+[Declare a decisão tomada de forma clara e concisa. Qual foi a escolha final e por quê?]
+
+**Decisão:** [A decisão é...]
+
+## ⚖️ Consequências
+
+### Positivas
+[Liste os benefícios e vantagens da decisão tomada.]
+- [ ] [Benefício 1]
+- [ ] [Benefício 2]
+- [ ] [Benefício 3]
+
+### Negativas
+[Liste os custos, desvantagens, riscos ou compromissos associados à decisão.]
+- [ ] [Custo/Desvantagem 1]
+- [ ] [Custo/Desvantagem 2]
+- [ ] [Custo/Desvantagem 3]
+
+## 🔄 Alternativas Consideradas
+[Descreva as outras opções que foram avaliadas e por que foram descartadas ou não escolhidas.]
+- **[Alternativa A]:** [Breve descrição e motivos para não escolher.]
+- **[Alternativa B]:** [Breve descrição e motivos para não escolher.]
+
+## ⏭️ Próximas Etapas
+[Liste as ações a serem tomadas como resultado desta decisão.]
+- [ ] [Ação 1: [Responsável], [Prazo]]
+- [ ] [Ação 2: [Responsável], [Prazo]]
+
+## 🔗 Referências
+- [[Feature: [Feature Relacionada]]]
+- [Link para discussões ou pesquisas](https://link-da-discussao.com)
+
+#adr #[area-afetada]
+```
+
+---
+
+### 4. Template de API/Dados
+
+```markdown
+---
+type: api-data
+resource: "[nome-da-colecao-ou-endpoint]"
+version: "v1"
+lastUpdated: [[YYYY-MM-DD]]
+tags: [api, data, firestore, [modulo]]
+---
+
+# 🗄️ API/Dados: [Nome da Coleção/Endpoint]
+
+## 📌 Descrição
+[Descreva o propósito desta coleção do Firestore ou endpoint da API. O que ela armazena/retorna e para que é usada?]
+
+## 📊 Estrutura de Campos
+[Use uma tabela para detalhar cada campo da coleção/endpoint.]
+
+| `name`      | `string`  | Nome do recurso (ex: nome do time, nome do evento)| Sim         | `Time A`         |
+| `createdAt` | `Timestamp` | Data de criação do registro                       | Sim         | `Timestamp(1678886400, 0)` |
+
+## 📝 Exemplos JSON
+[Forneça um ou mais exemplos de como os dados são estruturados em JSON.]
+
+```json
+// Exemplo de documento na coleção 'matches'
+{
+  "id": "match_xyz123",
+  "teamA": {
+    "name": "Tubarões",
+    "score": 25
+  },
+  "teamB": {
+    "name": "Falcões",
+    "score": 18
+  },
+  "sport": "Basquete",
+  "status": "finished",
+  "createdAt": "2026-03-28T10:00:00Z",
+  "updatedAt": "2026-03-28T11:30:00Z"
+}
+```
+
+## 🔍 Query Examples (Firestore)
+[Mostre exemplos de como consultar esta coleção no Firestore.]
+
+```typescript
+// Exemplo: Buscar todas as partidas finalizadas de Basquete
+import { collection, query, where, getDocs } from "firebase/firestore";
+
+const matchesRef = collection(db, "matches");
+const q = query(matchesRef, 
+  where("sport", "==", "Basquete"),
+  where("status", "==", "finished")
+);
+
+const querySnapshot = await getDocs(q);
+querySnapshot.forEach((doc) => {
+  console.log(doc.id, " => ", doc.data());
+});
+```
+
+## 🔑 Índices Recomendados (Firestore)
+[Liste os índices que devem ser criados no Firestore para otimizar as queries.]
+- `sport` ASC, `status` ASC
+- `createdAt` DESC
+- `teamA.score` DESC
+
+## ✅ Validações e Regras de Segurança (Firestore)
+[Descreva as regras de validação ou segurança aplicadas a esta coleção/endpoint.]
+- **Validação:** `score` deve ser um número inteiro não negativo.
+- **Regra de Segurança:** Apenas usuários autenticados podem criar/atualizar documentos. Apenas administradores podem deletar.
+
+## 🔗 Referências
+- [[Data Models.md]]
+- [[Firebase Setup.md]]
+- [Link para a documentação da API externa (se houver)](https://api.example.com/docs)
+
+#api #data #[modulo]
+```
+
+---
+
+### 5. Template de Troubleshooting
+
+```markdown
+---
+type: troubleshooting
+severity: high | medium | low
+lastUpdated: [[YYYY-MM-DD]]
+tags: [troubleshooting, bug, [area-afetada]]
+---
+
+# 🚨 Troubleshooting: [Título do Problema]
+
+## 📌 Sintoma
+[Descreva o comportamento inesperado ou o erro que o usuário/desenvolvedor está enfrentando. Inclua mensagens de erro exatas, se houver.]
+
+**Exemplo:** "O aplicativo falha ao iniciar no ambiente de desenvolvimento com a mensagem 'Firebase: Error: Missing or insufficient permissions (auth/permission-denied)'."
+
+## 💥 Causa Raiz
+[Explique a causa fundamental do problema. Por que ele acontece?]
+
+**Exemplo:** "As regras de segurança do Firestore não permitem acesso de leitura/escrita para usuários não autenticados ou para a conta de serviço usada no ambiente de desenvolvimento."
+
+## 🛠️ Solução Passo-a-Passo
+[Forneça instruções claras e numeradas para resolver o problema.]
+
+### Passo 1: Verificar Regras de Segurança do Firebase
+1. Acesse o [Console do Firebase](https://console.firebase.google.com).
+2. Navegue até **Firestore Database** > **Regras**.
+3. Verifique se as regras permitem acesso para o ambiente de desenvolvimento.
+   ```
+   // Exemplo de regra que permite acesso para testes (NÃO USAR EM PRODUÇÃO)
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /{document=**} {
+         allow read, write: if true; // Apenas para desenvolvimento!
+       }
+     }
+   }
+   ```
+
+### Passo 2: Verificar Credenciais de Autenticação
+1. Certifique-se de que o usuário está logado ou que as credenciais da conta de serviço estão configuradas corretamente.
+2. No ambiente local, verifique se as variáveis de ambiente para as chaves da API Firebase estão corretas.
+
+### Passo 3: Limpar Cache e Recompilar
+1. Limpe o cache do projeto:
+   ```bash
+   npm cache clean --force
+   rm -rf node_modules
+   npm install
+   ```
+2. Recompile o aplicativo:
+   ```bash
+   npm run dev
+   ```
+
+## 🛡️ Prevenção
+[Como evitar que este problema ocorra novamente no futuro?]
+- [ ] Implementar testes automatizados para regras de segurança.
+- [ ] Criar um ambiente de desenvolvimento com regras de segurança mais permissivas, mas isolado da produção.
+- [ ] Documentar claramente as permissões necessárias para cada ambiente.
+
+## 🔗 Links Relacionados
+- [[How-To: Configurar Regras de Segurança do Firestore]]
+- [Documentação oficial do Firebase sobre regras de segurança](https://firebase.google.com/docs/firestore/security/get-started)
+- [Issue no GitHub sobre problema similar](https://github.com/myuser/myplacar/issues/XXX)
+
+#troubleshooting #[area-afetada] #[severidade]
+```
+
+---
+*Documento elaborado em 30 de março de 2026. As informações contidas são de responsabilidade do solicitante.*
