@@ -30,9 +30,16 @@ const warn = (fn: string, err: unknown) => {
   if (isDev) console.warn(`[supabaseMirror] ${fn}:`, err);
   // Em produção, loga apenas se for erro crítico (não PostgrestError de conflito)
   else {
-    const msg = (err as any)?.message || '';
-    if (!msg.includes('duplicate') && !msg.includes('conflict')) {
-      console.warn(`[supabaseMirror] ${fn}:`, msg);
+    const msg = err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : (typeof err === 'object' && err !== null)
+          ? JSON.stringify(err)
+          : String(err);
+    const normalizedMsg = msg || '';
+    if (!normalizedMsg.includes('duplicate') && !normalizedMsg.includes('conflict')) {
+      console.warn(`[supabaseMirror] ${fn}:`, normalizedMsg);
     }
   }
 };

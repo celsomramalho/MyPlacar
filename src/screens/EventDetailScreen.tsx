@@ -129,8 +129,8 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             p2Score: data.p2.score,
             p1Games: data.p1.games,
             p2Games: data.p2.games,
-            p1Sets: data.p1.sets.filter((s: number, i: number) => s > data.p2.sets[i]).length,
-            p2Sets: data.p2.sets.filter((s: number, i: number) => s > data.p1.sets[i]).length,
+            p1Sets: data.p1.sets.filter((s: number, i: number) => s > (((data.p2.sets as (number | undefined)[])[i]) ?? 0)).length,
+            p2Sets: data.p2.sets.filter((s: number, i: number) => s > (((data.p1.sets as (number | undefined)[])[i]) ?? 0)).length,
             isPaused: data.isPaused
           };
         }

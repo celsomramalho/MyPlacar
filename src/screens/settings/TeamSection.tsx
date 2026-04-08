@@ -1,22 +1,22 @@
 import React, { useState, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react';
-import { ArrowUpDown, Play, User, Users, ChevronDown, Camera, Dices, UserPlus, Loader2, Mic, ArrowRightLeft, Disc, ShieldCheck, Check, Antenna, Eraser, History, Trophy, Ticket, X, Share2, Copy } from 'lucide-react';
-import { Input } from '../../components/Input.tsx';
-import { Button } from '../../components/Button.tsx';
-import { MatchSettings, GameState, Partner, UserProfile, TournamentEvent, QueuePlayer } from '../../types.ts';
-import { formatPortugueseName } from '../../utils/formatters.ts';
-import { SPORT_LIST } from '../../constants.ts';
-import { getDb } from '../../firebase.ts';
+import { ArrowUpDown, Play, User, Users, ChevronDown, Dices, Loader2, Eraser, History, Ticket, Check } from 'lucide-react';
+import { Input } from '../../components/Input';
+import { Button } from '../../components/Button';
+import { MatchSettings, GameState, Partner, UserProfile, TournamentEvent, QueuePlayer } from '../../types';
+import { formatPortugueseName } from '../../utils/formatters';
+import { SPORT_LIST } from '../../constants';
+import { getDb } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
 type Gender = 'M' | 'F';
 
-const MarsIcon = ({ size = 14 }) => (
+const MarsIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="10" cy="14" r="5" /><path d="M15 3h6v6" /><path d="m21 3-6.5 6.5" />
   </svg>
 );
 
-const VenusIcon = ({ size = 14 }) => (
+const VenusIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="9" r="5" /><path d="M12 14v7" /><path d="M9 18h6" />
   </svg>
@@ -76,21 +76,13 @@ interface Props {
   settings: MatchSettings;
   setSettings: React.Dispatch<React.SetStateAction<MatchSettings>>;
   onStartMatch: () => void;
-  gameState: GameState | null;
   onOpenPartners?: () => void;
-  partners: Partner[];
-  playerQueue: QueuePlayer[];
   onAutoRegisterPartner?: (pin: string, field: string) => Promise<string | null>;
-  cloudLiveExists?: boolean;
   userProfile?: UserProfile;
-  activeEvent: TournamentEvent | null;
-  userEntryDate: number | null;
   onJoinTournament: () => void;
-  onExitTournament: () => void;
-  isOfflineMode?: boolean;
 }
 
-export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, gameState, onOpenPartners, partners, playerQueue, onAutoRegisterPartner, cloudLiveExists, userProfile, activeEvent, userEntryDate, onJoinTournament, onExitTournament, isOfflineMode }, ref) => {
+export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, onOpenPartners, onAutoRegisterPartner, userProfile, onJoinTournament }, ref) => {
   const [genders, setGenders] = useState<Record<string, Gender>>({
     p1: 'M', p1Partner: 'M', p2: 'M', p2Partner: 'M'
   });
@@ -106,7 +98,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
         const icons: Record<string, string> = {};
         snap.forEach(d => { icons[d.id] = d.data().url; });
         setDbSportsIcons(icons);
-      } catch (e) {
+      } catch {
         // Silencia erros de permissão — ícones padrão já estão definidos nas constants
       }
     };

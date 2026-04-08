@@ -1,6 +1,6 @@
 
 export const emailService = {
-  sendEmail: async (templateId: string, templateParams: any) => {
+  sendEmail: async (templateId: string, templateParams: Record<string, unknown>) => {
     const data = {
       service_id: 'service_2p1sm56', 
       template_id: templateId,

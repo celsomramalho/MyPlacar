@@ -317,14 +317,14 @@ const App: React.FC = () => {
   
   const lastSentStateRef = useRef<string>("");
 
-  const sanitizeForFirestore = (obj: Record<string, unknown>) => {
+  const sanitizeForFirestore = (obj: unknown) => {
     if (!userProfile.email && !userProfile.pin) return null;
     const clean = JSON.parse(JSON.stringify(obj, (key, value) => value === undefined ? null : value));
     const fieldsToRemove = ['isWatchMode', 'brightness', 'volume', 'deviceLabel', 'selectedVoiceURI', 'voiceEnabled', 'voiceScoring', 'actionCooldown', 'stateLockout', 'screenDimTimeout', 'customSportIcon', 'customSportIcons', 'customCategoryIcons', 'cloudSportIcons', 'cloudCategoryIcons'];
     const deepClean = (target: Record<string, unknown>) => {
       if (!target || typeof target !== 'object') return;
       fieldsToRemove.forEach(f => { if (target[f] !== undefined) delete target[f]; });
-      Object.keys(target).forEach(key => { if (target[key] && typeof target[key] === 'object') deepClean(target[key]); });
+      Object.keys(target).forEach(key => { if (target[key] && typeof target[key] === 'object') deepClean(target[key] as Record<string, unknown>); });
     };
     deepClean(clean);
     return clean;
@@ -455,10 +455,13 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handleQuotaError = (e: ErrorEvent & PromiseRejectionEvent) => {
-      const isQuotaError = e.name === 'QuotaExceededError' || 
-                          (e.reason && e.reason.name === 'QuotaExceededError') ||
-                          (e.message && e.message.includes('exceeded the quota'));
+    const checkQuotaError = (name?: string, message?: string, reason?: unknown) => {
+      return name === 'QuotaExceededError' ||
+             (reason && typeof reason === 'object' && (reason as { name?: string }).name === 'QuotaExceededError') ||
+             (message && message.includes('exceeded the quota'));
+    };
+    const handleQuotaError = (e: ErrorEvent) => {
+      const isQuotaError = checkQuotaError(e.error?.name ?? e.type, e.message, undefined);
       
       if (isQuotaError) {
         Object.keys(localStorage).forEach(key => {
@@ -479,11 +482,19 @@ const App: React.FC = () => {
         }
       }
     };
+    const handleRejectionError = (e: PromiseRejectionEvent) => {
+      const isQuotaError = checkQuotaError(undefined, undefined, e.reason);
+      if (isQuotaError) {
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
+        });
+      }
+    };
     globalThis.addEventListener('error', handleQuotaError);
-    globalThis.addEventListener('unhandledrejection', handleQuotaError);
+    globalThis.addEventListener('unhandledrejection', handleRejectionError);
     return () => {
       globalThis.removeEventListener('error', handleQuotaError);
-      globalThis.removeEventListener('unhandledrejection', handleQuotaError);
+      globalThis.removeEventListener('unhandledrejection', handleRejectionError);
     };
   }, []);
 
@@ -2484,7 +2495,7 @@ const App: React.FC = () => {
         setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false} : null);
       }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
-      {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as TournamentEvent); setCurrentScreen('event-detail'); }} />}
+      {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as unknown as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={(pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
       {currentScreen === 'communications' && <CommunicationsScreen userProfile={userProfile} onBack={() => setCurrentScreen('settings')} />}
     </div>

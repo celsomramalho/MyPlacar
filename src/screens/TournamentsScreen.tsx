@@ -1,14 +1,13 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Search, Trophy, Calendar, Ticket, Loader2, X, ChevronRight } from 'lucide-react';
-import { Button } from '../components/Button.tsx';
-import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
+import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight } from 'lucide-react';
+import { ScoreboardIcon } from '../components/ScoreboardIcon';
 
 interface Props {
-  registrations: any[];
+  registrations: Array<Record<string, unknown>>;
   onBack: () => void;
   onJoin: (pin: string) => void;
-  onSelectEvent: (event: any) => void;
+  onSelectEvent: (event: Record<string, unknown>) => void;
 }
 
 export const TournamentsScreen: React.FC<Props> = ({ registrations, onBack, onJoin, onSelectEvent }) => {
@@ -74,9 +73,13 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onBack, onJo
             </div>
           ) : (
             <div className="space-y-3">
-              {registrations.map(reg => (
+              {registrations.map((reg) => {
+                const pin = reg.pin as string;
+                const name = reg.name as string;
+                const joinedAt = reg.joinedAt as number;
+                return (
                 <button 
-                  key={reg.pin} 
+                  key={pin} 
                   onClick={() => onSelectEvent(reg)}
                   className="w-full bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100 flex items-center justify-between active:scale-[0.98] transition-all group"
                 >
@@ -85,16 +88,17 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onBack, onJo
                       <Trophy size={24} />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-black text-gray-900 mb-1">{reg.name}</p>
+                      <p className="text-sm font-black text-gray-900 mb-1">{name}</p>
                       <div className="flex items-center gap-1.5 text-slate-400">
                         <Calendar size={12} />
-                        <p className="text-[10px] font-bold">Inscrito em {new Date(reg.joinedAt).toLocaleDateString('pt-BR')}</p>
+                        <p className="text-[10px] font-bold">Inscrito em {new Date(joinedAt).toLocaleDateString('pt-BR')}</p>
                       </div>
                     </div>
                   </div>
                   <ChevronRight size={20} className="text-gray-300 group-hover:text-amber-500 transition-colors" />
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

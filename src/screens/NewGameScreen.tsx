@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, User, HelpCircle, Watch, Target, Sparkles, Antenna, Check, Ticket, X, Loader2, Share2, Copy, QrCode, WifiOff, LogOut, Menu, Moon } from 'lucide-react';
-import { Toggle } from '../components/Toggle.tsx';
-import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile } from '../types.ts';
-import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
-import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants.ts';
-import { applyGoldenRule } from '../utils/formatters.ts';
-import { getDb } from '../firebase.ts';
+import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon } from 'lucide-react';
+import { Toggle } from '../components/Toggle';
+import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieBreakAt, TieBreakSideSwitchMode } from '../types';
+import { ScoreboardIcon } from '../components/ScoreboardIcon';
+import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants';
+import { applyGoldenRule } from '../utils/formatters';
+import { getDb } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { LazySportIcon } from '../components/LazySportIcon.tsx';
-import { Button } from '../components/Button.tsx';
-import { LiveIndicator } from '../components/LiveIndicator.tsx';
-import { SettingsTabs } from './settings/SettingsTabs.tsx';
+import { LazySportIcon } from '../components/LazySportIcon';
+import { Button } from '../components/Button';
+import { LiveIndicator } from '../components/LiveIndicator';
+import { SettingsTabs } from './settings/SettingsTabs';
 
 interface Props {
   baseSettings: MatchSettings; 
@@ -40,10 +40,26 @@ interface Props {
   onVersionTap?: () => void;
 }
 
-export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, onBack, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, activeEvent, onJoinTournament, onExitTournament, onOpenMenu, userProfile, isOfflineMode, onExitOffline, onVersionTap }) => {
+type DbCategory = {
+  id: string;
+  name: string;
+  url: string;
+  isActive: boolean;
+};
+
+type DbSport = {
+  id: string;
+  name: string;
+  url: string;
+  group: string;
+  engine: string;
+  isActive: boolean;
+};
+
+export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, onOpenMenu, userProfile, isOfflineMode, onExitOffline }) => {
   const [activeGroupId, setActiveGroupId] = useState<string>(() => (SPORT_LIST.find(s => s.id === settings.sportType)?.group as string) || 'raquetes');
-  const [dbCategories, setDbCategories] = useState<any[]>([]);
-  const [dbSports, setDbSports] = useState<any[]>([]);
+  const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
+  const [dbSports, setDbSports] = useState<DbSport[]>([]);
   const [isGeneralOpen, setIsGeneralOpen] = useState(false);
 
   const isLiveActive = useMemo(() => {
@@ -66,12 +82,12 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
       try {
         const catSnap = await getDocs(collection(db, "category_icons"));
         const sportSnap = await getDocs(collection(db, "sport_icons"));
-        const cats: any[] = [];
-        catSnap.forEach(doc => cats.push({ id: doc.id, isActive: true, ...doc.data() }));
-        const sports: any[] = [];
-        sportSnap.forEach(doc => sports.push({ id: doc.id, isActive: true, ...doc.data() }));
-        const finalCats = cats.length > 0 ? cats : SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true }));
-        const finalSports = sports.length > 0 ? sports : SPORT_LIST.map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true }));
+            const cats: DbCategory[] = [];
+        catSnap.forEach(doc => cats.push({ id: doc.id, isActive: true, ...doc.data() } as DbCategory));
+        const sports: DbSport[] = [];
+        sportSnap.forEach(doc => sports.push({ id: doc.id, isActive: true, ...doc.data() } as DbSport));
+        const finalCats: DbCategory[] = cats.length > 0 ? cats : SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true }));
+        const finalSports: DbSport[] = sports.length > 0 ? sports : SPORT_LIST.map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true }));
         setDbCategories(finalCats.filter(c => c.isActive !== false));
         setDbSports(finalSports.filter(s => s.isActive !== false));
       } catch (e) { console.error(e); }
@@ -265,7 +281,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
                 {(settings.sportType === 'pickleball' ? [1, 3] : [1, 3, 5]).map(num => (
                   <button 
                     disabled={isReadOnly}
-                    key={num} onClick={() => setSettings({...settings, sets: num as any})} className={`w-10 h-10 rounded-lg text-xs font-black transition-all ${Number(settings.sets) === num ? 'bg-blue-600 text-white shadow-md' : 'text-black'}`}>{num}</button>
+                    key={num} onClick={() => setSettings({...settings, sets: num as 1 | 3 | 5})} className={`w-10 h-10 rounded-lg text-xs font-black transition-all ${Number(settings.sets) === num ? 'bg-blue-600 text-white shadow-md' : 'text-black'}`}>{num}</button>
                 ))}
               </div>
             </div>
@@ -313,7 +329,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
                     {['3-3', '5-5', '6-6'].map(val => {
                       const isOptionDisabled = (settings.gamesPerSet === 4 && val !== '3-3') || (settings.gamesPerSet === 6 && val === '3-3') || isReadOnly;
                       if (isOptionDisabled && !isReadOnly) return null;
-                      return <button disabled={isReadOnly} key={val} onClick={() => setSettings({...settings, tieBreakAt: val as any})} className={`px-3 py-2 rounded-lg text-xs font-black transition-all ${settings.tieBreakAt === val ? 'bg-blue-600 text-white shadow-md' : 'text-black'}`}>{val}</button>;
+                      return <button disabled={isReadOnly} key={val} onClick={() => setSettings({...settings, tieBreakAt: val as TieBreakAt})} className={`px-3 py-2 rounded-lg text-xs font-black transition-all ${settings.tieBreakAt === val ? 'bg-blue-600 text-white shadow-md' : 'text-black'}`}>{val}</button>;
                     })}
                   </div>
                 </div>
@@ -332,7 +348,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
                   <span className="text-sm font-black text-black block">Troca de lado no tie break</span>
                   <div className="grid grid-cols-2 gap-2">
                     {[{ id: '1_6', label: '1 + soma de 6 pts' }, { id: '1_4', label: '1 + 4 pts' }, { id: '1_2', label: '1 + 2 pts (Ímpar)' }, { id: null, label: 'Não trocar' }].map(opt => (
-                      <button disabled={isReadOnly} key={opt.id === null ? 'none' : opt.id} onClick={() => setSettings({...settings, tieBreakSideSwitchMode: opt.id as any})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.tieBreakSideSwitchMode === opt.id ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>{opt.label}</button>
+                      <button disabled={isReadOnly} key={opt.id === null ? 'none' : opt.id} onClick={() => setSettings({...settings, tieBreakSideSwitchMode: opt.id as TieBreakSideSwitchMode})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.tieBreakSideSwitchMode === opt.id ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>{opt.label}</button>
                     ))}
                   </div>
                 </div>

@@ -47,7 +47,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const savedProfile = localStorage.getItem('MyPlacarUserProfile');
       if (savedProfile) {
         const profile = JSON.parse(savedProfile) as UserProfile;
-        if (profile?.authMethod) return profile.authMethod;
+        if (profile?.authMethod === 'pin' || profile?.authMethod === 'password') return profile.authMethod;
       }
     } catch (e) {}
     return 'password'; // padrão: senha (não PIN)

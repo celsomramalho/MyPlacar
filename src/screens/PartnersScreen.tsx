@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, ShieldCheck, Plus, Play, Info, CloudDownload, CloudUpload, RotateCw, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Antenna, Wifi, Dices, UserCheck, ArrowRightLeft, UserX, History, Check, CheckSquare, Eraser, Mic, Clock, Trophy, Gavel } from 'lucide-react';
-import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent, TournamentEntry } from '../types.ts'; 
-import { Input } from '../components/Input.tsx'; 
-import { getDb } from '../firebase.ts'; 
+import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, Plus, Play, CloudDownload, CloudUpload, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Wifi, Dices, ArrowRightLeft, History, CheckSquare, Mic, Clock, Gavel } from 'lucide-react';
+import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent } from '../types'; 
+import { Input } from '../components/Input'; 
+import { getDb } from '../firebase'; 
 import { collection, query, where, getDocs, getDocsFromServer, getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
-import { mirrorUser, mirrorPartners } from '../services/supabaseMirror.ts';
-import { LiveIndicator } from '../components/LiveIndicator.tsx'; 
-import { formatPortugueseName, maskPin } from '../utils/formatters.ts'; 
-import { Toggle } from '../components/Toggle.tsx'; 
-import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx'; 
+import { mirrorUser, mirrorPartners } from '../services/supabaseMirror';
+import { LiveIndicator } from '../components/LiveIndicator'; 
+import { formatPortugueseName, maskPin } from '../utils/formatters'; 
+import { Toggle } from '../components/Toggle'; 
+import { ScoreboardIcon } from '../components/ScoreboardIcon'; 
 
 interface Props {
   partners: Partner[];
@@ -53,13 +53,13 @@ const LIGHT_BG_COLORS: Record<string, string> = {
   lilas: 'bg-violet-50', verde: 'bg-green-50', vermelho: 'bg-red-50', roxo: 'bg-purple-50',
 };
 
-const MarsIcon = ({ size = 14 }) => (
+const MarsIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="10" cy="14" r="5" /><path d="M15 3h6v6" /><path d="m21 3-6.5 6.5" />
   </svg>
 );
 
-const VenusIcon = ({ size = 14 }) => (
+const VenusIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="9" r="5" /><path d="M12 14v7" /><path d="M9 18h6" />
   </svg>
@@ -97,7 +97,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
   const [selections, setSelections] = useState<Record<string, 1 | 2>>(() => {
     const initial: Record<string, 1 | 2> = {};
-    const allKnown = [
+    const allKnown: Array<{ name: string | undefined; team: 1 | 2 }> = [
         { name: matchSettings.p1Name, team: 1 as const },
         { name: matchSettings.p1Partner, team: 1 as const },
         { name: matchSettings.p2Name, team: 2 as const },
@@ -113,7 +113,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     return initial;
   });
 
-  const scannerInputRef = useRef<any>(null);
+  const scannerInputRef = useRef<{ startScanner?: () => void } | null>(null);
   const partnerPins = useMemo(() => new Set(partners.map(p => p.pin.toUpperCase())), [partners]);
   const displayedLives = useMemo(() => {
     const myPin = userProfile.pin.toUpperCase();
@@ -167,7 +167,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
         const db = getDb();
         if (!db) { setIsSearchingPin(false); return; }
         try {
-          const q = query(collection(db as any, "users"), where("pin", "==", cleanPin));
+          const q = query(collection(db as Firestore, "users"), where("pin", "==", cleanPin));
           const snap = await getDocs(q);
           if (!snap.empty) { 
             const data = snap.docs[0].data();
@@ -187,7 +187,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     const text = `Participe comigo no my placar. Clique no link para se cadastrar e me adicionar como parceiro: ${shareLink}`;
     globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
-  const handleCopyShareLink = () => navigator.clipboard.writeText(shareLink).then(() => (window as any).alert("Link de indicação copiado com sucesso!"));
+  const handleCopyShareLink = () => navigator.clipboard.writeText(shareLink).then(() => window.alert("Link de indicação copiado com sucesso!"));
 
   const refreshAllNicknames = async () => {
     if (isRefreshing || partners.length === 0) return;
@@ -208,7 +208,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       for (let i = 0; i < allPins.length; i += 30) chunks.push(allPins.slice(i, i + 30));
 
       for (const chunk of chunks) {
-        const q = query(collection(db as any, "users"), where("pin", "in", chunk));
+        const q = query(collection(db as Firestore, "users"), where("pin", "in", chunk));
         const snap = await getDocs(q);
         snap.forEach(d => {
           const userData = d.data();
@@ -225,8 +225,8 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
         });
       }
 
-      if (changed) { setPartners(updatedPartners); (window as any).alert("Apelidos e nomes atualizados com sucesso!"); }
-      else { (window as any).alert("Todos os dados já estão atualizados."); }
+      if (changed) { setPartners(updatedPartners); window.alert("Apelidos e nomes atualizados com sucesso!"); }
+      else { window.alert("Todos os dados já estão atualizados."); }
     } catch (e) { console.error(e); } finally { setIsRefreshing(false); }
   };
 
@@ -353,10 +353,10 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
         prev.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
         return Array.from(pinMap.values()).sort((a, b) => b.addedAt - a.addedAt);
       });
-      if (!silent) (window as any).alert("Dados sincronizados!");
+      if (!silent) window.alert("Dados sincronizados!");
       // Melhoria 3: atualiza timestamp do último sync
       localStorage.setItem('myPlacarPartnersSyncAt', Date.now().toString());
-    } catch (e) {} finally { if (!silent) setIsDownloading(false); }
+    } catch (e) { console.error("Falha ao sincronizar parceiros:", e); } finally { if (!silent) setIsDownloading(false); }
   };
 
   const uploadToCloud = async (silent = false) => {
@@ -365,14 +365,14 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     // Guard: aguarda o Firebase Auth restaurar a sessão após auto-login pelo localStorage.
     // Sem isso, request.auth chega null no Firestore e a regra isAuthenticated() falha.
     if (!isAuthReady) {
-      if (!silent) (window as any).alert("Autenticação em andamento. Tente novamente em instantes.");
+      if (!silent) window.alert("Autenticação em andamento. Tente novamente em instantes.");
       return;
     }
     // Captura o estado atual de parceiros no momento da chamada
     // para evitar problemas de closure com estado desatualizado
     const currentPartners = partners;
     if (currentPartners.length === 0) {
-      if (!silent) (window as any).alert("Nenhum parceiro para fazer backup.");
+      if (!silent) window.alert("Nenhum parceiro para fazer backup.");
       return;
     }
     if (!silent) setIsUploading(true);
@@ -409,10 +409,10 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       localStorage.setItem('myPlacarPartnersCloudCount', currentPartners.length.toString());
       // Melhoria 4: registra o count do último upload para evitar uploads redundantes
       lastUploadedCountRef.current = currentPartners.length;
-      if (!silent) (window as any).alert("Backup realizado!");
+      if (!silent) window.alert("Backup realizado!");
     } catch (e) {
       console.error("Myplacar: uploadToCloud falhou após retry.", e);
-      if (!silent) (window as any).alert("Erro ao fazer backup. Tente novamente.");
+      if (!silent) window.alert("Erro ao fazer backup. Tente novamente.");
     } finally {
       if (!silent) setIsUploading(false);
     }
@@ -436,14 +436,14 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       return next;
     });
     setPinInput(''); setLookupName(''); setLookupFullName('');
-    if (origin === 'manual') (window as any).alert(`Parceiro ${nickname} adicionado à sua lista.`);
+    if (origin === 'manual') window.alert(`Parceiro ${nickname} adicionado à sua lista.`);
   };
 
   const handlePartnerGenderToggle = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (id === 'me') return;
     setPartners(prev => {
-      const next = prev.map(p => p.id === id ? { ...p, gender: p.gender === 'M' ? 'F' : 'M' } : p);
+      const next = prev.map(p => p.id === id ? { ...p, gender: (p.gender === 'M' ? 'F' : 'M') as 'M' | 'F' } : p);
       mirrorUser(userProfile);
       mirrorPartners(userProfile.email, next);
       return next;
@@ -465,7 +465,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     }
     
     if (activeTab === 'queue' && selectedInQueue.length > availableSlotsOnCourt) {
-       (window as any).alert("Não há espaços suficientes na quadra para os jogadores selecionados.");
+       window.alert("Não há espaços suficientes na quadra para os jogadores selecionados.");
        return;
     }
 
@@ -605,7 +605,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
   const handleShuffleFormation = async () => {
     const selectedIndices = playerQueue.map((p, i) => p.isSelected && p.name ? i : -1).filter(i => i !== -1);
-    if (selectedIndices.length < 2) { (window as any).alert("Selecione pelo menos 2 jogadores com nome na fila."); return; }
+    if (selectedIndices.length < 2) { window.alert("Selecione pelo menos 2 jogadores com nome na fila."); return; }
     if (isShuffling) return;
     setIsShuffling(true);
     for (let i = 0; i < 6; i++) {
@@ -624,7 +624,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     const selected = playerQueue.filter(p => p.isSelected && p.name);
     const males = selected.filter(p => p.gender === 'M');
     const females = selected.filter(p => p.gender === 'F');
-    if (selected.length !== 4 || males.length !== 2 || females.length !== 2) { (window as any).alert("Selecione exatamente 4 jogadores (2 homens e 2 mulheres) para o sorteio misto."); return; }
+    if (selected.length !== 4 || males.length !== 2 || females.length !== 2) { window.alert("Selecione exatamente 4 jogadores (2 homens e 2 mulheres) para o sorteio misto."); return; }
     if (isShuffling) return;
     setIsShuffling(true);
     const selectedIndices = playerQueue.map((p, i) => p.isSelected ? i : -1).filter(i => i !== -1);
@@ -785,7 +785,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
               <div className="space-y-4">
                 <div className="flex items-center gap-2 px-1 text-emerald-500"><UserPlus size={18} /><h3 className="text-sm font-black text-black tracking-tight">Novo parceiro</h3></div>
                 <div className="space-y-3">
-                    <div className="relative" onClick={() => scannerInputRef.current?.startScanner()}><div className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 z-10 pointer-events-none"><QrCode size={20} /></div><Input ref={scannerInputRef} enableCamera readOnly placeholder="Escanear qr code" onVoiceComplexResult={(n, p) => handleAddPartner(p, n, 'qrcode')} className="h-[56px] pl-12 text-[14px] font-bold border-2 border-emerald-500 rounded-2xl shadow-sm cursor-pointer" /></div>
+                    <div className="relative" onClick={() => scannerInputRef.current?.startScanner?.()}><div className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 z-10 pointer-events-none"><QrCode size={20} /></div><Input ref={scannerInputRef} enableCamera readOnly placeholder="Escanear qr code" onVoiceComplexResult={(n, p) => handleAddPartner(p, n, 'qrcode')} className="h-[56px] pl-12 text-[14px] font-bold border-2 border-emerald-500 rounded-2xl shadow-sm cursor-pointer" /></div>
                     <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-gray-100 space-y-4">
                       <div className="flex gap-2">
                           <div className="relative w-28 shrink-0"><div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300"><Hash size={14} /></div><input type="text" placeholder="Pin" maxLength={5} value={pinInput} onChange={e => setPinInput(e.target.value.toUpperCase())} className="w-full h-14 pl-8 pr-2 bg-slate-50 border border-slate-100 rounded-2xl text-base font-black outline-none focus:ring-2 focus:ring-emerald-500/20" />{isSearchingPin && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 animate-spin" />}</div>

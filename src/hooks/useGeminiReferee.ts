@@ -2,6 +2,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { VoiceCommands, PointType } from '../types.ts';
 
+// Declarações locais da Web Speech API — não incluídas no lib.dom.d.ts padrão do TypeScript
+interface SpeechRecognitionAlternative { readonly transcript: string; readonly confidence: number; }
+interface SpeechRecognitionResult { readonly isFinal: boolean; readonly length: number; [index: number]: SpeechRecognitionAlternative; }
+interface SpeechRecognitionResultList { readonly length: number; [index: number]: SpeechRecognitionResult; }
+interface SpeechRecognitionEvent extends Event { readonly resultIndex: number; readonly results: SpeechRecognitionResultList; }
+interface SpeechRecognitionErrorEvent extends Event { readonly error: string; readonly message: string; }
+
+interface SpeechRecognitionInstance {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
+
 interface UseGeminiRefereeProps {
   onScoreP1: (type: PointType, text: string) => void;
   onScoreP2: (type: PointType, text: string) => void;
@@ -46,7 +66,7 @@ export const useGeminiReferee = ({
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>('');
   
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const lastActionTimeRef = useRef<number>(0);
   const lastProcessedTextRef = useRef<string>('');
 
@@ -127,7 +147,10 @@ export const useGeminiReferee = ({
   }, []);
 
   const initRecognition = useCallback(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = (
+      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition
+    );
     if (!SpeechRecognition) {
       setError("Reconhecimento de voz não suportado neste navegador.");
       return;
@@ -143,17 +166,17 @@ export const useGeminiReferee = ({
       setIsListening(false);
       // Reinicia automaticamente se ainda deve estar ouvindo
       if (recognitionRef.current) {
-        try { recognition.start(); } catch(e) {}
+        try { recognition.start(); } catch {}
       }
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       const lastIdx = event.results.length - 1;
       const text = event.results[lastIdx][0].transcript;
       handleTranscriptResult(text);
     };
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (event.error === 'not-allowed') {
         setError("Permissão negada");
         recognitionRef.current = null;
@@ -161,7 +184,7 @@ export const useGeminiReferee = ({
     };
 
     recognitionRef.current = recognition;
-    try { recognition.start(); } catch(e) {}
+    try { recognition.start(); } catch {}
   }, [handleTranscriptResult]);
 
   useEffect(() => {

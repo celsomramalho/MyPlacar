@@ -9,7 +9,7 @@ import { Button } from '../components/Button.tsx';
 import { Toggle } from '../components/Toggle.tsx';
 import { applyGoldenRule, formatPortugueseName } from '../utils/formatters.ts';
 import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
-import { VoiceCommands, ErrorSoundType, UserProfile, TournamentEvent } from '../types.ts';
+import { VoiceCommands, ErrorSoundType, UserProfile, TournamentEvent, MatchHistoryItem } from '../types.ts';
 import { playErrorBeep, unlockAudio } from '../hooks/useScoreAnnouncer.ts';
 
 import { CommunicationsPanel } from '../components/CommunicationsPanel.tsx';
@@ -35,6 +35,24 @@ interface StorageFile {
   contentType: string;
 }
 
+interface CategoryItem {
+  id: string;
+  name: string;
+  url: string;
+  isActive?: boolean;
+  updatedAt?: string;
+}
+
+interface SportItem {
+  id: string;
+  name: string;
+  url: string;
+  group: string;
+  engine: string;
+  isActive?: boolean;
+  updatedAt?: string;
+}
+
 export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory, initialTab, onOpenMenu, userProfile }) => {
   const [adminTab, setAdminTab] = useState<'configs' | 'users' | 'icons' | 'events' | 'comms'>(initialTab || 'configs');
   const [loading, setLoading] = useState<string | null>(null);
@@ -46,8 +64,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [goldenRule, setGoldenRule] = useState(true);
   
-  const [categories, setCategories] = useState<any[]>([]);
-  const [sports, setSports] = useState<any[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [sports, setSports] = useState<SportItem[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<string>("");
   const [selectedSportId, setSelectedSportId] = useState<string>("");
   const [isEditingId, setIsEditingId] = useState(false);
@@ -73,13 +91,13 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isOpenCVS, setIsOpenCVS] = useState(false);
   const [isOpenCVO, setIsOpenCVO] = useState(false);
 
-  const [storageFiles, setStorageFiles] = useState<StorageFile[]>([]);
-  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
-  const [isUploadingFile, setIsUploadingFile] = useState(false);
-  const [storageError, setStorageError] = useState<string | null>(null);
+  const [_storageFiles, setStorageFiles] = useState<StorageFile[]>([]);
+  const [_isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [_isUploadingFile, setIsUploadingFile] = useState(false);
+  const [_storageError, setStorageError] = useState<string | null>(null);
   
   const [liveStats, setLiveStats] = useState({ total: 0, expired: 0, expiredIds: [] as string[] });
-  const [isCleaningLives, setIsCleaningLives] = useState(false);
+  const [_isCleaningLives, setIsCleaningLives] = useState(false);
   
   const [eventList, setEventList] = useState<TournamentEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -90,7 +108,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const mainStorage = getStorageInstance();
   const defaultBucketName = mainStorage?.app.options.storageBucket || "";
   const [activeBucket, setActiveBucket] = useState(defaultBucketName);
-  const [isAddingBucket, setIsAddingBucket] = useState(false);
+  const [_isAddingBucket, setIsAddingBucket] = useState(false);
   const [newBucketName, setNewBucketName] = useState("");
   
   const [buckets, setBuckets] = useState<string[]>([defaultBucketName]);
@@ -114,7 +132,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
   const slugify = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
-  const sortItems = (items: any[]) => {
+  const sortItems = (items: (CategoryItem | SportItem)[]) => {
     return [...items].sort((a, b) => {
       const activeA = a.isActive !== false ? 1 : 0;
       const activeB = b.isActive !== false ? 1 : 0;
@@ -156,7 +174,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       const list: TournamentEvent[] = [];
       snap.forEach(d => list.push({ pin: d.id, ...d.data() } as TournamentEvent));
       setEventList(list.sort((a,b) => b.createdAt - a.createdAt));
-    } catch (e) {} finally { setIsLoadingEvents(false); }
+    } catch (_e) { console.error('Erro ao carregar eventos:', _e); } finally { setIsLoadingEvents(false); }
   };
 
   const fetchData = async () => {
@@ -165,10 +183,10 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     try {
       const catSnap = await getDocs(collection(db, "category_icons"));
       const sportSnap = await getDocs(collection(db, "sport_icons"));
-      const catList: any[] = [];
-      catSnap.forEach(doc => catList.push({ id: doc.id, isActive: true, ...doc.data() }));
-      const sportList: any[] = [];
-      sportSnap.forEach(doc => sportList.push({ id: doc.id, isActive: true, ...doc.data() }));
+      const catList: CategoryItem[] = [];
+      catSnap.forEach(doc => catList.push({ id: doc.id, isActive: true, ...doc.data() } as CategoryItem));
+      const sportList: SportItem[] = [];
+      sportSnap.forEach(doc => sportList.push({ id: doc.id, isActive: true, ...doc.data() } as SportItem));
       
       const finalCats = catList.length === 0 ? INITIAL_SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true })) : catList;
       const finalSports = sportList.length === 0 ? INITIAL_SPORT_LIST.map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true })) : sportList;
@@ -229,23 +247,25 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                 updated: metadata.timeCreated,
                 contentType: metadata.contentType || 'unknown'
               };
-            } catch (e) {
+            } catch (_e) {
               return { name: item.name, fullPath: item.fullPath, url: '#', size: 0, updated: '', contentType: 'unknown' };
             }
           });
           const levelFiles = await Promise.all(filePromises);
           allFiles.push(...levelFiles);
           for (const prefix of res.prefixes) await crawl(prefix);
-        } catch (err: any) {
-          if (err.code === 'storage/unauthorized') throw new Error("Acesso negado ao bucket. Verifique as regras de segurança.");
+        } catch (err: unknown) {
+          const storageErr = err as { code?: string; message?: string };
+          if (storageErr.code === 'storage/unauthorized') throw new Error("Acesso negado ao bucket. Verifique as regras de segurança.");
           throw err;
         }
       };
 
       await crawl(ref(storageInstance, ''));
       setStorageFiles(allFiles);
-    } catch (e: any) {
-      setStorageError(e.message || "Erro ao acessar o armazenamento.");
+    } catch (e: unknown) {
+      const storageErr = e as { message?: string };
+      setStorageError(storageErr.message || "Erro ao acessar o armazenamento.");
     } finally {
       setIsLoadingFiles(false);
     }
@@ -280,7 +300,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       await batch.commit();
       setStatus({ type: 'success', msg: `${liveStats.expired} transmissões removidas com sucesso.` });
       fetchLiveMatchesStats();
-    } catch (e) {
+    } catch (_e) {
       setStatus({ type: 'error', msg: "Erro ao remover transmissões." });
     } finally {
       setIsCleaningLives(false);
@@ -323,8 +343,9 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         await deleteDoc(doc(db, "events", id));
         setEventList(prev => prev.filter(e => e.pin !== id));
         setStatus({ type: 'success', msg: "Evento removido com sucesso." });
-      } catch (e) {} finally {
-        setDeleteConfirm(null);
+      } catch (_e) {
+        setStatus({ type: 'error', msg: "Erro ao remover evento." });
+      } finally {
         setTimeout(() => setStatus(null), 2000);
       }
       return;
@@ -339,7 +360,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       if (type === 'category') { setCategories(prev => prev.filter(c => c.id !== id)); setSelectedCatId(""); }
       else { setSports(prev => prev.filter(s => s.id !== id)); setSelectedSportId(""); }
       setStatus({ type: 'success', msg: "Excluído com sucesso." });
-    } catch (e) { setStatus({ type: 'error', msg: "Erro ao excluir." }); } finally {
+    } catch (_e) { setStatus({ type: 'error', msg: "Erro ao excluir." }); } finally {
       setDeleteConfirm(null);
       setTimeout(() => setStatus(null), 2000);
     }
@@ -358,7 +379,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       await uploadBytes(storageRef, file);
       setStatus({ type: 'success', msg: "Arquivo enviado com sucesso!" });
       fetchStorageFiles();
-    } catch (e) {
+    } catch (_e) {
       setStatus({ type: 'error', msg: "Falha ao enviar arquivo." });
     } finally {
       setIsUploadingFile(false);
@@ -376,7 +397,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       await deleteObject(fileRef);
       setStatus({ type: 'success', msg: "Arquivo removido do storage." });
       fetchStorageFiles();
-    } catch (e) {
+    } catch (_e) {
       setStatus({ type: 'error', msg: "Erro ao excluir arquivo." });
     } finally {
       setDeleteConfirm(null);
@@ -401,14 +422,14 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const toggleUserPremium = async (user: UserProfile) => {
     const db = getDb();
     if (!db) return;
-    const nextPlan = user.planType === 'premium' ? 'free' : 'premium';
+    const nextPlan: 'free' | 'premium' = user.planType === 'premium' ? 'free' : 'premium';
     try {
       await setDoc(doc(db, "users", user.email), { planType: nextPlan }, { merge: true });
-      mirrorUser({ ...user, planType: nextPlan as any });
-      setFoundUsers(prev => prev.map(u => u.email === user.email ? { ...u, planType: nextPlan as any } : u));
+      mirrorUser({ ...user, planType: nextPlan });
+      setFoundUsers(prev => prev.map(u => u.email === user.email ? { ...u, planType: nextPlan } : u));
       setStatus({ type: 'success', msg: `Usuário ${user.nickname} agora é ${nextPlan === 'premium' ? 'premium' : 'free'}` });
       setTimeout(() => setStatus(null), 2000);
-    } catch (e) { setStatus({ type: 'error', msg: "Falha ao atualizar plano." }); }
+    } catch (_e) { setStatus({ type: 'error', msg: "Falha ao atualizar plano." }); }
   };
 
   const executeMigrateToSupabase = async () => {
@@ -432,18 +453,18 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       }
       // 2. Migrar matches
       const matchesSnap = await getDocs(collection(db, 'matches'));
-      const matchesByOwner = new Map<string, any[]>();
+      const matchesByOwner = new Map<string, { match: Record<string, unknown>; ownerPin: string }[]>();
       matchesSnap.forEach(docSnap => {
-        const data = { id: docSnap.id, ...docSnap.data() };
-        const ownerEmail = data.ownerEmail || '';
-        const ownerPin = data.ownerPin || '';
+        const data = { id: docSnap.id, ...docSnap.data() } as Record<string, unknown>;
+        const ownerEmail = (data.ownerEmail as string) || '';
+        const ownerPin = (data.ownerPin as string) || '';
         if (!ownerEmail) return;
         if (!matchesByOwner.has(ownerEmail)) matchesByOwner.set(ownerEmail, []);
         matchesByOwner.get(ownerEmail)!.push({ match: data, ownerPin });
       });
       for (const [ownerEmail, items] of matchesByOwner) {
         const ownerPin = items[0].ownerPin;
-        const matches = items.map(i => i.match);
+        const matches = items.map(i => i.match) as unknown as MatchHistoryItem[];
         mirrorMatches(matches, ownerEmail, ownerPin);
         matchesCount += matches.length;
       }
@@ -453,7 +474,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         const ownerEmail = docSnap.id; // document ID é o email do dono
         const partnersList = docSnap.data().partners_list || [];
         // Filtra parceiros sem PIN para evitar dados inconsistentes
-        const validPartners = partnersList.filter((p: any) => p.pin && p.pin.trim().length > 0);
+        const validPartners = partnersList.filter((p: Record<string, unknown>) => p.pin && typeof p.pin === 'string' && p.pin.trim().length > 0);
         if (ownerEmail && validPartners.length > 0) {
           mirrorPartners(ownerEmail, validPartners);
           partnersCount += validPartners.length;
@@ -462,12 +483,12 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       // 4. Migrar sport_icons e category_icons
       const sportSnap = await getDocs(collection(db, 'sport_icons'));
       sportSnap.forEach(docSnap => {
-        mirrorIcon('sport', { id: docSnap.id, ...docSnap.data() });
+        mirrorIcon('sport', { id: docSnap.id, name: '', url: '', ...docSnap.data() });
         iconsCount++;
       });
       const catSnap = await getDocs(collection(db, 'category_icons'));
       catSnap.forEach(docSnap => {
-        mirrorIcon('category', { id: docSnap.id, ...docSnap.data() });
+        mirrorIcon('category', { id: docSnap.id, name: '', url: '', ...docSnap.data() });
         iconsCount++;
       });
       setMigrationResult({ users: usersCount, matches: matchesCount, partners: partnersCount, icons: iconsCount });
@@ -503,7 +524,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       } else {
         setStatus({ type: 'success', msg: "Nenhuma partida órfã encontrada." });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
       setStatus({ type: 'error', msg: "Falha na atualização em massa." });
     } finally {
@@ -520,7 +541,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       await setDoc(doc(db, "system", "config"), { goldenRuleEnabled: val }, { merge: true });
       setStatus({ type: 'success', msg: "Regra de ouro atualizada!" });
       setTimeout(() => setStatus(null), 2000);
-    } catch (e) { setStatus({ type: 'error', msg: "Falha ao salvar." }); }
+    } catch (_e) { setStatus({ type: 'error', msg: "Falha ao salvar." }); }
   };
 
   const handleSaveVoiceConfigs = async () => {
@@ -536,7 +557,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       }, { merge: true });
       setStatus({ type: 'success', msg: "Configurações globais salvas!" });
       setIsVoiceSaved(true);
-    } catch (e) {
+    } catch (_e) {
       setStatus({ type: 'error', msg: "Erro ao salvar configurações." });
     } finally {
       setIsSavingVoice(false);
@@ -550,7 +571,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     setIsVoiceSaved(false);
   };
 
-  const handleSaveItem = async (type: 'category' | 'sport', item: any) => {
+  const handleSaveItem = async (type: 'category' | 'sport', item: CategoryItem | SportItem) => {
     const db = getDb();
     if (!db) return;
     setLoading(item.id);
@@ -562,7 +583,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       setIsEditingId(false);
       if (type === 'category') setIsCatSaved(true);
       else setIsSportSaved(true);
-    } catch (e) { setStatus({ type: 'error', msg: "Erro ao salvar." }); } finally {
+    } catch (_e) { setStatus({ type: 'error', msg: "Erro ao salvar." }); } finally {
       setLoading(null);
       setTimeout(() => setStatus(null), 2000);
     }
@@ -611,7 +632,9 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       setStatus({ type: 'success', msg: "Evento salvo com sucesso!" });
       fetchEvents();
       setEditingEvent(null);
-    } catch (e) {} finally {
+    } catch (_e) {
+      setStatus({ type: 'error', msg: "Erro ao salvar evento." });
+    } finally {
       setIsSavingEvent(false);
       setTimeout(() => setStatus(null), 2000);
     }
@@ -719,15 +742,15 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         
         <div className="grid grid-cols-5 gap-1 mt-6 max-w-md mx-auto">
           {[
-            { id: 'configs', label: 'Configs', icon: <SettingsIcon size={14} /> },
-            { id: 'users', label: 'Usuários', icon: <User size={14} /> },
-            { id: 'icons', label: 'Ícones', icon: <LayoutGrid size={14} /> },
-            { id: 'events', label: 'Eventos', icon: <Ticket size={14} /> },
-            { id: 'comms', label: 'Avisos', icon: <Send size={14} /> }
+            { id: 'configs' as const, label: 'Configs', icon: <SettingsIcon size={14} /> },
+            { id: 'users' as const, label: 'Usuários', icon: <User size={14} /> },
+            { id: 'icons' as const, label: 'Ícones', icon: <LayoutGrid size={14} /> },
+            { id: 'events' as const, label: 'Eventos', icon: <Ticket size={14} /> },
+            { id: 'comms' as const, label: 'Avisos', icon: <Send size={14} /> }
           ].map(tab => (
             <button 
               key={tab.id}
-              onClick={() => setAdminTab(tab.id as any)}
+              onClick={() => setAdminTab(tab.id)}
               className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl text-[8px] font-black transition-all border leading-tight text-center ${adminTab === tab.id ? 'bg-black text-white border-black shadow-md scale-105' : 'bg-white text-black border-slate-100'}`}
             >
               {tab.icon} {tab.label}

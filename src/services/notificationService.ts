@@ -1,5 +1,5 @@
 import { emailService } from './emailService.ts';
-import { Communication, UserProfile } from '../types.ts';
+import { Communication } from '../types.ts';
 
 /**
  * Serviço híbrido de notificações (Push + E-mail)
@@ -8,8 +8,8 @@ export const notificationService = {
   /**
    * Envia notificações push via Firebase Cloud Messaging
    */
-  sendPushNotification: async (comm: Partial<Communication>, targetTokens: string[]) => {
-    if (targetTokens.length === 0) return;
+  sendPushNotification: (comm: Partial<Communication>, targetTokens: string[]) => {
+    if (targetTokens.length === 0) return Promise.resolve();
     console.log(`[Push Notification] Enviando para ${targetTokens.length} dispositivos:`, {
       title: comm.title,
       body: comm.content?.substring(0, 100) + '...',
@@ -23,8 +23,8 @@ export const notificationService = {
   /**
    * Envia e-mails formatados para os destinatários
    */
-  sendEmailNotification: async (comm: Partial<Communication>, targetEmails: string[], appUrl: string) => {
-    if (targetEmails.length === 0) return;
+  sendEmailNotification: (comm: Partial<Communication>, targetEmails: string[], appUrl: string) => {
+    if (targetEmails.length === 0) return Promise.resolve([]);
     console.log(`[Email Notification] Enviando para ${targetEmails.length} e-mails:`, {
       subject: comm.title,
       content: comm.content,
@@ -52,7 +52,7 @@ export const notificationService = {
     const emails = users.map(u => u.email).filter(Boolean);
     const tokens = users.map(u => u.pushToken).filter(Boolean) as string[];
 
-    const promises: Promise<any>[] = [
+    const promises: Promise<unknown>[] = [
       notificationService.sendPushNotification(comm, tokens)
     ];
 

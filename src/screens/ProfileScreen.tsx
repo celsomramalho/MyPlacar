@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, ShieldCheck, Save, Loader2, LogOut, Settings, Smartphone, CheckCircle2, AlertCircle, Mic, MapPin, Camera, Wifi, RotateCw, Zap, Crown, Star, ArrowRight, HelpCircle, Eye, EyeOff, Hash, Lock, Check as CheckIcon, Shield, Fingerprint } from 'lucide-react';
-import { Input } from '../components/Input.tsx';
-import { Button } from '../components/Button.tsx';
-import { UserProfile, MatchSettings } from '../types.ts';
-import { formatPortugueseName, applyGoldenRule } from '../utils/formatters.ts';
-import { APP_VERSION } from '../constants.ts';
-import { getAuthInstance, getDb } from '../firebase.ts';
-import { createUserWithEmailAndPassword, updatePassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { User, ShieldCheck, Save, Loader2, LogOut, Smartphone, CheckCircle2, AlertCircle, Mic, MapPin, Camera, RotateCw, Star, Eye, EyeOff, Hash, Lock, Check as CheckIcon, Shield, Fingerprint } from 'lucide-react';
+import { Input } from '../components/Input';
+import { Button } from '../components/Button';
+import { UserProfile, MatchSettings } from '../types';
+import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
+import { APP_VERSION } from '../constants';
+import { getAuthInstance, getDb } from '../firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, updateDoc, Firestore } from 'firebase/firestore';
 
 interface Props {
@@ -24,6 +24,7 @@ interface Props {
 }
 
 type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'checking' | 'unavailable';
+type PermissionType = 'mic' | 'loc' | 'cam' | 'passkey';
 
 const MarsIcon = ({ size = 14 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -54,7 +55,6 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   const [requesting, setRequesting] = useState<string | null>(null);
   const [isTestingLat, setIsTestingLat] = useState(false);
   const [latency, setLatency] = useState<number | null>(null);
-  const [isStandalone, setIsStandalone] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, PermissionStatus>>({
     mic: 'checking',
@@ -136,27 +136,29 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
 
       try {
         await createUserWithEmailAndPassword(auth, cleanEmail, newPassword);
-      } catch (e: any) {
-        console.log("Firebase Auth Error Details:", { code: e.code, message: e.message, full: e });
-        if (e.code === 'auth/email-already-in-use') {
+      } catch (unknownError) {
+        const authError = unknownError as { code?: string; message?: string };
+        console.log("Firebase Auth Error Details:", { code: authError.code, message: authError.message, full: unknownError });
+        if (authError.code === 'auth/email-already-in-use') {
           try {
             await signInWithEmailAndPassword(auth, cleanEmail, newPassword);
-          } catch (signInError: any) {
-            if (signInError.code === 'auth/wrong-password' || signInError.code === 'auth/invalid-credential') {
+          } catch (signInError) {
+            const signInAuthError = signInError as { code?: string; message?: string };
+            if (signInAuthError.code === 'auth/wrong-password' || signInAuthError.code === 'auth/invalid-credential') {
               throw new Error("Este e-mail já possui uma senha cadastrada diferente da digitada.");
             }
             throw signInError;
           }
-        } else if (e.code === 'auth/invalid-email') {
+        } else if (authError.code === 'auth/invalid-email') {
           throw new Error("O formato do e-mail é inválido.");
-        } else if (e.code === 'auth/network-request-failed') {
+        } else if (authError.code === 'auth/network-request-failed') {
           throw new Error("Falha na conexão com a internet. Verifique seu sinal.");
-        } else if (e.code === 'auth/weak-password') {
+        } else if (authError.code === 'auth/weak-password') {
           throw new Error("A senha escolhida é muito fraca para o sistema.");
-        } else if (e.message?.includes('signup-are-blocked') || e.code === 'auth/operation-not-allowed') {
-          throw new Error(`O cadastro de novas senhas está temporariamente desativado pelo administrador. (Erro: ${e.code})`);
+        } else if (authError.message?.includes('signup-are-blocked') || authError.code === 'auth/operation-not-allowed') {
+          throw new Error(`O cadastro de novas senhas está temporariamente desativado pelo administrador. (Erro: ${authError.code})`);
         } else {
-          throw new Error(`${e.message} (Código: ${e.code})`);
+          throw new Error(`${authError.message || 'Erro desconhecido'} (Código: ${authError.code || 'sem código'})`);
         }
       }
 
@@ -178,18 +180,14 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
       }
       
       setIsMigrationModalOpen(false);
-    } catch (e: any) {
-      console.error("Erro na migração:", e);
-      setMigrationError(e.message || "Erro ao processar sua nova senha. Tente novamente.");
+    } catch (unknownMigrationError) {
+      const migrationError = unknownMigrationError as { message?: string };
+      console.error("Erro na migração:", migrationError);
+      setMigrationError(migrationError.message || "Erro ao processar sua nova senha. Tente novamente.");
     } finally {
       setIsMigrating(false);
     }
   };
-
-  useEffect(() => {
-    const isStandaloneMode = globalThis.matchMedia('(display-mode: standalone)').matches || (globalThis.navigator as any).standalone === true;
-    setIsStandalone(isStandaloneMode);
-  }, []);
 
   // Detecção automática de hardware
   useEffect(() => {
@@ -247,8 +245,9 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         });
         nextStates.loc = 'granted';
       }
-    } catch (e: any) {
-      nextStates.loc = (e.code === 1) ? 'denied' : 'prompt';
+    } catch (unknownGeoError) {
+      const geoError = unknownGeoError as { code?: number };
+      nextStates.loc = (geoError.code === 1) ? 'denied' : 'prompt';
     }
 
     setPermissions(nextStates);
@@ -288,7 +287,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         });
       }
       await checkPermissions();
-    } catch (e: any) { 
+    } catch {
       setPermissions(prev => ({ ...prev, [type]: 'denied' }));
     } finally { setRequesting(null); }
   };
@@ -381,7 +380,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
       const userId = profile.email || 'user';
       const userHandle = new TextEncoder().encode(userId);
 
-      const publicKeyCredentialCreationOptions: any = {
+      const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
         challenge,
         rp: {
           name: "MyPlacar",
@@ -404,9 +403,9 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
 
       const credential = await navigator.credentials.create({
         publicKey: publicKeyCredentialCreationOptions,
-      }) as any;
+      }) as PublicKeyCredential | null;
 
-      if (credential) {
+      if (credential && credential.rawId) {
         const rawId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
         const updatedProfile = {
           ...profile,
@@ -432,7 +431,8 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
 
         alert(isReset ? "Biometria recadastrada com sucesso!" : "Biometria cadastrada e salva com sucesso!");
       }
-    } catch (err: any) {
+    } catch (unknownErr) {
+      const err = unknownErr as { name?: string; message?: string };
       console.error(err);
       if (err.name === 'InvalidStateError') {
         alert("Esta chave já está cadastrada neste dispositivo. Tente usar outro método de autenticação biométrica.");
@@ -617,7 +617,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
                       </div>
                     ) : (
                       <button 
-                        onClick={() => requestPermission(item.id as any)} 
+                        onClick={() => requestPermission(item.id as 'mic' | 'loc' | 'cam')} 
                         disabled={requesting === item.id} 
                         className="text-[10px] font-black text-white px-4 py-2 bg-blue-600 rounded-xl active:scale-95 shadow-sm transition-all"
                       >

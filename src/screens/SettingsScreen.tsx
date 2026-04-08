@@ -25,7 +25,7 @@ interface Props {
   onViewMap: (matchId: string | null) => void;
   userProfile: UserProfile;
   setUserProfile: (profile: UserProfile) => void;
-  onSaveProfile: () => void;
+  onSaveProfile: () => Promise<void>;
   onLogout: () => void;
   onGoAtAdmin?: () => void;
   onGoToScoreboard: () => void;
@@ -65,6 +65,7 @@ interface Props {
 
 export const SettingsScreen: React.FC<Props> = (props) => {
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
+  const teamSectionRef = useRef<{ triggerStart: () => void }>(null);
   const prevTabRef = useRef(props.activeTab);
 
   // MC1: Salvamento automático ao sair da aba perfil
@@ -81,7 +82,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
         return <ProfileScreen 
           profile={props.userProfile} 
           setProfile={props.setUserProfile} 
-          onSave={async () => props.onSaveProfile()} 
+          onSave={props.onSaveProfile}
           onLogout={props.onLogout} 
           onGoAdmin={props.onGoAdmin} 
           onCheckUpdate={props.onCheckUpdate}
@@ -103,7 +104,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
             cloudMatchesCount={props.cloudMatchesCount}
             isDownloading={props.isDownloading}
             onDeleteMatch={props.onDeleteMatch} 
-            onViewMap={props.onViewMap} 
+            onViewMap={(id: string) => props.onViewMap(id)} 
             selectedMatches={selectedMatches} 
             setSelectedMatches={setSelectedMatches} 
           />
@@ -113,6 +114,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
       case 'config':
       default:
         return <TeamSection 
+          ref={teamSectionRef}
           settings={props.settings} 
           setSettings={props.setSettings} 
           onStartMatch={props.onStart} 

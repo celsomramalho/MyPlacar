@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Trophy, Loader2, ChevronRight, CheckCircle2, Wifi, AlertTriangle, Watch, RotateCcw, X, Smartphone, Settings, Play, ArrowLeft } from 'lucide-react';
-import { getDb } from '../firebase.ts';
-import { doc, onSnapshot, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
-import { GameState, MatchHistoryItem } from '../types.ts';
-import { SPORT_LIST } from '../constants.ts';
+import React, { useState, useEffect } from 'react';
+import { Loader2, Wifi, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { getDb } from '../firebase';
+import { doc, onSnapshot, collection, getDocs, query, where } from 'firebase/firestore';
+import { GameState } from '../types';
+import { SPORT_LIST } from '../constants';
 
 interface Props {
   matchId: string;
@@ -52,7 +52,7 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
     const db = getDb();
     if (!db) return;
 
-    let targetPin = spectatorPin?.toUpperCase();
+    const targetPin = spectatorPin?.toUpperCase();
     
     const setupListener = (pin: string) => {
       return onSnapshot(doc(db, "live_matches", pin), (snap) => {
@@ -63,7 +63,7 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
           setError("Partida não encontrada ou encerrada.");
           setIsLoading(false);
         }
-      }, (err) => {
+      }, () => {
         setError("Erro ao conectar com a partida.");
         setIsLoading(false);
       });

@@ -1,14 +1,13 @@
 
 import React, { useMemo } from 'react';
-import { LogOut, Play, User, X, Clock, Trash2, Share2, Check, Bell } from 'lucide-react';
-import { ScoreboardIcon } from '../../components/ScoreboardIcon.tsx';
-import { LiveIndicator } from '../../components/LiveIndicator.tsx';
+import { Play, User, X, Clock, Trash2, Share2, Check, Bell } from 'lucide-react';
+import { ScoreboardIcon } from '../../components/ScoreboardIcon';
+import { LiveIndicator } from '../../components/LiveIndicator';
 
 interface Props {
   isSelectionMode: boolean;
   selectedCount: number;
   activeTab: string;
-  onLogout: () => void;
   onStart: () => void;
   onDeleteSelected?: () => void;
   onClearSelection?: () => void;
@@ -27,7 +26,6 @@ export const SettingsHeader: React.FC<Props> = ({
   isSelectionMode, 
   selectedCount, 
   activeTab, 
-  onLogout, 
   onStart, 
   onDeleteSelected, 
   onClearSelection,

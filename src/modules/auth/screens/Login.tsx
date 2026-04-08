@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from 'react';
-import { supabase } from '../integrations/supabase/client.ts';
-import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
+import { supabase } from '@infra/supabase';
+import { ScoreboardIcon } from '../../../components/ScoreboardIcon.tsx';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -12,7 +12,10 @@ export const Login: React.FC = () => {
   const [mode, setMode] = useState<'sign_in' | 'sign_up'>('sign_in');
 
   const handleSubmit = async () => {
-    if (!email || !password) { setError('Preencha e-mail e senha.'); return; }
+    if (!email || !password) {
+      setError('Preencha e-mail e senha.');
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {

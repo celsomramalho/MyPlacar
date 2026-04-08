@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock, Settings, User, Menu, Check, LogOut } from 'lucide-react';
-import { ScoreboardIcon } from '../../components/ScoreboardIcon.tsx';
+import { ScoreboardIcon } from '../../components/ScoreboardIcon';
 
 interface Props {
   activeTab: string;

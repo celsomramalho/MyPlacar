@@ -2,6 +2,7 @@ import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 // ── Lê APP_VERSION de constants.ts ─────────────────────────────────────────
 const constantsRaw = readFileSync(resolve(__dirname, 'src/constants.ts'), 'utf-8');
@@ -64,11 +65,23 @@ export default defineConfig({
     htmlVersionPlugin(),
     swInjectPlugin(),
   ],
+  resolve: {
+    alias: {
+      '@modules':  resolve(__dirname, 'src/modules'),
+      '@shared':   resolve(__dirname, 'src/shared'),
+      '@infra':    resolve(__dirname, 'src/infrastructure'),
+      '@routes':   resolve(__dirname, 'src/routes'),
+    },
+  },
   define: {
     // Disponível no código React via import.meta.env ou como constante
     __APP_VERSION__: JSON.stringify(APP_VERSION),
     // Garante fallback correto caso o sw.js seja processado pelo bundler
     'self.__CACHE_NAME__': JSON.stringify(CACHE_NAME),
+  },
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
   },
   optimizeDeps: {
     include: [

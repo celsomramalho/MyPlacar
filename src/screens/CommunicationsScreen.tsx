@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, User, Loader2 } from 'lucide-react';
+import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, Loader2 } from 'lucide-react';
 import { Communication, UserProfile, Reply } from '../types.ts';
 import { getDb } from '../firebase.ts';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '../components/Button.tsx';
-import { Input } from '../components/Input.tsx';
 
 interface Props {
   userProfile: UserProfile;
@@ -182,7 +181,6 @@ export const CommunicationsScreen: React.FC<Props> = ({ userProfile, onBack }) =
                   {comm.poll.options.map(opt => {
                     const hasVoted = comm.poll!.options.some(o => o.voters?.includes(userProfile.pin));
                     const isUserSelection = opt.voters?.includes(userProfile.pin);
-                    const isPendingSelection = selectedOptions[comm.id]?.includes(opt.id);
                     const percentage = comm.poll!.totalVotes > 0 ? Math.round((opt.votes / comm.poll!.totalVotes) * 100) : 0;
                     
                     return (

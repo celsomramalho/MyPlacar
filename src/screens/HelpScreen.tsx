@@ -10,7 +10,7 @@ interface Props {
   canStartMatch: boolean;
 }
 
-export const HelpScreen: React.FC<Props> = ({ profile, onNavigateToTab, onOpenRules, onPlay, canStartMatch }) => {
+export const HelpScreen: React.FC<Props> = ({ onPlay, canStartMatch }) => {
   const helpItems = [
     {
       title: "Placar e voz",

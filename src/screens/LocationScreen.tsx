@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, MapPin, Info, ShieldCheck, Loader2, Target, AlertTriangle } from 'lucide-react';
+import { Clock, MapPin, Loader2, Target, AlertTriangle } from 'lucide-react';
 import { getFirestore, collection, getDocs, query, orderBy, QueryDocumentSnapshot } from 'firebase/firestore';
 import L from 'leaflet';
 import { MatchHistoryItem } from '../types.ts';
@@ -41,7 +41,7 @@ export const LocationScreen: React.FC<Props> = ({ history, focusMatchId, onBack 
         fetched.push({ id: doc.id, ...doc.data() } as MatchHistoryItem);
       });
       setCloudMatches(fetched);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Erro ao buscar dados na nuvem:", error);
       setHasError("Falha ao carregar dados da nuvem.");
     } finally {
@@ -65,7 +65,7 @@ export const LocationScreen: React.FC<Props> = ({ history, focusMatchId, onBack 
         setTimeout(() => marker.openPopup(), 1600);
       }
     } else if (id) {
-      (window as any).alert("Atenção: Esta partida foi registrada sem coordenadas de GPS.");
+      window.alert("Atenção: Esta partida foi registrada sem coordenadas de GPS.");
     }
   };
 

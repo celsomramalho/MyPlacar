@@ -17,7 +17,7 @@ export const useWakeLock = (enabled: boolean) => {
           // Tenta readquirir quando a página voltar ao foco
           if (!released) acquire();
         });
-      } catch (e) {
+      } catch {
         // Permissão negada ou API indisponível — falha silenciosa
       }
     };

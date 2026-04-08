@@ -38,7 +38,7 @@ export const isTennisTieBreak = (state: GameState): boolean => {
     return state.p1.games === t1 && state.p2.games === t2;
 };
 
-const incrementScoreTennis = (state: GameState, player: 1 | 2): GameState => {
+export const incrementScoreTennis = (state: GameState, player: 1 | 2): GameState => {
   const scorer = player === 1 ? state.p1 : state.p2;
   const opponent = player === 1 ? state.p2 : state.p1;
 
@@ -59,7 +59,7 @@ const incrementScoreTennis = (state: GameState, player: 1 | 2): GameState => {
 
       if (tieBreakFinished) {
           scorer.games++;
-          winSet(state, player);
+          winSet(state);
       } else {
           const totalPoints = newScore + opponentScore;
           if (totalPoints % 2 === 1) {
@@ -121,11 +121,11 @@ const winGame = (state: GameState, winner: 1 | 2) => {
   if (reachedTarget) {
       if (gamesLimit === 4) {
           // Em set de 4, ganha quem fizer 4 primeiro (exceto o 3-3 já tratado acima)
-          winSet(state, winner);
+          winSet(state);
       } else {
           // Em set de 6, precisa de 2 de vantagem (ex: 6-4) ou ganhar o 7º game (ex: 7-5)
           if (hasLeadOfTwo || winnerObj.games > gamesLimit) {
-              winSet(state, winner);
+              winSet(state);
           } else {
               rotateServer(state);
           }
@@ -141,7 +141,7 @@ const rotateServer = (state: GameState) => {
     state.server = (state.servingOrderOffset % 2 === 0) ? 1 : 2;
 };
 
-const winSet = (state: GameState, winner: 1 | 2) => {
+const winSet = (state: GameState) => {
   const isPickle = state.matchConfig.sportType === 'pickleball';
   const p1Final = isPickle ? (parseInt(state.p1.score) || 0) : state.p1.games;
   const p2Final = isPickle ? (parseInt(state.p2.score) || 0) : state.p2.games;

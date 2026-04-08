@@ -1,23 +1,22 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Plus, Mic, MicOff, Undo, Settings, Clock, Bluetooth, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, ArrowRightLeft, ArrowUpDown, HelpCircle, CheckCircle2, Type, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, Keyboard, CheckCircle, Check, Wifi, Send, MonitorSmartphone, Smartphone, Monitor, ChevronDown, ChevronUp, ListTodo, Disc, ShieldCheck, Eye, ArrowLeft, Crown, ChevronRight, Volume2, Antenna, WifiOff, LogOut, Menu, Gavel, Trash2, Users } from 'lucide-react';
-import { SettingsTabs } from './settings/SettingsTabs.tsx';
-import { Button } from '../components/Button.tsx';
-import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
-import { Input } from '../components/Input.tsx';
-import { GameState, PointType, PointEvent, UserProfile } from '../types.ts';
-import { useGeminiReferee } from '../hooks/useGeminiReferee.ts';
-import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../hooks/useScoreAnnouncer.ts';
-import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer.ts';
-import { useWakeLock } from '../hooks/useWakeLock.ts';
-import { isTennisTieBreak } from '../utils/tennisEngine.ts';
-import { SPORT_LIST } from '../constants.ts';
-import { Toggle } from '../components/Toggle.tsx';
-import { getDb } from '../firebase.ts';
-import { doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
-import { LazySportIcon } from '../components/LazySportIcon.tsx';
-import { LiveIndicator } from '../components/LiveIndicator.tsx';
-import { applyGoldenRule, maskPin } from '../utils/formatters.ts';
-import { WatchBoard } from '../components/WatchBoard.tsx';
+import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users } from 'lucide-react';
+import { SettingsTabs } from './settings/SettingsTabs';
+import { Button } from '../components/Button';
+import { ScoreboardIcon } from '../components/ScoreboardIcon';
+import { Input } from '../components/Input';
+import { GameState, PointType, PointEvent, UserProfile } from '../types';
+import { useGeminiReferee } from '../hooks/useGeminiReferee';
+import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../hooks/useScoreAnnouncer';
+import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer';
+import { useWakeLock } from '../hooks/useWakeLock';
+import { isTennisTieBreak } from '../utils/tennisEngine';
+import { SPORT_LIST } from '../constants';
+import { getDb } from '../firebase';
+import { doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { LazySportIcon } from '../components/LazySportIcon';
+import { LiveIndicator } from '../components/LiveIndicator';
+import { applyGoldenRule, maskPin } from '../utils/formatters';
+import { WatchBoard } from '../components/WatchBoard';
 
 interface CommandLogEntry {
   id: string;
@@ -178,11 +177,18 @@ const ScorePickerModal: React.FC<{
   );
 };
 
-export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number, p1Sets: number[], p2Sets: number[], isMatchOver?: boolean, p1Color?: string, p2Color?: string }> = ({ history, currentSet, p1Sets, p2Sets, isMatchOver, p1Color, p2Color }) => {
+type MatchTimelineElement =
+  | { type: 'set-marker'; setNumber: number }
+  | { type: 'score-start' }
+  | { type: 'point'; winner: 1 | 2; pointType: PointType }
+  | { type: 'game-score'; winner: 1 | 2; g1: number; g2: number }
+  | { type: 'set-score'; winner: 1 | 2; s1: number; s2: number };
+
+export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; p2Sets: number[]; isMatchOver?: boolean; p1Color?: string; p2Color?: string }> = ({ history, p1Sets, p2Sets, isMatchOver, p1Color, p2Color }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (scrollRef.current) { scrollRef.current.scrollLeft = scrollRef.current.scrollWidth; } }, [history]);
   const timelineElements = useMemo(() => {
-    const elements: any[] = [];
+    const elements: MatchTimelineElement[] = [];
     if (!history) return elements;
     
     // Initial set marker and start score
@@ -195,12 +201,14 @@ export const MatchTimeline: React.FC<{ history: PointEvent[], currentSet: number
     history.forEach((event) => {
       elements.push({ type: 'point', winner: event.winner, pointType: event.type });
       if (event.resultingScore) {
-        const [g1, g2] = event.resultingScore!.split('-');
+        const [g1Str, g2Str] = event.resultingScore!.split('-');
+        const g1 = Number(g1Str);
+        const g2 = Number(g2Str);
         elements.push({ type: 'game-score', winner: event.winner, g1, g2 });
         if (setCounter < setsP1.length) {
-          if (Number(g1) === setsP1[setCounter] && Number(g2) === setsP2[setCounter]) {
+          if (g1 === setsP1[setCounter] && g2 === setsP2[setCounter]) {
             setCounter++;
-            elements.push({ type: 'set-score', winner: event.winner, s1: setsP1.slice(0, setCounter).filter((s, i) => s > setsP2[i]).length, s2: setsP2.slice(0, setCounter).filter((s, i) => s > p1Sets[i]).length });
+            elements.push({ type: 'set-score', winner: event.winner, s1: setsP1.slice(0, setCounter).filter((s, i) => s > (setsP2[i] ?? 0)).length, s2: setsP2.slice(0, setCounter).filter((s, i) => s > (setsP1[i] ?? 0)).length });
             
             // Add next set marker if match is not over
             if (!isMatchOver) {
@@ -267,8 +275,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }
 
   const [resetPressProgress, setResetPressProgress] = useState(0);
-  const resetPressTimerRef = useRef<any>(null);
-  const resetProgressIntervalRef = useRef<any>(null);
+  const resetPressTimerRef = useRef<number | null>(null);
+  const resetProgressIntervalRef = useRef<number | null>(null);
 
   const startResetPress = () => {
     if (!onResetMatch || !isCommandOwner) return;
@@ -291,7 +299,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const [scorePressProgress, setScorePressProgress] = useState<{ player: 1 | 2; type: 'game' | 'gameSet' | 'matchSet'; progress: number } | null>(null);
-  const scoreProgressIntervalRef = useRef<any>(null);
+  const scoreProgressIntervalRef = useRef<number | null>(null);
   const hasDraggedRef = useRef(false);
 
   const [isLogsOpen, setIsLogsOpen] = useState(gameState.matchConfig.isHistoryEnabled);
@@ -303,7 +311,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const [correctionMode, setCorrectionMode] = useState<'none' | 'game' | 'gameSet' | 'matchSet'>('none');
   const [correctionPlayer, setCorrectionPlayer] = useState<1 | 2 | null>(null);
   const [voiceWasManuallyStopped, setVoiceWasManuallyStopped] = useState(false);
-  const longPressTimer = useRef<any>(null);
+  const longPressTimer = useRef<number | null>(null);
   const isLongPressActive = useRef(false);
   const touchStartPos = useRef({ x: 0, y: 0 });
   const lastRemoteCommandTimestamp = useRef(0);
@@ -313,8 +321,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const [isLiveExpanded, setIsLiveExpanded] = useState(false);
   const [isDimmed, setIsDimmed] = useState(false);
   const [dimProgress, setDimProgress] = useState(0);
-  const dimTimeoutRef = useRef<any>(null);
-  const dimProgressIntervalRef = useRef<any>(null);
+  const dimTimeoutRef = useRef<number | null>(null);
+  const dimProgressIntervalRef = useRef<number | null>(null);
 
   const currentGameStateRef = useRef(gameState);
   const pendingLogIdRef = useRef<string | null>(null);
@@ -344,10 +352,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         const elapsed = Date.now() - startTime;
         const pct = Math.min((elapsed / timeoutMs) * 100, 100);
         setDimProgress(pct);
-        if (pct >= 100) clearInterval(dimProgressIntervalRef.current);
+        if (pct >= 100 && dimProgressIntervalRef.current !== null) clearInterval(dimProgressIntervalRef.current);
       }, 200);
       dimTimeoutRef.current = setTimeout(() => {
-        clearInterval(dimProgressIntervalRef.current);
+        if (dimProgressIntervalRef.current !== null) clearInterval(dimProgressIntervalRef.current);
         setDimProgress(0);
         setIsDimmed(true);
       }, timeoutMs);
@@ -578,8 +586,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const handleSaveBaseUrl = () => { localStorage.setItem('myPlacar_CustomHost', customBaseUrl); setIsEditingUrl(false); };
-  const handleCopyLink = () => navigator.clipboard.writeText(mirrorLink).then(() => (window as any).alert("Link de espelhamento copiado com sucesso."));
-  const handleCopyWatchLink = () => navigator.clipboard.writeText(watchLink).then(() => (window as any).alert("Link para relógio copiado com sucesso."));
+  const handleCopyLink = () => navigator.clipboard.writeText(mirrorLink).then(() => window.alert("Link de espelhamento copiado com sucesso."));
+  const handleCopyWatchLink = () => navigator.clipboard.writeText(watchLink).then(() => window.alert("Link para relógio copiado com sucesso."));
   const handleShareWhatsApp = () => {
     const currentSportDef = SPORT_LIST.find(s => s.id === gameState.matchConfig.sportType) || SPORT_LIST[0];
     const text = `Acompanhe meu jogo de ${currentSportDef.name} ao vivo no my placar. 🎾\n\n${mirrorLink}`;
@@ -920,7 +928,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                  </div>
                  {isTimelineOpen && (
                    <div className="mt-6 animate-in slide-in-from-top-2 duration-300">
-                     <MatchTimeline history={gameState.pointHistory ?? []} currentSet={gameState.currentSet} p1Sets={gameState.p1.sets} p2Sets={gameState.p2.sets} isMatchOver={gameState.isMatchOver} p1Color={gameState.p1.color} p2Color={gameState.p2.color} />
+                     <MatchTimeline history={gameState.pointHistory ?? []} p1Sets={gameState.p1.sets} p2Sets={gameState.p2.sets} isMatchOver={gameState.isMatchOver} p1Color={gameState.p1.color} p2Color={gameState.p2.color} />
                    </div>
                  )}
               </div>

@@ -1,47 +1,50 @@
-import { GameState, MatchSettings, Player, PointEvent } from '../types.ts';
+import { GameState, MatchSettings, Player } from '../types.ts';
 
-export function isValidPlayer(p: any): p is Player {
+export function isValidPlayer(p: unknown): p is Player {
   return (
-    p &&
-    typeof p.name === 'string' &&
-    typeof p.score === 'string' &&
-    typeof p.games === 'number' &&
-    Array.isArray(p.sets)
+    typeof p === 'object' &&
+    p !== null &&
+    typeof (p as Player).name === 'string' &&
+    typeof (p as Player).score === 'string' &&
+    typeof (p as Player).games === 'number' &&
+    Array.isArray((p as Player).sets)
   );
 }
 
-export function isValidMatchSettings(s: any): s is MatchSettings {
+export function isValidMatchSettings(s: unknown): s is MatchSettings {
   return (
-    s &&
-    typeof s.sportType === 'string' &&
-    typeof s.p1Name === 'string' &&
-    typeof s.p2Name === 'string' &&
-    typeof s.sets === 'number' &&
-    typeof s.gamesPerSet === 'number'
+    typeof s === 'object' &&
+    s !== null &&
+    typeof (s as MatchSettings).sportType === 'string' &&
+    typeof (s as MatchSettings).p1Name === 'string' &&
+    typeof (s as MatchSettings).p2Name === 'string' &&
+    typeof (s as MatchSettings).sets === 'number' &&
+    typeof (s as MatchSettings).gamesPerSet === 'number'
   );
 }
 
-export function isValidGameState(s: any): s is GameState {
-  if (!s) return false;
+export function isValidGameState(s: unknown): s is GameState {
+  if (!s || typeof s !== 'object') return false;
+  const obj = s as any;
   
   // Essential fields for rendering
   const hasBasicFields = (
-    typeof s.matchId === 'string' &&
-    typeof s.startTime === 'number' &&
-    isValidPlayer(s.p1) &&
-    isValidPlayer(s.p2) &&
-    (s.server === 1 || s.server === 2) &&
-    Array.isArray(s.pointHistory) &&
-    typeof s.currentSet === 'number' &&
-    typeof s.isMatchOver === 'boolean' &&
-    typeof s.matchDuration === 'number' &&
-    typeof s.isPaused === 'boolean'
+    typeof obj.matchId === 'string' &&
+    typeof obj.startTime === 'number' &&
+    isValidPlayer(obj.p1) &&
+    isValidPlayer(obj.p2) &&
+    (obj.server === 1 || obj.server === 2) &&
+    Array.isArray(obj.pointHistory) &&
+    typeof obj.currentSet === 'number' &&
+    typeof obj.isMatchOver === 'boolean' &&
+    typeof obj.matchDuration === 'number' &&
+    typeof obj.isPaused === 'boolean'
   );
 
   if (!hasBasicFields) return false;
 
   // Check matchConfig which is often a source of crashes if missing
-  if (!s.matchConfig || typeof s.matchConfig.sportType !== 'string') {
+  if (!obj.matchConfig || typeof obj.matchConfig.sportType !== 'string') {
     return false;
   }
 

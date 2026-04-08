@@ -11,7 +11,7 @@ let hardwareInitialized = false;
 
 export const getSharedAudioContext = () => {
   if (!sharedAudioContext) {
-    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const AudioContextClass = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (AudioContextClass) {
       sharedAudioContext = new AudioContextClass({ sampleRate: 24000 });
     }
@@ -21,7 +21,7 @@ export const getSharedAudioContext = () => {
 
 export const unlockAudio = async () => {
   const ctx = getSharedAudioContext();
-  const synth = globalThis.speechSynthesis || (window as any).webkitSynthesis;
+  const synth = globalThis.speechSynthesis || (window as unknown as { webkitSynthesis?: SpeechSynthesis }).webkitSynthesis;
   try {
     if (ctx && ctx.state === 'suspended') await ctx.resume();
     if (synth) {
@@ -67,13 +67,13 @@ export const playErrorBeep = (type: ErrorSoundType = 'baixo') => {
 
 export const speakSystem = (text: string, voiceURI: string | undefined, volume: number): Promise<void> => {
   return new Promise((resolve) => {
-    const win = window as any;
+    const win = window as unknown as { AndroidTTS?: { speak: (t: string) => void } };
     if (win.AndroidTTS && typeof win.AndroidTTS.speak === 'function') {
       win.AndroidTTS.speak(text);
       setTimeout(resolve, text.length * 80 + 500);
       return;
     }
-    const synth = globalThis.speechSynthesis || (window as any).webkitSpeechSynthesis;
+    const synth = globalThis.speechSynthesis || (window as unknown as { webkitSpeechSynthesis?: SpeechSynthesis }).webkitSpeechSynthesis;
     if (!synth) { resolve(); return; }
     synth.cancel();
     setTimeout(() => {
@@ -93,13 +93,13 @@ export const speakSystem = (text: string, voiceURI: string | undefined, volume: 
   });
 };
 
-export const speakGemini = async (
+export const speakGemini = (
   _text: string,
   _voiceName: GeminiVoiceName,
   _persona: GeminiPersona,
   _volume: number
 ): Promise<void> => {
-  throw new Error('Gemini TTS nao implementado nesta versao do SDK');
+  return Promise.reject(new Error('Gemini TTS nao implementado nesta versao do SDK'));
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

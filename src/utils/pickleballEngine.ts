@@ -31,7 +31,7 @@
  *   - Sem flag explícito no estado — não polui PickleballState.
  */
 
-import { GameState, PickleballState, PickleballServerState, CourtSide } from '../types.ts';
+import { GameState, PickleballState, CourtSide } from '../types.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers internos — resolução de nomes
@@ -77,13 +77,6 @@ const resolveWinnerNames = (state: GameState, team: 1 | 2): string => {
 /** Placar par → 'even' (direita), ímpar → 'odd' (esquerda). */
 const resolveSide = (sacadorScore: number): CourtSide =>
   sacadorScore % 2 === 0 ? 'even' : 'odd';
-
-/** Atualiza server.side com base no placar atual do sacador. */
-const updateSide = (pkl: PickleballState): void => {
-  const sacadorScore =
-    pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-  pkl.server.side = resolveSide(sacadorScore);
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inicialização

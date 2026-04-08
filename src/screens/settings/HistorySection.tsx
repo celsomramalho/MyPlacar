@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Loader2, Clock, Trophy, ChevronDown, ChevronUp, MapPin, Cloud, Trash2, CloudUpload, CloudDownload, Calendar, Smartphone, Share2 } from 'lucide-react';
-import { Input } from '../../components/Input.tsx';
-import { MatchHistoryItem } from '../../types.ts';
-import { MatchTimeline } from '../ScoreboardScreen.tsx';
-import { LazySportIcon } from '../../components/LazySportIcon.tsx';
+import { Input } from '../../components/Input';
+import { MatchHistoryItem } from '../../types';
+import { MatchTimeline } from '../ScoreboardScreen';
+import { LazySportIcon } from '../../components/LazySportIcon';
 
 const COLOR_MAP: Record<string, string> = {
   azul: 'text-blue-600',
@@ -88,7 +88,7 @@ export const HistorySection: React.FC<Props> = ({
     setSelectedMatches(next);
   };
 
-  const toggleSelectDay = (date: string, items: MatchHistoryItem[]) => {
+  const toggleSelectDay = (items: MatchHistoryItem[]) => {
     const next = new Set(selectedMatches);
     const allSelected = items.every(i => next.has(i.id));
     items.forEach(i => {
@@ -176,7 +176,7 @@ export const HistorySection: React.FC<Props> = ({
                    <span className="text-[13px] font-black text-gray-900 tracking-tight">{originalDate}</span>
                 </div>
                 <button 
-                  onClick={() => toggleSelectDay(originalDate, items)}
+                  onClick={() => toggleSelectDay(items)}
                   className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-all border ${items.every(i => selectedMatches.has(i.id)) ? 'bg-black text-white border-black' : 'bg-gray-200 text-gray-600 border-transparent'}`}
                 >
                   <span className="text-[10px] font-black">Marcar dia</span>
@@ -300,7 +300,6 @@ export const HistorySection: React.FC<Props> = ({
 
                         <MatchTimeline 
                            history={item.pointHistory || []} 
-                           currentSet={setsP1.length - 1} 
                            p1Sets={item.p1Sets} 
                            p2Sets={item.p2Sets} 
                         />
