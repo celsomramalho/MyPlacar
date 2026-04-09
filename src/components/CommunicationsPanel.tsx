@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, MessageSquare, PieChart, Users, User, Pin, Trash2, Loader2, Plus, X, ChevronDown, ChevronUp, Mail } from 'lucide-react';
 import { Communication, UserProfile, Reply } from '../types.ts';
-import { getDb } from '../firebase.ts';
+import { getDb } from '@infra/firebase';
 import { collection, addDoc, serverTimestamp, query, getDocs, deleteDoc, doc, where, orderBy, limit, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from './Button.tsx';
 import { Input } from './Input.tsx';

@@ -5,7 +5,7 @@ import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieB
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants';
 import { applyGoldenRule } from '../utils/formatters';
-import { getDb } from '../firebase';
+import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '../components/LazySportIcon';
 import { Button } from '../components/Button';

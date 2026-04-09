@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { UserProfile, MatchSettings } from '../types';
 import { formatPortugueseName, applyGoldenRule } from '../utils/formatters';
 import { APP_VERSION } from '../constants';
-import { getAuthInstance, getDb } from '../firebase';
+import { getAuthInstance, getDb } from '@infra/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, updateDoc, Firestore } from 'firebase/firestore';
 

@@ -21,7 +21,7 @@ import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
 import { initPickleballState } from './utils/pickleballEngine.ts';
 import { applyGoldenRule } from './utils/formatters.ts';
 import { isWatchDevice } from './utils/device.ts';
-import { getDb, clearFirestoreCache } from './firebase.ts';
+import { getDb, clearFirestoreCache } from '@infra/firebase';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
 import { AlertCircle, Trash2, RotateCw, Wifi, X, CheckCircle, Eye, Loader2, ArrowLeftRight, Crown, UserCheck } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator.tsx';

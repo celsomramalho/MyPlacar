@@ -26,6 +26,7 @@ Sumário de documentação
 - docs/00-overview.md — Visão geral do projeto
 - docs/01-quickstart.md — Instalação e execução local
 - docs/02-architecture.md — Arquitetura do projeto
+- docs/architecture-phase-1-decisions.md — Decisões oficiais para encerramento da fase 1 da reforma arquitetural
 - docs/03-firebase.md — Configuração e deploy do Firebase
 - docs/04-deploy.md — Deploy (Vercel / Firebase / Capacitor)
 - docs/05-api-and-data-models.md — Modelos de dados (Firestore & types.ts)

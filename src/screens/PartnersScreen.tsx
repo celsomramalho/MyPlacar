@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, Plus, Play, CloudDownload, CloudUpload, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Wifi, Dices, ArrowRightLeft, History, CheckSquare, Mic, Clock, Gavel } from 'lucide-react';
 import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent } from '../types'; 
 import { Input } from '../components/Input'; 
-import { getDb } from '../firebase'; 
+import { getDb } from '@infra/firebase'; 
 import { collection, query, where, getDocs, getDocsFromServer, getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
 import { mirrorUser, mirrorPartners } from '../services/supabaseMirror';
 import { LiveIndicator } from '../components/LiveIndicator'; 

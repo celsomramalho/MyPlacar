@@ -4,7 +4,7 @@ import { Input } from '../components/Input.tsx';
 import { Button } from '../components/Button.tsx';
 import { Toggle } from '../components/Toggle.tsx';
 import { UserProfile } from '../types.ts';
-import { getDb, getAuthInstance } from '../firebase.ts';
+import { getDb, getAuthInstance } from '@infra/firebase';
 import { doc, getDoc, getDocFromServer, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { mirrorUser } from '../services/supabaseMirror.ts';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';

@@ -11,7 +11,7 @@ import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { isTennisTieBreak } from '../utils/tennisEngine';
 import { SPORT_LIST } from '../constants';
-import { getDb } from '../firebase';
+import { getDb } from '@infra/firebase';
 import { doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { LazySportIcon } from '../components/LazySportIcon';
 import { LiveIndicator } from '../components/LiveIndicator';

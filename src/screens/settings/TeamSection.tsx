@@ -5,7 +5,7 @@ import { Button } from '../../components/Button';
 import { MatchSettings, GameState, Partner, UserProfile, TournamentEvent, QueuePlayer } from '../../types';
 import { formatPortugueseName } from '../../utils/formatters';
 import { SPORT_LIST } from '../../constants';
-import { getDb } from '../../firebase';
+import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
 type Gender = 'M' | 'F';

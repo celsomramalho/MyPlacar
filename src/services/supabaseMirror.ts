@@ -18,7 +18,7 @@
  *   deleteIcon       → AdminScreen:handleDeleteItem (após deleteDoc)
  */
 
-import { supabase } from '../integrations/supabase/client.ts';
+import { supabase } from '@infra/supabase';
 import type { UserProfile, MatchHistoryItem, Partner } from '../types.ts';
 
 // ─── helpers ────────────────────────────────────────────────────────────────

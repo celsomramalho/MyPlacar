@@ -1,5 +1,9 @@
 # Arquitetura do projeto
 
+Atualizacao importante:
+- As decisoes arquiteturais da reforma estrutural em andamento estao registradas em [`architecture-phase-1-decisions.md`](./architecture-phase-1-decisions.md).
+- Esse documento e a referencia oficial para encerrar a fase 1 e preparar a migracao incremental por dominio da fase 2.
+
 Visão geral das pastas e arquivos principais
 - App.tsx — ponto de entrada principal da aplicação React
 - src/ — código-fonte da aplicação (componentes, páginas, utilitários)

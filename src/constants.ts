@@ -3,7 +3,7 @@ import { MatchSettings, VoiceCommands, SportDefinition } from './types.ts';
 
 // ATENÇÃO: Esta é a versão deste arquivo de código. 
 // Se você mudar no Admin para um número DIFERENTE deste, todos os usuários serão forçados a atualizar.
-export const APP_VERSION = '2.5.12'; 
+export const APP_VERSION = '2.5.13'; 
 
 export const SPORT_GROUPS = [
   { id: 'raquetes', name: 'Raquetes', icon: '🎾' },

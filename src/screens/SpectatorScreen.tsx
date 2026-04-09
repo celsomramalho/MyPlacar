@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Wifi, AlertTriangle, ArrowLeft } from 'lucide-react';
-import { getDb } from '../firebase';
+import { getDb } from '@infra/firebase';
 import { doc, onSnapshot, collection, getDocs, query, where } from 'firebase/firestore';
 import { GameState } from '../types';
 import { SPORT_LIST } from '../constants';

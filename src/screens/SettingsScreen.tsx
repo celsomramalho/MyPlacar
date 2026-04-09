@@ -118,18 +118,10 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           settings={props.settings} 
           setSettings={props.setSettings} 
           onStartMatch={props.onStart} 
-          gameState={props.gameState} 
           onOpenPartners={props.onOpenPartners} 
-          partners={props.partners}
-          playerQueue={props.playerQueue}
           onAutoRegisterPartner={props.onAutoRegisterPartner}
-          cloudLiveExists={props.cloudLiveExists}
           userProfile={props.userProfile}
-          activeEvent={props.activeEvent}
-          userEntryDate={props.userEntryDate}
           onJoinTournament={props.onJoinTournament}
-          onExitTournament={props.onExitTournament}
-          isOfflineMode={props.isOfflineMode}
         />;
     }
   };
@@ -143,7 +135,6 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           isSelectionMode={selectedMatches.size > 0} 
           selectedCount={selectedMatches.size} 
           activeTab={props.activeTab} 
-          onLogout={props.onLogout} 
           onStart={props.onPlayShortcut} 
           onDeleteSelected={() => { props.onDeleteManyMatches(selectedMatches); setSelectedMatches(new Set()); }} 
           onClearSelection={() => setSelectedMatches(new Set())} 
