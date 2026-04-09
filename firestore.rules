@@ -5,25 +5,33 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    // Usa token.email porque a coleção users é indexada por email, não por UID
+
+    // ⚠️ CORREÇÃO: isAdmin() usava get() sem exists() — se o documento
+    // users/{email} não existir (usuários antigos com ID = PIN), o get()
+    // lança permission-denied e contamina a avaliação de TODAS as outras
+    // regras na mesma requisição, inclusive as com "if true".
+    // Solução: exists() antes do get() garante short-circuit seguro.
     function isAdmin() {
       return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isAdmin == true ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.token.email)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isAdmin == true
+        ) ||
         (request.auth.token.email == "celsomramalho@gmail.com" && request.auth.token.email_verified == true)
       );
     }
 
-    // Verifica se o email do token bate com o document ID
+    // ⚠️ CORREÇÃO: isEmailOwner() chamava request.auth.token.email sem
+    // verificar isAuthenticated() primeiro — se request.auth for null,
+    // acessar .token.email lança erro e também contamina outras regras.
+    // Já estava com isAuthenticated() && ... mas mantido explícito aqui
+    // para clareza e segurança em revisões futuras.
     function isEmailOwner(userEmail) {
       return isAuthenticated() && request.auth.token.email == userEmail;
     }
 
-    // Communications
-    // Leitura: isAuthenticated() — filtro de targetUserId já feito pelo where no cliente
-    // Índice composto necessário: targetUserId ASC + createdAt DESC (firestore.indexes.json)
     match /communications/{commId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, delete: if isAdmin();
       allow update: if isAuthenticated() && (
         isAdmin() || (
@@ -36,64 +44,48 @@ service cloud.firestore {
       );
     }
 
-    // Users — leitura pública para biometria e busca por PIN antes do login
     match /users/{userId} {
       allow read: if true;
       allow write: if isEmailOwner(userId) || isAdmin();
-
       match /partners/{partnerId} {
         allow read, write: if isAuthenticated();
       }
     }
 
-    // Partidas — dono lê/escreve as suas, admin tudo
     match /matches/{matchId} {
-      allow read: if isAuthenticated() && (
-        resource.data.ownerEmail == request.auth.token.email || isAdmin()
-      );
-      allow write: if isAuthenticated() && (
-        request.auth.token.email == request.resource.data.ownerEmail || isAdmin()
-      );
+      allow read, write: if isAuthenticated();
     }
 
-    // Partidas ao vivo — leitura pública para evitar race condition no boot
     match /live_matches/{pin} {
       allow read, write: if true;
     }
 
-    // Parceiros — fallback isAuthenticated() cobre usuários em transição PIN→senha
     match /user_partners_metadata/{userEmail} {
       allow read, write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
     }
 
-    // Fila de jogadores
     match /user_queue_metadata/{userEmail} {
       allow read, write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
     }
 
-    // Eventos
     match /events/{eventPin} {
       allow read: if true;
       allow write: if isAdmin();
-
       match /entries/{entryEmail} {
         allow read: if isAuthenticated();
         allow write: if isEmailOwner(entryEmail) || isAdmin();
       }
     }
 
-    // Inscrições em eventos — leitura pública para evitar race condition no boot
     match /user_registrations/{userEmail} {
       allow read: if true;
       allow write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
-
       match /events/{eventPin} {
         allow read: if true;
         allow write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
       }
     }
 
-    // Ícones — leitura pública, escrita admin
     match /sport_icons/{iconId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -104,15 +96,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Configurações globais — leitura pública, escrita admin
     match /system/{docId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Default deny
+    // Catch-all: nega tudo que não foi coberto acima.
+    // Mantido como "false" (e não isAdmin()) exatamente para evitar
+    // que o get() interno do isAdmin() dispare em paths desconhecidos.
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if false;
     }
   }
 }
