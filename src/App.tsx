@@ -22,6 +22,8 @@ import { initPickleballState } from './utils/pickleballEngine.ts';
 import { applyGoldenRule } from './utils/formatters.ts';
 import { isWatchDevice } from './utils/device.ts';
 import { getDb, clearFirestoreCache } from '@infra/firebase';
+import { getAuthInstance } from '@infra/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
 import { AlertCircle, Trash2, RotateCw, Wifi, X, CheckCircle, Eye, Loader2, ArrowLeftRight, Crown, UserCheck } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator.tsx';
@@ -127,10 +129,25 @@ const App: React.FC = () => {
     return 'auth';
   });
 
+  // authReady: true quando o Firebase Auth terminou de restaurar a sessão.
+  // Impede que listeners do Firestore disparem com request.auth == null no refresh.
+  const [authReady, setAuthReady] = useState(false);
   useEffect(() => {
-    // Sinaliza que o app carregou IMEDIATAMENTE
+    const auth = getAuthInstance();
+    if (!auth) { setAuthReady(true); return; }
+    const unsub = onAuthStateChanged(auth, () => {
+      setAuthReady(true);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    // Sinaliza que o app carregou IMEDIATAMENTE — independente do auth
     globalThis.dispatchEvent(new CustomEvent('app-ready'));
-    
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
     const db = getDb();
     if (!db) return;
     const unsubscribe = onSnapshot(doc(db, "system", "config"), (snap) => {
@@ -142,7 +159,7 @@ const App: React.FC = () => {
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [authReady]);
 
   const [spectatorMatchId, _setMatchId] = useState<string | null>(initialSpectatorMatchId);
   const [spectatorPin, setSpectatorPin] = useState<string | null>(initialSpectatorPin);
@@ -828,6 +845,7 @@ const App: React.FC = () => {
   }, [userProfile]);
 
   useEffect(() => {
+    if (!authReady) return;
     const db = getDb();
     if (db) {
       const q = query(collection(db, "live_matches"), where("isLiveClosed", "==", false));
@@ -838,7 +856,7 @@ const App: React.FC = () => {
       });
       return () => unsubscribe();
     }
-  }, []);
+  }, [authReady]);
 
   useEffect(() => {
     if (!userProfile.pin) { setCloudLiveExists(false); return; }
@@ -2377,7 +2395,7 @@ const App: React.FC = () => {
         onOpenCommunications={() => setCurrentScreen('communications')} unreadCount={unreadCommsCount}
         onOpenMenu={() => setIsMenuOpen(true)}
       />}
-      {currentScreen === 'partners' && <PartnersScreen appUrl={appUrl} partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => { if (isSelectingJudge) { setIsSelectingJudge(false); setCurrentScreen('scoreboard'); } else setCurrentScreen('settings'); }} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} onSelectPartner={isSelectingJudge ? handleSelectJudgeFromPartners : undefined} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} activeLives={activeLives} onWatchLive={(pin) => { 
+      {currentScreen === 'partners' && <PartnersScreen appUrl={appUrl} isAuthReady={authReady} partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => { if (isSelectingJudge) { setIsSelectingJudge(false); setCurrentScreen('scoreboard'); } else setCurrentScreen('settings'); }} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} onSelectPartner={isSelectingJudge ? handleSelectJudgeFromPartners : undefined} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} activeLives={activeLives} onWatchLive={(pin) => { 
         const isJudge = activeLives.find(l => l.ownerPin?.toUpperCase() === pin.toUpperCase())?.judgePin?.toUpperCase() === userProfile.pin.toUpperCase();
         if (isJudge) {
           handleObserveLive(pin);

@@ -12,13 +12,14 @@ service cloud.firestore {
     // regras na mesma requisição, inclusive as com "if true".
     // Solução: exists() antes do get() garante short-circuit seguro.
     function isAdmin() {
-      return isAuthenticated() && (
-        (
-          exists(/databases/$(database)/documents/users/$(request.auth.token.email)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isAdmin == true
-        ) ||
-        (request.auth.token.email == "celsomramalho@gmail.com" && request.auth.token.email_verified == true)
-      );
+      return isAuthenticated() && 
+        request.auth.token.email != null && (
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.token.email)) &&
+            get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isAdmin == true
+          ) ||
+          (request.auth.token.email == "celsomramalho@gmail.com" && request.auth.token.email_verified == true)
+        );
     }
 
     // ⚠️ CORREÇÃO: isEmailOwner() chamava request.auth.token.email sem

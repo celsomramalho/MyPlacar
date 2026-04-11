@@ -500,15 +500,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
       const confirmationLink = `${appBaseUrl}/?email=${encodeURIComponent(cleanEmail)}&code=${code}`;
 
-      const emailSent = await emailService.sendEmail('template_v9fhxz3', {
+      const emailSent = await emailService.sendEmail('verification', {
         to_name: name.split(' ')[0],
         email: cleanEmail,
         pin_code: code,
         confirmation_link: confirmationLink,
         app_access_link: appBaseUrl,
-        subject: "Código de verificação - MyPlacar",
-        from_name: "MyPlacar",
-        reply_to: "celsomramalho@gmail.com"
       });
 
       if (emailSent) {
@@ -575,14 +572,11 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       await setDoc(doc(db as Firestore, "users", cleanEmail), newProfile);
       mirrorUser(newProfile as unknown as UserProfile);
       const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
-      await emailService.sendEmail('template_wn0f65h', {
+      await emailService.sendEmail('welcome', {
         to_name: newProfile.nickname,
         email: cleanEmail,
         pin_code: finalPin,
         app_access_link: appBaseUrl,
-        subject: "Seu pin de acesso - MyPlacar",
-        from_name: "MyPlacar",
-        reply_to: "celsomramalho@gmail.com"
       });
 
       localStorage.removeItem('MyPlacarPendingPassword');
@@ -636,55 +630,60 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userUid = userData?.uid || userSnap.id;
 
       let firebaseEmailSent = false;
-      const resetLink = `${appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl}/?mode=resetPassword`;
-      try {
-        await sendPasswordResetEmail(auth, cleanEmail, {
-          url: resetLink,
-          handleCodeInApp: true,
-        });
-        firebaseEmailSent = true;
-        setRecoveryInfo({ 
-          type: 'link', 
-          value: resetLink,
-          userName,
-          userEmail: cleanEmail,
-          userUid
-        });
-      } catch (e: any) {
-        console.warn("Firebase reset error:", e);
-        if (e.code === 'auth/unauthorized-domain') {
-          setError("Este domínio não está autorizado no Firebase para enviar e-mails.");
-          setIsLoading(false);
-          return;
+      const resetLink = `https://myplacar.app.br/?mode=resetPassword&email=${encodeURIComponent(cleanEmail)}`;
+
+      // Usuários com senha → gera link de reset via Firebase mas envia pelo SES
+      if (userAuthMethod === 'password') {
+        try {
+          await sendPasswordResetEmail(auth, cleanEmail, {
+            url: resetLink,
+            handleCodeInApp: true,
+          });
+          firebaseEmailSent = true;
+          setRecoveryInfo({
+            type: 'link',
+            value: resetLink,
+            userName,
+            userEmail: cleanEmail,
+            userUid
+          });
+        } catch (_e) {
+          // Firebase falhou ao gerar o link — cairá no envio do PIN abaixo
         }
       }
 
       if (userAuthMethod === 'pin' || !firebaseEmailSent) {
         setStatusText('Enviando dados de acesso por e-mail...');
-        const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl; 
-        const emailSent = await emailService.sendEmail('template_wn0f65h', {
+        const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+        const emailSent = await emailService.sendEmail('recovery', {
           to_name: userName,
           email: cleanEmail,
-          pin_code: userPin,
+          pin_code: userPin || undefined,
           app_access_link: appBaseUrl,
-          subject: "Recuperação de acesso - MyPlacar",
-          from_name: "MyPlacar",
-          reply_to: "celsomramalho@gmail.com"
         });
 
         if (!emailSent && !firebaseEmailSent) {
           throw new Error("Não foi possível enviar o e-mail de recuperação.");
         }
-        
+
         if (userPin) {
-          setRecoveryInfo({ 
-            type: 'pin', 
+          setRecoveryInfo({
+            type: 'pin',
             value: userPin,
             userName,
             userEmail: cleanEmail,
             userUid
           });
         }
+      } else if (firebaseEmailSent) {
+        // Usuário com senha — reenviar pelo SES com o link gerado pelo Firebase
+        const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+        await emailService.sendEmail('recovery', {
+          to_name: userName,
+          email: cleanEmail,
+          reset_link: resetLink,
+          app_access_link: appBaseUrl,
+        });
       }
 
       setMode('recovery_sent');
