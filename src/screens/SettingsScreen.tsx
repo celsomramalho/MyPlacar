@@ -7,7 +7,7 @@ import { TeamSection } from './settings/TeamSection.tsx';
 import { HistorySection } from './settings/HistorySection.tsx';
 import { SettingsTabs } from './settings/SettingsTabs.tsx';
 import { getDb } from '@infra/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDocFromServer, setDoc } from 'firebase/firestore';
 
 interface Props {
   history: MatchHistoryItem[];
@@ -75,17 +75,19 @@ const WatchLoginApproval: React.FC<{ userProfile: UserProfile }> = ({ userProfil
     const trimmed = code.trim().toUpperCase();
     if (trimmed.length !== 4) { setErrorMsg('Digite o código de 4 letras'); return; }
     const db = getDb();
-    if (!db) return;
+    if (!db) { setErrorMsg('Sem conexão com o banco de dados'); return; }
     setStatus('loading');
     setErrorMsg('');
     try {
       const tokenRef = doc(db, 'watch_tokens', trimmed);
-      const snap = await getDoc(tokenRef);
+      // getDocFromServer ignora cache — garante que o token existe de verdade
+      const snap = await getDocFromServer(tokenRef);
       if (!snap.exists()) { setStatus('error'); setErrorMsg('Código não encontrado'); return; }
       const data = snap.data();
       if (data.status !== 'pending') { setStatus('error'); setErrorMsg('Código já utilizado ou expirado'); return; }
       if (Date.now() > data.expiresAt) { setStatus('error'); setErrorMsg('Código expirado'); return; }
-      await updateDoc(tokenRef, {
+      // setDoc com merge evita problemas de permissão do updateDoc em docs criados por não-autenticados
+      await setDoc(tokenRef, {
         status: 'approved',
         email: userProfile.email,
         pin: userProfile.pin,
@@ -101,12 +103,14 @@ const WatchLoginApproval: React.FC<{ userProfile: UserProfile }> = ({ userProfil
           planType: userProfile.planType,
         },
         approvedAt: Date.now(),
-      });
+      }, { merge: true });
       setStatus('success');
       setCode('');
-    } catch (_e) {
+    } catch (e) {
+      console.error('[WatchLoginApproval] Erro ao aprovar token:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrorMsg(`Erro: ${msg.includes('permission') || msg.includes('PERMISSION') ? 'Permissão negada no banco de dados — verifique as regras do Firestore' : msg}`);
       setStatus('error');
-      setErrorMsg('Erro ao aprovar. Tente novamente.');
     }
   };
 

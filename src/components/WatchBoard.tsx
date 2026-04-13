@@ -288,9 +288,11 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           >
             <Zap size={30} fill="currentColor" />
           </button>
-          <button
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => { resetDimTimer(); setIsMenuOpen(true); }}
-            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden ${
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${
               isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
               isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
               'border-white bg-emerald-500 text-white'
@@ -300,7 +302,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-full h-full" />
               : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
             }
-          </button>
+          </div>
           <button 
             disabled={!isCommandOwner} 
             onClick={() => onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb')} 
@@ -332,13 +334,15 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
               {/* Live / Controle — só se live ativo */}
               {isLiveActive && (
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => { setIsMenuOpen(false); onOpenLiveControl?.(); }}
-                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
                 >
                   <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-8 h-8 shrink-0" />
                   <span className="font-black text-sm">Live / Controle</span>
-                </button>
+                </div>
               )}
 
               {/* Regras */}
