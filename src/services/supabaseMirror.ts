@@ -259,3 +259,51 @@ export const deleteIcon = (type: 'sport' | 'category', id: string): void => {
     .eq('id', id)
     .then(({ error }) => { if (error) warn('deleteIcon', error); });
 };
+
+// ─── deleteMatch ──────────────────────────────────────────────────────────────
+
+/**
+ * Remove uma única partida da tabela `matches` no Supabase.
+ * Chamado junto com deleteDoc no Firebase (onDeleteMatch / onDeleteManyMatches).
+ */
+export const deleteMatch = (id: string): void => {
+  if (!id) return;
+
+  supabase
+    .from('matches')
+    .delete()
+    .eq('id', id)
+    .then(({ error }) => { if (error) warn('deleteMatch', error); });
+};
+
+// ─── deleteManyMatches ────────────────────────────────────────────────────────
+
+/**
+ * Remove múltiplas partidas da tabela `matches` no Supabase de uma vez.
+ * Chamado junto com o batch.delete do Firebase (onDeleteManyMatches).
+ */
+export const deleteManyMatches = (ids: string[]): void => {
+  if (!ids.length) return;
+
+  supabase
+    .from('matches')
+    .delete()
+    .in('id', ids)
+    .then(({ error }) => { if (error) warn('deleteManyMatches', error); });
+};
+
+// ─── deleteAllMatches ─────────────────────────────────────────────────────────
+
+/**
+ * Remove TODAS as partidas de um usuário da tabela `matches` no Supabase.
+ * Chamado junto com handleClearAllHistory após batch.commit() no Firebase.
+ */
+export const deleteAllMatches = (ownerEmail: string): void => {
+  if (!ownerEmail) return;
+
+  supabase
+    .from('matches')
+    .delete()
+    .eq('owner_email', ownerEmail.toLowerCase().trim())
+    .then(({ error }) => { if (error) warn('deleteAllMatches', error); });
+};

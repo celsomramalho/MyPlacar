@@ -81,7 +81,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [remoteAppVersion, setRemoteAppVersion] = useState(LOCAL_VERSION);
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isVoiceSaved, setIsVoiceSaved] = useState(true);
-  const [appUrl, setAppUrl] = useState("https://my-placar.vercel.app/");
+  const [appUrl, setAppUrl] = useState("https://myplacar.app.br/");
 
   const [userSearch, setUserSearch] = useState('');
   const [foundUsers, setFoundUsers] = useState<UserProfile[]>([]);
@@ -804,7 +804,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                         onChange={(e) => { setAppUrl(e.target.value); setIsVoiceSaved(false); }} 
                         className="w-full h-[52px] bg-white border rounded-xl px-4 font-black text-sm text-black outline-none appearance-none"
                       >
-                        <option value="https://myplacar-244305581318.us-west1.run.app/">Google Cloud Run (run.app)</option>
+                        <option value="https://myplacar.app.br/">Domínio próprio (myplacar.app.br)</option>
                         <option value="https://my-placar.vercel.app/">Vercel (vercel.app)</option>
                       </select>
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">

@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint, Wifi } from 'lucide-react';
 import { Input } from '../components/Input.tsx';
 import { Button } from '../components/Button.tsx';
 import { Toggle } from '../components/Toggle.tsx';
 import { UserProfile } from '../types.ts';
 import { getDb, getAuthInstance } from '@infra/firebase';
-import { doc, getDoc, getDocFromServer, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { mirrorUser } from '../services/supabaseMirror.ts';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
 import { emailService } from '../services/emailService.ts';
 import { formatPortugueseName, applyGoldenRule } from '../utils/formatters.ts';
 import { APP_VERSION } from '../constants.ts';
+import { isWatchDevice } from '../utils/device.ts';
 
 interface Props {
   onAuthSuccess: (profile: UserProfile, stayConnected: boolean) => void;
@@ -29,13 +30,18 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [remoteVersionFound, setRemoteVersionFound] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
-  const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password'>(() => {
+  const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password' | 'watch_login'>(() => {
     const params = new URLSearchParams(globalThis.location.search);
     if (params.get('mode') === 'resetPassword' && params.get('oobCode')) return 'reset_password';
     return (params.get('ref') || params.get('pin_ref') || params.get('joinEvent')) ? 'register' : 'login';
   });
 
   const [oobCode, setOobCode] = useState(() => new URLSearchParams(globalThis.location.search).get('oobCode') || '');
+
+  // ── Watch Login ────────────────────────────────────────────────────────────
+  const [watchCode, setWatchCode] = useState<string>('');
+  const [watchStatus, setWatchStatus] = useState<'idle' | 'waiting' | 'approved' | 'expired'>('idle');
+  const watchUnsubRef = useRef<(() => void) | null>(null);
 
   const [email, setEmail] = useState(() => localStorage.getItem('MyPlacarSavedEmail') || '');
   const [pin, setPin] = useState(() => localStorage.getItem('MyPlacarSavedPin') || ''); 
@@ -695,6 +701,75 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     }
   };
 
+  // ── Watch Login — gera código e aguarda aprovação ─────────────────────────
+  const generateWatchCode = (): string => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem O,0,I,1 para evitar confusão
+    return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  };
+
+  const handleStartWatchLogin = async () => {
+    const db = getDb();
+    if (!db) return;
+    const code = generateWatchCode();
+    setWatchCode(code);
+    setWatchStatus('waiting');
+    setMode('watch_login');
+
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+    const tokenRef = doc(db, 'watch_tokens', code);
+    await setDoc(tokenRef, { code, status: 'pending', expiresAt, createdAt: Date.now() });
+
+    // Expira automaticamente no cliente após 15 min
+    const expireTimer = setTimeout(() => {
+      setWatchStatus('expired');
+      watchUnsubRef.current?.();
+    }, 15 * 60 * 1000);
+
+    // Listener: aguarda celular aprovar
+    const unsub = onSnapshot(tokenRef, async (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      if (data.status === 'approved' && data.email && data.pin) {
+        clearTimeout(expireTimer);
+        watchUnsubRef.current?.();
+        setWatchStatus('approved');
+
+        // Salva para próximos logins sem precisar do celular
+        localStorage.setItem('MyPlacarSavedEmail', data.email);
+        localStorage.setItem('MyPlacarSavedPin', data.pin);
+        if (data.rememberMe) {
+          localStorage.setItem('myPlacarUserProfile', JSON.stringify(data.profile));
+        }
+
+        // Busca perfil completo e autentica
+        const userRef = doc(db, 'users', data.email.toLowerCase().trim());
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const profile = userSnap.data() as UserProfile;
+          await deleteDoc(tokenRef); // token de uso único
+          onAuthSuccess(profile, true);
+        }
+      }
+      if (data.status === 'expired' || (data.expiresAt && Date.now() > data.expiresAt)) {
+        clearTimeout(expireTimer);
+        setWatchStatus('expired');
+        watchUnsubRef.current?.();
+      }
+    });
+
+    watchUnsubRef.current = () => { unsub(); clearTimeout(expireTimer); };
+  };
+
+  const handleCancelWatchLogin = () => {
+    watchUnsubRef.current?.();
+    setWatchStatus('idle');
+    setWatchCode('');
+    setMode('login');
+    // Limpa token pendente
+    const db = getDb();
+    if (db && watchCode) deleteDoc(doc(db, 'watch_tokens', watchCode)).catch(() => {});
+  };
+
   const handlePasskeyLogin = async () => {
     if (!globalThis.PublicKeyCredential) {
       setError("Seu navegador não suporta biometria.");
@@ -1184,7 +1259,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       </div>
 
       <div className="flex flex-col gap-4 mt-20 pb-12 items-center max-w-md mx-auto w-full">
-        {mode !== 'verifying' && mode !== 'recovery_sent' && (
+        {mode !== 'verifying' && mode !== 'recovery_sent' && mode !== 'watch_login' && (
           <Button 
             disabled={isLoading} 
             onClick={mode === 'login' ? handleLogin : (mode === 'confirm_email' ? handleConfirmEmail : (mode === 'reset_password' ? handleResetPassword : handleRequestRegister))} 
@@ -1230,6 +1305,72 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             >
               <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" /> Entrar com google
             </button>
+
+            {isWatchDevice() && (
+              <button
+                onClick={handleStartWatchLogin}
+                disabled={isLoading}
+                className="w-full py-4 rounded-3xl font-black border-2 border-blue-200 text-blue-700 flex items-center justify-center gap-3 active:scale-95 transition-all bg-blue-50"
+              >
+                📱 Entrar via celular
+              </button>
+            )}
+          </div>
+        )}
+
+        {mode === 'watch_login' && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="text-center">
+              <h2 className="text-2xl font-black text-black tracking-tight">Entrar via celular</h2>
+              <p className="text-slate-500 font-bold text-sm mt-1">
+                {watchStatus === 'expired' ? 'Código expirado' : 'Abra o app no celular e digite o código'}
+              </p>
+            </div>
+
+            {watchStatus === 'waiting' && (
+              <div className="flex flex-col items-center gap-6">
+                <div className="w-full bg-blue-50 border-2 border-blue-200 rounded-3xl p-8 flex flex-col items-center gap-3">
+                  <span className="text-6xl font-black tracking-[0.3em] text-blue-700">{watchCode}</span>
+                  <span className="text-xs font-bold text-blue-400">válido por 15 minutos</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Loader2 size={18} className="animate-spin text-blue-500" />
+                  <span className="text-sm font-bold text-slate-500">Aguardando aprovação no celular...</span>
+                </div>
+              </div>
+            )}
+
+            {watchStatus === 'approved' && (
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center">
+                  <CheckCircle2 size={36} className="text-green-500" />
+                </div>
+                <p className="text-sm font-bold text-green-600">Aprovado! Entrando...</p>
+              </div>
+            )}
+
+            {watchStatus === 'expired' && (
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+                  <AlertCircle size={36} className="text-red-400" />
+                </div>
+                <button
+                  onClick={handleStartWatchLogin}
+                  className="w-full py-4 rounded-3xl font-black bg-blue-600 text-white flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <RotateCw size={18} /> Gerar novo código
+                </button>
+              </div>
+            )}
+
+            {watchStatus !== 'approved' && (
+              <button
+                onClick={handleCancelWatchLogin}
+                className="w-full py-4 rounded-3xl font-black border-2 border-slate-200 text-slate-500 flex items-center justify-center gap-2 active:scale-95"
+              >
+                <ArrowLeft size={18} /> Voltar
+              </button>
+            )}
           </div>
         )}
 
@@ -1275,7 +1416,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               <WifiOff size={20} /> Usar offline
             </Button>
           </div>
-        ) : (mode !== 'verifying' && mode !== 'recovery_sent') ? (
+        ) : (mode !== 'verifying' && mode !== 'recovery_sent' && mode !== 'watch_login') ? (
           <Button 
             onClick={() => setMode('login')} 
             variant="secondary" 

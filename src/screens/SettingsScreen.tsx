@@ -6,6 +6,8 @@ import { SettingsHeader } from './settings/SettingsHeader.tsx';
 import { TeamSection } from './settings/TeamSection.tsx';
 import { HistorySection } from './settings/HistorySection.tsx';
 import { SettingsTabs } from './settings/SettingsTabs.tsx';
+import { getDb } from '@infra/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 interface Props {
   history: MatchHistoryItem[];
@@ -63,6 +65,82 @@ interface Props {
   onVersionTap?: () => void;
 }
 
+// ─── Aprovação de login do relógio ────────────────────────────────────────────
+const WatchLoginApproval: React.FC<{ userProfile: UserProfile }> = ({ userProfile }) => {
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleApprove = async () => {
+    const trimmed = code.trim().toUpperCase();
+    if (trimmed.length !== 4) { setErrorMsg('Digite o código de 4 letras'); return; }
+    const db = getDb();
+    if (!db) return;
+    setStatus('loading');
+    setErrorMsg('');
+    try {
+      const tokenRef = doc(db, 'watch_tokens', trimmed);
+      const snap = await getDoc(tokenRef);
+      if (!snap.exists()) { setStatus('error'); setErrorMsg('Código não encontrado'); return; }
+      const data = snap.data();
+      if (data.status !== 'pending') { setStatus('error'); setErrorMsg('Código já utilizado ou expirado'); return; }
+      if (Date.now() > data.expiresAt) { setStatus('error'); setErrorMsg('Código expirado'); return; }
+      await updateDoc(tokenRef, {
+        status: 'approved',
+        email: userProfile.email,
+        pin: userProfile.pin,
+        rememberMe: true,
+        profile: {
+          name: userProfile.name,
+          nickname: userProfile.nickname,
+          email: userProfile.email,
+          pin: userProfile.pin,
+          phone: userProfile.phone,
+          isProfileComplete: userProfile.isProfileComplete,
+          authMethod: userProfile.authMethod,
+          planType: userProfile.planType,
+        },
+        approvedAt: Date.now(),
+      });
+      setStatus('success');
+      setCode('');
+    } catch (_e) {
+      setStatus('error');
+      setErrorMsg('Erro ao aprovar. Tente novamente.');
+    }
+  };
+
+  return (
+    <div className="mt-4 p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
+      <p className="text-xs font-black text-blue-800">🕐 Login rápido para relógio</p>
+      <p className="text-[11px] font-bold text-blue-500">Digite o código exibido no relógio para aprovar o acesso</p>
+      {status === 'success' ? (
+        <div className="flex items-center gap-2 py-2">
+          <span className="text-green-600 font-black text-sm">✓ Relógio autorizado com sucesso!</span>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            value={code}
+            onChange={e => { setCode(e.target.value.toUpperCase()); setStatus('idle'); setErrorMsg(''); }}
+            maxLength={4}
+            placeholder="Ex: K7X2"
+            className="flex-1 h-11 bg-white border border-blue-200 rounded-xl px-3 font-black text-lg text-center text-blue-800 uppercase tracking-widest outline-none"
+          />
+          <button
+            onClick={handleApprove}
+            disabled={status === 'loading' || code.length !== 4}
+            className="h-11 px-5 bg-blue-600 text-white rounded-xl font-black text-sm active:scale-95 disabled:opacity-50"
+          >
+            {status === 'loading' ? '...' : 'OK'}
+          </button>
+        </div>
+      )}
+      {errorMsg && <p className="text-xs font-bold text-red-500">{errorMsg}</p>}
+    </div>
+  );
+};
+
 export const SettingsScreen: React.FC<Props> = (props) => {
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
   const teamSectionRef = useRef<{ triggerStart: () => void }>(null);
@@ -79,18 +157,23 @@ export const SettingsScreen: React.FC<Props> = (props) => {
   const renderActiveContent = () => {
     switch (props.activeTab) {
       case 'profile':
-        return <ProfileScreen 
-          profile={props.userProfile} 
-          setProfile={props.setUserProfile} 
-          onSave={props.onSaveProfile}
-          onLogout={props.onLogout} 
-          onGoAdmin={props.onGoAdmin} 
-          onCheckUpdate={props.onCheckUpdate}
-          setIsUpdatingVersion={props.setIsUpdatingVersion}
-          settings={props.settings}
-          setSettings={props.setSettings}
-          onVersionTap={props.onVersionTap}
-        />;
+        return (
+          <>
+            <ProfileScreen 
+              profile={props.userProfile} 
+              setProfile={props.setUserProfile} 
+              onSave={props.onSaveProfile}
+              onLogout={props.onLogout} 
+              onGoAdmin={props.onGoAdmin} 
+              onCheckUpdate={props.onCheckUpdate}
+              setIsUpdatingVersion={props.setIsUpdatingVersion}
+              settings={props.settings}
+              setSettings={props.setSettings}
+              onVersionTap={props.onVersionTap}
+            />
+            <WatchLoginApproval userProfile={props.userProfile} />
+          </>
+        );
       case 'history':
         return (
           <HistorySection 

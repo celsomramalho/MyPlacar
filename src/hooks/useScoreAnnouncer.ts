@@ -191,7 +191,9 @@ const getGameScoreText = (state: GameState): string => {
   const serverName    = getServerName(state);
   const receiverName  = server === 1 ? p2.name : p1.name;
 
-  if (serverScore === receiverScore && serverScore !== '0') return 'quarenta iguais';
+  if (serverScore === '40' && receiverScore === '40') return 'quarenta iguais';
+  if (serverScore === '30' && receiverScore === '30') return 'trinta iguais';
+  if (serverScore === '15' && receiverScore === '15') return 'quinze iguais';
   if (serverScore === 'Ad')   return `vantagem ${serverName}`;
   if (receiverScore === 'Ad') return `vantagem ${receiverName}`;
   return `${mapScore(serverScore)} a ${mapScore(receiverScore)}`;
