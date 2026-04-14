@@ -299,7 +299,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             }`}
           >
             {isLiveActive
-              ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-full h-full" />
+              ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-full h-full pointer-events-none" />
               : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
             }
           </div>

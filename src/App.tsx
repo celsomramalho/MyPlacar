@@ -1136,7 +1136,7 @@ const App: React.FC = () => {
     } catch (_e) { setModalConfig({ title: "Erro", message: "Falha ao processar arquivo.", onConfirm: () => setModalConfig(null) }); }
   };
 
-  const fetchCloudMatchesCount = useCallback(async (_isSilent = false) => {
+  const fetchCloudMatchesCount = useCallback(async (_isSilent = false, excludeIds: Set<string> = new Set()) => {
     if (!navigator.onLine) return;
     const db = getDb();
     const cleanEmail = userProfile.email?.toLowerCase().trim();
@@ -1146,7 +1146,8 @@ const App: React.FC = () => {
       const snap = await getDocs(q);
       const localIds = new Set(matchHistoryRef.current.map(m => m.id));
       let count = 0;
-      snap.forEach(docSnap => { if (!localIds.has(docSnap.id)) count++; });
+      // excludeIds: IDs recém-deletados que podem ainda aparecer no snapshot em cache do Firebase
+      snap.forEach(docSnap => { if (!localIds.has(docSnap.id) && !excludeIds.has(docSnap.id)) count++; });
       setCloudMatchesCount(count);
     } catch {}
   }, [userProfile.email]);
@@ -1771,7 +1772,7 @@ const App: React.FC = () => {
 
   const handleExitSpectator = () => globalThis.location.href = globalThis.location.pathname;
 
-  useEffect(() => { if (gameState?.isConfirmedFinished && !matchHistory.some(m => m.id === gameState.matchId)) finalizeMatchInternal(gameState); }, [gameState?.isConfirmedFinished, gameState?.matchId, finalizeMatchInternal, matchHistory]);
+  useEffect(() => { if (gameState?.isConfirmedFinished && !matchHistoryRef.current.some(m => m.id === gameState.matchId)) finalizeMatchInternal(gameState); }, [gameState?.isConfirmedFinished, gameState?.matchId, finalizeMatchInternal]); // matchHistory removido das deps: ler via ref evita re-finalizar partidas deletadas
 
   const handleConfirmPartners = (team1: Partner[], team2: Partner[]) => {
     setMatchSettings(prev => {
@@ -2354,8 +2355,8 @@ const App: React.FC = () => {
             <h3 className="text-2xl font-black mb-4 text-center">{modalConfig.title}</h3>
             <p className="text-black font-black mb-6 leading-tight text-center">{modalConfig.message}</p>
             <div className="flex gap-3 w-full">
-              {modalConfig.onCancel && <button onClick={() => setModalConfig(null)} className="flex-1 py-4 bg-gray-100 rounded-[1.5rem] font-black text-xs tracking-widest text-black">Cancelar</button>}
-              <button onClick={() => { modalConfig.onConfirm(); }} className={`flex-1 py-4 rounded-[1.5rem] font-black text-xs tracking-widest ${modalConfig.variant === 'danger' ? 'bg-red-50 text-black shadow-lg shadow-red-100' : 'bg-blue-600 text-white shadow-lg shadow-blue-100'}`}>{modalConfig.confirmLabel || 'Ok'}</button>
+              {modalConfig.onCancel && <button onClick={() => setModalConfig(null)} className="flex-1 py-4 bg-gray-200 rounded-[1.5rem] font-black text-xs tracking-widest text-gray-700 active:scale-95 transition-all">Cancelar</button>}
+              <button onClick={() => { modalConfig.onConfirm(); }} className={`flex-1 py-4 rounded-[1.5rem] font-black text-xs tracking-widest active:scale-95 transition-all ${modalConfig.variant === 'danger' ? 'bg-red-600 text-white shadow-lg shadow-red-200' : 'bg-blue-600 text-white shadow-lg shadow-blue-100'}`}>{modalConfig.confirmLabel || 'Ok'}</button>
             </div>
           </div>
         </div>
@@ -2376,8 +2377,26 @@ const App: React.FC = () => {
       {currentScreen === 'settings' && <SettingsScreen 
         appUrl={appUrl}
         history={matchHistory} setHistory={setMatchHistory} 
-        onDeleteMatch={id => setModalConfig({ title: "Excluir partida?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: async () => { const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim(); if (db && cleanEmail && navigator.onLine) try { await deleteDoc(doc(db as Firestore, "matches", id)); deleteMatch(id); } catch {} persistHistory(matchHistoryRef.current.filter(m => m.id !== id)); setModalConfig(null); }, onCancel: () => setModalConfig(null) })} 
-        onDeleteManyMatches={ids => setModalConfig({ title: `Excluir ${ids.size} partidas?`, message: "Apagar registros permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: async () => { const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim(); if (db && cleanEmail && navigator.onLine) { const batch = writeBatch(db as Firestore); ids.forEach(id => batch.delete(doc(db as Firestore, "matches", id))); try { await batch.commit(); deleteManyMatches([...ids]); } catch {} } persistHistory(matchHistoryRef.current.filter(m => !ids.has(m.id))); setModalConfig(null); }, onCancel: () => setModalConfig(null) })}
+        onDeleteMatch={id => setModalConfig({ title: "Excluir partida?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: () => {
+          persistHistory(matchHistoryRef.current.filter(m => m.id !== id));
+          setModalConfig(null);
+          const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim();
+          if (db && cleanEmail && navigator.onLine) {
+            deleteDoc(doc(db as Firestore, "matches", id)).catch(() => {});
+            deleteMatch(id);
+          }
+        }, onCancel: () => setModalConfig(null) })}
+        onDeleteManyMatches={ids => setModalConfig({ title: `Excluir ${ids.size} partidas?`, message: "Apagar registros permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: () => {
+          persistHistory(matchHistoryRef.current.filter(m => !ids.has(m.id)));
+          setModalConfig(null);
+          const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim();
+          if (db && cleanEmail && navigator.onLine) {
+            const batch = writeBatch(db as Firestore);
+            ids.forEach(id => batch.delete(doc(db as Firestore, "matches", id)));
+            batch.commit().catch(() => {});
+            deleteManyMatches([...ids]);
+          }
+        }, onCancel: () => setModalConfig(null) })}
         onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }} onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} gameState={gameState} settings={matchSettings} setSettings={setMatchSettings} onStart={() => { persistMatchSettings(); initGameState(true); }} onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }} onOpenRules={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} activeTab={activeTab} setActiveTab={(t) => { persistMatchSettings(); setActiveTab(t); }} onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }} userProfile={userProfile} setUserProfile={setUserProfile} onSaveProfile={handleSaveProfile} onLogout={handleLogout} onGoAdmin={() => setCurrentScreen('admin')} onGoToScoreboard={() => { persistMatchSettings(); initGameState(false); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} isProfileSaved={isProfileSaved} canStartMatch={canStartMatch} onSyncAll={(force) => syncHistoryToFirebase(undefined, force)} onDownloadHistory={downloadHistoryFromFirebase} cloudMatchesCount={cloudMatchesCount} isSyncingAll={isSyncing} isDownloading={isDownloading} onOpenPartners={() => setCurrentScreen('partners')} partners={partners} playerQueue={playerQueue} onAutoRegisterPartner={async (p, field) => { 
           if (!navigator.onLine) return null; 
           const db = getDb(); 
