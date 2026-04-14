@@ -9,19 +9,6 @@ interface SpeechRecognitionResultList { readonly length: number; [index: number]
 interface SpeechRecognitionEvent extends Event { readonly resultIndex: number; readonly results: SpeechRecognitionResultList; }
 interface SpeechRecognitionErrorEvent extends Event { readonly error: string; readonly message: string; }
 
-interface SpeechRecognitionInstance {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start(): void;
-  stop(): void;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-}
-type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
-
 interface UseGeminiRefereeProps {
   onScoreP1: (type: PointType, text: string) => void;
   onScoreP2: (type: PointType, text: string) => void;
@@ -47,7 +34,7 @@ interface UseGeminiRefereeProps {
 
 const FONETICA = {
     ponto: ['ponto', 'ponte', 'ponta', 'pinto'],
-    ace: ['ace', 'aice', 'aize', 'ease', 'as', 'ice', 'ase', 'ês', 'es', 'ise'],
+    ace: ['ace', 'eise', 'ease', 'eice', 'ês'],
     saque: ['saque', 'saqui', 'sacou', 'sac'],
     falta: ['falta', 'erro', 'errado', 'errar'],
     sacador: ['sacador', 'servidor', 'quem saca', 'quem sacou', 'sacando'],
@@ -66,7 +53,8 @@ export const useGeminiReferee = ({
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>('');
   
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const shouldRunRef = useRef<boolean>(false); // controla se onend deve reiniciar
   const lastActionTimeRef = useRef<number>(0);
   const lastProcessedTextRef = useRef<string>('');
 
@@ -147,10 +135,7 @@ export const useGeminiReferee = ({
   }, []);
 
   const initRecognition = useCallback(() => {
-    const SpeechRecognition = (
-      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ||
-      (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition
-    );
+    const SpeechRecognition = (window as unknown as { SpeechRecognition?: typeof globalThis.SpeechRecognition; webkitSpeechRecognition?: typeof globalThis.SpeechRecognition }).SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: typeof globalThis.SpeechRecognition }).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError("Reconhecimento de voz não suportado neste navegador.");
       return;
@@ -164,8 +149,10 @@ export const useGeminiReferee = ({
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => {
       setIsListening(false);
-      // Reinicia automaticamente se ainda deve estar ouvindo
-      if (recognitionRef.current) {
+      // Reinicia automaticamente APENAS se shouldRunRef ainda está ativo
+      // Usar recognitionRef aqui causava race condition: stop() zeraria o ref
+      // após onend disparar, fazendo o reconhecimento reiniciar indevidamente
+      if (shouldRunRef.current) {
         try { recognition.start(); } catch {}
       }
     };
@@ -184,6 +171,7 @@ export const useGeminiReferee = ({
     };
 
     recognitionRef.current = recognition;
+    shouldRunRef.current = true;
     try { recognition.start(); } catch {}
   }, [handleTranscriptResult]);
 
@@ -191,6 +179,8 @@ export const useGeminiReferee = ({
     if (isEnabled) {
       initRecognition();
     } else {
+      // Zera shouldRunRef ANTES de stop() para que onend não reinicie
+      shouldRunRef.current = false;
       if (recognitionRef.current) {
         recognitionRef.current.onend = null;
         recognitionRef.current.stop();
@@ -200,6 +190,7 @@ export const useGeminiReferee = ({
     }
 
     return () => {
+      shouldRunRef.current = false;
       if (recognitionRef.current) {
         recognitionRef.current.onend = null;
         recognitionRef.current.stop();
@@ -216,6 +207,7 @@ export const useGeminiReferee = ({
   }, [isEnabled, initRecognition]);
 
   const stop = useCallback(() => {
+    shouldRunRef.current = false;
     if (recognitionRef.current) {
       recognitionRef.current.onend = null;
       recognitionRef.current.stop();

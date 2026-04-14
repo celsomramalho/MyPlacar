@@ -11,6 +11,8 @@ export interface ControllerRecord {
   lastSeen: number;
   isOwner?: boolean;
   nickname?: string;
+  /** Papel explícito do dispositivo na live: owner (quem criou), judge (juiz designado), observer (somente leitura) */
+  role?: 'owner' | 'judge' | 'observer';
 }
 
 export interface TournamentPair {

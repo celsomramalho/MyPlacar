@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, ShieldCheck, Save, Loader2, LogOut, Smartphone, CheckCircle2, AlertCircle, Mic, MapPin, Camera, RotateCw, Star, Eye, EyeOff, Hash, Lock, Check as CheckIcon, Shield, Fingerprint } from 'lucide-react';
+import { User, ShieldCheck, Save, Loader2, LogOut, Smartphone, Laptop, Watch, CheckCircle2, AlertCircle, Mic, MapPin, Camera, RotateCw, Star, Eye, EyeOff, Hash, Lock, Check as CheckIcon, Shield, Fingerprint } from 'lucide-react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { UserProfile, MatchSettings } from '../types';
@@ -37,6 +37,13 @@ const VenusIcon = ({ size = 14 }) => (
     <circle cx="12" cy="9" r="5" /><path d="M12 14v7" /><path d="M9 18h6" />
   </svg>
 );
+
+const getDeviceIcon = (label: string) => {
+  const l = label.toLowerCase();
+  if (l.includes('rel')) return Watch;
+  if (l.includes('cel') || l.includes('phone')) return Smartphone;
+  return Laptop;
+};
 
 const guessGender = (name: string): 'M' | 'F' | undefined => {
   if (!name) return undefined;
@@ -500,19 +507,26 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
             </button>
           </div>
           
-          <Input 
-            label={<div className="flex items-center gap-2"><Smartphone size={16} className="text-blue-600" /> <span>Nome deste aparelho</span></div>} 
-            value={localDeviceLabel} 
-            onChange={(e) => {
-              const val = applyGoldenRule(e.target.value, true);
-              setLocalDeviceLabel(val);
-              localStorage.setItem('myPlacar_LocalDeviceLabel', val);
-              if (settings && setSettings) {
-                setSettings({ ...settings, deviceLabel: val });
-              }
-            }} 
-            placeholder="Ex: Note, Celular, Tablet"
-          />
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <Input 
+                label={<div className="flex items-center gap-2"><Smartphone size={16} className="text-blue-600" /> <span>Nome deste aparelho</span></div>} 
+                value={localDeviceLabel} 
+                onChange={(e) => {
+                  const val = applyGoldenRule(e.target.value, true);
+                  setLocalDeviceLabel(val);
+                  localStorage.setItem('myPlacar_LocalDeviceLabel', val);
+                  if (settings && setSettings) {
+                    setSettings({ ...settings, deviceLabel: val });
+                  }
+                }} 
+                placeholder="Ex: Note, Celular, Tablet"
+              />
+            </div>
+            <div className="w-[42px] h-[44px] rounded-2xl border-2 border-slate-100 bg-slate-50 text-slate-400 flex items-center justify-center shrink-0">
+              {React.createElement(getDeviceIcon(localDeviceLabel), { size: 14 })}
+            </div>
+          </div>
 
           <Input 
             label={<div className="flex items-center gap-2"><Hash size={16} className="text-blue-600" /> <span>Seu pin</span></div>} 

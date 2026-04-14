@@ -870,7 +870,7 @@ const App: React.FC = () => {
       setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
     }
 
-    // Registro automático como observador: quando há live E este dispositivo NÃO é o controller
+    // Registro automático como observador/juiz: quando há live E este dispositivo NÃO é o controller
     if (!thisDeviceIsController && hasAnyLive && navigator.onLine && userProfile.email) {
       const db = getDb();
       if (db) {
@@ -879,12 +879,16 @@ const App: React.FC = () => {
         );
         const ownerPin = observerLive.ownerPin?.toUpperCase();
         if (ownerPin) {
+          const myPin = userProfile.pin?.toUpperCase();
           const myNickname = userProfile.nickname || userProfile.name?.split(' ')[0] || 'Observador';
+          // Determina o papel correto: judge se o pin bate com judgePin, senão observer
+          const isJudgeDevice = activeLives.some(l => l.judgePin?.toUpperCase() === myPin);
+          const deviceRole: 'judge' | 'observer' = isJudgeDevice ? 'judge' : 'observer';
           getDoc(doc(db, "live_matches", ownerPin)).then(snap => {
             if (snap.exists() && !snap.data().isLiveClosed) {
               const nextControllers = { ...(snap.data().controllers || {}) };
               if (!nextControllers[deviceId]) {
-                nextControllers[deviceId] = { label: currentFullDeviceName, nickname: myNickname, lastSeen: Date.now() };
+                nextControllers[deviceId] = { label: currentFullDeviceName, nickname: myNickname, lastSeen: Date.now(), role: deviceRole };
                 updateDoc(doc(db, "live_matches", ownerPin), { controllers: nextControllers }).catch(() => {});
               }
             }
@@ -949,10 +953,13 @@ const App: React.FC = () => {
             if (snap.exists() && !snap.data().isLiveClosed) {
               const data = snap.data();
               const controllers = { ...(data.controllers || {}) };
+              // Judge heartbeat: mantém role:'judge' nos controllers
+              const isActiveJudge = data.commandOwnerId === deviceId;
               controllers[deviceId] = { 
                 label: currentFullDeviceName, 
                 nickname: myNickname,
-                lastSeen: Date.now() 
+                lastSeen: Date.now(),
+                role: isActiveJudge ? 'judge' : 'observer'
               };
               await updateDoc(docRef, { controllers });
             }
@@ -1007,18 +1014,20 @@ const App: React.FC = () => {
             if (shouldSync) {
               const nextControllers: Record<string, any> = { ...(gameState.controllers || {}) };
               const shouldUpdateLastSeen = now - lastSeenUpdateRef.current > 30000;
+              // O controller ativo é sempre owner se ownerPin bate, senão é judge
+              const controllerRole: 'owner' | 'judge' = isOriginalOwner ? 'owner' : 'judge';
               
               if (shouldUpdateLastSeen) {
                 Object.keys(nextControllers).forEach(id => { 
                   if (nextControllers[id].label === currentFullDeviceName && id !== deviceId) delete nextControllers[id]; 
                 });
-                nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now, isOwner: isOriginalOwner };
+                nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now, isOwner: isOriginalOwner, role: controllerRole };
                 lastSeenUpdateRef.current = now;
               } else {
                 const existing = gameState.controllers?.[deviceId];
-                if (existing) nextControllers[deviceId] = { ...existing, isOwner: isOriginalOwner };
+                if (existing) nextControllers[deviceId] = { ...existing, isOwner: isOriginalOwner, role: controllerRole };
                 else {
-                  nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now, isOwner: isOriginalOwner };
+                  nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now, isOwner: isOriginalOwner, role: controllerRole };
                   lastSeenUpdateRef.current = now;
                 }
               }
@@ -1460,7 +1469,7 @@ const App: React.FC = () => {
       pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode }, history: [], currentSet: 0, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
       isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin,
       liveSessionCounter: globalLiveCount, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, 
-      controllers: { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now() } },
+      controllers: { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: true, role: 'owner' } },
       ...tournamentMeta
     };
     
@@ -1584,7 +1593,29 @@ const App: React.FC = () => {
         const snap = await getDoc(doc(db, "live_matches", targetPin));
         if (snap.exists() && snap.data().isLiveClosed !== true) {
           const cloudState = snap.data() as GameState;
+
+          // ── Guard: bloqueia assumir controle se já há um controller ativo (visto há menos de 30s)
+          // e esse controller NÃO é este dispositivo.
+          const currentControllerId = cloudState.commandOwnerId;
+          if (currentControllerId && currentControllerId !== deviceId) {
+            const controllerRecord = cloudState.controllers?.[currentControllerId];
+            const lastSeen = controllerRecord?.lastSeen || 0;
+            const isActiveController = (Date.now() - lastSeen) < 30000;
+            if (isActiveController) {
+              const activeLabel = controllerRecord?.label || 'outro dispositivo';
+              setModalConfig({
+                title: "Controle em uso",
+                message: `O dispositivo "${activeLabel}" está controlando a partida agora. Aguarde ou peça para ele liberar o controle.`,
+                onConfirm: () => setModalConfig(null)
+              });
+              return;
+            }
+          }
+          // ──────────────────────────────────────────────────────────────────────
+
           const myCommandName = currentFullDeviceName;
+          // Role do novo controller: owner se ownerPin bate, senão judge
+          const newControllerRole: 'owner' | 'judge' = isOriginalOwner ? 'owner' : 'judge';
           const syncedSettings: MatchSettings = { 
             ...matchSettings, 
             p1Name: cloudState.p1.name, 
@@ -1611,7 +1642,11 @@ const App: React.FC = () => {
             isWatchMode: !!matchSettings.isWatchMode 
           };
           const nextControllers = { ...(cloudState.controllers || {}) };
-          nextControllers[deviceId] = { label: myCommandName, lastSeen: Date.now() };
+          // Rebaixa o controller anterior para observer (se ainda estiver nos records)
+          if (currentControllerId && currentControllerId !== deviceId && nextControllers[currentControllerId]) {
+            nextControllers[currentControllerId] = { ...nextControllers[currentControllerId], role: 'observer' };
+          }
+          nextControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole };
           const updatedStateRaw = { ...cloudState, commandOwner: myCommandName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false, matchConfig: { ...syncedSettings, setsToWin: syncedSettings.sets, isWatchMode: !!syncedSettings.isWatchMode } };
           const updatedState = sanitizeForFirestore(updatedStateRaw);
           if (updatedState) {
@@ -1662,7 +1697,7 @@ const App: React.FC = () => {
           const myCommandName = currentFullDeviceName;
           const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
           const nextControllers = { ...(cloudData.controllers || {}) };
-          nextControllers[deviceId] = { label: myCommandName, nickname: myNickname, lastSeen: Date.now() };
+          nextControllers[deviceId] = { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: 'observer' };
           await updateDoc(doc(db, "live_matches", pinUpper), { controllers: nextControllers }).catch(() => {});
           
           if (cloudData.matchConfig) {
