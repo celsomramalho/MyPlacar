@@ -901,16 +901,22 @@ const App: React.FC = () => {
   // Detecta live disponível e exibe overlay automaticamente para dispositivos não-controller
   const overlayShownForLiveRef = useRef<string | null>(null);
   useEffect(() => {
+    // Reseta o ref ao trocar de tela para que o overlay possa aparecer novamente após refresh
+    overlayShownForLiveRef.current = null;
+  }, [currentScreen]);
+
+  useEffect(() => {
     if (!userProfile.pin || !userProfile.email) return;
     // Usa deviceId: este dispositivo NÃO é o controller ativo da live?
     const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
     // Mostra overlay quando há live E este dispositivo não é o controller
-    if (!thisDeviceIsController && activeLives.length > 0 && currentScreen !== 'scoreboard') {
+    // (incluí scoreboard: após refresh o dispositivo pode estar na tela mas sem ver a live)
+    if (!thisDeviceIsController && activeLives.length > 0) {
       const observerLive = activeLives.reduce((latest, l) =>
         (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
       );
       const liveId = observerLive.ownerPin?.toUpperCase() || '';
-      // Evita mostrar o overlay múltiplas vezes para a mesma live
+      // Evita mostrar o overlay múltiplas vezes para a mesma live na mesma sessão de tela
       if (liveId && overlayShownForLiveRef.current !== liveId) {
         overlayShownForLiveRef.current = liveId;
         setShowLiveControlOverlay(true);
@@ -920,7 +926,7 @@ const App: React.FC = () => {
     if (activeLives.length === 0) {
       overlayShownForLiveRef.current = null;
     }
-  }, [activeLives, userProfile.pin, userProfile.email, currentScreen, deviceId]);
+  }, [activeLives, userProfile.pin, userProfile.email, deviceId]);
 
   useEffect(() => {
     if (userProfile.email && navigator.onLine) {

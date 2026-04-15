@@ -161,7 +161,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   };
 
   return (
-    <div className={`${isEmbedded ? 'relative w-full aspect-[4/5] rounded-[2rem]' : 'fixed inset-0 h-full w-full z-[99999]'} bg-black flex select-none touch-none overflow-hidden ${gameState.isLiveClosed && !isOfflineMode ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
+    <div className={`${isEmbedded ? 'relative w-full aspect-[4/5] rounded-[2rem]' : 'fixed inset-0 h-full w-full z-[99999]'} bg-black flex select-none touch-none overflow-hidden`}>
       {isDimmed && (
         <div
           onClick={(e) => { e.stopPropagation(); setIsDimmed(false); resetDimTimer(); }}
@@ -265,7 +265,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 1); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 1)} className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
+        <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 1); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 1)} className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner ? 'opacity-70' : ''} ${gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} >
           {scorePressProgress?.player === 1 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
@@ -372,7 +372,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           </div>
         )}
 
-        <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 2); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''}`} >
+        <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 2); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''} ${gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} >
           {scorePressProgress?.player === 2 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
