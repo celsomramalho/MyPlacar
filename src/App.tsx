@@ -907,26 +907,32 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!userProfile.pin || !userProfile.email) return;
-    // Usa deviceId: este dispositivo NÃO é o controller ativo da live?
-    const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
-    // Mostra overlay quando há live E este dispositivo não é o controller
-    // (incluí scoreboard: após refresh o dispositivo pode estar na tela mas sem ver a live)
+    // Guard 1 (Firebase): activeLives já reflete este dispositivo como controller?
+    const thisDeviceIsControllerInCloud = activeLives.some(l => l.commandOwnerId === deviceId);
+    // Guard 2 (local — anti-race): o gameState local já marca este dispositivo como controller?
+    // Necessário porque activeLives vem do Firebase e pode estar atrasado após handleControlLive.
+    const thisDeviceIsControllerLocal = gameState?.commandOwnerId === deviceId;
+    const thisDeviceIsController = thisDeviceIsControllerInCloud || thisDeviceIsControllerLocal;
+
     if (!thisDeviceIsController && activeLives.length > 0) {
+      // No scoreboard: só mostra overlay se o dispositivo for genuinamente observador
+      // (não é controller localmente). Isso trata o refresh de observadores sem
+      // interferir com o controller que acabou de assumir o controle.
+      if (currentScreen === 'scoreboard' && thisDeviceIsControllerLocal) return;
+
       const observerLive = activeLives.reduce((latest, l) =>
         (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
       );
       const liveId = observerLive.ownerPin?.toUpperCase() || '';
-      // Evita mostrar o overlay múltiplas vezes para a mesma live na mesma sessão de tela
       if (liveId && overlayShownForLiveRef.current !== liveId) {
         overlayShownForLiveRef.current = liveId;
         setShowLiveControlOverlay(true);
       }
     }
-    // Reseta o ref quando não há mais lives disponíveis
     if (activeLives.length === 0) {
       overlayShownForLiveRef.current = null;
     }
-  }, [activeLives, userProfile.pin, userProfile.email, deviceId]);
+  }, [activeLives, userProfile.pin, userProfile.email, deviceId, gameState?.commandOwnerId, currentScreen]);
 
   useEffect(() => {
     if (userProfile.email && navigator.onLine) {
