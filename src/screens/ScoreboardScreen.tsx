@@ -523,7 +523,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     server: gameState.server, servingOrderOffset: gameState.servingOrderOffset, voiceCommands: gameState.matchConfig.voiceCommands, actionCooldownSec: gameState.matchConfig.actionCooldown || 5, stateLockoutSec: gameState.matchConfig.stateLockout || 2
   });
 
-  useEffect(() => { setVoiceLogs([]); currentGameStateRef.current = gameState; }, [gameState.matchId]);
+  useEffect(() =\u003e { setVoiceLogs([]); }, [gameState.matchId]);
+  // Mantém a ref sempre sincronizada com o gameState mais recente.
+  // CRÍTICO: a ref é lida em handlers de pointer (handleScoreCardPointerUp/Down)
+  // que capturam closure — sem isso, commandOwnerId fica stale após troca de controller.
+  useEffect(() =\u003e { currentGameStateRef.current = gameState; });
 
   useEffect(() => {
     if (!gameState.matchConfig.isWatchMode) return;
