@@ -6,7 +6,7 @@ import { NewGameScreen } from './screens/NewGameScreen.tsx';
 import { AdminScreen } from './screens/AdminScreen.tsx';
 import { LocationScreen } from './screens/LocationScreen.tsx';
 import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
-import { PartnersScreen } from './screens/PartnersScreen.tsx';
+import { PartnersScreen } from '@modules/partners';
 import { TournamentsScreen } from './screens/TournamentsScreen.tsx';
 import { EventDetailScreen } from './screens/EventDetailScreen.tsx';
 import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
