@@ -1,1 +1,10 @@
 export { PartnersScreen } from './screens/PartnersScreen';
+export { applyPartnerSelection } from './services/applyPartnerSelection';
+export { addPartnerToState } from './services/addPartnerToState';
+export { hasPartnerWithPin, normalizePartnerPin } from './services/addPartnerToState';
+export { autoRegisterPartnerByPin } from './services/autoRegisterPartnerByPin';
+export { createManualPartner } from './services/createManualPartner';
+export { createQueuePartner } from './services/createQueuePartner';
+export { createSelfPartner } from './services/createSelfPartner';
+export { guessPartnerGender } from './services/guessPartnerGender';
+export type { Partner, QueuePlayer } from './types';

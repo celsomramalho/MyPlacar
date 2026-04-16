@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import type { Partner } from '@modules/partners';
+import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle } from 'lucide-react';
-import { TournamentEvent, TournamentEntry, UserProfile, Partner, TournamentPair, TournamentMatch, TournamentConfig } from '../types.ts';
-import { getDb } from '@infra/firebase';
-import { collection, query, where, getDocs, doc, setDoc, onSnapshot, updateDoc, getDoc, deleteDoc, Firestore, writeBatch } from 'firebase/firestore';
+import { TournamentEvent, TournamentEntry, UserProfile, TournamentPair, TournamentMatch, TournamentConfig } from '../types.ts';
+import { findUserByPin, getDb } from '@infra/firebase';
+import { collection, getDocs, doc, setDoc, onSnapshot, updateDoc, getDoc, deleteDoc, Firestore, writeBatch } from 'firebase/firestore';
 import { SPORT_LIST } from '../constants.ts';
-import { formatPortugueseName } from '../utils/formatters.ts';
+import { formatPortugueseName, maskPin } from '../utils/formatters.ts';
 import { Toggle } from '../components/Toggle.tsx';
 import { Input } from '../components/Input.tsx';
 
@@ -28,26 +30,6 @@ interface Props {
   appUrl: string;
 }
 
-interface MarsIconProps {
-  size?: number;
-}
-
-const MarsIcon = ({ size = 14 }: MarsIconProps) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="10" cy="14" r="5" /><path d="M15 3h6v6" /><path d="m21 3-6.5 6.5" />
-  </svg>
-);
-
-interface VenusIconProps {
-  size?: number;
-}
-
-const VenusIcon = ({ size = 14 }: VenusIconProps) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="9" r="5" /><path d="M12 14v7" /><path d="M9 18h6" />
-  </svg>
-);
-
 interface DesfazerTimeIconProps {
   size?: number;
 }
@@ -60,11 +42,6 @@ const DesfazerTimeIcon: React.FC<DesfazerTimeIconProps> = ({ size = 16 }) => (
 );
 
 const idxToLetter = (idx: number) => String.fromCharCode(65 + idx);
-
-const maskPin = (pin: string) => {
-  if (!pin || pin.length < 5) return pin;
-  return `${pin[0]}*${pin[2]}*${pin[4]}`;
-};
 
 export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack, userProfile, onExitTournament, onAddPartner, partners, onStartTournamentMatch, setModalConfig, appUrl }) => {
   const [event, setEvent] = useState<TournamentEvent>(initialEvent);
@@ -148,11 +125,9 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
         const db = getDb();
         if (!db) { setIsSearchingCoAdminPin(false); return; }
         try {
-          const q = query(collection(db as Firestore, "users"), where("pin", "==", pin));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const data = snap.docs[0].data();
-            setCoAdminLookupName(data.nickname || data.name.split(' ')[0]);
+          const user = await findUserByPin(db as Firestore, pin);
+          if (user) {
+            setCoAdminLookupName(user.nickname);
           } else {
             setCoAdminLookupName("Usuário não localizado");
           }

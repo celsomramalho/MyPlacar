@@ -6,14 +6,15 @@ import { NewGameScreen } from './screens/NewGameScreen.tsx';
 import { AdminScreen } from './screens/AdminScreen.tsx';
 import { LocationScreen } from './screens/LocationScreen.tsx';
 import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
-import { PartnersScreen } from '@modules/partners';
+import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterPartnerByPin, createManualPartner, hasPartnerWithPin } from '@modules/partners';
 import { TournamentsScreen } from './screens/TournamentsScreen.tsx';
 import { EventDetailScreen } from './screens/EventDetailScreen.tsx';
 import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
 import { InstallPwaModal } from './components/InstallPwaModal.tsx';
 import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 // import { Input } from './components/Input.tsx'; // unused
-import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointType, Partner, QueuePlayer, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab } from './types.ts';
+import type { Partner, QueuePlayer } from '@modules/partners';
+import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointType, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab } from './types.ts';
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
@@ -21,7 +22,7 @@ import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
 import { initPickleballState } from './utils/pickleballEngine.ts';
 import { applyGoldenRule } from './utils/formatters.ts';
 import { isWatchDevice } from './utils/device.ts';
-import { getDb, clearFirestoreCache } from '@infra/firebase';
+import { findUserByPin, getDb, clearFirestoreCache } from '@infra/firebase';
 import { getAuthInstance } from '@infra/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
@@ -1736,11 +1737,9 @@ const App: React.FC = () => {
         const db = getDb();
         if (!db) return;
         try {
-          const q = query(collection(db as Firestore, "users"), where("pin", "==", pin));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const data = snap.docs[0].data();
-            setJudgeNicknameLookup(data.nickname || data.name.split(' ')[0]);
+          const user = await findUserByPin(db as Firestore, pin, { fallbackNickname: 'Juiz' });
+          if (user) {
+            setJudgeNicknameLookup(user.nickname);
           } else {
             setJudgeNicknameLookup("Usuário não localizado");
           }
@@ -1763,25 +1762,24 @@ const App: React.FC = () => {
     if (!db) return;
     try {
       const pinUpper = judgePinInput.toUpperCase().trim();
-      const nickname = judgeNicknameLookup;
+      const judgeResult = await autoRegisterPartnerByPin(db as Firestore, pinUpper, { origin: 'manual', fallbackNickname: 'Juiz' });
+      const nickname = judgeResult?.nickname || judgeNicknameLookup || 'Juiz';
 
-      if (pinUpper && !partners.some(p => p.pin === pinUpper)) {
-        const newPartner: Partner = {
+      if (pinUpper && !hasPartnerWithPin(partners, pinUpper)) {
+        const newPartner: Partner = judgeResult?.partner || {
           id: `p_${Date.now()}`,
           pin: pinUpper,
-          nickname: nickname || 'Juiz',
+          nickname,
           addedAt: Date.now(),
           origin: 'manual'
         };
-        const updatedPartners = [...partners, newPartner];
-        setPartners(updatedPartners);
-        localStorage.setItem('myPlacarPartners', JSON.stringify(updatedPartners));
+        setPartners(prev => addPartnerToState(prev, newPartner));
 
         if (db && userProfile.pin) {
           await setDoc(doc(db as Firestore, 'users', userProfile.pin.toUpperCase(), 'partners', pinUpper), {
             pin: pinUpper,
-            nickname: nickname || 'Juiz',
-            addedAt: Date.now(),
+            nickname,
+            addedAt: newPartner.addedAt,
             origin: 'manual'
           }).catch(err => console.error("Erro ao salvar parceiro no Firestore:", err));
         }
@@ -1822,20 +1820,33 @@ const App: React.FC = () => {
   useEffect(() => { if (gameState?.isConfirmedFinished && !matchHistoryRef.current.some(m => m.id === gameState.matchId)) finalizeMatchInternal(gameState); }, [gameState?.isConfirmedFinished, gameState?.matchId, finalizeMatchInternal]); // matchHistory removido das deps: ler via ref evita re-finalizar partidas deletadas
 
   const handleConfirmPartners = (team1: Partner[], team2: Partner[]) => {
-    setMatchSettings(prev => {
-      const next = { ...prev };
-      if (!prev.isDoubles) { 
-        if (team1.length > 0) { next.p1Name = team1[0].nickname; next.p1Verified = team1[0].pin === 'VERIFIED' || !!team1[0].pin; } 
-        if (team2.length > 0) { next.p2Name = team2[0].nickname; next.p2Verified = team2[0].pin === 'VERIFIED' || !!team2[0].pin; } 
+    setMatchSettings(prev => applyPartnerSelection(prev, team1, team2));
+  };
+
+  const handleAutoRegisterPartner = async (pin: string, field: string): Promise<string | null> => {
+    if (!navigator.onLine) return null;
+    const db = getDb();
+    if (!db) return null;
+
+    try {
+      const result = await autoRegisterPartnerByPin(db as Firestore, pin);
+      if (!result) return null;
+
+      setPartners(prev => addPartnerToState(prev, result.partner));
+
+      if (field) {
+        setMatchSettings(prev => ({ ...prev, [`${field}Verified`]: true }));
       }
-      else { 
-        if (team1.length >= 1) { next.p1Name = team1[0].nickname; next.p1Verified = team1[0].pin === 'VERIFIED' || !!team1[0].pin; } 
-        if (team1.length >= 2) { next.p1Partner = team1[1].nickname; next.p1PartnerVerified = team1[1].pin === 'VERIFIED' || !!team1[1].pin; } 
-        if (team2.length >= 1) { next.p2Name = team2[0].nickname; next.p2Verified = team2[0].pin === 'VERIFIED' || !!team2[0].pin; } 
-        if (team2.length >= 2) { next.p2Partner = team2[1].nickname; next.p2PartnerVerified = team2[1].pin === 'VERIFIED' || !!team2[1].pin; } 
-      }
-      return next;
-    });
+
+      return result.nickname;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleAddTournamentPartner = (pin: string, nickname: string, gender: 'M' | 'F', name?: string) => {
+    const partner = createManualPartner({ pin, nickname, gender, name });
+    setPartners(prev => addPartnerToState(prev, partner));
   };
 
   const handleLogout = async () => {
@@ -2444,27 +2455,7 @@ const App: React.FC = () => {
             deleteManyMatches([...ids]);
           }
         }, onCancel: () => setModalConfig(null) })}
-        onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }} onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} gameState={gameState} settings={matchSettings} setSettings={setMatchSettings} onStart={() => { persistMatchSettings(); initGameState(true); }} onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }} onOpenRules={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} activeTab={activeTab} setActiveTab={(t) => { persistMatchSettings(); setActiveTab(t); }} onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }} userProfile={userProfile} setUserProfile={setUserProfile} onSaveProfile={handleSaveProfile} onLogout={handleLogout} onGoAdmin={() => setCurrentScreen('admin')} onGoToScoreboard={() => { persistMatchSettings(); initGameState(false); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} isProfileSaved={isProfileSaved} canStartMatch={canStartMatch} onSyncAll={(force) => syncHistoryToFirebase(undefined, force)} onDownloadHistory={downloadHistoryFromFirebase} cloudMatchesCount={cloudMatchesCount} isSyncingAll={isSyncing} isDownloading={isDownloading} onOpenPartners={() => setCurrentScreen('partners')} partners={partners} playerQueue={playerQueue} onAutoRegisterPartner={async (p, field) => { 
-          if (!navigator.onLine) return null; 
-          const db = getDb(); 
-          if (!db) return null; 
-          try { 
-            const q = query(collection(db as Firestore, "users"), where("pin", "==", p.toUpperCase())); 
-            const s = await getDocs(q); 
-            if (!s.empty) { 
-              const d = s.docs[0].data(); 
-              const nick = d.nickname || d.name.split(' ')[0]; 
-              const fullName = d.name;
-              setPartners(prev => { 
-                if (prev.some(x => x.pin.toUpperCase() === p.toUpperCase())) return prev; 
-                return [...prev, { id: s.docs[0].id, name: fullName, nickname: nick, pin: p.toUpperCase(), addedAt: Date.now(), origin: 'qrcode', gender: d.gender }]; 
-              }); 
-              if (field) setMatchSettings(prev => ({ ...prev, [`${field}Verified`]: true })); 
-              return nick; 
-            } 
-          } catch {} 
-          return null; 
-        }} 
+        onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }} onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} gameState={gameState} settings={matchSettings} setSettings={setMatchSettings} onStart={() => { persistMatchSettings(); initGameState(true); }} onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }} onOpenRules={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} activeTab={activeTab} setActiveTab={(t) => { persistMatchSettings(); setActiveTab(t); }} onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }} userProfile={userProfile} setUserProfile={setUserProfile} onSaveProfile={handleSaveProfile} onLogout={handleLogout} onGoAdmin={() => setCurrentScreen('admin')} onGoToScoreboard={() => { persistMatchSettings(); initGameState(false); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} isProfileSaved={isProfileSaved} canStartMatch={canStartMatch} onSyncAll={(force) => syncHistoryToFirebase(undefined, force)} onDownloadHistory={downloadHistoryFromFirebase} cloudMatchesCount={cloudMatchesCount} isSyncingAll={isSyncing} isDownloading={isDownloading} onOpenPartners={() => setCurrentScreen('partners')} partners={partners} playerQueue={playerQueue} onAutoRegisterPartner={handleAutoRegisterPartner} 
         onDeletePartners={ids => setModalConfig({ title: "Excluir parceiros?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: () => {
           setPartners(prev => {
             const next = prev.filter(p => !ids.has(p.id));
@@ -2595,7 +2586,7 @@ const App: React.FC = () => {
       }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={liveRole} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as unknown as TournamentEvent); setCurrentScreen('event-detail'); }} />}
-      {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={(pin, nickname, gender, name) => { setPartners(prev => [{ id: `p_${Date.now()}`, name, nickname, pin, origin: 'manual', addedAt: Date.now(), gender }, ...prev]); }} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
+      {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={handleAddTournamentPartner} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
       {currentScreen === 'communications' && <CommunicationsScreen userProfile={userProfile} onBack={() => setCurrentScreen('settings')} />}
     </div>
     </ErrorBoundary>

@@ -1,9 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, Plus, Play, CloudDownload, CloudUpload, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Wifi, Dices, ArrowRightLeft, History, CheckSquare, Mic, Clock, Gavel } from 'lucide-react';
-import { Partner, UserProfile, GameState, MatchSettings, QueuePlayer, TournamentEvent } from '../../../types'; 
+import { addPartnerToState, createQueuePartner, createSelfPartner, guessPartnerGender, hasPartnerWithPin } from '@modules/partners';
+import type { Partner, QueuePlayer } from '../types';
+import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
+import { UserProfile, GameState, MatchSettings, TournamentEvent } from '../../../types'; 
 import { Input } from '../../../components/Input'; 
-import { getDb } from '@infra/firebase'; 
-import { collection, query, where, getDocs, getDocsFromServer, getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
+import { findUserByPin, findUsersByPins, getDb } from '@infra/firebase'; 
+import { getDocsFromServer, getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
 import { mirrorUser, mirrorPartners } from '../../../services/supabaseMirror';
 import { LiveIndicator } from '../../../components/LiveIndicator'; 
 import { formatPortugueseName, maskPin } from '../../../utils/formatters'; 
@@ -53,18 +56,6 @@ const LIGHT_BG_COLORS: Record<string, string> = {
   lilas: 'bg-violet-50', verde: 'bg-green-50', vermelho: 'bg-red-50', roxo: 'bg-purple-50',
 };
 
-const MarsIcon = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="10" cy="14" r="5" /><path d="M15 3h6v6" /><path d="m21 3-6.5 6.5" />
-  </svg>
-);
-
-const VenusIcon = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="9" r="5" /><path d="M12 14v7" /><path d="M9 18h6" />
-  </svg>
-);
-
 export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, userProfile, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, matchSettings, activeEvent, appUrl, isAuthReady = false }) => {
   const [activeTab, setActiveTab] = useState<'list' | 'queue'>('list');
   const [isShuffling, setIsShuffling] = useState(false);
@@ -103,7 +94,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
         { name: matchSettings.p2Name, team: 2 as const },
         { name: matchSettings.p2Partner, team: 2 as const }
     ];
-    const availablePartners = [...partners, { id: 'me', name: userProfile.name, nickname: userProfile.nickname || userProfile.name.split(' ')[0], pin: userProfile.pin, origin: 'manual', addedAt: 0 }];
+    const availablePartners = [...partners, createSelfPartner(userProfile)];
     allKnown.forEach(slot => {
         if (slot.name) {
             const found = availablePartners.find(p => p.nickname === slot.name);
@@ -123,9 +114,9 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       return isPartnerMatch || isJudgeMatch;
     });
   }, [activeLives, partnerPins, userProfile.pin]);
-  const isAlreadyRegistered = useMemo(() => partners.some(p => p.pin.toUpperCase() === pinInput.toUpperCase().trim()), [partners, pinInput]);
+  const isAlreadyRegistered = useMemo(() => hasPartnerWithPin(partners, pinInput), [partners, pinInput]);
   const maxPerTeam = isDoubles ? 2 : 1;
-  const meAsPartner: Partner = useMemo(() => ({ id: 'me', name: userProfile.name, nickname: userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu', pin: userProfile.pin, origin: 'manual', addedAt: 0, gender: userProfile.gender || 'M' }), [userProfile]);
+  const meAsPartner: Partner = useMemo(() => createSelfPartner(userProfile), [userProfile]);
   const shareLink = useMemo(() => {
     const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
     return `${appBaseUrl}/?ref=${encodeURIComponent(userProfile.nickname || userProfile.name.split(' ')[0] || 'Eu')}&pin_ref=${userProfile.pin.toUpperCase()}`;
@@ -167,12 +158,10 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
         const db = getDb();
         if (!db) { setIsSearchingPin(false); return; }
         try {
-          const q = query(collection(db as Firestore, "users"), where("pin", "==", cleanPin));
-          const snap = await getDocs(q);
-          if (!snap.empty) { 
-            const data = snap.docs[0].data();
-            setLookupName(data.nickname || data.name.split(' ')[0]); 
-            setLookupFullName(data.name || '');
+          const user = await findUserByPin(db as Firestore, cleanPin);
+          if (user) { 
+            setLookupName(user.nickname); 
+            setLookupFullName(user.name || '');
           } else { 
             setLookupName('Pin não localizado'); 
             setLookupFullName('');
@@ -198,32 +187,21 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       const updatedPartners = [...partners];
       let changed = false;
 
-      // Busca todos os parceiros em batches de 30 (limite do Firestore 'in')
-      // substitui o loop N queries sequenciais anterior
       const pinToIndex = new Map<string, number>();
       updatedPartners.forEach((p, i) => { if (p.pin) pinToIndex.set(p.pin.toUpperCase().trim(), i); });
-      const allPins = Array.from(pinToIndex.keys());
+      const usersByPin = await findUsersByPins(db as Firestore, Array.from(pinToIndex.keys()));
 
-      const chunks: string[][] = [];
-      for (let i = 0; i < allPins.length; i += 30) chunks.push(allPins.slice(i, i + 30));
+      usersByPin.forEach(user => {
+        const idx = pinToIndex.get(user.pin);
+        if (idx === undefined) return;
 
-      for (const chunk of chunks) {
-        const q = query(collection(db as Firestore, "users"), where("pin", "in", chunk));
-        const snap = await getDocs(q);
-        snap.forEach(d => {
-          const userData = d.data();
-          const pin = userData.pin?.toUpperCase().trim();
-          const idx = pin ? pinToIndex.get(pin) : undefined;
-          if (idx !== undefined) {
-            const newNick = userData.nickname || userData.name.split(' ')[0];
-            const newName = userData.name;
-            if (newNick !== updatedPartners[idx].nickname || newName !== updatedPartners[idx].name) {
-              updatedPartners[idx] = { ...updatedPartners[idx], nickname: newNick, name: newName };
-              changed = true;
-            }
-          }
-        });
-      }
+        const newNick = user.nickname;
+        const newName = user.name;
+        if (newNick !== updatedPartners[idx].nickname || newName !== updatedPartners[idx].name) {
+          updatedPartners[idx] = { ...updatedPartners[idx], nickname: newNick, name: newName };
+          changed = true;
+        }
+      });
 
       if (changed) { setPartners(updatedPartners); window.alert("Apelidos e nomes atualizados com sucesso!"); }
       else { window.alert("Todos os dados já estão atualizados."); }
@@ -422,14 +400,15 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     const cleanPin = pin.toUpperCase().trim();
     if (!cleanPin || cleanPin === userProfile.pin.toUpperCase()) return;
     setPartners(prev => {
-      const existingIdx = prev.findIndex(p => p.pin.toUpperCase() === cleanPin);
-      let next: Partner[];
-      if (existingIdx !== -1) {
-        next = [...prev];
-        next[existingIdx] = { ...next[existingIdx], nickname: nickname || cleanPin, name: name || next[existingIdx].name };
-      } else {
-        next = [{ id: `p_${Date.now()}`, name, nickname: nickname || cleanPin, pin: cleanPin, origin, addedAt: Date.now(), gender }, ...prev];
-      }
+      const next = addPartnerToState(prev, {
+        id: `p_${Date.now()}`,
+        name,
+        nickname: nickname || cleanPin,
+        pin: cleanPin,
+        origin,
+        addedAt: Date.now(),
+        gender,
+      });
       // Espelha imediatamente no Supabase — mirrorUser garante que o owner existe na tabela users
       mirrorUser(userProfile);
       mirrorPartners(userProfile.email, next);
@@ -472,17 +451,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     if (activeTab === 'queue') {
        const team1: Partner[] = [];
        const team2: Partner[] = [];
-       const queueAsPartners = selectedInQueue.map(p => ({ 
-         id: p.id, 
-         name: p.name,
-         nickname: p.name, 
-         // PIN real se verificado, QUEUE_ANONYMOUS se jogador anônimo da fila
-         // Separa explicitamente parceiros verificados (têm PIN real) de anônimos
-         pin: p.verified ? 'VERIFIED' : 'QUEUE_ANONYMOUS', 
-         origin: 'manual' as const, 
-         addedAt: Date.now(), 
-         gender: p.gender 
-       }));
+       const queueAsPartners = selectedInQueue.map(createQueuePartner);
        
        if (!isDoubles) {
           if (!matchSettings.p1Name && queueAsPartners[0]) team1.push(queueAsPartners[0]);
@@ -531,7 +500,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       ...next[index], 
       name: formatted, 
       verified,
-      gender: guessGender(formatted) || next[index].gender 
+      gender: guessPartnerGender(formatted) || next[index].gender 
     };
     setPlayerQueue(next);
   };
@@ -545,7 +514,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       ...next[index],
       name: formatted1,
       verified: false,
-      gender: guessGender(formatted1) || next[index].gender
+      gender: guessPartnerGender(formatted1) || next[index].gender
     };
 
     // Process p2 for next index if it exists
@@ -555,21 +524,11 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
         ...next[index + 1],
         name: formatted2,
         verified: false,
-        gender: guessGender(formatted2) || next[index + 1].gender
+        gender: guessPartnerGender(formatted2) || next[index + 1].gender
       };
     }
     
     setPlayerQueue(next);
-  };
-
-  const guessGender = (name: string): 'M' | 'F' | undefined => {
-    if (!name) return undefined;
-    const firstWord = name.trim().split(' ')[0].toUpperCase();
-    if (!firstWord || firstWord.length < 2) return undefined;
-    const lastChar = firstWord.slice(-1);
-    const femaleExceptions = ['ALICE', 'BEATRIZ', 'RAQUEL', 'ESTER', 'RUTE', 'IRIS'];
-    if (femaleExceptions.includes(firstWord)) return 'F';
-    return lastChar === 'A' ? 'F' : 'M';
   };
 
   const handleQueueGenderToggle = (index: number) => {

@@ -1,26 +1,17 @@
 import React, { useState, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react';
 import { ArrowUpDown, Play, User, Users, ChevronDown, Dices, Loader2, Eraser, History, Ticket, Check } from 'lucide-react';
+import { guessPartnerGender } from '@modules/partners';
+import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
-import { MatchSettings, GameState, Partner, UserProfile, TournamentEvent, QueuePlayer } from '../../types';
+import type { Partner, QueuePlayer } from '@modules/partners';
+import { MatchSettings, GameState, UserProfile, TournamentEvent } from '../../types';
 import { formatPortugueseName } from '../../utils/formatters';
 import { SPORT_LIST } from '../../constants';
 import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
 type Gender = 'M' | 'F';
-
-const MarsIcon = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="10" cy="14" r="5" /><path d="M15 3h6v6" /><path d="m21 3-6.5 6.5" />
-  </svg>
-);
-
-const VenusIcon = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="9" r="5" /><path d="M12 14v7" /><path d="M9 18h6" />
-  </svg>
-);
 
 const RaquetIcon = ({ size = 16, className }: { size?: number; className?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -31,16 +22,6 @@ const RaquetIcon = ({ size = 16, className }: { size?: number; className?: strin
     <circle cx="7" cy="11" r="2.5" fill="#bef264" stroke="currentColor" strokeWidth="1.5"/>
   </svg>
 );
-
-const guessGender = (name: string): Gender | undefined => {
-  if (!name) return undefined;
-  const firstWord = name.trim().split(' ')[0].toUpperCase();
-  if (!firstWord || firstWord.length < 2) return undefined;
-  const lastChar = firstWord.slice(-1);
-  const femaleExceptions = ['ALICE', 'BEATRIZ', 'RAQUEL', 'ESTER', 'RUTE', 'IRIS'];
-  if (femaleExceptions.includes(firstWord)) return 'F';
-  return lastChar === 'A' ? 'F' : 'M';
-};
 
 const T1_COLORS = ['azul', 'amarelo', 'laranja', 'marrom'];
 const T2_COLORS = ['vermelho', 'lilas', 'verde', 'roxo'];
@@ -152,7 +133,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     const fieldPrefix = key.replace('Name', '');
     const verifiedKey = `${fieldPrefix}Verified` as keyof MatchSettings;
     
-    const guessed = guessGender(formatted);
+    const guessed = guessPartnerGender(formatted);
     if (guessed) {
       setGenders(prev => ({ ...prev, [fieldPrefix]: guessed }));
     }
@@ -168,7 +149,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
         const dbNickname = await onAutoRegisterPartner(name2, fieldPrefix);
         if (dbNickname) {
             const finalName = dbNickname; 
-            const guessed = guessGender(finalName);
+            const guessed = guessPartnerGender(finalName);
             if (guessed) setGenders(prev => ({ ...prev, [fieldPrefix]: guessed }));
             setSettings(prev => ({ ...prev, [targetField]: finalName, [verifiedKey]: true }));
             return;
@@ -189,11 +170,11 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     const team = targetField.startsWith('p1') ? 1 : 2;
     if (team === 1) {
       if (nf1) {
-        const g1 = guessGender(nf1);
+        const g1 = guessPartnerGender(nf1);
         if (g1) setGenders(p => ({ ...p, p1: g1 }));
       }
       if (nf2) {
-        const g2 = guessGender(nf2);
+        const g2 = guessPartnerGender(nf2);
         if (g2) setGenders(p => ({ ...p, p1Partner: g2 }));
       }
       setSettings(prev => {
@@ -202,11 +183,11 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
       });
     } else {
       if (nf1) {
-        const g1 = guessGender(nf1);
+        const g1 = guessPartnerGender(nf1);
         if (g1) setGenders(p => ({ ...p, p2: g1 }));
       }
       if (nf2) {
-        const g2 = guessGender(nf2);
+        const g2 = guessPartnerGender(nf2);
         if (g2) setGenders(p => ({ ...p, p2Partner: g2 }));
       }
       setSettings(prev => {

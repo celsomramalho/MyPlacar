@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, MatchHistoryItem, MatchSettings, UserProfile, Partner, TournamentEvent, QueuePlayer } from '../types.ts';
+import type { Partner, QueuePlayer } from '@modules/partners';
+import { GameState, MatchHistoryItem, MatchSettings, UserProfile, TournamentEvent } from '../types.ts';
 import { ProfileScreen } from './ProfileScreen.tsx';
 import { HelpScreen } from './HelpScreen.tsx';
 import { SettingsHeader } from './settings/SettingsHeader.tsx';
