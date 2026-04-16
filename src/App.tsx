@@ -1735,7 +1735,7 @@ const App: React.FC = () => {
       if (pin.length === 5) {
         setIsSearchingJudgePin(true);
         const db = getDb();
-        if (!db) return;
+        if (!db) { setIsSearchingJudgePin(false); return; }
         try {
           const user = await findUserByPin(db as Firestore, pin, { fallbackNickname: 'Juiz' });
           if (user) {

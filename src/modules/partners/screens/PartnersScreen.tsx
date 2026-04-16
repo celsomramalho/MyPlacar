@@ -5,8 +5,8 @@ import type { Partner, QueuePlayer } from '../types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { UserProfile, GameState, MatchSettings, TournamentEvent } from '../../../types'; 
 import { Input } from '../../../components/Input'; 
-import { findUserByPin, findUsersByPins, getDb } from '@infra/firebase'; 
-import { getDocsFromServer, getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
+import { findUserByPin, findUsersByPins, getResolvedNickname, getDb } from '@infra/firebase'; 
+import { collection, getDocs, getDocsFromServer, getDocFromServer, doc, query, setDoc, getDoc, onSnapshot, where, Firestore } from 'firebase/firestore'; 
 import { mirrorUser, mirrorPartners } from '../../../services/supabaseMirror';
 import { LiveIndicator } from '../../../components/LiveIndicator'; 
 import { formatPortugueseName, maskPin } from '../../../utils/formatters'; 
@@ -311,7 +311,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
           referralList.push({
             id: d.id,
             name: ud.name,
-            nickname: ud.nickname || ud.name.split(' ')[0],
+            nickname: getResolvedNickname({ nickname: ud.nickname, name: ud.name, pin: ud.pin?.toUpperCase() }),
             pin: ud.pin.toUpperCase(),
             origin: 'referral',
             // Usa joinedAt/createdAt do documento para addedAt estável entre sessões
