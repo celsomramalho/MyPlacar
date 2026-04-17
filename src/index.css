@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* Desativa seleção de texto e menus de contexto do sistema em todo o app 
+   para evitar que o relógio dispare overlays de ajuda/pesquisa acidentalmente */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  touch-action: manipulation; /* Permite cliques mas evita gestos de sistema como pinch-zoom */
+}
+
+/* Permite seleção apenas em inputs, caso necessário no futuro */
+input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+
 /* Safe-area padding para rodapés — respeita barra de gestos do celular.
    Com viewport-fit=cover ativo, env(safe-area-inset-bottom) retorna
    o recuo real do dispositivo (0 em botões físicos, ~20-34px em gesture nav). */

@@ -1,8 +1,9 @@
 
 import React from 'react';
 import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw } from 'lucide-react';
-import { GameState, PointType } from '../types.ts';
+import { GameState, PointType, CourtSide } from '../types.ts';
 import { LiveIndicator } from './LiveIndicator.tsx';
+import { getTennisServerSide } from '../utils/tennisEngine.ts';
 
 interface WatchBoardProps {
   gameState: GameState;
@@ -94,7 +95,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
     return (
       <div 
-        onClick={(e) => { e.stopPropagation(); onSwitchServer(team, isPartner); }}
+        onPointerDown={(e) => { e.stopPropagation(); onSwitchServer(team, isPartner); }}
         className={`flex items-center justify-center min-w-[48px] h-[48px] rounded-2xl font-black text-2xl transition-all active:scale-90 ${
           isServingNow ? `bg-white ${teamColorText} shadow-lg` : 'text-white border-2 border-white/20'
         }`}
@@ -127,11 +128,11 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     const label = isDoubles ? `S${srvNum}` : 'S';
 
     // Posição horizontal via style inline (evita purge do Tailwind)
-    const side = (sport === 'pickleball' && pkl) ? pkl.server.side : null;
-    const justifyContent =
-      side === 'even' ? 'flex-end' :
-      side === 'odd'  ? 'flex-start' :
-      'center';
+    // Pickleball: usa pkl.server.side; Tênis/beach: calcula pela paridade do total de pontos do game
+    const side: CourtSide = (sport === 'pickleball' && pkl)
+      ? pkl.server.side
+      : getTennisServerSide(gameState);
+    const justifyContent = side === 'even' ? 'flex-end' : 'flex-start';
 
     // Posição vertical
     const posClass = team === 1 ? 'bottom-2' : 'top-2';
@@ -164,7 +165,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     <div className={`${isEmbedded ? 'relative w-full aspect-[4/5] rounded-[2rem]' : 'fixed inset-0 h-full w-full z-[99999]'} bg-black flex select-none touch-none overflow-hidden`}>
       {isDimmed && (
         <div
-          onClick={(e) => { e.stopPropagation(); setIsDimmed(false); resetDimTimer(); }}
+          onPointerDown={(e) => { e.stopPropagation(); setIsDimmed(false); resetDimTimer(); }}
           className="fixed inset-0 z-[100002] bg-black/50 backdrop-blur-none animate-in fade-in duration-500"
         >
 
@@ -172,7 +173,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       )}
       
       {isAudioLocked && (
-        <div onClick={async () => { await unlockAudio(); announceFullScore(); }} className="fixed top-2 left-1/2 -translate-x-1/2 z-[100000] px-4 py-2 rounded-xl shadow-2xl bg-orange-600 text-white flex items-center gap-2 animate-bounce cursor-pointer">
+        <div onPointerDown={async () => { await unlockAudio(); announceFullScore(); }} className="fixed top-2 left-1/2 -translate-x-1/2 z-[100000] px-4 py-2 rounded-xl shadow-2xl bg-orange-600 text-white flex items-center gap-2 animate-bounce cursor-pointer">
           <VolumeX size={16} /><span className="text-[10px] font-black">Ativar som</span>
         </div>
       )}
@@ -186,8 +187,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               <p className="text-[10px] font-bold text-slate-400 mt-1">Venceu: {p1WonSets > p2WonSets ? gameState.p1.name : gameState.p2.name}</p>
             </div>
             <div className="flex flex-col w-full gap-2">
-              <button onClick={() => onConfirmMatch?.()} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-black text-xs shadow-lg">Confirmar resultado</button>
-              {isCommandOwner && <button onClick={handleUndoWithLog} className="w-full py-2 bg-slate-800 text-white rounded-xl font-black text-xs">Desfazer ponto</button>}
+              <button onPointerDown={() => onConfirmMatch?.()} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-black text-xs shadow-lg">Confirmar resultado</button>
+              {isCommandOwner && <button onPointerDown={handleUndoWithLog} className="w-full py-2 bg-slate-800 text-white rounded-xl font-black text-xs">Desfazer ponto</button>}
             </div>
           </div>
         </div>
@@ -278,10 +279,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         </div>
         
         <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
-          <button onClick={() => { resetDimTimer(); handleUndoWithLog(); }} disabled={!isCommandOwner} className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5"><RotateCcw size={34} strokeWidth={4} /></button>
+          <button onPointerDown={() => { resetDimTimer(); handleUndoWithLog(); }} disabled={!isCommandOwner} className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5"><RotateCcw size={34} strokeWidth={4} /></button>
           <button 
             disabled={!isCommandOwner} 
-            onClick={() => onScoreUpdate(gameState.server, 'ace', 'cb')} 
+            onPointerDown={() => onScoreUpdate(gameState.server, 'ace', 'cb')} 
             className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
               SOLID_COLORS[gameState.server === 1 ? (gameState.p1.color || 'azul') : (gameState.p2.color || 'vermelho')]
             }`}
@@ -290,8 +291,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           </button>
           <div
             role="button"
-            tabIndex={0}
-            onClick={() => { resetDimTimer(); setIsMenuOpen(true); }}
+            onPointerDown={() => { resetDimTimer(); setIsMenuOpen(true); }}
             className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${
               isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
               isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
@@ -305,7 +305,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           </div>
           <button 
             disabled={!isCommandOwner} 
-            onClick={() => onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb')} 
+            onPointerDown={() => onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb')} 
             className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
               SOLID_COLORS[gameState.server === 1 ? (gameState.p2.color || 'vermelho') : (gameState.p1.color || 'azul')]
             }`}
@@ -336,8 +336,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {isLiveActive && (
                 <div
                   role="button"
-                  tabIndex={0}
-                  onClick={() => { setIsMenuOpen(false); onOpenLiveControl?.(); }}
+                  onPointerDown={() => { setIsMenuOpen(false); onOpenLiveControl?.(); }}
                   className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
                 >
                   <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-8 h-8 shrink-0" />
@@ -347,7 +346,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
               {/* Regras */}
               <button
-                onClick={() => { setIsMenuOpen(false); onBack(); }}
+                onPointerDown={() => { setIsMenuOpen(false); onBack(); }}
                 className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
               >
                 <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl">
@@ -359,7 +358,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {/* Zerar partida — só se commandOwner */}
               {isCommandOwner && onResetMatch && (
                 <button
-                  onClick={() => { setIsMenuOpen(false); onResetMatch(); }}
+                  onPointerDown={() => { setIsMenuOpen(false); onResetMatch(); }}
                   className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-red-500/20 active:bg-red-500/30 text-red-400 transition-colors"
                 >
                   <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-red-500/30 rounded-xl">

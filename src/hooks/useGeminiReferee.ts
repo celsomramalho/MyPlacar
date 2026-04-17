@@ -34,7 +34,7 @@ interface UseGeminiRefereeProps {
 
 const FONETICA = {
     ponto: ['ponto', 'ponte', 'ponta', 'pinto'],
-    ace: ['ace', 'eise', 'ease', 'eice', 'ês'],
+    ace: ['ace', 'aice', 'aize', 'ease', 'as', 'ice', 'ase', 'ês', 'es', 'ise'],
     saque: ['saque', 'saqui', 'sacou', 'sac'],
     falta: ['falta', 'erro', 'errado', 'errar'],
     sacador: ['sacador', 'servidor', 'quem saca', 'quem sacou', 'sacando'],

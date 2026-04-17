@@ -4,6 +4,7 @@ import { getDb } from '@infra/firebase';
 import { doc, onSnapshot, collection, getDocs, query, where } from 'firebase/firestore';
 import { GameState } from '../types';
 import { SPORT_LIST } from '../constants';
+import { getTennisServerSide } from '../utils/tennisEngine';
 
 interface Props {
   matchId: string;
@@ -113,6 +114,9 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
   }
 
   const sportDef = SPORT_LIST.find(s => s.id === gameState.matchConfig.sportType);
+  const isTennis = gameState.matchConfig.sportType === 'tennis' || gameState.matchConfig.sportType === 'beach-tennis';
+  const tennisSide = isTennis ? getTennisServerSide(gameState) : null;
+  const tennisServerNumber: 1 | 2 = gameState.matchConfig.isDoubles && gameState.servingOrderOffset >= 2 ? 2 : 1;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col font-sans text-white">
@@ -172,6 +176,14 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
                     position="bottom"
                   />
                 )}
+                {isTennis && gameState.server === 1 && tennisSide && (
+                  <ServerIndicator
+                    serverNumber={tennisServerNumber}
+                    side={tennisSide}
+                    teamColor={gameState.p1.color || 'azul'}
+                    position="bottom"
+                  />
+                )}
                 <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Ponto</p>
                 <span className={`text-5xl font-black tabular-nums ${gameState.server === 1 ? 'text-blue-400' : 'text-white'}`}>
                   {gameState.p1.score}
@@ -201,6 +213,14 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
                   <ServerIndicator 
                     serverNumber={gameState.pickleball.server.serverNumber}
                     side={gameState.pickleball.server.side}
+                    teamColor={gameState.p2.color || 'vermelho'}
+                    position="top"
+                  />
+                )}
+                {isTennis && gameState.server === 2 && tennisSide && (
+                  <ServerIndicator
+                    serverNumber={tennisServerNumber}
+                    side={tennisSide}
                     teamColor={gameState.p2.color || 'vermelho'}
                     position="top"
                   />

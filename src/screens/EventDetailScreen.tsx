@@ -4,7 +4,7 @@ import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle } from 'lucide-react';
 import { TournamentEvent, TournamentEntry, UserProfile, TournamentPair, TournamentMatch, TournamentConfig } from '../types.ts';
 import { findUserByPin, getDb } from '@infra/firebase';
-import { collection, getDocs, doc, setDoc, onSnapshot, updateDoc, getDoc, deleteDoc, Firestore, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, onSnapshot, query, updateDoc, getDoc, deleteDoc, Firestore, writeBatch } from 'firebase/firestore';
 import { SPORT_LIST } from '../constants.ts';
 import { formatPortugueseName, maskPin } from '../utils/formatters.ts';
 import { Toggle } from '../components/Toggle.tsx';

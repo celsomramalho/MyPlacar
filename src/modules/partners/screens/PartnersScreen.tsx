@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, Plus, Play, CloudDownload, CloudUpload, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Wifi, Dices, ArrowRightLeft, History, CheckSquare, Mic, Clock, Gavel } from 'lucide-react';
-import { addPartnerToState, createQueuePartner, createSelfPartner, guessPartnerGender, hasPartnerWithPin } from '@modules/partners';
+import { addPartnerToState, createQueuePartner, createReferralPartner, createSelfPartner, guessPartnerGender, hasPartnerWithPin, mergePartnersByPin, normalizePartnerPin, sanitizePartnersForCloud } from '@modules/partners';
 import type { Partner, QueuePlayer } from '../types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { UserProfile, GameState, MatchSettings, TournamentEvent } from '../../../types'; 
 import { Input } from '../../../components/Input'; 
-import { findUserByPin, findUsersByPins, getResolvedNickname, getDb } from '@infra/firebase'; 
-import { collection, getDocs, getDocsFromServer, getDocFromServer, doc, query, setDoc, getDoc, onSnapshot, where, Firestore } from 'firebase/firestore'; 
+import { findUserByPin, findUsersByPins, findUsersReferredByPin, getDb } from '@infra/firebase'; 
+import { getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
 import { mirrorUser, mirrorPartners } from '../../../services/supabaseMirror';
 import { LiveIndicator } from '../../../components/LiveIndicator'; 
 import { formatPortugueseName, maskPin } from '../../../utils/formatters'; 
@@ -147,7 +147,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
   useEffect(() => {
     const fetchNick = async () => {
-      const cleanPin = pinInput.toUpperCase().trim();
+      const cleanPin = normalizePartnerPin(pinInput);
       if (cleanPin.length === 5) {
         if (cleanPin === userProfile.pin.toUpperCase()) { 
           setLookupName(`${meAsPartner.nickname} (você)`); 
@@ -188,7 +188,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       let changed = false;
 
       const pinToIndex = new Map<string, number>();
-      updatedPartners.forEach((p, i) => { if (p.pin) pinToIndex.set(p.pin.toUpperCase().trim(), i); });
+      updatedPartners.forEach((p, i) => { if (p.pin) pinToIndex.set(normalizePartnerPin(p.pin), i); });
       const usersByPin = await findUsersByPins(db as Firestore, Array.from(pinToIndex.keys()));
 
       usersByPin.forEach(user => {
@@ -272,21 +272,12 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       if (cloudList.length > 0) {
         const pinsWithPin = cloudList.filter(p => p.pin);
         const pinsWithoutPin = cloudList.filter(p => !p.pin);
-        const validPins = new Set<string>();
-
-        const chunks: string[][] = [];
-        for (let i = 0; i < pinsWithPin.length; i += 30) {
-          chunks.push(pinsWithPin.slice(i, i + 30).map(p => p.pin.toUpperCase().trim()));
-        }
-        for (const chunk of chunks) {
-          const q = query(collection(db as Firestore, "users"), where("pin", "in", chunk));
-          const s = await getDocs(q);
-          s.forEach(d => validPins.add(d.data().pin?.toUpperCase().trim()));
-        }
+        const usersByPin = await findUsersByPins(db as Firestore, pinsWithPin.map(partner => partner.pin));
+        const validPins = new Set(usersByPin.keys());
 
         const verifiedList: Partner[] = [
           ...pinsWithoutPin,
-          ...pinsWithPin.filter(p => validPins.has(p.pin.toUpperCase().trim()))
+          ...pinsWithPin.filter(p => validPins.has(normalizePartnerPin(p.pin)))
         ];
         const ghostCount = cloudList.length - verifiedList.length;
 
@@ -301,36 +292,16 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
       let referralList: Partner[] = [];
       if (userProfile.pin) {
-        // getDocsFromServer garante contagem real, ignorando cache do Firestore
-        const q = query(collection(db, "users"), where("referredByPin", "==", userProfile.pin.toUpperCase()));
-        const rSnap = await getDocsFromServer(q);
-        setReferralCount(rSnap.size);
-        localStorage.setItem('myPlacarPartnersReferralCount', rSnap.size.toString());
-        rSnap.forEach(d => {
-          const ud = d.data();
-          referralList.push({
-            id: d.id,
-            name: ud.name,
-            nickname: getResolvedNickname({ nickname: ud.nickname, name: ud.name, pin: ud.pin?.toUpperCase() }),
-            pin: ud.pin.toUpperCase(),
-            origin: 'referral',
-            // Usa joinedAt/createdAt do documento para addedAt estável entre sessões
-            // Date.now() causava reordenação da lista a cada syncAllData
-            addedAt: ud.createdAt?.toMillis?.() || ud.joinedAt || ud.addedAt || 0,
-            gender: ud.gender
-          });
-        });
+        const referredUsers = await findUsersReferredByPin(db as Firestore, userProfile.pin);
+        setReferralCount(referredUsers.length);
+        localStorage.setItem('myPlacarPartnersReferralCount', referredUsers.length.toString());
+        referralList = referredUsers.map(createReferralPartner);
       }
-      setPartners(prev => {
-        const pinMap = new Map<string, Partner>();
-        const myPin = userProfile.pin.toUpperCase();
+      setPartners(prev =>
         // Ordem: referral → cloud → prev
         // prev vence porque tem dados mais atualizados (gender, nickname editados pelo usuário)
-        referralList.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
-        cloudList.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
-        prev.forEach(p => { if (p.pin.toUpperCase() !== myPin) pinMap.set(p.pin.toUpperCase(), p); });
-        return Array.from(pinMap.values()).sort((a, b) => b.addedAt - a.addedAt);
-      });
+        mergePartnersByPin(userProfile.pin, referralList, cloudList, prev),
+      );
       if (!silent) window.alert("Dados sincronizados!");
       // Melhoria 3: atualiza timestamp do último sync
       localStorage.setItem('myPlacarPartnersSyncAt', Date.now().toString());
@@ -359,15 +330,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       // que já estão no estado mas nunca eram persistidos na nuvem.
       // Sanitiza undefined: Firestore rejeita qualquer campo undefined explicitamente
       // (name e gender são opcionais no tipo Partner e podem chegar undefined).
-      const sanitizedPartners = currentPartners.map(p => ({
-        id:       p.id,
-        pin:      p.pin,
-        nickname: p.nickname || p.pin,
-        name:     p.name     || '',
-        origin:   p.origin   || 'manual',
-        addedAt:  p.addedAt  ?? 0,
-        gender:   p.gender   || 'M',
-      }));
+      const sanitizedPartners = sanitizePartnersForCloud(currentPartners);
       const docRef = doc(db, "user_partners_metadata", userProfile.email.toLowerCase().trim());
       const payload = { partners_list: sanitizedPartners, updatedAt: Date.now() };
 
@@ -397,7 +360,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   };
 
   const handleAddPartner = (pin: string, nickname: string, origin: 'qrcode' | 'manual', gender?: 'M' | 'F', name?: string) => {
-    const cleanPin = pin.toUpperCase().trim();
+    const cleanPin = normalizePartnerPin(pin);
     if (!cleanPin || cleanPin === userProfile.pin.toUpperCase()) return;
     setPartners(prev => {
       const next = addPartnerToState(prev, {

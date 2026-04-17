@@ -72,8 +72,19 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
 
   useEffect(() => {
     if (isOfflineMode || !userProfile?.email) {
-      setDbCategories(SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true })));
-      setDbSports(SPORT_LIST.map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true })));
+      // 1ª opção: cache da última sessão online (reflete o que o admin configurou)
+      const cachedCats  = localStorage.getItem('myPlacar_ActiveCategories');
+      const cachedSports = localStorage.getItem('myPlacar_ActiveSports');
+      if (cachedCats && cachedSports) {
+        try {
+          setDbCategories(JSON.parse(cachedCats));
+          setDbSports(JSON.parse(cachedSports));
+          return;
+        } catch (_) { /* cache corrompido — cai no fallback abaixo */ }
+      }
+      // 2º fallback: constants (nunca foi online ou cache inválido)
+      setDbCategories(SPORT_GROUPS.filter(g => g.isActive !== false).map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true })));
+      setDbSports(SPORT_LIST.filter(s => s.isActive !== false).map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true })));
       return;
     }
     const fetchData = async () => {
@@ -88,8 +99,13 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
         sportSnap.forEach(doc => sports.push({ id: doc.id, isActive: true, ...doc.data() } as DbSport));
         const finalCats: DbCategory[] = cats.length > 0 ? cats : SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true }));
         const finalSports: DbSport[] = sports.length > 0 ? sports : SPORT_LIST.map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true }));
-        setDbCategories(finalCats.filter(c => c.isActive !== false));
-        setDbSports(finalSports.filter(s => s.isActive !== false));
+        const activeCats   = finalCats.filter(c => c.isActive !== false);
+        const activeSports = finalSports.filter(s => s.isActive !== false);
+        setDbCategories(activeCats);
+        setDbSports(activeSports);
+        // Persiste para uso offline — reflete sempre a última config do admin
+        localStorage.setItem('myPlacar_ActiveCategories', JSON.stringify(activeCats));
+        localStorage.setItem('myPlacar_ActiveSports',     JSON.stringify(activeSports));
       } catch (e) { console.error(e); }
     };
     fetchData();

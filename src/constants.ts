@@ -3,24 +3,24 @@ import { MatchSettings, VoiceCommands, SportDefinition } from './types.ts';
 
 // ATENÇÃO: Esta é a versão deste arquivo de código. 
 // Se você mudar no Admin para um número DIFERENTE deste, todos os usuários serão forçados a atualizar.
-export const APP_VERSION = '2.5.13'; 
+export const APP_VERSION = '2.5.14'; 
 
 export const SPORT_GROUPS = [
-  { id: 'raquetes', name: 'Raquetes', icon: '🎾' },
-  { id: 'coletivos', name: 'Coletivos', icon: '🏐' },
-  { id: 'mesa', name: 'Mesa', icon: '🏓' },
-  { id: 'cartas', name: 'Cartas', icon: '🃏' },
-  { id: 'outros', name: 'Outros', icon: '🎯' }
+  { id: 'raquetes',  name: 'Raquetes',  icon: '🎾', isActive: true  },
+  { id: 'coletivos', name: 'Coletivos', icon: '🏐', isActive: false },
+  { id: 'mesa',      name: 'Mesa',      icon: '🏓', isActive: false },
+  { id: 'cartas',    name: 'Cartas',    icon: '🃏', isActive: false },
+  { id: 'outros',    name: 'Outros',    icon: '🎯', isActive: false },
 ];
 
 export const SPORT_LIST: SportDefinition[] = [
-  { id: 'tennis', group: 'raquetes', name: 'Tênis', defaultIcon: '🎾', engine: 'tennis' },
-  { id: 'beach-tennis', group: 'raquetes', name: 'Beach tênis', defaultIcon: '🏓', engine: 'tennis' },
-  { id: 'pickleball', group: 'raquetes', name: 'Pickleball', defaultIcon: '🟡', engine: 'rally' },
-  { id: 'voley', group: 'coletivos', name: 'Vôlei', defaultIcon: '🏐', engine: 'rally' },
-  { id: 'voley-praia', group: 'coletivos', name: 'Vôlei de praia', defaultIcon: '🏐', engine: 'rally' },
-  { id: 'pingpong', group: 'mesa', name: 'Tênis de mesa', defaultIcon: '🏓', engine: 'rally' },
-  { id: 'truco', group: 'cartas', name: 'Truco', defaultIcon: '🃏', engine: 'points-fixed' }
+  { id: 'tennis',      group: 'raquetes',  name: 'Tênis',          defaultIcon: '🎾', engine: 'tennis',       isActive: true  },
+  { id: 'beach-tennis',group: 'raquetes',  name: 'Beach tênis',    defaultIcon: '🏓', engine: 'tennis',       isActive: true  },
+  { id: 'pickleball',  group: 'raquetes',  name: 'Pickleball',     defaultIcon: '🟡', engine: 'rally',        isActive: true  },
+  { id: 'voley',       group: 'coletivos', name: 'Vôlei',          defaultIcon: '🏐', engine: 'rally',        isActive: false },
+  { id: 'voley-praia', group: 'coletivos', name: 'Vôlei de praia', defaultIcon: '🏐', engine: 'rally',        isActive: false },
+  { id: 'pingpong',    group: 'mesa',      name: 'Tênis de mesa',  defaultIcon: '🏓', engine: 'rally',        isActive: false },
+  { id: 'truco',       group: 'cartas',    name: 'Truco',           defaultIcon: '🃏', engine: 'points-fixed', isActive: false },
 ];
 
 export const DEFAULT_VOICE_COMMANDS: VoiceCommands = {

@@ -5,6 +5,9 @@ export { hasPartnerWithPin, normalizePartnerPin } from './services/addPartnerToS
 export { autoRegisterPartnerByPin } from './services/autoRegisterPartnerByPin';
 export { createManualPartner } from './services/createManualPartner';
 export { createQueuePartner } from './services/createQueuePartner';
+export { createReferralPartner } from './services/createReferralPartner';
 export { createSelfPartner } from './services/createSelfPartner';
 export { guessPartnerGender } from './services/guessPartnerGender';
+export { mergePartnersByPin } from './services/mergePartnersByPin';
+export { sanitizePartnersForCloud } from './services/sanitizePartnersForCloud';
 export type { Partner, QueuePlayer } from './types';

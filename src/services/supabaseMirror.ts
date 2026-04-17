@@ -19,7 +19,8 @@
  */
 
 import { supabase } from '@infra/supabase';
-import type { UserProfile, MatchHistoryItem, Partner } from '../types.ts';
+import type { Partner } from '@modules/partners';
+import type { UserProfile, MatchHistoryItem } from '../types.ts';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 

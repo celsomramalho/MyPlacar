@@ -13,6 +13,8 @@ export interface ControllerRecord {
   nickname?: string;
   /** Papel explícito do dispositivo na live: owner (quem criou), judge (juiz designado), observer (somente leitura) */
   role?: 'owner' | 'judge' | 'observer';
+  /** Tipo físico do dispositivo, gravado no momento do registro para exibição de ícone */
+  deviceType?: 'watch' | 'phone' | 'tablet';
 }
 
 export interface TournamentPair {

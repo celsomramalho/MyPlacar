@@ -332,7 +332,12 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
         <input 
           value={value}
           onChange={onChange}
-          className={`w-full bg-white border border-gray-200 rounded-xl px-4 py-1.5 text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm ${(rightAction || enableVoice || enableCamera) ? 'pr-12' : ''} ${className}`}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          data-lpignore="true"
+          className={`notranslate w-full bg-white border border-gray-200 rounded-xl px-4 py-1.5 text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm ${(rightAction || enableVoice || enableCamera) ? 'pr-12' : ''} ${className}`}
           {...props}
         />
         <div className="absolute right-2 flex items-center gap-1">

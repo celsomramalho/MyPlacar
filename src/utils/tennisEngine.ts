@@ -1,5 +1,5 @@
 
-import { GameState, PointType } from '../types.ts';
+import { GameState, PointType, CourtSide } from '../types.ts';
 import { incrementScorePickleball } from './pickleballEngine.ts';
 
 export const incrementScore = (state: GameState, rallyWinner: 1 | 2, pointType: PointType = 'rally', source: string = 'cb'): GameState => {
@@ -173,4 +173,26 @@ const winSet = (state: GameState) => {
 export const undoPoint = (historyStack: GameState[]): GameState | null => {
     if (historyStack.length > 1) return historyStack[historyStack.length - 2];
     return null;
+};
+
+/**
+ * Calcula o lado da quadra do sacador para tênis e beach tennis.
+ * Regra: o lado alterna a cada ponto disputado no game atual.
+ * Placar 0-0 (início do game) → direita ('even').
+ * Cada ponto adicional inverte o lado.
+ *
+ * Funciona tanto no game normal (pontos: 0/15/30/40/Ad)
+ * quanto no tie-break (pontos numéricos).
+ */
+export const getTennisServerSide = (state: GameState): CourtSide => {
+  const scoreToPoints = (s: string): number => {
+    if (s === '15') return 1;
+    if (s === '30') return 2;
+    if (s === '40') return 3;
+    if (s === 'Ad') return 4;
+    // '0' ou numérico (tie-break)
+    return parseInt(s) || 0;
+  };
+  const total = scoreToPoints(state.p1.score) + scoreToPoints(state.p2.score);
+  return total % 2 === 0 ? 'even' : 'odd';
 };

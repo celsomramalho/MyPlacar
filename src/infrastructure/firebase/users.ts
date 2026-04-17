@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, query, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
 
 export interface FirebaseUserByPin {
   id: string;
@@ -6,6 +6,10 @@ export interface FirebaseUserByPin {
   name?: string;
   nickname: string;
   gender?: 'M' | 'F';
+}
+
+export interface FirebaseReferredUser extends FirebaseUserByPin {
+  addedAt: number;
 }
 
 interface FirebaseUserLookupOptions {
@@ -20,6 +24,8 @@ const getResolvedNickname = (
   data: { nickname?: string; name?: string; pin?: string },
   fallbackNickname?: string,
 ) => data.nickname || data.name?.split(' ')[0] || fallbackNickname || data.pin || '';
+
+const getUserAddedAt = (data: DocumentData) => data.createdAt?.toMillis?.() || data.joinedAt || data.addedAt || 0;
 
 const mapUserDocByPin = (
   docSnapshot: QueryDocumentSnapshot<DocumentData>,
@@ -84,4 +90,22 @@ export const findUsersByPins = async (
   return usersByPin;
 };
 
-export { getResolvedNickname, normalizeUserPin };
+export const findUsersReferredByPin = async (
+  db: Firestore,
+  pin: string,
+  options?: FirebaseUserLookupOptions,
+): Promise<FirebaseReferredUser[]> => {
+  const normalizedPin = normalizeUserPin(pin);
+  const usersQuery = query(collection(db, 'users'), where('referredByPin', '==', normalizedPin));
+  const snapshot = await getDocsFromServer(usersQuery);
+
+  return snapshot.docs.map(docSnapshot => {
+    const user = mapUserDocByPin(docSnapshot, options);
+    return {
+      ...user,
+      addedAt: getUserAddedAt(docSnapshot.data()),
+    };
+  });
+};
+
+export { getResolvedNickname, getUserAddedAt, normalizeUserPin };

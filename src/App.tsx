@@ -23,6 +23,13 @@ import { initPickleballState } from './utils/pickleballEngine.ts';
 import { applyGoldenRule } from './utils/formatters.ts';
 import { isWatchDevice } from './utils/device.ts';
 import { findUserByPin, getDb, clearFirestoreCache } from '@infra/firebase';
+
+/** Detecta o tipo físico do dispositivo atual para gravar no ControllerRecord */
+const getDeviceType = (): 'watch' | 'phone' | 'tablet' => {
+  if (isWatchDevice()) return 'watch';
+  const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  return isMobile ? 'phone' : 'tablet';
+};
 import { getAuthInstance } from '@infra/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
@@ -403,33 +410,57 @@ const App: React.FC = () => {
   }, [userProfile.pin]);
 
   useEffect(() => {
-    const handleAppExit = () => {
-      if (gameState?.isMirroringActive && userProfile.email && navigator.onLine) {
-        const db = getDb();
-        if (db) {
-          const myPin = userProfile.pin?.toUpperCase();
-          const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-          const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
-          if (targetPin) {
-            if (gameState.commandOwnerId === deviceId) {
-              setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
-            } else {
-              getDoc(doc(db, "live_matches", targetPin)).then(snap => {
-                if (snap.exists()) {
-                  const data = snap.data();
-                  const nextControllers = { ...(data.controllers || {}) };
-                  delete nextControllers[deviceId];
-                  updateDoc(doc(db, "live_matches", targetPin), { controllers: nextControllers }).catch(() => {});
-                }
-              }).catch(() => {});
+    const performExit = () => {
+      if (!gameState?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
+      const db = getDb();
+      if (!db) return;
+      const myPin = userProfile.pin?.toUpperCase();
+      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+      const targetPin = (judgeMatch && judgeMatch.ownerPin)
+        ? judgeMatch.ownerPin.toUpperCase()
+        : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+      if (!targetPin) return;
+
+      const isActiveController = gameState.commandOwnerId === deviceId;
+
+      if (isActiveController && isOriginalOwner) {
+        // Owner ativo saiu: fecha a live
+        setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
+      } else {
+        // Judge ativo saiu: libera o controle (não fecha a live) e se remove dos controllers
+        // Observer saiu: apenas se remove dos controllers
+        getDoc(doc(db, "live_matches", targetPin)).then(snap => {
+          if (snap.exists()) {
+            const data = snap.data();
+            const nextControllers = { ...(data.controllers || {}) };
+            delete nextControllers[deviceId];
+            const extraFields: Record<string, unknown> = { controllers: nextControllers };
+            if (isActiveController) {
+              // Judge era controller: libera o commandOwnerId para o owner poder assumir
+              extraFields.commandOwnerId = null;
+              extraFields.commandOwner = null;
             }
+            updateDoc(doc(db, "live_matches", targetPin), extraFields).catch(() => {});
           }
-        }
+        }).catch(() => {});
       }
     };
-    globalThis.addEventListener('beforeunload', handleAppExit);
-    return () => globalThis.removeEventListener('beforeunload', handleAppExit);
-  }, [gameState, userProfile.pin, userProfile.email, deviceId, isOriginalOwner]);
+
+    // visibilitychange é o sinal mais confiável em mobile (iOS/Android)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') performExit();
+    };
+
+    // beforeunload cobre desktop e serve como fallback
+    const handleBeforeUnload = () => performExit();
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    globalThis.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      globalThis.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [gameState, userProfile.pin, userProfile.email, deviceId, isOriginalOwner, activeLives]);
 
   useEffect(() => {
     localStorage.setItem('myPlacar_AppVersion', LOCAL_CODE_VERSION);
@@ -711,11 +742,14 @@ const App: React.FC = () => {
         )
       : null;
 
+    // Fallback: se activeLives ainda não chegou (latência do onSnapshot da collection),
+    // usa o ownerPin já gravado no gameState local para não escutar o próprio pin do observer.
+    const localOwnerPin = gameState?.ownerPin?.toUpperCase();
     const listenPin = myLive
       ? myLive.ownerPin?.toUpperCase()
       : observerLive
         ? observerLive.ownerPin?.toUpperCase()
-        : myPin;
+        : localOwnerPin || myPin;
 
     if (!listenPin) return;
 
@@ -889,7 +923,7 @@ const App: React.FC = () => {
             if (snap.exists() && !snap.data().isLiveClosed) {
               const nextControllers = { ...(snap.data().controllers || {}) };
               if (!nextControllers[deviceId]) {
-                nextControllers[deviceId] = { label: currentFullDeviceName, nickname: myNickname, lastSeen: Date.now(), role: deviceRole };
+                nextControllers[deviceId] = { label: currentFullDeviceName, nickname: myNickname, lastSeen: Date.now(), role: deviceRole, deviceType: getDeviceType() };
                 updateDoc(doc(db, "live_matches", ownerPin), { controllers: nextControllers }).catch(() => {});
               }
             }
@@ -957,6 +991,10 @@ const App: React.FC = () => {
     const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
     
     const interval = setInterval(async () => {
+      const now = Date.now();
+      const myDeviceType = getDeviceType();
+
+      // ── Judge heartbeat ──────────────────────────────────────────────────────
       const judgeMatches = activeLives.filter(l => l.judgePin?.toUpperCase() === myPin);
       for (const match of judgeMatches) {
         if (match.ownerPin) {
@@ -971,13 +1009,39 @@ const App: React.FC = () => {
               controllers[deviceId] = { 
                 label: currentFullDeviceName, 
                 nickname: myNickname,
-                lastSeen: Date.now(),
-                role: isActiveJudge ? 'judge' : 'observer'
+                lastSeen: now,
+                role: isActiveJudge ? 'judge' : 'observer',
+                deviceType: myDeviceType
               };
               await updateDoc(docRef, { controllers });
             }
           } catch {}
         }
+      }
+
+      // ── Owner heartbeat (quando NÃO é o controller ativo) ──────────────────
+      // Garante que o owner aparece como "presente" nos Dispositivos participantes
+      // mesmo quando o judge está controlando a partida.
+      const ownerMatch = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin);
+      const isOwnerControlling = ownerMatch?.commandOwnerId === deviceId;
+      if (ownerMatch && !isOwnerControlling) {
+        const docRef = doc(db, "live_matches", myPin);
+        try {
+          const snap = await getDoc(docRef);
+          if (snap.exists() && !snap.data().isLiveClosed) {
+            const data = snap.data();
+            const controllers = { ...(data.controllers || {}) };
+            controllers[deviceId] = {
+              label: currentFullDeviceName,
+              nickname: myNickname,
+              lastSeen: now,
+              isOwner: true,
+              role: 'observer',
+              deviceType: myDeviceType
+            };
+            await updateDoc(docRef, { controllers });
+          }
+        } catch {}
       }
     }, 30000);
     return () => clearInterval(interval);
@@ -1006,6 +1070,10 @@ const App: React.FC = () => {
       if (gameState.isMirroringActive && userProfile.email && !gameState.isLiveClosed && navigator.onLine) {
         const db = getDb();
         if (db && gameState.commandOwnerId === deviceId) {
+            // Guard duplo: só escreve se AMBOS local e Firebase confirmam este device como controller.
+            // Elimina race condition onde o ex-controller ainda escreve por alguns ciclos após ceder o controle.
+            const isConfirmedControllerInCloud = activeLives.some(l => l.commandOwnerId === deviceId);
+            if (!isConfirmedControllerInCloud) return;
             const now = Date.now();
             const prevStateStr = lastSentStateRef.current;
             const prevState = prevStateStr ? JSON.parse(prevStateStr) : null;
@@ -1029,22 +1097,28 @@ const App: React.FC = () => {
               const shouldUpdateLastSeen = now - lastSeenUpdateRef.current > 30000;
               // O controller ativo é sempre owner se ownerPin bate, senão é judge
               const controllerRole: 'owner' | 'judge' = isOriginalOwner ? 'owner' : 'judge';
-              
+              const myDeviceType = getDeviceType();
+
               if (shouldUpdateLastSeen) {
                 Object.keys(nextControllers).forEach(id => { 
                   if (nextControllers[id].label === currentFullDeviceName && id !== deviceId) delete nextControllers[id]; 
                 });
-                nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now, isOwner: isOriginalOwner, role: controllerRole };
+                // Limpeza de dispositivos stale (sem heartbeat há mais de 2 minutos)
+                Object.keys(nextControllers).forEach(id => {
+                  if (id !== deviceId && (now - (nextControllers[id].lastSeen || 0)) > 120000) {
+                    delete nextControllers[id];
+                  }
+                });
+                nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now, isOwner: isOriginalOwner, role: controllerRole, deviceType: myDeviceType };
                 lastSeenUpdateRef.current = now;
               } else {
                 const existing = gameState.controllers?.[deviceId];
-                if (existing) nextControllers[deviceId] = { ...existing, isOwner: isOriginalOwner, role: controllerRole };
+                if (existing) nextControllers[deviceId] = { ...existing, isOwner: isOriginalOwner, role: controllerRole, deviceType: myDeviceType };
                 else {
-                  nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now, isOwner: isOriginalOwner, role: controllerRole };
+                  nextControllers[deviceId] = { label: currentFullDeviceName, lastSeen: now, isOwner: isOriginalOwner, role: controllerRole, deviceType: myDeviceType };
                   lastSeenUpdateRef.current = now;
                 }
               }
-
               const stateToSave = sanitizeForFirestore({ ...gameState, controllers: nextControllers });
               if (stateToSave) {
                 const strState = JSON.stringify(stateToSave);
@@ -1609,8 +1683,10 @@ const App: React.FC = () => {
 
           // ── Guard: bloqueia assumir controle se já há um controller ativo (visto há menos de 30s)
           // e esse controller NÃO é este dispositivo.
+          // EXCEÇÃO: o owner original tem prioridade máxima e nunca é bloqueado —
+          // ele sempre pode retomar o controle independentemente de quem está controlando.
           const currentControllerId = cloudState.commandOwnerId;
-          if (currentControllerId && currentControllerId !== deviceId) {
+          if (!isOriginalOwner && currentControllerId && currentControllerId !== deviceId) {
             const controllerRecord = cloudState.controllers?.[currentControllerId];
             const lastSeen = controllerRecord?.lastSeen || 0;
             const isActiveController = (Date.now() - lastSeen) < 30000;
@@ -1659,7 +1735,7 @@ const App: React.FC = () => {
           if (currentControllerId && currentControllerId !== deviceId && nextControllers[currentControllerId]) {
             nextControllers[currentControllerId] = { ...nextControllers[currentControllerId], role: 'observer' };
           }
-          nextControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole };
+          nextControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() };
           const updatedStateRaw = { ...cloudState, commandOwner: myCommandName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false, matchConfig: { ...syncedSettings, setsToWin: syncedSettings.sets, isWatchMode: !!syncedSettings.isWatchMode } };
           const updatedState = sanitizeForFirestore(updatedStateRaw);
           if (updatedState) {
@@ -1710,7 +1786,7 @@ const App: React.FC = () => {
           const myCommandName = currentFullDeviceName;
           const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
           const nextControllers = { ...(cloudData.controllers || {}) };
-          nextControllers[deviceId] = { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: 'observer' };
+          nextControllers[deviceId] = { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: 'observer', deviceType: getDeviceType() };
           await updateDoc(doc(db, "live_matches", pinUpper), { controllers: nextControllers }).catch(() => {});
           
           if (cloudData.matchConfig) {

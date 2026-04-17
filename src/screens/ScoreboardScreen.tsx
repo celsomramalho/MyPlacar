@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users } from 'lucide-react';
+import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Crown } from 'lucide-react';
 import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -391,30 +391,26 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [gameState.p1.score, gameState.p2.score, (gameState.pointHistory?.length ?? 0)]);
 
   const groupedControllers = useMemo(() => {
-    const counts: Record<string, { count: number; isOnline: boolean; isOwner: boolean }> = {};
     const list = Object.entries(gameState.controllers || {});
     const now = Date.now();
-    list.forEach(([id, data]) => {
-      const d = data as { label: string; lastSeen: number; isOwner?: boolean };
-      if (!counts[d.label]) {
-        counts[d.label] = { count: 0, isOnline: false, isOwner: false };
-      }
-      counts[d.label].count += 1;
-      if (now - d.lastSeen < 60000) {
-        counts[d.label].isOnline = true;
-      }
-      if (d.isOwner) {
-        counts[d.label].isOwner = true;
-      }
-    });
-    return Object.entries(counts)
-      .map(([name, { count, isOnline, isOwner }]) => ({ name, count, isOnline, isOwner }))
+    // Considera online se visto nos últimos 2 minutos (alinhado com o TTL de limpeza)
+    return list
+      .map(([id, data]) => {
+        const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' };
+        const isOnline = (now - d.lastSeen) < 120000;
+        const isActiveController = gameState.commandOwnerId === id;
+        return { id, label: d.label, isOnline, isOwner: !!d.isOwner, role: d.role || 'observer', deviceType: d.deviceType || 'phone', isActiveController };
+      })
+      .filter(d => d.isOnline) // exibe apenas dispositivos que ainda estão ativos
       .sort((a, b) => {
-        if (a.name === gameState.commandOwner) return -1;
-        if (b.name === gameState.commandOwner) return 1;
-        return a.name.localeCompare(b.name);
+        // Controller ativo primeiro, depois owners, depois os demais por ordem alfabética
+        if (a.isActiveController) return -1;
+        if (b.isActiveController) return 1;
+        if (a.isOwner && !b.isOwner) return -1;
+        if (!a.isOwner && b.isOwner) return 1;
+        return a.label.localeCompare(b.label);
       });
-  }, [gameState.controllers, gameState.commandOwner]);
+  }, [gameState.controllers, gameState.commandOwnerId]);
 
   const createCommandLog = (commandText: string, source: string = 'cb', isError = false, winner?: 1 | 2, isRemote = false) => {
     const now = Date.now();
@@ -964,7 +960,26 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   <button onClick={() => setIsLiveExpanded(!isLiveExpanded)} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center active:scale-90 transition-all border border-gray-100">{isLiveExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
                </div>
                {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
-                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ name, count, isOnline, isOwner }) => { const isPrimary = gameState.commandOwner === name; const isActive = isPrimary || (isOwner && isOnline); return <div key={name} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${isActive && !gameState.isLiveClosed ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : 'bg-white border-gray-100 text-gray-400 opacity-60'}`}>{isActive && !gameState.isLiveClosed ? <ShieldCheck size={14} className="text-blue-600" fill="white" /> : <Eye size={12} className="text-[#40E0D0]" />}<span className="text-[10px] font-black">{name}{count > 1 ? ` (${count})` : ''}</span></div>; })}</div></div>
+                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ id, label, isOnline, isOwner, role, deviceType, isActiveController }) => {
+                    // Ícone 1: tipo físico do dispositivo
+                    const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'tablet' ? Monitor : Smartphone;
+                    // Ícone 2: papel na live
+                    const RoleIcon = role === 'owner' ? Crown : role === 'judge' ? Gavel : Eye;
+                    const roleColor = role === 'owner' ? 'text-blue-600' : role === 'judge' ? 'text-emerald-500' : 'text-cyan-400';
+                    const roleLabel = role === 'owner' ? 'Dono' : role === 'judge' ? 'Juiz' : 'Obs.';
+                    // Nome curto: só a parte antes do " - "
+                    const shortLabel = label.includes(' - ') ? label.split(' - ').slice(1).join(' - ') : label;
+                    return (
+                      <div key={id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isActiveController && !gameState.isLiveClosed ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'}`}>
+                        <DeviceIcon size={12} className={isActiveController ? 'text-blue-500' : 'text-gray-400'} />
+                        <span className="text-[10px] font-black">{shortLabel}</span>
+                        <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${roleColor}`}>
+                          <RoleIcon size={11} />
+                          <span className="text-[9px] font-bold">{roleLabel}</span>
+                        </div>
+                      </div>
+                    );
+                  })}</div></div>
                    <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex items-center gap-2.5"><CheckCircle size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Sincronização confirmada</span></div><div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-colors ${gameState.isLiveClosed ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{gameState.isLiveClosed ? <X size={12} strokeWidth={4} /> : <Check size={12} strokeWidth={4} />}<span className="text-[10px] font-black">{gameState.isLiveClosed ? 'Encerrado' : 'Ativo'}</span></div></div>
                     {/* Recurso de inserir juiz - Apenas para o proprietário */}
                     {isOriginalOwner && (
