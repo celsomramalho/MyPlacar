@@ -11,10 +11,6 @@ export interface ControllerRecord {
   lastSeen: number;
   isOwner?: boolean;
   nickname?: string;
-  /** Papel explícito do dispositivo na live: owner (quem criou), judge (juiz designado), observer (somente leitura) */
-  role?: 'owner' | 'judge' | 'observer';
-  /** Tipo físico do dispositivo, gravado no momento do registro para exibição de ícone */
-  deviceType?: 'watch' | 'phone' | 'tablet';
 }
 
 export interface TournamentPair {
@@ -64,7 +60,24 @@ export interface TournamentEntry {
   checkedIn?: boolean;
 }
 
-export type { Partner, QueuePlayer } from './modules/partners/types';
+export interface Partner {
+  id: string;
+  name?: string;
+  nickname: string;
+  pin: string;
+  origin: 'referral' | 'qrcode' | 'manual';
+  addedAt: number;
+  isSelected?: boolean;
+  gender?: 'M' | 'F';
+}
+
+export interface QueuePlayer {
+  id: string;
+  name: string;
+  gender: 'M' | 'F';
+  verified?: boolean;
+  isSelected?: boolean;
+}
 
 export interface SportDefinition {
   id: SportType;
@@ -72,6 +85,7 @@ export interface SportDefinition {
   name: string;
   defaultIcon: string;
   engine: 'tennis' | 'rally' | 'points-fixed';
+  isActive?: boolean;
 }
 
 export type ErrorSoundType = 'baixo' | 'agudo' | 'duplo' | 'discreto';

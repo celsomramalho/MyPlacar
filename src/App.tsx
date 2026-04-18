@@ -266,9 +266,13 @@ const App: React.FC = () => {
   });
 
   const isOriginalOwner = useMemo(() => {
-    if (!gameState || !userProfile.pin) return false;
-    return userProfile.pin.toUpperCase() === gameState.ownerPin?.toUpperCase();
-  }, [gameState?.ownerPin, userProfile.pin]);
+    if (!userProfile.pin) return false;
+    const myPin = userProfile.pin.toUpperCase();
+    // Fonte primária: activeLives (Firebase) — imune a gameState local desatualizado
+    if (activeLives.some(l => l.ownerPin?.toUpperCase() === myPin)) return true;
+    // Fallback: gameState local (cobre o caso em que activeLives ainda não chegou)
+    return myPin === gameState?.ownerPin?.toUpperCase();
+  }, [activeLives, userProfile.pin, gameState?.ownerPin]);
 
   const _activeMatchPin = useMemo(() => {
     return isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState?.ownerPin?.toUpperCase();
@@ -728,6 +732,12 @@ const App: React.FC = () => {
     }
   }, [matchSettings.brightness]);
 
+  // Ref espelho de matchSettings — permite que o callback do onSnapshot leia
+  // configurações locais atualizadas sem precisar de matchSettings no dep array,
+  // evitando o resubscribe do listener a cada mudança de setting.
+  const matchSettingsRef = useRef(matchSettings);
+  useEffect(() => { matchSettingsRef.current = matchSettings; }, [matchSettings]);
+
   useEffect(() => {
     if (!userProfile.pin || !currentFullDeviceName || !navigator.onLine) return;
     const db = getDb();
@@ -771,8 +781,10 @@ const App: React.FC = () => {
         }
         setCloudLiveExists(true);
         if (cloudData.commandOwnerId !== deviceId) {
+           // Lê matchSettings via ref para não forçar resubscribe do listener
+           const localSettings = matchSettingsRef.current;
            setGameState(prev => {
-             const baseConfig = prev?.matchConfig || matchSettings;
+             const baseConfig = prev?.matchConfig || localSettings;
              return {
                ...cloudData,
                isMirroringActive: true,
@@ -816,7 +828,8 @@ const App: React.FC = () => {
       }
     });
     return () => unsubscribe();
-  }, [userProfile.pin, currentFullDeviceName, deviceId, matchSettings, activeLives]);
+  // matchSettings removido do dep array — lido via matchSettingsRef para evitar resubscribe
+  }, [userProfile.pin, currentFullDeviceName, deviceId, activeLives]);
 
   const prevIsCommandOwner = useRef(isCommandOwner);
   useEffect(() => {
@@ -894,10 +907,11 @@ const App: React.FC = () => {
     }
   }, [authReady]);
 
+  // Throttle do registro automático de observer: evita writes excessivos no Firestore
+  const lastObserverRegisterRef = useRef<number>(0);
+
   useEffect(() => {
     if (!userProfile.pin) { setCloudLiveExists(false); return; }
-    // Usa deviceId para detectar se ESTE dispositivo é o controller ativo
-    // (suporta múltiplos dispositivos do mesmo usuário)
     const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
     const hasAnyLive = activeLives.length > 0;
     setCloudLiveExists(hasAnyLive);
@@ -907,6 +921,9 @@ const App: React.FC = () => {
 
     // Registro automático como observador/juiz: quando há live E este dispositivo NÃO é o controller
     if (!thisDeviceIsController && hasAnyLive && navigator.onLine && userProfile.email) {
+      const now = Date.now();
+      // Throttle: só registra/atualiza a cada 60s para não gerar writes excessivos
+      if (now - lastObserverRegisterRef.current < 60000) return;
       const db = getDb();
       if (db) {
         const observerLive = activeLives.reduce((latest, l) =>
@@ -916,14 +933,22 @@ const App: React.FC = () => {
         if (ownerPin) {
           const myPin = userProfile.pin?.toUpperCase();
           const myNickname = userProfile.nickname || userProfile.name?.split(' ')[0] || 'Observador';
-          // Determina o papel correto: judge se o pin bate com judgePin, senão observer
           const isJudgeDevice = activeLives.some(l => l.judgePin?.toUpperCase() === myPin);
           const deviceRole: 'judge' | 'observer' = isJudgeDevice ? 'judge' : 'observer';
+          lastObserverRegisterRef.current = now;
           getDoc(doc(db, "live_matches", ownerPin)).then(snap => {
             if (snap.exists() && !snap.data().isLiveClosed) {
               const nextControllers = { ...(snap.data().controllers || {}) };
-              if (!nextControllers[deviceId]) {
-                nextControllers[deviceId] = { label: currentFullDeviceName, nickname: myNickname, lastSeen: Date.now(), role: deviceRole, deviceType: getDeviceType() };
+              const existing = nextControllers[deviceId];
+              // Sempre atualiza lastSeen — não apenas quando não existe
+              if (!existing || (now - (existing.lastSeen || 0)) > 55000) {
+                nextControllers[deviceId] = { 
+                  label: currentFullDeviceName, 
+                  nickname: myNickname, 
+                  lastSeen: now, 
+                  role: deviceRole, 
+                  deviceType: getDeviceType() 
+                };
                 updateDoc(doc(db, "live_matches", ownerPin), { controllers: nextControllers }).catch(() => {});
               }
             }
@@ -1578,10 +1603,13 @@ const App: React.FC = () => {
   };
 
   const handleScoreUpdate = (player: 1 | 2, type: PointType = 'rally', source: string = 'cb') => {
-    // Guarda referência ao gameState atual para as verificações de guarda
     const current = gameState;
     if (!current || current.isConfirmedFinished || current.isMatchOver || current.isLiveClosed) return;
+    // Bloqueia se outro device é o controller ativo (live em andamento)
     if (current.isMirroringActive && current.commandOwnerId !== deviceId) return;
+    // Bloqueia se há juiz designado e este device não é o controller
+    // (mesmo antes de ativar o mirroring, o juiz deve ser o único a pontuar)
+    if (!current.isMirroringActive && current.judgePin && current.commandOwnerId !== deviceId) return;
     setIsRecoveryFromMatchOver(false);
     // Usa setState funcional para garantir que incrementScore opera
     // sempre sobre o estado mais recente, evitando closure stale
@@ -1666,6 +1694,41 @@ const App: React.FC = () => {
       } catch (_e) { setModalConfig({ title: "Erro", message: "Erro ao excluir a transmissão. Verifique sua internet.", onConfirm: () => setModalConfig(null) }); }
     } else { setModalConfig({ title: "Erro", message: "Verifique sua conexão para encerrar a live.", onConfirm: () => setModalConfig(null) }); }
   };
+
+  /**
+   * handleLeaveLive — chamado quando o usuário sai VOLUNTARIAMENTE da tela do placar
+   * (botão Voltar ou Home). Diferente do performExit (fechamento do app):
+   * - Owner: NÃO fecha a live (pode voltar), apenas remove sua presença dos controllers
+   * - Judge ativo: libera commandOwnerId (sem fechar a live) e remove dos controllers
+   * - Observer: apenas remove dos controllers
+   */
+  const handleLeaveLive = useCallback(async () => {
+    if (!gameState?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
+    const db = getDb();
+    if (!db) return;
+    const myPin = userProfile.pin?.toUpperCase();
+    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+    const targetPin = (judgeMatch && judgeMatch.ownerPin)
+      ? judgeMatch.ownerPin.toUpperCase()
+      : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+    if (!targetPin) return;
+
+    try {
+      const snap = await getDoc(doc(db, "live_matches", targetPin));
+      if (!snap.exists() || snap.data().isLiveClosed) return;
+      const data = snap.data();
+      const nextControllers = { ...(data.controllers || {}) };
+      delete nextControllers[deviceId];
+      const isActiveController = gameState.commandOwnerId === deviceId;
+      const extraFields: Record<string, unknown> = { controllers: nextControllers };
+      if (isActiveController && !isOriginalOwner) {
+        // Judge era o controller ativo: libera o controle para o owner reassumir
+        extraFields.commandOwnerId = null;
+        extraFields.commandOwner = null;
+      }
+      await updateDoc(doc(db, "live_matches", targetPin), extraFields).catch(() => {});
+    } catch {}
+  }, [gameState, userProfile.email, userProfile.pin, deviceId, isOriginalOwner, activeLives]);
 
   const handleControlLive = async () => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
@@ -2639,7 +2702,7 @@ const App: React.FC = () => {
       }} onSwitchServer={handleSmartSwitchServer} onTogglePause={() => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner) return; 
         setGameState(p => p ? {...p, isPaused: !p.isPaused} : null); 
-      }} onBack={() => setCurrentScreen('new-game')} onHome={() => setCurrentScreen('settings')} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={a => { 
+      }} onBack={() => { handleLeaveLive(); setCurrentScreen('new-game'); }} onHome={() => { handleLeaveLive(); setCurrentScreen('settings'); }} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={a => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isLiveClosed) return; 
         if (a) { const isStarted = (gameState.pointHistory?.length ?? 0) > 0 || gameState.p1.games > 0 || gameState.p2.games > 0 || (gameState.p1.score !== '0' && gameState.p1.score !== '') || (gameState.p2.score !== '0' && gameState.p2.score !== ''); if (isStarted) { setModalConfig({ title: "Atenção", message: "Não é possível iniciar a live com a partida em andamento.", onConfirm: () => setModalConfig(null) }); return; } }
         const db = getDb();
@@ -2647,7 +2710,7 @@ const App: React.FC = () => {
           const myPin = userProfile.pin?.toUpperCase();
           const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
           const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
-          const nextControllers = { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now() } };
+        const nextControllers = { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: isOriginalOwner ? 'owner' : 'judge' as const, deviceType: getDeviceType() } };
           const stateToSave = sanitizeForFirestore({...gameState, isMirroringActive: true, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false});
           if (stateToSave && targetPin) { setDoc(doc(db, "live_matches", targetPin), stateToSave).catch(() => {}); }
         }

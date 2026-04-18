@@ -696,6 +696,30 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   const isVoiceActive = isListening && !voiceWasManuallyStopped && gameState.matchConfig.voiceEnabled && !gameState.isLiveClosed && isCommandOwner && !gameState.isMatchOver;
   const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+
+  // Banner "quem está controlando" — calculado fora do JSX para evitar IIFE com const
+  const liveBanner = useMemo(() => {
+    if (!isLiveActive || gameState.isLiveClosed || gameState.matchConfig.isWatchMode) return null;
+    const iAmController = currentDeviceId === gameState.commandOwnerId;
+    const controllerName = gameState.commandOwner || '';
+    if (iAmController) {
+      return (
+        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-[11px] font-black tracking-tight">
+          {isOriginalOwner ? <Crown size={13} /> : <Gavel size={13} />}
+          <span>Você está no controle do placar</span>
+        </div>
+      );
+    }
+    if (gameState.isMirroringActive && controllerName) {
+      return (
+        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white text-[11px] font-black tracking-tight">
+          <Gavel size={13} />
+          <span>{controllerName} está controlando · você está observando</span>
+        </div>
+      );
+    }
+    return null;
+  }, [isLiveActive, gameState.isLiveClosed, gameState.matchConfig.isWatchMode, gameState.commandOwnerId, gameState.commandOwner, gameState.isMirroringActive, currentDeviceId, isOriginalOwner]);
   const connType = connection?.type;
   const downlink = connection?.downlink;
 
@@ -785,6 +809,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           </button>
         </div>
       </header>
+
+      {/* Banner: indica quem está controlando o placar durante a live */}
+      {liveBanner}
+
       <main className={`flex-1 p-4 max-w-2xl mx-auto w-full pb-36 overflow-y-auto no-scrollbar transition-all duration-700 ${gameState.isLiveClosed && !isOfflineMode ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
         <div className={`bg-white rounded-[2rem] shadow-sm border ${gameState.isConfirmedFinished ? 'border-emerald-400 ring-4 ring-emerald-50' : isTieBreak ? 'border-amber-300 ring-4 ring-amber-100' : 'border-gray-100'} p-4 md:p-8 flex flex-col items-center gap-4 relative`}>
            <div className="flex flex-col w-full mb-4">

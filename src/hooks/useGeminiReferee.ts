@@ -9,6 +9,19 @@ interface SpeechRecognitionResultList { readonly length: number; [index: number]
 interface SpeechRecognitionEvent extends Event { readonly resultIndex: number; readonly results: SpeechRecognitionResultList; }
 interface SpeechRecognitionErrorEvent extends Event { readonly error: string; readonly message: string; }
 
+interface SpeechRecognitionInstance {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
+
 interface UseGeminiRefereeProps {
   onScoreP1: (type: PointType, text: string) => void;
   onScoreP2: (type: PointType, text: string) => void;
@@ -53,7 +66,7 @@ export const useGeminiReferee = ({
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>('');
   
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const shouldRunRef = useRef<boolean>(false); // controla se onend deve reiniciar
   const lastActionTimeRef = useRef<number>(0);
   const lastProcessedTextRef = useRef<string>('');
@@ -135,7 +148,10 @@ export const useGeminiReferee = ({
   }, []);
 
   const initRecognition = useCallback(() => {
-    const SpeechRecognition = (window as unknown as { SpeechRecognition?: typeof globalThis.SpeechRecognition; webkitSpeechRecognition?: typeof globalThis.SpeechRecognition }).SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: typeof globalThis.SpeechRecognition }).webkitSpeechRecognition;
+    const SpeechRecognition = (
+      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition
+    );
     if (!SpeechRecognition) {
       setError("Reconhecimento de voz não suportado neste navegador.");
       return;

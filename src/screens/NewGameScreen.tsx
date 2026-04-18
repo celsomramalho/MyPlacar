@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
-import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieBreakAt, TieBreakSideSwitchMode } from '../types';
+import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../types';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants';
 import { applyGoldenRule } from '../utils/formatters';
