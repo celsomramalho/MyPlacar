@@ -33,6 +33,7 @@ export const notificationService = {
 
     // Envia e-mails reais usando o template de comunicado
     const promises = targetEmails.map(email => 
+      // @ts-expect-error - comunicados usam template custom não tipado
       emailService.sendEmail('template_v9fhxz3', {
         to_name: 'Usuário',
         email: email,

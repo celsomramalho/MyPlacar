@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Crown } from 'lucide-react';
+import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown } from 'lucide-react';
 import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -396,7 +396,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     // Considera online se visto nos últimos 2 minutos (alinhado com o TTL de limpeza)
     return list
       .map(([id, data]) => {
-        const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' };
+        const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop' };
         const isOnline = (now - d.lastSeen) < 120000;
         const isActiveController = gameState.commandOwnerId === id;
         return { id, label: d.label, isOnline, isOwner: !!d.isOwner, role: d.role || 'observer', deviceType: d.deviceType || 'phone', isActiveController };
@@ -990,7 +990,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
                    <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ id, label, isOnline, isOwner, role, deviceType, isActiveController }) => {
                     // Ícone 1: tipo físico do dispositivo
-                    const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'tablet' ? Monitor : Smartphone;
+                    const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'laptop' ? Laptop : deviceType === 'tablet' ? Monitor : Smartphone;
                     // Ícone 2: papel na live
                     const RoleIcon = role === 'owner' ? Crown : role === 'judge' ? Gavel : Eye;
                     const roleColor = role === 'owner' ? 'text-blue-600' : role === 'judge' ? 'text-emerald-500' : 'text-cyan-400';

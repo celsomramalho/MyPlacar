@@ -13,6 +13,9 @@ if ('serviceWorker' in navigator) {
       // Só recarrega se a página não foi carregada pelo próprio SW nesta sessão
       if (!sessionStorage.getItem('sw-reload-done')) {
         sessionStorage.setItem('sw-reload-done', '1');
+        // Sinaliza que este unload é um reload de SW — não uma saída real do usuário.
+        // O beforeunload em App.tsx checa essa flag e NÃO fecha a live.
+        try { sessionStorage.setItem('myPlacar_pwa_updating', '1'); } catch {}
         globalThis.location.reload();
       }
     }

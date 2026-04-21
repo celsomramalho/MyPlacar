@@ -11,6 +11,8 @@ export interface ControllerRecord {
   lastSeen: number;
   isOwner?: boolean;
   nickname?: string;
+  role?: string;
+  deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop';
 }
 
 export interface TournamentPair {

@@ -25,10 +25,14 @@ import { isWatchDevice } from './utils/device.ts';
 import { findUserByPin, getDb, clearFirestoreCache } from '@infra/firebase';
 
 /** Detecta o tipo físico do dispositivo atual para gravar no ControllerRecord */
-const getDeviceType = (): 'watch' | 'phone' | 'tablet' => {
+const getDeviceType = (): 'watch' | 'phone' | 'tablet' | 'laptop' => {
   if (isWatchDevice()) return 'watch';
   const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  return isMobile ? 'phone' : 'tablet';
+  if (isMobile) return 'phone';
+  // Consulta o label salvo para distinguir notebook/PC de tablet genérico
+  const label = (localStorage.getItem('myPlacar_LocalDeviceLabel') || '').toLowerCase();
+  const isLaptop = label.includes('note') || label.includes('laptop') || label.includes('pc') || label.includes('computador');
+  return isLaptop ? 'laptop' : 'tablet';
 };
 import { getAuthInstance } from '@infra/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -265,6 +269,14 @@ const App: React.FC = () => {
     return saved;
   });
 
+  // Refs espelho de gameState e activeLives — declarados logo após os estados para
+  // garantir que estejam disponíveis em qualquer useEffect ou closure abaixo,
+  // incluindo o performExit (que não pode ter gameState/activeLives no dep array).
+  const gameStateRef = useRef(gameState);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+  const activeLivesRef = useRef<GameState[]>([]);
+  useEffect(() => { activeLivesRef.current = activeLives; }, [activeLives]);
+
   const isOriginalOwner = useMemo(() => {
     if (!userProfile.pin) return false;
     const myPin = userProfile.pin.toUpperCase();
@@ -348,7 +360,6 @@ const App: React.FC = () => {
   const lastSentStateRef = useRef<string>("");
 
   const sanitizeForFirestore = (obj: unknown) => {
-    if (!userProfile.email || !userProfile.pin) return null; // ← era &&, agora || (rejeita se qualquer um faltar)
     const clean = JSON.parse(JSON.stringify(obj, (key, value) => value === undefined ? null : value));
     const fieldsToRemove = ['isWatchMode', 'brightness', 'volume', 'deviceLabel', 'selectedVoiceURI', 'voiceEnabled', 'voiceScoring', 'actionCooldown', 'stateLockout', 'screenDimTimeout', 'customSportIcon', 'customSportIcons', 'customCategoryIcons', 'cloudSportIcons', 'cloudCategoryIcons'];
     const deepClean = (target: Record<string, unknown>) => {
@@ -415,17 +426,21 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const performExit = () => {
-      if (!gameState?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
+      // Lê estado atual via refs — evita closure stale e mantém o dep array estável
+      // (o effect não é recriado a cada ponto marcado).
+      const gs = gameStateRef.current;
+      const lives = activeLivesRef.current;
+      if (!gs?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
       const db = getDb();
       if (!db) return;
       const myPin = userProfile.pin?.toUpperCase();
-      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+      const judgeMatch = lives.find(l => l.judgePin?.toUpperCase() === myPin);
       const targetPin = (judgeMatch && judgeMatch.ownerPin)
         ? judgeMatch.ownerPin.toUpperCase()
-        : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+        : (isOriginalOwner ? myPin : gs.ownerPin?.toUpperCase());
       if (!targetPin) return;
 
-      const isActiveController = gameState.commandOwnerId === deviceId;
+      const isActiveController = gs.commandOwnerId === deviceId;
 
       if (isActiveController && isOriginalOwner) {
         // Owner ativo saiu: fecha a live
@@ -438,33 +453,57 @@ const App: React.FC = () => {
             const data = snap.data();
             const nextControllers = { ...(data.controllers || {}) };
             delete nextControllers[deviceId];
-            const extraFields: Record<string, unknown> = { controllers: nextControllers };
+            const updateData: Record<string, unknown> = { controllers: nextControllers };
             if (isActiveController) {
-              // Judge era controller: libera o commandOwnerId para o owner poder assumir
-              extraFields.commandOwnerId = null;
-              extraFields.commandOwner = null;
+              updateData.commandOwnerId = null;
+              updateData.commandOwner = null;
             }
-            updateDoc(doc(db, "live_matches", targetPin), extraFields).catch(() => {});
+            // @ts-expect-error - Firestore updateDoc aceita objeto genérico
+            updateDoc(doc(db, "live_matches", targetPin), updateData).catch(() => {});
           }
         }).catch(() => {});
       }
     };
 
-    // visibilitychange é o sinal mais confiável em mobile (iOS/Android)
+    // visibilitychange é o sinal mais confiável em mobile (iOS/Android).
+    // Usamos um grace period de 2500ms: se o app voltar para 'visible' dentro
+    // desse tempo (ex: reload/atualização de PWA), o performExit é cancelado e
+    // a live NÃO é fechada prematuramente no Firebase.
+    let exitTimer: ReturnType<typeof setTimeout> | null = null;
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') performExit();
+      if (document.visibilityState === 'hidden') {
+        exitTimer = setTimeout(() => {
+          if (document.visibilityState === 'hidden') performExit();
+        }, 2500);
+      } else {
+        // Usuário voltou para o app dentro do grace period — cancela o fechamento
+        if (exitTimer !== null) {
+          clearTimeout(exitTimer);
+          exitTimer = null;
+        }
+      }
     };
 
-    // beforeunload cobre desktop e serve como fallback
-    const handleBeforeUnload = () => performExit();
+    // beforeunload cobre desktop e serve como fallback.
+    // Se a flag myPlacar_pwa_updating estiver ativa, é um reload de atualização
+    // de PWA — não fechar a live (o app vai reabrir em segundos).
+    const handleBeforeUnload = () => {
+      try {
+        if (sessionStorage.getItem('myPlacar_pwa_updating')) return;
+      } catch {}
+      performExit();
+    };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     globalThis.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      if (exitTimer !== null) clearTimeout(exitTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       globalThis.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [gameState, userProfile.pin, userProfile.email, deviceId, isOriginalOwner, activeLives]);
+  // gameState e activeLives removidos do dep array — lidos via ref dentro de performExit,
+  // evitando que o handler seja recriado (e o exitTimer cancelado) a cada ponto marcado.
+  }, [userProfile.pin, userProfile.email, deviceId, isOriginalOwner]);
 
   useEffect(() => {
     localStorage.setItem('myPlacar_AppVersion', LOCAL_CODE_VERSION);
@@ -506,6 +545,9 @@ const App: React.FC = () => {
       }
     };
     runMigration();
+    // Limpa flag de atualização de PWA em andamento — o app reiniciou com sucesso,
+    // o beforeunload já pode fechar lives normalmente em saídas futuras.
+    try { sessionStorage.removeItem('myPlacar_pwa_updating'); } catch {}
   }, []);
 
   useEffect(() => {
@@ -703,6 +745,9 @@ const App: React.FC = () => {
               }
 
               // 3. Hard reload com ?v= para forçar bypass do CDN do Vercel
+              // Sinaliza que este unload é uma atualização de PWA — não uma saída
+              // real do usuário. O beforeunload vai checar essa flag e NÃO fechar a live.
+              try { sessionStorage.setItem('myPlacar_pwa_updating', '1'); } catch {}
               const cleanUrl = globalThis.location.origin + globalThis.location.pathname + '?v=' + remoteVersion;
               globalThis.location.replace(cleanUrl);
             },
@@ -739,22 +784,27 @@ const App: React.FC = () => {
   useEffect(() => { matchSettingsRef.current = matchSettings; }, [matchSettings]);
 
   useEffect(() => {
-    if (!userProfile.pin || !currentFullDeviceName || !navigator.onLine) return;
+    if (!navigator.onLine) return;
     const db = getDb();
     if (!db) return;
-    const myPin = userProfile.pin.toUpperCase();
-    const myLive = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin || l.judgePin?.toUpperCase() === myPin);
+
+    // Usa PIN do usuário ou fallback para conectar como observador.
+    // activeLives e gameState são lidos via ref para não entrar no dep array —
+    // evita resubscribe do listener a cada mudança de presença/heartbeat.
+    const myPin = userProfile.pin?.toUpperCase();
+    const currentActiveLives = activeLivesRef.current;
+    const myLive = myPin ? currentActiveLives.find(l => l.ownerPin?.toUpperCase() === myPin || l.judgePin?.toUpperCase() === myPin) : null;
 
     // Para observadores (não owner nem judge), escuta a live mais recente disponível
-    const observerLive = !myLive && activeLives.length > 0
-      ? activeLives.reduce((latest, l) =>
+    const observerLive = !myLive && currentActiveLives.length > 0
+      ? currentActiveLives.reduce((latest, l) =>
           (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
         )
       : null;
 
     // Fallback: se activeLives ainda não chegou (latência do onSnapshot da collection),
     // usa o ownerPin já gravado no gameState local para não escutar o próprio pin do observer.
-    const localOwnerPin = gameState?.ownerPin?.toUpperCase();
+    const localOwnerPin = gameStateRef.current?.ownerPin?.toUpperCase();
     const listenPin = myLive
       ? myLive.ownerPin?.toUpperCase()
       : observerLive
@@ -766,12 +816,28 @@ const App: React.FC = () => {
     const unsubscribe = onSnapshot(doc(db, "live_matches", listenPin), (snap) => {
       if (snap.exists()) {
         const cloudData = snap.data() as GameState;
-        
+
         if (!isValidGameState(cloudData)) {
           return;
         }
 
         if (cloudData.isLiveClosed) {
+          // Guard: se este device é o owner ativo da live, ignora isLiveClosed: true
+          // vindo do Firebase — é quase certamente um artefato do próprio reload/reconnect.
+          // O owner vai reescrever isLiveClosed: false no próximo ciclo de sync.
+          // Observers e judges continuam sendo fechados normalmente.
+          const currentGs = gameStateRef.current;
+          const thisDeviceIsActiveOwner =
+            currentGs?.isMirroringActive &&
+            currentGs?.commandOwnerId === deviceId &&
+            currentGs?.ownerPin?.toUpperCase() === myPin;
+
+          if (thisDeviceIsActiveOwner) {
+            console.log("[Sync] isLiveClosed: true ignorado — owner ativo local, provável artefato de reload.");
+            return;
+          }
+
+          console.log("[Sync] Live fechada detected!");
           setCloudLiveExists(false);
           setGameState(prev => {
             if (!prev) return null;
@@ -779,42 +845,43 @@ const App: React.FC = () => {
           });
           return;
         }
+
         setCloudLiveExists(true);
         if (cloudData.commandOwnerId !== deviceId) {
-           // Lê matchSettings via ref para não forçar resubscribe do listener
-           const localSettings = matchSettingsRef.current;
-           setGameState(prev => {
-             const baseConfig = prev?.matchConfig || localSettings;
-             return {
-               ...cloudData,
-               isMirroringActive: true,
-               isLiveClosed: false,
-               isConfirmedFinished: cloudData.isConfirmedFinished,
-               matchConfig: {
-                 ...cloudData.matchConfig,
-                 isWatchMode: baseConfig.isWatchMode,
-                 brightness: baseConfig.brightness,
-                 volume: baseConfig.volume,
-                 deviceLabel: baseConfig.deviceLabel,
-                 selectedVoiceURI: baseConfig.selectedVoiceURI,
-                 voiceEnabled: baseConfig.voiceEnabled,
-                 voiceScoring: baseConfig.voiceScoring,
-                 actionCooldown: baseConfig.actionCooldown,
-                 stateLockout: baseConfig.stateLockout
-               }
-             };
-           });
-           setIsWaitingSync(false);
+          // Lê matchSettings via ref para não forçar resubscribe do listener
+          const localSettings = matchSettingsRef.current;
+          setGameState(prev => {
+            const baseConfig = prev?.matchConfig || localSettings;
+            return {
+              ...cloudData,
+              isMirroringActive: true,
+              isLiveClosed: false,
+              isConfirmedFinished: cloudData.isConfirmedFinished,
+              matchConfig: {
+                ...cloudData.matchConfig,
+                isWatchMode: baseConfig.isWatchMode,
+                brightness: baseConfig.brightness,
+                volume: baseConfig.volume,
+                deviceLabel: baseConfig.deviceLabel,
+                selectedVoiceURI: baseConfig.selectedVoiceURI,
+                voiceEnabled: baseConfig.voiceEnabled,
+                voiceScoring: baseConfig.voiceScoring,
+                actionCooldown: baseConfig.actionCooldown,
+                stateLockout: baseConfig.stateLockout
+              }
+            };
+          });
+          setIsWaitingSync(false);
         } else {
-           setGameState(prev => {
-             if (!prev) return null;
-              return { 
-                ...prev, 
-                controllers: cloudData.controllers,
-                judgePin: cloudData.judgePin,
-                judgeNickname: cloudData.judgeNickname
-              };
-           });
+          setGameState(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              controllers: cloudData.controllers,
+              judgePin: cloudData.judgePin,
+              judgeNickname: cloudData.judgeNickname
+            };
+          });
         }
       } else {
         setCloudLiveExists(false);
@@ -828,8 +895,9 @@ const App: React.FC = () => {
       }
     });
     return () => unsubscribe();
-  // matchSettings removido do dep array — lido via matchSettingsRef para evitar resubscribe
-  }, [userProfile.pin, currentFullDeviceName, deviceId, activeLives]);
+  // activeLives e gameState removidos do dep array — lidos via ref para evitar
+  // resubscribe do listener a cada mudança de presença/heartbeat.
+  }, [userProfile.pin, currentFullDeviceName, deviceId]);
 
   const prevIsCommandOwner = useRef(isCommandOwner);
   useEffect(() => {
@@ -894,33 +962,72 @@ const App: React.FC = () => {
   }, [userProfile]);
 
   useEffect(() => {
-    if (!authReady) return;
     const db = getDb();
-    if (db) {
+    if (!db) return;
+    
+    const subscribeToLives = () => {
+      if (!navigator.onLine) {
+        setActiveLives([]);
+        return () => {};
+      }
       const q = query(collection(db, "live_matches"), where("isLiveClosed", "==", false));
-      const unsubscribe = onSnapshot(q, (snap) => {
+      return onSnapshot(q, (snap) => {
         const lives: GameState[] = [];
         snap.forEach(d => lives.push(d.data() as GameState));
         setActiveLives(lives);
+      }, (error) => {
+        console.error("Live listener error:", error);
       });
-      return () => unsubscribe();
+    };
+    
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = subscribeToLives();
+    } catch (e) {
+      console.error("Failed to subscribe to lives:", e);
     }
-  }, [authReady]);
+    
+    const handleOnline = () => {
+      unsubscribe();
+      unsubscribe = subscribeToLives();
+    };
+    
+    window.addEventListener('online', handleOnline);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
 
   // Throttle do registro automático de observer: evita writes excessivos no Firestore
   const lastObserverRegisterRef = useRef<number>(0);
 
   useEffect(() => {
-    if (!userProfile.pin) { setCloudLiveExists(false); return; }
-    const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
     const hasAnyLive = activeLives.length > 0;
     setCloudLiveExists(hasAnyLive);
+
+    // Proteção contra latência do Firebase: quando activeLives fica vazio
+    // momentaneamente (ex: reload do app, reconexão), aguardamos 3s antes
+    // de concluir que não há mais live e desativar o mirroring local.
+    // Se activeLives voltar a ter entradas dentro desse tempo, o timer é cancelado.
     if (!hasAnyLive && gameState?.isMirroringActive) {
-      setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
+      const debounceTimer = setTimeout(() => {
+        setGameState(prev => {
+          if (!prev || !prev.isMirroringActive) return prev;
+          return { ...prev, isMirroringActive: false };
+        });
+      }, 3000);
+      return () => clearTimeout(debounceTimer);
     }
+  }, [activeLives]);
+
+  useEffect(() => {
+    if (!userProfile.pin) return;
+    const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
+    const hasLive = activeLives.length > 0;
 
     // Registro automático como observador/juiz: quando há live E este dispositivo NÃO é o controller
-    if (!thisDeviceIsController && hasAnyLive && navigator.onLine && userProfile.email) {
+    if (!thisDeviceIsController && hasLive && navigator.onLine && userProfile.email) {
       const now = Date.now();
       // Throttle: só registra/atualiza a cada 60s para não gerar writes excessivos
       if (now - lastObserverRegisterRef.current < 60000) return;
@@ -960,10 +1067,10 @@ const App: React.FC = () => {
 
   // Detecta live disponível e exibe overlay automaticamente para dispositivos não-controller
   const overlayShownForLiveRef = useRef<string | null>(null);
-  useEffect(() => {
-    // Reseta o ref ao trocar de tela para que o overlay possa aparecer novamente após refresh
-    overlayShownForLiveRef.current = null;
-  }, [currentScreen]);
+  // Ref separado: marca liveId que o usuário já aceitou (observer ou controller).
+  // Não é resetado ao trocar de tela — só quando a live realmente encerra.
+  // Isso impede que o modal reabra após setCurrentScreen('scoreboard') no aceite.
+  const overlayAcceptedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!userProfile.pin || !userProfile.email) return;
@@ -984,6 +1091,10 @@ const App: React.FC = () => {
         (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
       );
       const liveId = observerLive.ownerPin?.toUpperCase() || '';
+      // Guard 3: usuário já aceitou este liveId (observer ou controller) — não reabre o modal.
+      // overlayAcceptedRef só é resetado quando a live encerra (activeLives.length === 0),
+      // nunca ao trocar de tela, evitando o duplo disparo após setCurrentScreen('scoreboard').
+      if (liveId && overlayAcceptedRef.current === liveId) return;
       if (liveId && overlayShownForLiveRef.current !== liveId) {
         overlayShownForLiveRef.current = liveId;
         setShowLiveControlOverlay(true);
@@ -991,6 +1102,7 @@ const App: React.FC = () => {
     }
     if (activeLives.length === 0) {
       overlayShownForLiveRef.current = null;
+      overlayAcceptedRef.current = null;
     }
   }, [activeLives, userProfile.pin, userProfile.email, deviceId, gameState?.commandOwnerId, currentScreen]);
 
@@ -1516,18 +1628,22 @@ const App: React.FC = () => {
        }
     }
 
-    if (forceNew && cloudLiveExists && navigator.onLine) {
+    if (forceNew && navigator.onLine) {
         const db = getDb();
         if (db && userProfile.pin) {
            const pinUpper = userProfile.pin.toUpperCase();
            try {
              const snap = await getDoc(doc(db, "live_matches", pinUpper));
-             if (snap.exists() && snap.data().isLiveClosed !== true) {
-                const data = snap.data() as GameState;
-                const ownerData = Object.values(data.controllers || {}).find((c: ControllerRecord) => c.label === data.commandOwner);
-                const lastAct = ownerData?.lastSeen || data.startTime || 0;
-                if ((Date.now() - lastAct) < (60 * 60 * 1000)) { setShowLiveControlOverlay(true); return; }
-                await deleteDoc(doc(db, "live_matches", pinUpper)).catch(() => {});
+             if (snap.exists()) {
+               const cloudData = snap.data();
+               const isClosed = cloudData.isLiveClosed === true;
+               if (!isClosed) {
+                 const data = cloudData as GameState;
+                 const ownerData = Object.values(data.controllers || {}).find((c: ControllerRecord) => c.label === data.commandOwner);
+                 const lastAct = ownerData?.lastSeen || data.startTime || 0;
+                 if ((Date.now() - lastAct) < (60 * 60 * 1000)) { setShowLiveControlOverlay(true); return; }
+                 await deleteDoc(doc(db, "live_matches", pinUpper)).catch(() => {});
+               }
              }
            } catch {}
         }
@@ -1535,7 +1651,7 @@ const App: React.FC = () => {
     if (gameState && gameState.isMatchOver && !gameState.isConfirmedFinished) finalizeMatchInternal({ ...gameState, isConfirmedFinished: true });
     
     setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true); setIsRecoveryFromMatchOver(false);
-    if (!forceNew && cloudLiveExists && navigator.onLine) {
+    if (!forceNew && navigator.onLine) {
         const db = getDb();
         if (db && userProfile.pin) {
            try {
@@ -1570,7 +1686,20 @@ const App: React.FC = () => {
     const globalLiveCount = parseInt(localStorage.getItem('myPlacarLiveGlobalCount') || '0') + 1;
     try { localStorage.setItem('myPlacarLiveGlobalCount', globalLiveCount.toString()); } catch {}
     const db = getDb();
-    if (db && userProfile.pin && navigator.onLine) { try { await deleteDoc(doc(db, "live_matches", userProfile.pin.toUpperCase())).catch(() => {}); } catch {} }
+    if (db && userProfile.pin && navigator.onLine) { 
+      try { 
+        const checkSnap = await getDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()));
+        if (checkSnap.exists() && checkSnap.data().isLiveClosed !== true) {
+          const controllerData = checkSnap.data() as GameState;
+          const ctrl = Object.values(controllerData.controllers || {}).find((c: ControllerRecord) => c.lastSeen && (Date.now() - c.lastSeen) < 30000);
+          if (ctrl) {
+            setShowLiveControlOverlay(true);
+            return;
+          }
+        }
+        await deleteDoc(doc(db, "live_matches", userProfile.pin.toUpperCase())).catch(() => {}); 
+      } catch {} 
+    }
     
     const newGameState: GameState = {
       matchId: `match_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
@@ -1679,20 +1808,28 @@ const App: React.FC = () => {
 
   const handleCloseCloudLive = async () => {
     const db = getDb();
-    if (db && userProfile.pin && navigator.onLine) {
-      const myPin = userProfile.pin.toUpperCase();
-      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-      const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
-      if (!targetPin) return;
-      try {
-        await deleteDoc(doc(db, "live_matches", targetPin));
-        setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: false, isLiveClosed: false }; });
-        setCloudLiveExists(false); try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
-        setShowLiveControlOverlay(false); setConfirmDeleteLive(false); setCurrentScreen('settings');
-        setModalConfig({ title: "Sucesso", message: "Transmissão encerrada com sucesso.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
-        setTimeout(() => setModalConfig(null), 3000);
-      } catch (_e) { setModalConfig({ title: "Erro", message: "Erro ao excluir a transmissão. Verifique sua internet.", onConfirm: () => setModalConfig(null) }); }
-    } else { setModalConfig({ title: "Erro", message: "Verifique sua conexão para encerrar a live.", onConfirm: () => setModalConfig(null) }); }
+    if (!db) { setModalConfig({ title: "Erro", message: "Banco de dados não disponível.", onConfirm: () => setModalConfig(null) }); return; }
+    if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Sem conexão com a internet.", onConfirm: () => setModalConfig(null) }); return; }
+    if (!userProfile.pin) { setModalConfig({ title: "Erro", message: "PIN não cadastrado.", onConfirm: () => setModalConfig(null) }); return; }
+    
+    const myPin = userProfile.pin.toUpperCase();
+    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+    const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
+    
+    if (!targetPin) { setModalConfig({ title: "Erro", message: "PIN da transmissão não encontrado.", onConfirm: () => setModalConfig(null) }); return; }
+    
+    try {
+      await deleteDoc(doc(db, "live_matches", targetPin));
+      setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: false, isLiveClosed: false }; });
+      setCloudLiveExists(false); setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
+      try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
+      setShowLiveControlOverlay(false); setConfirmDeleteLive(false); setCurrentScreen('settings');
+      setModalConfig({ title: "Sucesso", message: "Transmissão encerrada com sucesso.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
+      setTimeout(() => setModalConfig(null), 3000);
+    } catch (_e) { 
+      console.error("Erro ao excluir live:", _e);
+      setModalConfig({ title: "Erro", message: `Erro ao excluir: ${_e instanceof Error ? _e.message : 'Tente novamente'}`, onConfirm: () => setModalConfig(null) }); 
+    }
   };
 
   /**
@@ -1720,12 +1857,12 @@ const App: React.FC = () => {
       const nextControllers = { ...(data.controllers || {}) };
       delete nextControllers[deviceId];
       const isActiveController = gameState.commandOwnerId === deviceId;
-      const extraFields: Record<string, unknown> = { controllers: nextControllers };
+      const extraFields = { controllers: nextControllers } as Record<string, unknown>;
       if (isActiveController && !isOriginalOwner) {
-        // Judge era o controller ativo: libera o controle para o owner reassumir
         extraFields.commandOwnerId = null;
         extraFields.commandOwner = null;
       }
+      // @ts-expect-error - Firestore updateDoc aceita objeto genérico
       await updateDoc(doc(db, "live_matches", targetPin), extraFields).catch(() => {});
     } catch {}
   }, [gameState, userProfile.email, userProfile.pin, deviceId, isOriginalOwner, activeLives]);
@@ -1808,6 +1945,7 @@ const App: React.FC = () => {
             setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
             setGameState({ ...updatedState, isMirroringActive: true, matchConfig: { ...updatedState.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
             try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
+            overlayAcceptedRef.current = targetPin; // impede que o modal reabra após setCurrentScreen
             setShowLiveControlOverlay(false); if (currentScreen !== 'scoreboard') setCurrentScreen('scoreboard');
             setModalConfig({ title: "Sucesso", message: "Controle da partida assumido com sucesso.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
             setTimeout(() => setModalConfig(null), 3000);
@@ -1857,6 +1995,7 @@ const App: React.FC = () => {
           }
 
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+          overlayAcceptedRef.current = pinUpper; // impede que o modal reabra após setCurrentScreen
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
           if (!targetPin) setCloudLiveExists(false);
@@ -2702,9 +2841,37 @@ const App: React.FC = () => {
       }} onSwitchServer={handleSmartSwitchServer} onTogglePause={() => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner) return; 
         setGameState(p => p ? {...p, isPaused: !p.isPaused} : null); 
-      }} onBack={() => { handleLeaveLive(); setCurrentScreen('new-game'); }} onHome={() => { handleLeaveLive(); setCurrentScreen('settings'); }} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={a => { 
+      }} onBack={() => { handleLeaveLive(); setCurrentScreen('new-game'); }} onHome={() => { handleLeaveLive(); setCurrentScreen('settings'); }} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={async a => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isLiveClosed) return; 
-        if (a) { const isStarted = (gameState.pointHistory?.length ?? 0) > 0 || gameState.p1.games > 0 || gameState.p2.games > 0 || (gameState.p1.score !== '0' && gameState.p1.score !== '') || (gameState.p2.score !== '0' && gameState.p2.score !== ''); if (isStarted) { setModalConfig({ title: "Atenção", message: "Não é possível iniciar a live com a partida em andamento.", onConfirm: () => setModalConfig(null) }); return; } }
+        if (a) { 
+          const isStarted = (gameState.pointHistory?.length ?? 0) > 0 || gameState.p1.games > 0 || gameState.p2.games > 0 || (gameState.p1.score !== '0' && gameState.p1.score !== '') || (gameState.p2.score !== '0' && gameState.p2.score !== ''); 
+          if (isStarted) { setModalConfig({ title: "Atenção", message: "Não é possível iniciar a live com a partida em andamento.", onConfirm: () => setModalConfig(null) }); return; } 
+          const db = getDb();
+          if (db && navigator.onLine && userProfile.pin) {
+            const myPin = userProfile.pin.toUpperCase();
+            const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+            const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+            // Guard: consulta o Firestore diretamente pelo pin (não depende de activeLives
+            // estar populado em memória — cobre o caso de reload/latência do onSnapshot).
+            // Usamos o pin próprio como fallback adicional caso targetPin venha de activeLives vazio.
+            const pinsToCheck = Array.from(new Set([targetPin, myPin].filter(Boolean))) as string[];
+            let foundActiveLive = false;
+            for (const pin of pinsToCheck) {
+              try {
+                const existingSnap = await getDoc(doc(db, "live_matches", pin));
+                if (existingSnap.exists() && existingSnap.data().isLiveClosed !== true) {
+                  const existingData = existingSnap.data() as GameState;
+                  const hasActiveController = Object.values(existingData.controllers || {}).some((c: ControllerRecord) => c.lastSeen && (Date.now() - c.lastSeen) < 30000);
+                  if (hasActiveController) { foundActiveLive = true; break; }
+                }
+              } catch {}
+            }
+            if (foundActiveLive) {
+              setModalConfig({ title: "Live já ativa", message: "Já existe uma transmissão ativa para esta partida. Deseja assumir o controle?", confirmLabel: "Sim", onConfirm: () => { setGameState(p => p ? {...p, isMirroringActive: true, commandOwnerId: deviceId} : null); setModalConfig(null); }, onCancel: () => setModalConfig(null) });
+              return;
+            }
+          }
+        }
         const db = getDb();
         if (a && db && navigator.onLine) {
           const myPin = userProfile.pin?.toUpperCase();
