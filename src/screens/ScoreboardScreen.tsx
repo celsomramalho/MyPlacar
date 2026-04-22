@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown } from 'lucide-react';
+import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus } from 'lucide-react';
 import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -33,6 +33,28 @@ interface CommandLogEntry {
   liveSequence?: number;
   liveId?: number;
   source: string;
+}
+
+type LiveLogType =
+  | 'live_created'
+  | 'control_taken'
+  | 'match_started'
+  | 'score'
+  | 'participant_join'
+  | 'participant_leave'
+  | 'match_over'
+  | 'match_confirmed'
+  | 'fb_ack'
+  | 'observers_ack'
+  | 'live_closed';
+
+interface LiveLogEntry {
+  id: string;
+  time: string;
+  timestamp: number;
+  type: LiveLogType;
+  text: string;
+  ok?: boolean;
 }
 
 interface Props {
@@ -330,6 +352,192 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const voiceLogsRef = useRef<CommandLogEntry[]>([]);
 
   useEffect(() => { voiceLogsRef.current = voiceLogs; }, [voiceLogs]);
+
+  // ─── Live Log state ────────────────────────────────────────────────────────
+  const [isLiveLogOpen, setIsLiveLogOpen] = useState(true);
+  const [liveLogs, setLiveLogs] = useState<LiveLogEntry[]>([]);
+
+  const nowTime = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+  // Resolve o label de um deviceId a partir dos controllers do gameState atual
+  const resolveLabel = (deviceId: string, controllers?: Record<string, any>): string => {
+    const c = (controllers || {})[deviceId];
+    return c?.label || deviceId;
+  };
+
+  const addLiveLog = useCallback((type: LiveLogType, text: string, ok?: boolean) => {
+    const entry: LiveLogEntry = {
+      id: Math.random().toString(36).substr(2, 9),
+      time: nowTime(),
+      timestamp: Date.now(),
+      type,
+      text,
+      ok,
+    };
+    setLiveLogs(prev => [entry, ...prev].slice(0, 60));
+  }, []);
+
+  // Reset log ao iniciar nova partida
+  useEffect(() => { setLiveLogs([]); }, [gameState.matchId]);
+
+  // ── Live criada ────────────────────────────────────────────────────────────
+  const prevIsMirroringRef = useRef(gameState.isMirroringActive && !gameState.isLiveClosed);
+  useEffect(() => {
+    const isNowActive = gameState.isMirroringActive && !gameState.isLiveClosed;
+    if (!prevIsMirroringRef.current && isNowActive) {
+      const label = currentDeviceFullLabel || 'Dispositivo';
+      addLiveLog('live_created', `${label}: criou a live às ${nowTime()}`, true);
+    }
+    prevIsMirroringRef.current = isNowActive;
+  }, [gameState.isMirroringActive, gameState.isLiveClosed, currentDeviceFullLabel, addLiveLog]);
+
+  // ── Partida iniciada (primeiro ponto) ─────────────────────────────────────
+  const prevHistLenRef = useRef(gameState.pointHistory?.length ?? 0);
+  useEffect(() => {
+    const cur = gameState.pointHistory?.length ?? 0;
+    const prev = prevHistLenRef.current;
+    if (prev === 0 && cur === 1 && gameState.isMirroringActive && !gameState.isLiveClosed) {
+      addLiveLog('match_started', `Partida iniciada às ${nowTime()}`, true);
+      addLiveLog('score', `${gameState.p1.name} ${gameState.p1.score} × ${gameState.p2.score} ${gameState.p2.name}`, true);
+    }
+    prevHistLenRef.current = cur;
+  }, [gameState.pointHistory?.length, addLiveLog]);
+
+  // ── Mudança de placar: FB enviando → FB ok → Observadores ok ──────────────
+  const prevScoreRef = useRef(`${gameState.p1.score}-${gameState.p2.score}-${gameState.p1.games}-${gameState.p2.games}`);
+  const pendingScoreLogIdRef = useRef<string | null>(null);
+  const pendingScoreSentAtRef = useRef<number>(0);
+  useEffect(() => {
+    const curKey = `${gameState.p1.score}-${gameState.p2.score}-${gameState.p1.games}-${gameState.p2.games}`;
+    if (!gameState.isMirroringActive || gameState.isLiveClosed || curKey === prevScoreRef.current) {
+      prevScoreRef.current = curKey;
+      return;
+    }
+    const histLen = gameState.pointHistory?.length ?? 0;
+    if (histLen === 0) { prevScoreRef.current = curKey; return; }
+
+    const scoreText = `${gameState.p1.name} ${gameState.p1.score} × ${gameState.p2.score} ${gameState.p2.name}`;
+    const sentAt = Date.now();
+    pendingScoreSentAtRef.current = sentAt;
+
+    // Linha placar atual
+    addLiveLog('score', scoreText, true);
+
+    // Linha FB: começa como pendente (ok = undefined)
+    const fbEntryId = Math.random().toString(36).substr(2, 9);
+    const fbEntry: LiveLogEntry = {
+      id: fbEntryId,
+      time: nowTime(),
+      timestamp: sentAt,
+      type: 'fb_ack',
+      text: `→ FB: enviando...`,
+      ok: undefined,
+    };
+    pendingScoreLogIdRef.current = fbEntryId;
+    setLiveLogs(prev => [fbEntry, ...prev].slice(0, 60));
+
+    // Após ~1.5s marca FB ok com latência medida
+    setTimeout(() => {
+      const latency = Date.now() - sentAt;
+      setLiveLogs(prev => {
+        const idx = prev.findIndex(l => l.id === fbEntryId);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], text: `✓ FB ok — ${latency}ms`, ok: true };
+        return updated;
+      });
+      pendingScoreLogIdRef.current = null;
+
+      // Observadores online (role observer OU spectator, vistos nos últimos 2min)
+      const now = Date.now();
+      const obsCount = Object.values(gameState.controllers || {}).filter(
+        (c: any) => (c.role === 'observer' || c.role === 'spectator') && (now - (c.lastSeen || 0)) < 120000
+      ).length;
+      if (obsCount > 0) {
+        addLiveLog('observers_ack', `✓ Obs: ${obsCount} online receberam`, true);
+      }
+    }, 1500);
+
+    prevScoreRef.current = curKey;
+  }, [gameState.p1.score, gameState.p2.score, gameState.p1.games, gameState.p2.games, addLiveLog]);
+
+  // ── Assumiu o controle ────────────────────────────────────────────────────
+  const prevCommandOwnerIdRef = useRef(gameState.commandOwnerId);
+  useEffect(() => {
+    if (!gameState.isMirroringActive || gameState.isLiveClosed) { prevCommandOwnerIdRef.current = gameState.commandOwnerId; return; }
+    const prev = prevCommandOwnerIdRef.current;
+    const cur = gameState.commandOwnerId;
+    if (prev !== cur && cur) {
+      // Busca label nos controllers; fallback para currentDeviceFullLabel se for este device
+      const label = cur === currentDeviceId
+        ? (currentDeviceFullLabel || resolveLabel(cur, gameState.controllers))
+        : resolveLabel(cur, gameState.controllers);
+      addLiveLog('control_taken', `${label}: assumiu o controle da partida`, true);
+    }
+    prevCommandOwnerIdRef.current = cur;
+  }, [gameState.commandOwnerId, gameState.isMirroringActive, gameState.isLiveClosed, addLiveLog]);
+
+  // ── Participante entrou / saiu ─────────────────────────────────────────────
+  const prevControllersRef = useRef<Record<string, any>>(gameState.controllers || {});
+  useEffect(() => {
+    if (!gameState.isMirroringActive || gameState.isLiveClosed) { prevControllersRef.current = gameState.controllers || {}; return; }
+    const prev = prevControllersRef.current;
+    const cur = gameState.controllers || {};
+
+    Object.keys(cur).forEach(id => {
+      if (!prev[id]) {
+        // Dono já foi logado em live_created — não duplicar como participante
+        if (id === currentDeviceId) return;
+        const c = cur[id] as any;
+        // Evita logar se outro dispositivo com mesmo label já estava presente
+        // (mesmo usuário registrado com deviceId diferente)
+        const labelJaPresente = Object.entries(prev).some(
+          ([pid, pd]: [string, any]) => pid !== id && pd.label === c.label
+        );
+        if (labelJaPresente) return;
+        const roleLabel = c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
+        addLiveLog('participant_join', `${c.label || id}: entrou na live (${roleLabel})`, true);
+      }
+    });
+    Object.keys(prev).forEach(id => {
+      if (!cur[id]) {
+        const c = prev[id] as any;
+        const roleLabel = c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
+        addLiveLog('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false);
+      }
+    });
+    prevControllersRef.current = cur;
+  }, [gameState.controllers, addLiveLog]);
+
+  // ── Partida encerrada ─────────────────────────────────────────────────────
+  const prevIsMatchOverRef = useRef(gameState.isMatchOver);
+  useEffect(() => {
+    if (!prevIsMatchOverRef.current && gameState.isMatchOver) {
+      const winner = gameState.matchWinner === 1 ? gameState.p1.name : gameState.matchWinner === 2 ? gameState.p2.name : null;
+      addLiveLog('match_over', `Partida encerrada${winner ? ` — Vencedor: ${winner}` : ''}`, true);
+    }
+    prevIsMatchOverRef.current = gameState.isMatchOver;
+  }, [gameState.isMatchOver, addLiveLog]);
+
+  // ── Partida confirmada ────────────────────────────────────────────────────
+  const prevIsConfirmedRef = useRef(gameState.isConfirmedFinished);
+  useEffect(() => {
+    if (!prevIsConfirmedRef.current && gameState.isConfirmedFinished) {
+      const label = currentDeviceFullLabel || 'Dispositivo';
+      addLiveLog('match_confirmed', `${label}: confirmou o encerramento da partida`, true);
+    }
+    prevIsConfirmedRef.current = gameState.isConfirmedFinished;
+  }, [gameState.isConfirmedFinished, currentDeviceFullLabel, addLiveLog]);
+
+  // ── Live encerrada ────────────────────────────────────────────────────────
+  const prevIsLiveClosedRef = useRef(gameState.isLiveClosed);
+  useEffect(() => {
+    if (!prevIsLiveClosedRef.current && gameState.isLiveClosed) {
+      addLiveLog('live_closed', 'Live encerrada', false);
+    }
+    prevIsLiveClosedRef.current = gameState.isLiveClosed;
+  }, [gameState.isLiveClosed, addLiveLog]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const isCommandOwner = useMemo(() => {
     if (!gameState.isMirroringActive) return true;
@@ -1094,6 +1302,95 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                  </div>}
             </div>
             )}
+            {/* ─── Log Live ─────────────────────────────────────────────────── */}
+            {isLiveActive && (
+              <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden animate-in fade-in duration-500">
+                <div
+                  className="flex items-center justify-between mb-0 cursor-pointer select-none"
+                  onClick={() => setIsLiveLogOpen(v => !v)}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-sky-50 rounded-lg relative">
+                      <Wifi size={18} className="text-sky-500" />
+                      {liveLogs.length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-500 rounded-full text-[7px] font-black text-white flex items-center justify-center">{Math.min(liveLogs.length, 9)}</span>
+                      )}
+                    </div>
+                    <span className="text-gray-900 font-black text-sm tracking-tight">Log Live</span>
+                    {gameState.isMirroringActive && !gameState.isLiveClosed && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[9px] font-black text-emerald-600">AO VIVO</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isLiveLogOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                  </div>
+                </div>
+                {isLiveLogOpen && (
+                  <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1 no-scrollbar mt-5 animate-in slide-in-from-top-2 duration-300">
+                    {liveLogs.length === 0 ? (
+                      <div className="py-10 flex items-center justify-center text-gray-300 text-[11px] font-bold italic text-center">Aguardando eventos da live...</div>
+                    ) : (
+                      liveLogs.map(log => {
+                        const iconMap: Record<LiveLogType, React.ReactNode> = {
+                          live_created:     <QrCode size={12} />,
+                          control_taken:    <Crown size={12} />,
+                          match_started:    <Zap size={12} />,
+                          score:            <Activity size={12} />,
+                          participant_join: <UserPlus size={12} />,
+                          participant_leave:<X size={12} />,
+                          match_over:       <Trophy size={12} />,
+                          match_confirmed:  <ShieldCheck size={12} />,
+                          fb_ack:           <Wifi size={12} />,
+                          observers_ack:    <Eye size={12} />,
+                          live_closed:      <WifiOff size={12} />,
+                        };
+                        const dotColor: Record<LiveLogType, string> = {
+                          live_created:     'bg-sky-500 text-white',
+                          control_taken:    'bg-blue-600 text-white',
+                          match_started:    'bg-emerald-500 text-white',
+                          score:            'bg-orange-400 text-white',
+                          participant_join: 'bg-teal-500 text-white',
+                          participant_leave:'bg-gray-400 text-white',
+                          match_over:       'bg-yellow-500 text-white',
+                          match_confirmed:  'bg-emerald-700 text-white',
+                          fb_ack:           log.ok === undefined ? 'bg-slate-300 text-white' : log.ok ? 'bg-sky-500 text-white' : 'bg-red-500 text-white',
+                          observers_ack:    'bg-cyan-500 text-white',
+                          live_closed:      'bg-red-500 text-white',
+                        };
+                        const rowBg: Record<LiveLogType, string> = {
+                          live_created:     'bg-sky-50 border-sky-100',
+                          control_taken:    'bg-blue-50 border-blue-100',
+                          match_started:    'bg-emerald-50 border-emerald-100',
+                          score:            'bg-orange-50 border-orange-100',
+                          participant_join: 'bg-teal-50 border-teal-100',
+                          participant_leave:'bg-gray-50 border-gray-200',
+                          match_over:       'bg-yellow-50 border-yellow-100',
+                          match_confirmed:  'bg-emerald-50 border-emerald-200',
+                          fb_ack:           log.ok === undefined ? 'bg-slate-50 border-slate-200' : log.ok ? 'bg-sky-50 border-sky-100' : 'bg-red-50 border-red-100',
+                          observers_ack:    'bg-cyan-50 border-cyan-100',
+                          live_closed:      'bg-red-50 border-red-100',
+                        };
+                        return (
+                          <div key={log.id} className={`flex items-start gap-2.5 p-2.5 rounded-2xl border shadow-xs animate-in fade-in slide-in-from-top-1 duration-200 ${rowBg[log.type]}`}>
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${dotColor[log.type]}`}>
+                              {iconMap[log.type]}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[11px] font-black text-slate-800 leading-snug block">{log.text}</span>
+                              <span className="text-[9px] font-bold text-slate-400 mt-0.5 block">{log.time}</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* ────────────────────────────────────────────────────────────────── */}
           </div>
         )}
       </main>

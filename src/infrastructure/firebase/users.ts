@@ -98,14 +98,24 @@ export const findUsersReferredByPin = async (
   const normalizedPin = normalizeUserPin(pin);
   const usersQuery = query(collection(db, 'users'), where('referredByPin', '==', normalizedPin));
   const snapshot = await getDocsFromServer(usersQuery);
+  const referredUsersByPin = new Map<string, FirebaseReferredUser>();
 
-  return snapshot.docs.map(docSnapshot => {
+  snapshot.docs.forEach(docSnapshot => {
     const user = mapUserDocByPin(docSnapshot, options);
-    return {
+    const userPin = normalizeUserPin(user.pin);
+
+    // Um usuário não deve contar como indicado de si mesmo.
+    if (!userPin || userPin === normalizedPin) {
+      return;
+    }
+
+    referredUsersByPin.set(userPin, {
       ...user,
       addedAt: getUserAddedAt(docSnapshot.data()),
-    };
+    });
   });
+
+  return Array.from(referredUsersByPin.values());
 };
 
 export { getResolvedNickname, getUserAddedAt, normalizeUserPin };

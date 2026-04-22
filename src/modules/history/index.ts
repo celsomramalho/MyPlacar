@@ -1,2 +1,12 @@
-// Public API do modulo history. Preenchimento sera definido na fase 2.
-export {};
+export { HistorySection } from './components/HistorySection';
+export { LocationScreen } from './screens/LocationScreen';
+export { createHistoryItem } from './services/createHistoryItem';
+export { filterHistory } from './services/filterHistory';
+export { clearCloudHistory, downloadHistoryBatch, fetchCloudHistoryCount, syncHistoryBatch } from './services/historySync';
+export { getUnsyncedHistory } from './services/getUnsyncedHistory';
+export { groupHistoryByDate } from './services/groupHistoryByDate';
+export { markHistoryAsSynced } from './services/markHistoryAsSynced';
+export { mergeDownloadedHistory } from './services/mergeDownloadedHistory';
+export { persistLocalHistory } from './services/persistLocalHistory';
+export { removeHistoryMatches } from './services/removeHistoryMatches';
+export type { MatchHistoryItem } from './types';

@@ -4,8 +4,8 @@ import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { ScoreboardScreen } from './screens/ScoreboardScreen.tsx';
 import { NewGameScreen } from './screens/NewGameScreen.tsx';
 import { AdminScreen } from './screens/AdminScreen.tsx';
-import { LocationScreen } from './screens/LocationScreen.tsx';
 import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
+import { LocationScreen, clearCloudHistory, createHistoryItem, downloadHistoryBatch, fetchCloudHistoryCount, getUnsyncedHistory, persistLocalHistory, removeHistoryMatches, syncHistoryBatch } from '@modules/history';
 import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterPartnerByPin, createManualPartner, hasPartnerWithPin } from '@modules/partners';
 import { TournamentsScreen } from './screens/TournamentsScreen.tsx';
 import { EventDetailScreen } from './screens/EventDetailScreen.tsx';
@@ -14,7 +14,8 @@ import { InstallPwaModal } from './components/InstallPwaModal.tsx';
 import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 // import { Input } from './components/Input.tsx'; // unused
 import type { Partner, QueuePlayer } from '@modules/partners';
-import { GameState, MatchSettings, Screen, MatchHistoryItem, UserProfile, PointType, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab } from './types.ts';
+import type { MatchHistoryItem } from '@modules/history';
+import { GameState, MatchSettings, Screen, UserProfile, PointType, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab } from './types.ts';
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
@@ -22,7 +23,7 @@ import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
 import { initPickleballState } from './utils/pickleballEngine.ts';
 import { applyGoldenRule } from './utils/formatters.ts';
 import { isWatchDevice } from './utils/device.ts';
-import { findUserByPin, getDb, clearFirestoreCache } from '@infra/firebase';
+import { findUserByPin, getDb, clearFirestoreCache, deleteCloudMatch, deleteCloudMatches } from '@infra/firebase';
 
 /** Detecta o tipo físico do dispositivo atual para gravar no ControllerRecord */
 const getDeviceType = (): 'watch' | 'phone' | 'tablet' | 'laptop' => {
@@ -42,7 +43,8 @@ import { LiveIndicator } from './components/LiveIndicator.tsx';
 import { useAppLogger } from './hooks/useAppLogger.ts';
 import { useInstallPwa } from './hooks/useInstallPwa.ts';
 import { useOnlineSync } from './hooks/useOnlineSync.ts';
-import { mirrorMatches, mirrorUser, deleteMatch, deleteManyMatches, deleteAllMatches } from './services/supabaseMirror.ts';
+import { mirrorUser } from './services/supabaseMirror.ts';
+import { deleteSupabaseMatch, deleteSupabaseMatches } from '@infra/supabase';
 
 const CURRENT_DATA_VERSION = '3.1.0'; // bumped: limpa SavedSettings_* para forçar novos defaults por esporte
 
@@ -1334,19 +1336,9 @@ const App: React.FC = () => {
   const [focusMatchId, setFocusMatchId] = useState<string | null>(null);
 
   const persistHistory = useCallback((newList: MatchHistoryItem[]) => {
-    const limitedList = newList.slice(0, 100);
+    const limitedList = persistLocalHistory(newList);
     matchHistoryRef.current = limitedList; // sincroniza ref com o que está realmente persistido
     setMatchHistory(limitedList);
-    try { 
-      localStorage.setItem('myPlacarHistory', JSON.stringify(limitedList)); 
-    } catch(e) {
-      if (e instanceof Error && e.name === 'QuotaExceededError') {
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('myPlacar_Backup_')) localStorage.removeItem(key);
-        });
-        try { localStorage.setItem('myPlacarHistory', JSON.stringify(limitedList.slice(0, 50))); } catch {}
-      }
-    }
   }, []);
 
   const handleClearAllHistory = async () => {
@@ -1355,18 +1347,9 @@ const App: React.FC = () => {
       setIsSyncing(true);
       const db = getDb();
       try {
-        if (db) {
-          const q = query(collection(db, "matches"), where("ownerEmail", "==", cleanEmail));
-          const snap = await getDocs(q);
-          const batch = writeBatch(db);
-          snap.forEach(docSnap => batch.delete(docSnap.ref));
-          await batch.commit();
-        }
+        await clearCloudHistory({ db, ownerEmail: cleanEmail });
         persistHistory([]);
         setCloudMatchesCount(0);
-        // ── espelho Supabase ──────────────────────────────────────────────
-        deleteAllMatches(cleanEmail);
-        // ─────────────────────────────────────────────────────────────────
         setModalConfig({ title: "Sucesso", message: "Todo o histórico foi removido com sucesso.", onConfirm: () => setModalConfig(null) });
       } catch (_e) { persistHistory([]); } finally { setIsSyncing(false); }
     } else {
@@ -1406,13 +1389,12 @@ const App: React.FC = () => {
     const cleanEmail = userProfile.email?.toLowerCase().trim();
     if (!db || !cleanEmail) return;
     try {
-      const q = query(collection(db, "matches"), where("ownerEmail", "==", cleanEmail));
-      const snap = await getDocs(q);
-      const localIds = new Set(matchHistoryRef.current.map(m => m.id));
-      let count = 0;
-      // excludeIds: IDs recém-deletados que podem ainda aparecer no snapshot em cache do Firebase
-      snap.forEach(docSnap => { if (!localIds.has(docSnap.id) && !excludeIds.has(docSnap.id)) count++; });
-      setCloudMatchesCount(count);
+      setCloudMatchesCount(await fetchCloudHistoryCount({
+        db,
+        ownerEmail: cleanEmail,
+        history: matchHistoryRef.current,
+        excludeIds,
+      }));
     } catch {}
   }, [userProfile.email]);
 
@@ -1424,29 +1406,25 @@ const App: React.FC = () => {
     const cleanEmail = userProfile.email?.toLowerCase().trim();
     if (!db || !cleanEmail) return;
     const currentList = forcedHistory || [...matchHistoryRef.current];
-    const unsynced = forceAll ? currentList : currentList.filter(m => !m.isSynced);
-    if (unsynced.length === 0) { fetchCloudMatchesCount(true); return; }
+    if ((forceAll ? currentList : getUnsyncedHistory(currentList)).length === 0) { fetchCloudMatchesCount(true); return; }
     setIsSyncing(true);
     const safetyTimeout = setTimeout(() => setIsSyncing(false), 15000);
     try {
-      const batch = writeBatch(db);
-      const validUnsynced: MatchHistoryItem[] = [];
-      unsynced.forEach(match => {
-        const sanitized = sanitizeForFirestore(match);
-        if (!sanitized) return; // ignora se sanitize retornou null (sem email/pin)
-        const matchRef = doc(db, "matches", match.id);
-        const dataToSave = { ...sanitized, syncedAt: serverTimestamp(), isSynced: true, ownerEmail: cleanEmail, ownerPin: userProfile.pin };
-        batch.set(matchRef, dataToSave, { merge: true });
-        validUnsynced.push(match);
+      const { updatedHistory, syncedCount } = await syncHistoryBatch({
+        db,
+        history: currentList,
+        ownerEmail: cleanEmail,
+        ownerPin: userProfile.pin || '',
+        forceAll,
+        serializeMatch: (match) => {
+          const sanitized = sanitizeForFirestore(match);
+          if (!sanitized) return null;
+          return sanitized;
+        },
+        syncedAt: serverTimestamp(),
       });
-      if (validUnsynced.length === 0) { fetchCloudMatchesCount(true); return; }
-      await batch.commit();
-      const syncedIds = new Set(validUnsynced.map(u => u.id));
-      const updatedList = currentList.map(m => syncedIds.has(m.id) ? { ...m, isSynced: true } : m);
-      persistHistory(updatedList);
-      // ── espelho Supabase ──────────────────────────────────────────────────
-      mirrorMatches(validUnsynced, cleanEmail, userProfile.pin || '');
-      // ─────────────────────────────────────────────────────────────────────
+      if (syncedCount === 0) { fetchCloudMatchesCount(true); return; }
+      persistHistory(updatedHistory);
       await fetchCloudMatchesCount(true);
     } catch {} finally { 
       clearTimeout(safetyTimeout);
@@ -1455,13 +1433,13 @@ const App: React.FC = () => {
   }, [userProfile.email, userProfile.pin, fetchCloudMatchesCount, persistHistory]);
 
   useEffect(() => {
-    const unsyncedCount = matchHistory.filter(m => !m.isSynced).length;
+    const unsyncedCount = getUnsyncedHistory(matchHistory).length;
     if (unsyncedCount > 0 && userProfile.email && !isSyncing) syncHistoryToFirebase();
   }, [matchHistory.length, userProfile.email, isSyncing, syncHistoryToFirebase]);
 
   useOnlineSync({
     onOnline: () => {
-      const unsynced = matchHistoryRef.current.filter(m => !m.isSynced);
+      const unsynced = getUnsyncedHistory(matchHistoryRef.current);
       if (unsynced.length > 0) syncHistoryToFirebase();
     },
     onOffline: () => setIsOfflineMode(true),
@@ -1474,14 +1452,14 @@ const App: React.FC = () => {
     if (!db || !cleanEmail) return;
     setIsDownloading(true);
     try {
-      const q = query(collection(db, "matches"), where("ownerEmail", "==", cleanEmail));
-      const snap = await getDocs(q);
-      const localIds = new Set(matchHistoryRef.current.map(m => m.id));
-      const downloaded: MatchHistoryItem[] = [];
-      snap.forEach(docSnap => { if (!localIds.has(docSnap.id)) downloaded.push({ id: docSnap.id, ...docSnap.data(), isSynced: true } as MatchHistoryItem); });
-      if (downloaded.length > 0) {
+      const { updatedHistory, downloadedCount } = await downloadHistoryBatch({
+        db,
+        ownerEmail: cleanEmail,
+        history: matchHistoryRef.current,
+      });
+      if (downloadedCount > 0) {
         setCloudMatchesCount(0);
-        persistHistory([...downloaded, ...matchHistoryRef.current].sort((a,b) => b.id.localeCompare(a.id)));
+        persistHistory(updatedHistory);
       }
     } catch {} finally { setIsDownloading(false); }
   }, [userProfile.email, persistHistory]);
@@ -1574,28 +1552,7 @@ const App: React.FC = () => {
       });
       location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     } catch {}
-    const involvedPins: string[] = [];
-    const checkAndAdd = (name: string) => { const found = partners.find(p => p.nickname === name); if (found && found.pin) involvedPins.push(found.pin.toUpperCase()); };
-    checkAndAdd(state.p1.name); if (state.p1.partnerName) checkAndAdd(state.p1.partnerName);
-    checkAndAdd(state.p2.name); if (state.p2.partnerName) checkAndAdd(state.p2.partnerName);
-    const historyItem: MatchHistoryItem = {
-      id: state.matchId,
-      date: new Date().toLocaleDateString('pt-BR'),
-      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      sportType: state.matchConfig.sportType,
-      p1Name: state.p1.name, p1Partner: state.p1.partnerName,
-      p2Name: state.p2.name, p2Partner: state.p2.partnerName,
-      p1Color: state.p1.color || 'azul', p2Color: state.p2.color || 'vermelho',
-      scoreSummary: `${state.p1.sets.join('/')} - ${state.p2.sets.join('/')}`,
-      p1Sets: [...state.p1.sets], p2Sets: [...state.p2.sets],
-      winner: winnerTeam === 1 ? state.p1.name : state.p2.name,
-      winnerTeam: winnerTeam,
-      duration: state.matchDuration, isSynced: false,
-      ownerEmail: userProfile.email?.toLowerCase().trim() || '', 
-      pointHistory: [...(state.pointHistory ?? [])],
-      location, stats: { p1Aces: (state.pointHistory ?? []).filter(p => p.winner === 1 && p.type === 'ace').length, p2Aces: (state.pointHistory ?? []).filter(p => p.winner === 2 && p.type === 'ace').length, p1Faults: (state.pointHistory ?? []).filter(p => p.winner === 1 && p.type === 'fault').length, p2Faults: (state.pointHistory ?? []).filter(p => p.winner === 2 && p.type === 'fault').length, totalPoints: (state.pointHistory ?? []).length },
-      involvedPins
-    };
+    const historyItem = createHistoryItem(state, userProfile, partners, location);
     persistHistory([historyItem, ...matchHistoryRef.current]);
     try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
     const db = getDb();
@@ -2763,23 +2720,21 @@ const App: React.FC = () => {
         appUrl={appUrl}
         history={matchHistory} setHistory={setMatchHistory} 
         onDeleteMatch={id => setModalConfig({ title: "Excluir partida?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: () => {
-          persistHistory(matchHistoryRef.current.filter(m => m.id !== id));
+          persistHistory(removeHistoryMatches(matchHistoryRef.current, [id]));
           setModalConfig(null);
           const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim();
           if (db && cleanEmail && navigator.onLine) {
-            deleteDoc(doc(db as Firestore, "matches", id)).catch(() => {});
-            deleteMatch(id);
+            deleteCloudMatch(db as Firestore, id).catch(() => {});
+            deleteSupabaseMatch(id);
           }
         }, onCancel: () => setModalConfig(null) })}
         onDeleteManyMatches={ids => setModalConfig({ title: `Excluir ${ids.size} partidas?`, message: "Apagar registros permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: () => {
-          persistHistory(matchHistoryRef.current.filter(m => !ids.has(m.id)));
+          persistHistory(removeHistoryMatches(matchHistoryRef.current, ids));
           setModalConfig(null);
           const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim();
           if (db && cleanEmail && navigator.onLine) {
-            const batch = writeBatch(db as Firestore);
-            ids.forEach(id => batch.delete(doc(db as Firestore, "matches", id)));
-            batch.commit().catch(() => {});
-            deleteManyMatches([...ids]);
+            deleteCloudMatches(db as Firestore, ids).catch(() => {});
+            deleteSupabaseMatches([...ids]);
           }
         }, onCancel: () => setModalConfig(null) })}
         onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }} onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} gameState={gameState} settings={matchSettings} setSettings={setMatchSettings} onStart={() => { persistMatchSettings(); initGameState(true); }} onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }} onOpenRules={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} activeTab={activeTab} setActiveTab={(t) => { persistMatchSettings(); setActiveTab(t); }} onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }} userProfile={userProfile} setUserProfile={setUserProfile} onSaveProfile={handleSaveProfile} onLogout={handleLogout} onGoAdmin={() => setCurrentScreen('admin')} onGoToScoreboard={() => { persistMatchSettings(); initGameState(false); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} isProfileSaved={isProfileSaved} canStartMatch={canStartMatch} onSyncAll={(force) => syncHistoryToFirebase(undefined, force)} onDownloadHistory={downloadHistoryFromFirebase} cloudMatchesCount={cloudMatchesCount} isSyncingAll={isSyncing} isDownloading={isDownloading} onOpenPartners={() => setCurrentScreen('partners')} partners={partners} playerQueue={playerQueue} onAutoRegisterPartner={handleAutoRegisterPartner} 

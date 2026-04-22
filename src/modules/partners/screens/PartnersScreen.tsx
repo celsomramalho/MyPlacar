@@ -67,9 +67,17 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // Inicializa cloudCount do localStorage para ter referência mesmo sem rodar syncAllData
-  const [cloudCount, setCloudCount] = useState<number>(() => {
-    try { return parseInt(localStorage.getItem('myPlacarPartnersCloudCount') || '0'); } catch { return 0; }
+  // cloudOwnCount: apenas a lista própria sincronizada do usuário.
+  const [cloudOwnCount, setCloudOwnCount] = useState<number>(() => {
+    try {
+      return parseInt(
+        localStorage.getItem('myPlacarPartnersCloudOwnCount')
+        || localStorage.getItem('myPlacarPartnersCloudCount')
+        || '0',
+      );
+    } catch {
+      return 0;
+    }
   });
   // Inicializa referralCount do localStorage para ter referência mesmo sem rodar syncAllData
   const [referralCount, setReferralCount] = useState<number>(() => {
@@ -80,9 +88,13 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
   // Ref que guarda o length da lista no último upload — melhoria 4
   const lastUploadedCountRef = useRef<number>(-1);
-  // Sync pendente: local tem mais parceiros que a nuvem
-  // Removida a condição && cloudCount > 0 — agora funciona mesmo antes do primeiro sync
-  const hasPendingSync = partners.length > cloudCount;
+  // Sync pendente: compara apenas a lista própria do usuário, sem incluir indicados.
+  const localPartners = useMemo(
+    () => partners.filter(partner => partner.origin !== 'referral'),
+    [partners],
+  );
+  // Removida a condição && cloudOwnCount > 0 — agora funciona mesmo antes do primeiro sync
+  const hasPendingSync = localPartners.length > cloudOwnCount;
   
   const [pendingQueueIndex, setPendingQueueIndex] = useState<number | null>(null);
 
@@ -105,6 +117,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
   });
 
   const scannerInputRef = useRef<{ startScanner?: () => void } | null>(null);
+  const cloudDisplayCount = cloudOwnCount + referralCount;
   const partnerPins = useMemo(() => new Set(partners.map(p => p.pin.toUpperCase())), [partners]);
   const displayedLives = useMemo(() => {
     const myPin = userProfile.pin.toUpperCase();
@@ -266,6 +279,8 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
       // getDocFromServer ignora cache — garante lista atualizada da nuvem
       const snap = await getDocFromServer(docRef);
       let cloudList: Partner[] = snap.exists() ? (snap.data().partners_list || []) : [];
+      // Indicados são derivados de users.referredByPin e não devem contar como backup próprio.
+      cloudList = cloudList.filter(partner => partner.origin !== 'referral');
 
       // Verificação de fantasmas em batches de 30 (limite do Firestore 'in')
       // substitui o loop N queries sequenciais anterior
@@ -287,8 +302,9 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
         cloudList = verifiedList;
       }
 
-      setCloudCount(cloudList.length);
-      localStorage.setItem('myPlacarPartnersCloudCount', cloudList.length.toString());
+      setCloudOwnCount(cloudList.length);
+      localStorage.setItem('myPlacarPartnersCloudOwnCount', cloudList.length.toString());
+      lastUploadedCountRef.current = cloudList.length;
 
       let referralList: Partner[] = [];
       if (userProfile.pin) {
@@ -319,15 +335,15 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     }
     // Captura o estado atual de parceiros no momento da chamada
     // para evitar problemas de closure com estado desatualizado
-    const currentPartners = partners;
+    const currentPartners = localPartners;
     if (currentPartners.length === 0) {
       if (!silent) window.alert("Nenhum parceiro para fazer backup.");
       return;
     }
     if (!silent) setIsUploading(true);
     try {
-      // Envia a lista completa incluindo indicados (origin: 'referral')
-      // que já estão no estado mas nunca eram persistidos na nuvem.
+      // Envia apenas a lista própria do usuário.
+      // Indicados são derivados de users.referredByPin e não devem virar segunda fonte de verdade.
       // Sanitiza undefined: Firestore rejeita qualquer campo undefined explicitamente
       // (name e gender são opcionais no tipo Partner e podem chegar undefined).
       const sanitizedPartners = sanitizePartnersForCloud(currentPartners);
@@ -345,9 +361,10 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
 
       mirrorUser(userProfile);
       mirrorPartners(userProfile.email, currentPartners);
-      // Atualiza o contador e persiste no localStorage para referência no próximo load
-      setCloudCount(currentPartners.length);
-      localStorage.setItem('myPlacarPartnersCloudCount', currentPartners.length.toString());
+      // Atualiza os contadores da nuvem:
+      // own = backup da lista própria, total = backup próprio + indicados
+      setCloudOwnCount(currentPartners.length);
+      localStorage.setItem('myPlacarPartnersCloudOwnCount', currentPartners.length.toString());
       // Melhoria 4: registra o count do último upload para evitar uploads redundantes
       lastUploadedCountRef.current = currentPartners.length;
       if (!silent) window.alert("Backup realizado!");
@@ -446,7 +463,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
     }
 
     // Melhoria 4: só faz upload se a lista mudou desde o último upload
-    if (partners.length !== lastUploadedCountRef.current) {
+    if (localPartners.length !== lastUploadedCountRef.current) {
       await uploadToCloud(true);
     }
     handleClearSelection(); 
@@ -660,11 +677,11 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
                 </div>
                 <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 flex items-center justify-between">
                     <div className="flex flex-wrap gap-2 flex-1">
-                      <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100"><Database size={12} className="text-blue-600" /><span className="text-[11px] font-black text-blue-800">{cloudCount} <span className="opacity-40 font-bold">Cloud</span></span></div>
+                      <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100"><Database size={12} className="text-blue-600" /><span className="text-[11px] font-black text-blue-800">{cloudDisplayCount} <span className="opacity-40 font-bold">Cloud</span></span></div>
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${hasPendingSync ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
                         <Smartphone size={12} className={hasPendingSync ? 'text-orange-500' : 'text-black'} />
                         <span className={`text-[11px] font-black ${hasPendingSync ? 'text-orange-700' : 'text-black'}`}>
-                          {partners.length} <span className="opacity-40 font-bold">Local</span>
+                          {localPartners.length} <span className="opacity-40 font-bold">Local</span>
                           {hasPendingSync && <span className="ml-1 text-orange-500">↑</span>}
                         </span>
                       </div>
@@ -683,7 +700,7 @@ export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQ
                     <CloudUpload size={16} className="text-orange-500 shrink-0" />
                     <div>
                       <p className="text-[11px] font-black text-orange-700 uppercase tracking-wide">Pendente envio</p>
-                      <p className="text-[11px] font-bold text-orange-600">{partners.length - cloudCount} {partners.length - cloudCount === 1 ? 'parceiro ainda não enviado' : 'parceiros ainda não enviados'}</p>
+                      <p className="text-[11px] font-bold text-orange-600">{localPartners.length - cloudOwnCount} {localPartners.length - cloudOwnCount === 1 ? 'parceiro ainda não enviado' : 'parceiros ainda não enviados'}</p>
                     </div>
                   </div>
                 )}

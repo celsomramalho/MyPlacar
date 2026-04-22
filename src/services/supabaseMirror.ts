@@ -10,7 +10,6 @@
  *   mirrorUser       → App.tsx:handleSaveProfile
  *                    → AuthScreen:cadastro (dois fluxos)
  *                    → AdminScreen:toggleUserPremium
- *   mirrorMatches    → App.tsx:syncHistoryToFirebase (após batch.commit)
  *   mirrorPartners   → PartnersScreen:uploadToCloud (após setDoc do metadata)
  *                    → App.tsx:setDoc da subcoleção users/{pin}/partners (juiz)
  *   deletePartners   → App.tsx:deletePartnersFromFirebase (junto com Firebase)
@@ -20,7 +19,7 @@
 
 import { supabase } from '@infra/supabase';
 import type { Partner } from '@modules/partners';
-import type { UserProfile, MatchHistoryItem } from '../types.ts';
+import type { UserProfile } from '../types.ts';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -98,53 +97,6 @@ export const mirrorUser = (profile: UserProfile): void => {
     .from('users')
     .upsert(row, { onConflict: 'email' })
     .then(({ error }) => { if (error) warn('mirrorUser', error); });
-};
-
-// ─── mirrorMatches ───────────────────────────────────────────────────────────
-
-/**
- * Espelha um array de MatchHistoryItem para a tabela `matches`.
- * Chamado após batch.commit() no syncHistoryToFirebase.
- * Recebe os mesmos itens já processados pelo sanitizeForFirestore.
- */
-export const mirrorMatches = (
-  matches: MatchHistoryItem[],
-  ownerEmail: string,
-  ownerPin: string,
-): void => {
-  if (!matches.length || !ownerEmail) return;
-
-  const rows = matches.map(m => ({
-    id:            m.id,
-    owner_email:   ownerEmail.toLowerCase().trim(),
-    owner_pin:     ownerPin   || '',
-    date:          m.date     || '',
-    time:          m.time     || '',
-    sport_type:    m.sportType || '',
-    p1_name:       m.p1Name   || '',
-    p1_partner:    m.p1Partner || '',
-    p2_name:       m.p2Name   || '',
-    p2_partner:    m.p2Partner || '',
-    p1_color:      m.p1Color  || '',
-    p2_color:      m.p2Color  || '',
-    p1_sets:       m.p1Sets   ?? [],
-    p2_sets:       m.p2Sets   ?? [],
-    score_summary: m.scoreSummary || '',
-    winner:        m.winner   || '',
-    winner_team:   m.winnerTeam ?? 1,
-    duration:      m.duration ?? 0,
-    stats:         m.stats    ?? {},
-    point_history: m.pointHistory ?? [],
-    location:      m.location ?? null,
-    involved_pins: m.involvedPins ?? [],
-    is_synced:     true,
-    synced_at:     new Date().toISOString(),
-  }));
-
-  supabase
-    .from('matches')
-    .upsert(rows, { onConflict: 'id' })
-    .then(({ error }) => { if (error) warn('mirrorMatches', error); });
 };
 
 // ─── mirrorPartners ───────────────────────────────────────────────────────────
@@ -259,52 +211,4 @@ export const deleteIcon = (type: 'sport' | 'category', id: string): void => {
     .delete()
     .eq('id', id)
     .then(({ error }) => { if (error) warn('deleteIcon', error); });
-};
-
-// ─── deleteMatch ──────────────────────────────────────────────────────────────
-
-/**
- * Remove uma única partida da tabela `matches` no Supabase.
- * Chamado junto com deleteDoc no Firebase (onDeleteMatch / onDeleteManyMatches).
- */
-export const deleteMatch = (id: string): void => {
-  if (!id) return;
-
-  supabase
-    .from('matches')
-    .delete()
-    .eq('id', id)
-    .then(({ error }) => { if (error) warn('deleteMatch', error); });
-};
-
-// ─── deleteManyMatches ────────────────────────────────────────────────────────
-
-/**
- * Remove múltiplas partidas da tabela `matches` no Supabase de uma vez.
- * Chamado junto com o batch.delete do Firebase (onDeleteManyMatches).
- */
-export const deleteManyMatches = (ids: string[]): void => {
-  if (!ids.length) return;
-
-  supabase
-    .from('matches')
-    .delete()
-    .in('id', ids)
-    .then(({ error }) => { if (error) warn('deleteManyMatches', error); });
-};
-
-// ─── deleteAllMatches ─────────────────────────────────────────────────────────
-
-/**
- * Remove TODAS as partidas de um usuário da tabela `matches` no Supabase.
- * Chamado junto com handleClearAllHistory após batch.commit() no Firebase.
- */
-export const deleteAllMatches = (ownerEmail: string): void => {
-  if (!ownerEmail) return;
-
-  supabase
-    .from('matches')
-    .delete()
-    .eq('owner_email', ownerEmail.toLowerCase().trim())
-    .then(({ error }) => { if (error) warn('deleteAllMatches', error); });
 };

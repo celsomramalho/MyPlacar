@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Partner, QueuePlayer } from '@modules/partners';
-import { GameState, MatchHistoryItem, MatchSettings, UserProfile, TournamentEvent } from '../types.ts';
+import type { MatchHistoryItem } from '@modules/history';
+import { HistorySection } from '@modules/history';
+import { GameState, MatchSettings, UserProfile, TournamentEvent } from '../types.ts';
 import { ProfileScreen } from './ProfileScreen.tsx';
 import { HelpScreen } from './HelpScreen.tsx';
 import { SettingsHeader } from './settings/SettingsHeader.tsx';
 import { TeamSection } from './settings/TeamSection.tsx';
-import { HistorySection } from './settings/HistorySection.tsx';
 import { SettingsTabs } from './settings/SettingsTabs.tsx';
 import { getDb } from '@infra/firebase';
 import { doc, getDocFromServer, setDoc } from 'firebase/firestore';
