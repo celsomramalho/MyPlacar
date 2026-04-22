@@ -453,8 +453,11 @@ const App: React.FC = () => {
       // causado pela própria troca de controlador feche a live prematuramente.
       const justLostControl = (Date.now() - lostControlAtRef.current) < 5000;
 
-      if (isActiveController && isOriginalOwner && !justLostControl) {
-        // Owner ativo saiu: verifica se há judge ativo antes de fechar a live (Regra 8).
+      // Item 5: o owner fecha a live ao sair independentemente de ser o controller atual.
+      // Antes exigia isActiveController — o que impedia o owner de fechar se havia cedido
+      // o controle para outro device antes de sair.
+      if (isOriginalOwner && !justLostControl) {
+        // Owner saiu: verifica se há judge ativo antes de fechar a live (Regra 8).
         // Judge ativo = designado E visto nos últimos 60s.
         const hasActiveJudge = !!(gs.judgePin && Object.values(gs.controllers || {}).some(
           (c: ControllerRecord) => c.role === 'judge' && (Date.now() - (c.lastSeen || 0)) < 60000
@@ -467,7 +470,14 @@ const App: React.FC = () => {
               const data = snap.data();
               const nextControllers = { ...(data.controllers || {}) };
               delete nextControllers[deviceId];
-              updateDoc(doc(db, "live_matches", targetPin), { controllers: nextControllers }).catch(() => {});
+              // Se o owner também era o controller, libera o controle
+              const updateData: Record<string, unknown> = { controllers: nextControllers };
+              if (isActiveController) {
+                updateData.commandOwnerId = null;
+                updateData.commandOwner = null;
+              }
+              // @ts-expect-error - Firestore updateDoc aceita objeto genérico
+              updateDoc(doc(db, "live_matches", targetPin), updateData).catch(() => {});
             }
           }).catch(() => {});
         } else {
@@ -1209,12 +1219,15 @@ const App: React.FC = () => {
           if (snap.exists() && !snap.data().isLiveClosed) {
             const data = snap.data();
             const controllers = { ...(data.controllers || {}) };
+            // Owner que não está controlando mantém role 'owner', não vira 'observer'
+            const existingRole = controllers[deviceId]?.role;
+            const heartbeatRole = existingRole === 'owner' || existingRole === 'judge' ? existingRole : 'observer';
             controllers[deviceId] = {
               label: currentFullDeviceName,
               nickname: myNickname,
               lastSeen: now,
               isOwner: true,
-              role: 'observer',
+              role: heartbeatRole,
               deviceType: myDeviceType
             };
             await updateDoc(docRef, { controllers });
@@ -1247,21 +1260,26 @@ const App: React.FC = () => {
       
       if (gameState.isMirroringActive && userProfile.email && !gameState.isLiveClosed && navigator.onLine) {
         const db = getDb();
-        if (db && gameState.commandOwnerId === deviceId) {
-            // Guard duplo: só escreve se AMBOS local e Firebase confirmam este device como controller.
-            // Elimina race condition onde o ex-controller ainda escreve por alguns ciclos após ceder o controle.
-            // Grace period de 5s: logo após assumir o controle, activeLives (listener da coleção) ainda
-            // não refletiu o novo commandOwnerId — permitimos a escrita nesse intervalo para não bloquear
-            // o primeiro ponto marcado imediatamente após assumir o controle (P3).
+        if (db) {
+            // ── Determina papel deste device ────────────────────────────────
+            const isThisDeviceController = gameState.commandOwnerId === deviceId;
+
+            // Guard duplo (escrita de estado de partida — apenas o controller):
+            // Só escreve placar/histórico se AMBOS local e Firebase confirmam este
+            // device como controller, ou se acabou de assumir (grace period).
             const isConfirmedControllerInCloud = activeLives.some(l => l.commandOwnerId === deviceId);
-            const justTookControl = (Date.now() - tookControlAtRef.current) < 5000;
-            if (!isConfirmedControllerInCloud && !justTookControl) return;
+            const isConfirmedControllerLocal = isThisDeviceController;
+            const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
+            const controllerGuardOk = isConfirmedControllerInCloud || isConfirmedControllerLocal || justTookControl;
+
+            // Owner sempre pode escrever mudanças de configuração/regras,
+            // independentemente de ser ou não o controller atual.
             const now = Date.now();
             const prevStateStr = lastSentStateRef.current;
             const prevState = prevStateStr ? JSON.parse(prevStateStr) : null;
-            
-            const isCriticalChange = !prevState || 
-              prevState.p1.score !== gameState.p1.score || 
+
+            const isMatchStateChange = !prevState ||
+              prevState.p1.score !== gameState.p1.score ||
               prevState.p2.score !== gameState.p2.score ||
               prevState.p1.games !== gameState.p1.games ||
               prevState.p2.games !== gameState.p2.games ||
@@ -1271,6 +1289,24 @@ const App: React.FC = () => {
               prevState.isMatchOver !== gameState.isMatchOver ||
               prevState.server !== gameState.server;
 
+            const isConfigChange = !prevState ||
+              prevState.p1.name !== gameState.p1.name ||
+              prevState.p2.name !== gameState.p2.name ||
+              prevState.p1.color !== gameState.p1.color ||
+              prevState.p2.color !== gameState.p2.color ||
+              prevState.matchConfig?.sportType !== gameState.matchConfig?.sportType ||
+              prevState.matchConfig?.sets !== gameState.matchConfig?.sets ||
+              prevState.matchConfig?.gamesPerSet !== gameState.matchConfig?.gamesPerSet ||
+              prevState.matchConfig?.noAd !== gameState.matchConfig?.noAd ||
+              prevState.matchConfig?.tieBreak !== gameState.matchConfig?.tieBreak ||
+              prevState.matchConfig?.isDoubles !== gameState.matchConfig?.isDoubles;
+
+            // Controller escreve mudanças de partida; owner escreve mudanças de config.
+            if (isMatchStateChange && !controllerGuardOk) return;
+            if (!isMatchStateChange && isConfigChange && !isOriginalOwner) return;
+            if (!isMatchStateChange && !isConfigChange && !isThisDeviceController) return;
+
+            const isCriticalChange = isMatchStateChange || isConfigChange;
             const timeSinceLastSync = now - lastSyncTimeRef.current;
             const shouldSync = isCriticalChange || timeSinceLastSync > 10000;
 
@@ -1946,9 +1982,13 @@ const App: React.FC = () => {
             isWatchMode: !!matchSettings.isWatchMode 
           };
           const nextControllers = { ...(cloudState.controllers || {}) };
-          // Rebaixa o controller anterior para observer (se ainda estiver nos records)
+          // Rebaixa o controller anterior para observer (se ainda estiver nos records).
+          // Preserva o role de owner: o dono da live não vira observer ao perder o controle.
           if (currentControllerId && currentControllerId !== deviceId && nextControllers[currentControllerId]) {
-            nextControllers[currentControllerId] = { ...nextControllers[currentControllerId], role: 'observer' };
+            const prevRole = nextControllers[currentControllerId].role;
+            const prevIsOwner = nextControllers[currentControllerId].isOwner;
+            const demotedRole = prevIsOwner || prevRole === 'owner' ? 'owner' : 'observer';
+            nextControllers[currentControllerId] = { ...nextControllers[currentControllerId], role: demotedRole };
           }
           nextControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() };
           const updatedStateRaw = { ...cloudState, commandOwner: myCommandName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false, matchConfig: { ...syncedSettings, setsToWin: syncedSettings.sets, isWatchMode: !!syncedSettings.isWatchMode } };
@@ -2004,7 +2044,10 @@ const App: React.FC = () => {
           const myCommandName = currentFullDeviceName;
           const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
           const nextControllers = { ...(cloudData.controllers || {}) };
-          nextControllers[deviceId] = { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: 'observer', deviceType: getDeviceType() };
+          // Preserva role existente se o device já está registrado (ex: owner voltando como observer)
+          const existingEntry = nextControllers[deviceId];
+          const joinRole = existingEntry?.role === 'owner' || existingEntry?.role === 'judge' ? existingEntry.role : 'observer';
+          nextControllers[deviceId] = { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType() };
           await updateDoc(doc(db, "live_matches", pinUpper), { controllers: nextControllers }).catch(() => {});
           
           if (cloudData.matchConfig) {
