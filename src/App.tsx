@@ -358,6 +358,9 @@ const App: React.FC = () => {
   const finalizationTimerRef = useRef<any>(null);
   
   const lastSentStateRef = useRef<string>("");
+  // T3.2: registra quando este device assumiu o controle pela última vez.
+  // Usado para o grace period do guard duplo no sync de gameState.
+  const tookControlAtRef = useRef<number>(0);
 
   const sanitizeForFirestore = (obj: unknown) => {
     const clean = JSON.parse(JSON.stringify(obj, (key, value) => value === undefined ? null : value));
@@ -443,8 +446,26 @@ const App: React.FC = () => {
       const isActiveController = gs.commandOwnerId === deviceId;
 
       if (isActiveController && isOriginalOwner) {
-        // Owner ativo saiu: fecha a live
-        setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
+        // Owner ativo saiu: verifica se há judge ativo antes de fechar a live (Regra 8).
+        // Judge ativo = designado E visto nos últimos 60s.
+        const hasActiveJudge = !!(gs.judgePin && Object.values(gs.controllers || {}).some(
+          (c: ControllerRecord) => c.role === 'judge' && (Date.now() - (c.lastSeen || 0)) < 60000
+        ));
+
+        if (hasActiveJudge) {
+          // Owner sai mas há judge ativo — live continua, apenas remove o owner dos controllers
+          getDoc(doc(db, "live_matches", targetPin)).then(snap => {
+            if (snap.exists()) {
+              const data = snap.data();
+              const nextControllers = { ...(data.controllers || {}) };
+              delete nextControllers[deviceId];
+              updateDoc(doc(db, "live_matches", targetPin), { controllers: nextControllers }).catch(() => {});
+            }
+          }).catch(() => {});
+        } else {
+          // Owner sai sem judge ativo — fecha a live para todos
+          setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
+        }
       } else {
         // Judge ativo saiu: libera o controle (não fecha a live) e se remove dos controllers
         // Observer saiu: apenas se remove dos controllers
@@ -778,40 +799,45 @@ const App: React.FC = () => {
   }, [matchSettings.brightness]);
 
   // Ref espelho de matchSettings — permite que o callback do onSnapshot leia
-  // configurações locais atualizadas sem precisar de matchSettings no dep array,
+  // configó locais atualizadas sem precisar de matchSettings no dep array,
   // evitando o resubscribe do listener a cada mudança de setting.
   const matchSettingsRef = useRef(matchSettings);
   useEffect(() => { matchSettingsRef.current = matchSettings; }, [matchSettings]);
 
+  // T3.1: PIN alvo do listener calculado de forma reativa (depende de activeLives).
+  // Quando o judge é adicionado em tempo real, activeLives atualiza e o memo recalcula,
+  // fazendo o useEffect do listener ser recriado com o PIN correto — sem closure stale.
+  // Usa activeLives (state, não ref) para garantir reatividade.
+  const targetListenPin = useMemo(() => {
+    const myPin = userProfile.pin?.toUpperCase();
+    if (!myPin) return null;
+
+    // Judge: escuta o documento do owner da live em que é juiz
+    const judgeInLive = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+    if (judgeInLive?.ownerPin) return judgeInLive.ownerPin.toUpperCase();
+
+    // Owner: escuta o próprio documento
+    const ownerOfLive = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin);
+    if (ownerOfLive) return myPin;
+
+    // Observer: escuta a live mais recente disponível
+    if (activeLives.length > 0) {
+      const latest = activeLives.reduce((a, b) =>
+        (b.liveSessionCounter || 0) > (a.liveSessionCounter || 0) ? b : a
+      );
+      if (latest.ownerPin) return latest.ownerPin.toUpperCase();
+    }
+
+    // Fallback: ownerPin já gravado no gameState local (cobre latencia do onSnapshot da collection)
+    return gameStateRef.current?.ownerPin?.toUpperCase() || myPin;
+  }, [activeLives, userProfile.pin]);
+
   useEffect(() => {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || !targetListenPin) return;
     const db = getDb();
     if (!db) return;
 
-    // Usa PIN do usuário ou fallback para conectar como observador.
-    // activeLives e gameState são lidos via ref para não entrar no dep array —
-    // evita resubscribe do listener a cada mudança de presença/heartbeat.
-    const myPin = userProfile.pin?.toUpperCase();
-    const currentActiveLives = activeLivesRef.current;
-    const myLive = myPin ? currentActiveLives.find(l => l.ownerPin?.toUpperCase() === myPin || l.judgePin?.toUpperCase() === myPin) : null;
-
-    // Para observadores (não owner nem judge), escuta a live mais recente disponível
-    const observerLive = !myLive && currentActiveLives.length > 0
-      ? currentActiveLives.reduce((latest, l) =>
-          (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
-        )
-      : null;
-
-    // Fallback: se activeLives ainda não chegou (latência do onSnapshot da collection),
-    // usa o ownerPin já gravado no gameState local para não escutar o próprio pin do observer.
-    const localOwnerPin = gameStateRef.current?.ownerPin?.toUpperCase();
-    const listenPin = myLive
-      ? myLive.ownerPin?.toUpperCase()
-      : observerLive
-        ? observerLive.ownerPin?.toUpperCase()
-        : localOwnerPin || myPin;
-
-    if (!listenPin) return;
+    const listenPin = targetListenPin;
 
     const unsubscribe = onSnapshot(doc(db, "live_matches", listenPin), (snap) => {
       if (snap.exists()) {
@@ -830,7 +856,7 @@ const App: React.FC = () => {
           const thisDeviceIsActiveOwner =
             currentGs?.isMirroringActive &&
             currentGs?.commandOwnerId === deviceId &&
-            currentGs?.ownerPin?.toUpperCase() === myPin;
+            currentGs?.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase();
 
           if (thisDeviceIsActiveOwner) {
             console.log("[Sync] isLiveClosed: true ignorado — owner ativo local, provável artefato de reload.");
@@ -895,9 +921,10 @@ const App: React.FC = () => {
       }
     });
     return () => unsubscribe();
-  // activeLives e gameState removidos do dep array — lidos via ref para evitar
-  // resubscribe do listener a cada mudança de presença/heartbeat.
-  }, [userProfile.pin, currentFullDeviceName, deviceId]);
+  // targetListenPin é reativo (useMemo sobre activeLives) — quando o PIN alvo muda
+  // (ex: judge adicionado, live nova detectada), o listener é recriado automaticamente.
+  // deviceId permanece para garantir que o guard de ownership funcione corretamente.
+  }, [targetListenPin, deviceId]);
 
   const prevIsCommandOwner = useRef(isCommandOwner);
   useEffect(() => {
@@ -1141,13 +1168,14 @@ const App: React.FC = () => {
             if (snap.exists() && !snap.data().isLiveClosed) {
               const data = snap.data();
               const controllers = { ...(data.controllers || {}) };
-              // Judge heartbeat: mantém role:'judge' nos controllers
-              const isActiveJudge = data.commandOwnerId === deviceId;
+              // Judge heartbeat: mantém role:'judge' nos controllers.
+              // O role reflete quem o usuário É (juiz designado), não o que faz agora.
+              // O commandOwnerId já indica quem está controlando ativamente.
               controllers[deviceId] = { 
                 label: currentFullDeviceName, 
                 nickname: myNickname,
                 lastSeen: now,
-                role: isActiveJudge ? 'judge' : 'observer',
+                role: 'judge',
                 deviceType: myDeviceType
               };
               await updateDoc(docRef, { controllers });
@@ -1209,8 +1237,12 @@ const App: React.FC = () => {
         if (db && gameState.commandOwnerId === deviceId) {
             // Guard duplo: só escreve se AMBOS local e Firebase confirmam este device como controller.
             // Elimina race condition onde o ex-controller ainda escreve por alguns ciclos após ceder o controle.
+            // Grace period de 5s: logo após assumir o controle, activeLives (listener da coleção) ainda
+            // não refletiu o novo commandOwnerId — permitimos a escrita nesse intervalo para não bloquear
+            // o primeiro ponto marcado imediatamente após assumir o controle (P3).
             const isConfirmedControllerInCloud = activeLives.some(l => l.commandOwnerId === deviceId);
-            if (!isConfirmedControllerInCloud) return;
+            const justTookControl = (Date.now() - tookControlAtRef.current) < 5000;
+            if (!isConfirmedControllerInCloud && !justTookControl) return;
             const now = Date.now();
             const prevStateStr = lastSentStateRef.current;
             const prevState = prevStateStr ? JSON.parse(prevStateStr) : null;
@@ -1237,9 +1269,8 @@ const App: React.FC = () => {
               const myDeviceType = getDeviceType();
 
               if (shouldUpdateLastSeen) {
-                Object.keys(nextControllers).forEach(id => { 
-                  if (nextControllers[id].label === currentFullDeviceName && id !== deviceId) delete nextControllers[id]; 
-                });
+                // NOTA: removida a limpeza por label — apagava dispositivos com mesmo nome
+                // mas deviceId diferente. A limpeza é feita exclusivamente por lastSeen (abaixo).
                 // Limpeza de dispositivos stale (sem heartbeat há mais de 2 minutos)
                 Object.keys(nextControllers).forEach(id => {
                   if (id !== deviceId && (now - (nextControllers[id].lastSeen || 0)) > 120000) {
@@ -1522,7 +1553,15 @@ const App: React.FC = () => {
       const myPin = userProfile.pin?.toUpperCase();
       const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
       const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : state.ownerPin?.toUpperCase());
-      if (targetPin && navigator.onLine) deleteDoc(doc(db, "live_matches", targetPin)).catch(() => {});
+      // Regra 9: a live pode permanecer aberta para nova partida — apenas marca como encerrada,
+      // não deleta. O documento será substituído quando o owner iniciar uma nova partida.
+      if (targetPin && navigator.onLine) {
+        updateDoc(doc(db, "live_matches", targetPin), {
+          isMatchOver: true,
+          isConfirmedFinished: true,
+          matchEndedAt: Date.now()
+        }).catch(() => {});
+      }
       return;
     }
 
@@ -1560,7 +1599,15 @@ const App: React.FC = () => {
     persistHistory([historyItem, ...matchHistoryRef.current]);
     try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
     const db = getDb();
-    if (db && userProfile.pin && navigator.onLine) deleteDoc(doc(db, "live_matches", userProfile.pin.toUpperCase())).catch(() => {});
+    // Regra 9: a live pode permanecer aberta para nova partida — apenas marca como encerrada,
+    // não deleta. O documento será substituído quando o owner iniciar uma nova partida.
+    if (db && userProfile.pin && navigator.onLine) {
+      updateDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), {
+        isMatchOver: true,
+        isConfirmedFinished: true,
+        matchEndedAt: Date.now()
+      }).catch(() => {});
+    }
   }, [persistHistory, userProfile.email, userProfile.pin, partners]);
 
   const initGameState = async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
@@ -1940,6 +1987,8 @@ const App: React.FC = () => {
           const updatedState = sanitizeForFirestore(updatedStateRaw);
           if (updatedState) {
             await setDoc(doc(db, "live_matches", targetPin), updatedState, { merge: true }).catch(() => {});
+            // T3.2: marca o timestamp de controle para o grace period do guard duplo
+            tookControlAtRef.current = Date.now();
             prevSettingsRef.current = JSON.parse(JSON.stringify(syncedSettings)); setMatchSettings(syncedSettings); 
             try { localStorage.setItem('myPlacarSettings', JSON.stringify(syncedSettings)); } catch {}
             setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
@@ -2608,7 +2657,7 @@ const App: React.FC = () => {
                       </button>
                     )}
 
-                    {(!isCurrentController || liveRole === 'judge' || gameState?.judgePin) && (
+                    {!isCurrentController && (
                       <button onClick={() => handleObserveLive()} className="w-full py-5 bg-[#00FFFF] text-black rounded-[2rem] font-black text-base shadow-xl shadow-cyan-100 active:scale-95 transition-all flex items-center justify-center gap-3">
                         <Eye size={24} /> Observador
                       </button>
@@ -2841,7 +2890,33 @@ const App: React.FC = () => {
       }} onSwitchServer={handleSmartSwitchServer} onTogglePause={() => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner) return; 
         setGameState(p => p ? {...p, isPaused: !p.isPaused} : null); 
-      }} onBack={() => { handleLeaveLive(); setCurrentScreen('new-game'); }} onHome={() => { handleLeaveLive(); setCurrentScreen('settings'); }} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={async a => { 
+      }} onBack={() => { 
+        // T2.3: Owner com live ativa — diálogo de saída explícito
+        if (gameState?.isMirroringActive && isOriginalOwner && !gameState.isLiveClosed && !gameState.isConfirmedFinished) {
+          setModalConfig({
+            title: "Sair da transmissão?",
+            message: "A live está ativa. Ao sair, os observadores perderão a conexão. O que deseja fazer?",
+            confirmLabel: "Pausar minha participação",
+            onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('new-game'); },
+            onCancel: () => setModalConfig(null),
+          });
+        } else {
+          handleLeaveLive(); setCurrentScreen('new-game');
+        }
+      }} onHome={() => { 
+        // T2.3: Owner com live ativa — diálogo de saída explícito
+        if (gameState?.isMirroringActive && isOriginalOwner && !gameState.isLiveClosed && !gameState.isConfirmedFinished) {
+          setModalConfig({
+            title: "Sair da transmissão?",
+            message: "A live está ativa. Ao sair, os observadores perderão a conexão. O que deseja fazer?",
+            confirmLabel: "Pausar minha participação",
+            onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('settings'); },
+            onCancel: () => setModalConfig(null),
+          });
+        } else {
+          handleLeaveLive(); setCurrentScreen('settings');
+        }
+      }} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={async a => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isLiveClosed) return; 
         if (a) { 
           const isStarted = (gameState.pointHistory?.length ?? 0) > 0 || gameState.p1.games > 0 || gameState.p2.games > 0 || (gameState.p1.score !== '0' && gameState.p1.score !== '') || (gameState.p2.score !== '0' && gameState.p2.score !== ''); 
