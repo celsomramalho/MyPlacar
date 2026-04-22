@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus } from 'lucide-react';
+import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2 } from 'lucide-react';
 import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -55,6 +55,10 @@ interface LiveLogEntry {
   type: LiveLogType;
   text: string;
   ok?: boolean;
+  // Campos para composição de ícones em eventos de participante
+  deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop';
+  participantRole?: 'owner' | 'judge' | 'observer';
+  isController?: boolean;
 }
 
 interface Props {
@@ -365,7 +369,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return c?.label || deviceId;
   };
 
-  const addLiveLog = useCallback((type: LiveLogType, text: string, ok?: boolean) => {
+  const addLiveLog = useCallback((
+    type: LiveLogType,
+    text: string,
+    ok?: boolean,
+    meta?: { deviceType?: LiveLogEntry['deviceType']; participantRole?: LiveLogEntry['participantRole']; isController?: boolean }
+  ) => {
     const entry: LiveLogEntry = {
       id: Math.random().toString(36).substr(2, 9),
       time: nowTime(),
@@ -373,6 +382,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       type,
       text,
       ok,
+      ...meta,
     };
     setLiveLogs(prev => [entry, ...prev].slice(0, 60));
   }, []);
@@ -386,7 +396,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     const isNowActive = gameState.isMirroringActive && !gameState.isLiveClosed;
     if (!prevIsMirroringRef.current && isNowActive) {
       const label = currentDeviceFullLabel || 'Dispositivo';
-      addLiveLog('live_created', `${label}: criou a live às ${nowTime()}`, true);
+      const ownerController = gameState.controllers?.[currentDeviceId || ''] as any;
+      addLiveLog('live_created', `${label}: criou a live às ${nowTime()}`, true, {
+        deviceType: ownerController?.deviceType,
+        participantRole: 'owner',
+        isController: true,
+      });
     }
     prevIsMirroringRef.current = isNowActive;
   }, [gameState.isMirroringActive, gameState.isLiveClosed, currentDeviceFullLabel, addLiveLog]);
@@ -472,7 +487,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       const label = cur === currentDeviceId
         ? (currentDeviceFullLabel || resolveLabel(cur, gameState.controllers))
         : resolveLabel(cur, gameState.controllers);
-      addLiveLog('control_taken', `${label}: assumiu o controle da partida`, true);
+      const ctrlRecord = gameState.controllers?.[cur] as any;
+      addLiveLog('control_taken', `${label}: assumiu o controle da partida`, true, {
+        deviceType: ctrlRecord?.deviceType,
+        participantRole: ctrlRecord?.role === 'owner' ? 'owner' : ctrlRecord?.role === 'judge' ? 'judge' : undefined,
+        isController: true,
+      });
     }
     prevCommandOwnerIdRef.current = cur;
   }, [gameState.commandOwnerId, gameState.isMirroringActive, gameState.isLiveClosed, addLiveLog]);
@@ -496,14 +516,22 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         );
         if (labelJaPresente) return;
         const roleLabel = c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
-        addLiveLog('participant_join', `${c.label || id}: entrou na live (${roleLabel})`, true);
+        addLiveLog('participant_join', `${c.label || id}: entrou na live (${roleLabel})`, true, {
+          deviceType: c.deviceType,
+          participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
+          isController: id === gameState.commandOwnerId,
+        });
       }
     });
     Object.keys(prev).forEach(id => {
       if (!cur[id]) {
         const c = prev[id] as any;
         const roleLabel = c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
-        addLiveLog('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false);
+        addLiveLog('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false, {
+          deviceType: c.deviceType,
+          participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
+          isController: id === gameState.commandOwnerId,
+        });
       }
     });
     prevControllersRef.current = cur;
@@ -1375,11 +1403,49 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                           observers_ack:    'bg-cyan-50 border-cyan-100',
                           live_closed:      'bg-red-50 border-red-100',
                         };
+                        // ── Ícones compostos para eventos de participante ──────────
+                        const hasParticipantMeta = log.deviceType || log.participantRole || log.isController !== undefined;
+                        const deviceIconMap: Record<string, React.ReactNode> = {
+                          watch:  <Watch size={11} />,
+                          phone:  <Smartphone size={11} />,
+                          tablet: <Monitor size={11} />,
+                          laptop: <Laptop size={11} />,
+                        };
+                        const roleIconMap: Record<string, React.ReactNode> = {
+                          owner: <Crown size={11} />,
+                          judge: <Gavel size={11} />,
+                        };
+                        const deviceBubbleColor = 'bg-slate-500 text-white';
+                        const roleBubbleColor: Record<string, string> = {
+                          owner: 'bg-amber-500 text-white',
+                          judge: 'bg-blue-600 text-white',
+                        };
+                        const modeBubbleColor = log.isController ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white';
+
                         return (
                           <div key={log.id} className={`flex items-start gap-2.5 p-2.5 rounded-2xl border shadow-xs animate-in fade-in slide-in-from-top-1 duration-200 ${rowBg[log.type]}`}>
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${dotColor[log.type]}`}>
-                              {iconMap[log.type]}
-                            </div>
+                            {hasParticipantMeta ? (
+                              <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                {/* Bolinha 1: tipo do dispositivo */}
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${deviceBubbleColor}`}>
+                                  {log.deviceType ? deviceIconMap[log.deviceType] : <Smartphone size={11} />}
+                                </div>
+                                {/* Bolinha 2: papel (owner/judge) — só se aplicável */}
+                                {log.participantRole && log.participantRole !== 'observer' && (
+                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${roleBubbleColor[log.participantRole] || ''}`}>
+                                    {roleIconMap[log.participantRole]}
+                                  </div>
+                                )}
+                                {/* Bolinha 3: modo (controller ou observer) */}
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${modeBubbleColor}`}>
+                                  {log.isController ? <Gamepad2 size={11} /> : <Eye size={11} />}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${dotColor[log.type]}`}>
+                                {iconMap[log.type]}
+                              </div>
+                            )}
                             <div className="flex-1 min-w-0">
                               <span className="text-[11px] font-black text-slate-800 leading-snug block">{log.text}</span>
                               <span className="text-[9px] font-bold text-slate-400 mt-0.5 block">{log.time}</span>

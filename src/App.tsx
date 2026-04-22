@@ -434,6 +434,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const performExit = () => {
+      // Se a flag 'alive' existe, o app foi montado recentemente — é um reload,
+      // não uma saída definitiva. Consome a flag e aborta para não fechar a live.
+      try {
+        if (sessionStorage.getItem('myPlacar_alive')) {
+          sessionStorage.removeItem('myPlacar_alive');
+          return;
+        }
+      } catch {}
       // Lê estado atual via refs — evita closure stale e mantém o dep array estável
       // (o effect não é recriado a cada ponto marcado).
       const gs = gameStateRef.current;
@@ -587,6 +595,9 @@ const App: React.FC = () => {
     // Limpa flag de atualização de PWA em andamento — o app reiniciou com sucesso,
     // o beforeunload já pode fechar lives normalmente em saídas futuras.
     try { sessionStorage.removeItem('myPlacar_pwa_updating'); } catch {}
+    // Seta flag de "app ativo" — usada pelo performExit para distinguir reload de saída real.
+    // Se o performExit encontrar essa flag, sabe que é um reload e aborta o fechamento da live.
+    try { sessionStorage.setItem('myPlacar_alive', '1'); } catch {}
   }, []);
 
   useEffect(() => {
