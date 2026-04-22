@@ -513,7 +513,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const prevIsMatchOverRef = useRef(gameState.isMatchOver);
   useEffect(() => {
     if (!prevIsMatchOverRef.current && gameState.isMatchOver) {
-      const winner = gameState.matchWinner === 1 ? gameState.p1.name : gameState.matchWinner === 2 ? gameState.p2.name : null;
+      const p1SetsWon = (gameState.p1.sets || []).filter((s: number, i: number) => s > (gameState.p2.sets?.[i] ?? 0)).length;
+      const p2SetsWon = (gameState.p2.sets || []).filter((s: number, i: number) => s > (gameState.p1.sets?.[i] ?? 0)).length;
+      const winner = p1SetsWon > p2SetsWon ? gameState.p1.name : p2SetsWon > p1SetsWon ? gameState.p2.name : null;
       addLiveLog('match_over', `Partida encerrada${winner ? ` — Vencedor: ${winner}` : ''}`, true);
     }
     prevIsMatchOverRef.current = gameState.isMatchOver;

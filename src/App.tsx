@@ -363,6 +363,9 @@ const App: React.FC = () => {
   // T3.2: registra quando este device assumiu o controle pela última vez.
   // Usado para o grace period do guard duplo no sync de gameState.
   const tookControlAtRef = useRef<number>(0);
+  // Registra quando este device PERDEU o controle (via onSnapshot).
+  // Usado para evitar que visibilitychange feche a live logo após uma troca de controlador.
+  const lostControlAtRef = useRef<number>(0);
 
   const sanitizeForFirestore = (obj: unknown) => {
     const clean = JSON.parse(JSON.stringify(obj, (key, value) => value === undefined ? null : value));
@@ -446,8 +449,11 @@ const App: React.FC = () => {
       if (!targetPin) return;
 
       const isActiveController = gs.commandOwnerId === deviceId;
+      // Grace period de 5s após perder o controle — evita que visibilitychange
+      // causado pela própria troca de controlador feche a live prematuramente.
+      const justLostControl = (Date.now() - lostControlAtRef.current) < 5000;
 
-      if (isActiveController && isOriginalOwner) {
+      if (isActiveController && isOriginalOwner && !justLostControl) {
         // Owner ativo saiu: verifica se há judge ativo antes de fechar a live (Regra 8).
         // Judge ativo = designado E visto nos últimos 60s.
         const hasActiveJudge = !!(gs.judgePin && Object.values(gs.controllers || {}).some(
@@ -876,6 +882,11 @@ const App: React.FC = () => {
 
         setCloudLiveExists(true);
         if (cloudData.commandOwnerId !== deviceId) {
+          // Se este device era o controlador antes e agora não é mais, marca o momento
+          const currentGs = gameStateRef.current;
+          if (currentGs?.commandOwnerId === deviceId) {
+            lostControlAtRef.current = Date.now();
+          }
           // Lê matchSettings via ref para não forçar resubscribe do listener
           const localSettings = matchSettingsRef.current;
           setGameState(prev => {
