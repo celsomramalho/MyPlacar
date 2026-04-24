@@ -47,7 +47,11 @@ type LiveLogType =
   | 'match_confirmed'
   | 'fb_ack'
   | 'observers_ack'
-  | 'live_closed';
+  | 'live_closed'
+  | 'judge_added'    // D3: juiz adicionado
+  | 'judge_removed'  // D3: juiz removido
+  | 'new_match'      // D3: nova partida iniciada na live
+  | 'match_reset';   // D3: partida zerada
 
 interface LiveLogEntry {
   id: string;
@@ -431,7 +435,16 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     const histLen = gameState.pointHistory?.length ?? 0;
     if (histLen === 0) { prevScoreRef.current = curKey; return; }
 
-    const scoreText = `${gameState.p1.name} ${gameState.p1.score} × ${gameState.p2.score} ${gameState.p2.name}`;
+    // D3: identifica quem marcou o ponto (last entry no histórico)
+    const lastEvent = gameState.pointHistory?.[histLen - 1];
+    const scorerName = lastEvent?.winner === 1
+      ? gameState.p1.name
+      : lastEvent?.winner === 2
+      ? gameState.p2.name
+      : null;
+    const scoreText = scorerName
+      ? `${scorerName}: ponto → ${gameState.p1.score} × ${gameState.p2.score}`
+      : `${gameState.p1.name} ${gameState.p1.score} × ${gameState.p2.score} ${gameState.p2.name}`;
     const sentAt = Date.now();
     pendingScoreSentAtRef.current = sentAt;
 
@@ -1376,6 +1389,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                           fb_ack:           <Wifi size={12} />,
                           observers_ack:    <Eye size={12} />,
                           live_closed:      <WifiOff size={12} />,
+                          judge_added:      <Gavel size={12} />,
+                          judge_removed:    <Trash2 size={12} />,
+                          new_match:        <RotateCcw size={12} />,
+                          match_reset:      <RotateCcw size={12} />,
                         };
                         const dotColor: Record<LiveLogType, string> = {
                           live_created:     'bg-sky-500 text-white',
@@ -1389,6 +1406,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                           fb_ack:           log.ok === undefined ? 'bg-slate-300 text-white' : log.ok ? 'bg-sky-500 text-white' : 'bg-red-500 text-white',
                           observers_ack:    'bg-cyan-500 text-white',
                           live_closed:      'bg-red-500 text-white',
+                          judge_added:      'bg-violet-500 text-white',
+                          judge_removed:    'bg-rose-400 text-white',
+                          new_match:        'bg-indigo-500 text-white',
+                          match_reset:      'bg-amber-500 text-white',
                         };
                         const rowBg: Record<LiveLogType, string> = {
                           live_created:     'bg-sky-50 border-sky-100',
@@ -1402,6 +1423,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                           fb_ack:           log.ok === undefined ? 'bg-slate-50 border-slate-200' : log.ok ? 'bg-sky-50 border-sky-100' : 'bg-red-50 border-red-100',
                           observers_ack:    'bg-cyan-50 border-cyan-100',
                           live_closed:      'bg-red-50 border-red-100',
+                          judge_added:      'bg-violet-50 border-violet-100',
+                          judge_removed:    'bg-rose-50 border-rose-100',
+                          new_match:        'bg-indigo-50 border-indigo-100',
+                          match_reset:      'bg-amber-50 border-amber-100',
                         };
                         // ── Ícones compostos para eventos de participante ──────────
                         const hasParticipantMeta = log.deviceType || log.participantRole || log.isController !== undefined;

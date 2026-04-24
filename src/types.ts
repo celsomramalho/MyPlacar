@@ -6,6 +6,20 @@ export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros'
 export type SportType = string;
 export type PlanType = 'free' | 'premium';
 
+/**
+ * B1 — Papel permanente do usuário na live.
+ * Não muda durante a live — apenas quem abriu (owner), quem foi convidado (judge) ou demais (observer).
+ * 'spectator' = sem live ativa.
+ */
+export type LivePapel = 'owner' | 'judge' | 'observer' | 'spectator';
+
+/**
+ * B1 — Tipo temporário: o que o dispositivo está fazendo no momento.
+ * 'controller' = está comandando o placar agora.
+ * 'watcher' = está apenas observando.
+ */
+export type LiveType = 'controller' | 'watcher';
+
 export interface ControllerRecord {
   label: string;
   lastSeen: number;
@@ -13,6 +27,19 @@ export interface ControllerRecord {
   nickname?: string;
   role?: string;
   deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop';
+}
+
+/**
+ * T4.3 — Sub-objeto centralizado do juiz.
+ * Preferido sobre os campos legados `judgePin` / `judgeNickname`.
+ * Backward-compatible: campos legados mantidos para leitura de documentos antigos.
+ */
+export interface JudgeInfo {
+  pin: string;
+  nickname: string;
+  addedAt: number;
+  /** true quando este juiz é o commandOwnerId atual */
+  isActive: boolean;
 }
 
 export interface TournamentPair {
@@ -232,10 +259,21 @@ export interface GameState {
   pingTimestamp?: number;
   pingConfirmed?: boolean;
   isLiveClosed?: boolean;
+  /** Encerramento da partida com data (T2.1) — a live permanece aberta */
+  matchEndedAt?: number;
   tournamentMatchId?: string;
   tournamentPin?: string;
+  /** @deprecated — usar `judge.pin`. Mantido para retrocompatibilidade com documentos antigos. */
   judgePin?: string;
+  /** @deprecated — usar `judge.nickname`. Mantido para retrocompatibilidade com documentos antigos. */
   judgeNickname?: string;
+  /** T4.3 — Sub-objeto do juiz. Fonte primária de dados do juiz a partir desta versão. */
+  judge?: JudgeInfo;
+  /**
+   * T4.2 — Versão incremental do documento: incrementada a cada write do controller ativo.
+   * Permite detectar e descartar writes stale do ex-controller durante troca de posse.
+   */
+  liveVersion?: number;
   /** Estado isolado do pickleball. Presente apenas quando sportType === 'pickleball'. */
   pickleball?: PickleballState;
 }
