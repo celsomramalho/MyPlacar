@@ -252,6 +252,8 @@ export interface GameState {
   remoteCommand?: { action: string; timestamp: number };
   lastRemotePing?: number;
   ownerPin?: string;
+  /** DeviceId fixo de quem criou a live. Nunca muda durante a sessão. */
+  ownerDeviceId?: string;
   liveSessionCounter?: number;
   commandOwner?: string;
   commandOwnerId?: string;

@@ -272,13 +272,20 @@ const App: React.FC = () => {
   useEffect(() => { activeLivesRef.current = activeLives; }, [activeLives]);
 
   const isOriginalOwner = useMemo(() => {
+    // Fonte primária: ownerDeviceId no gameState local — fixo, gravado na criação da live.
+    if (gameState?.ownerDeviceId) return gameState.ownerDeviceId === deviceId;
+    // Fallback: activeLives (Firebase) — cobre o caso de gameState ainda não carregado.
+    if (activeLives.some(l => l.ownerDeviceId === deviceId)) return true;
+    // Último fallback por PIN: compatibilidade com sessões sem ownerDeviceId
+    // (não deve ocorrer em novas lives, mas protege contra estado corrompido).
     if (!userProfile.pin) return false;
     const myPin = userProfile.pin.toUpperCase();
-    // Fonte primária: activeLives (Firebase) — imune a gameState local desatualizado
-    if (activeLives.some(l => l.ownerPin?.toUpperCase() === myPin)) return true;
-    // Fallback: gameState local (cobre o caso em que activeLives ainda não chegou)
-    return myPin === gameState?.ownerPin?.toUpperCase();
-  }, [activeLives, userProfile.pin, gameState?.ownerPin]);
+    if (activeLives.some(l => l.ownerPin?.toUpperCase() === myPin)) {
+      // Só considera owner por PIN se não há outro device como ownerDeviceId
+      return !activeLives.some(l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin);
+    }
+    return false;
+  }, [gameState?.ownerDeviceId, activeLives, deviceId, userProfile.pin]);
 
   const _activeMatchPin = useMemo(() => {
     return isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState?.ownerPin?.toUpperCase();
@@ -317,13 +324,20 @@ const App: React.FC = () => {
   }, [activeLives, deviceId]);
 
   // B1: papel permanente do usuário na live (não muda durante a live)
+  // 'owner' = este deviceId é o ownerDeviceId da live
+  // 'judge' = o PIN deste usuário é o judgePin da live
+  // 'observer' = qualquer outro
   const livePapel = useMemo((): LivePapel => {
     if (!cloudLiveExists) return 'spectator';
-    const myPin = userProfile.pin.toUpperCase();
-    if (activeLives.some(l => l.ownerPin?.toUpperCase() === myPin)) return 'owner';
-    if (activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
+    // Owner: baseado em deviceId — nunca por PIN, para não confundir multi-dispositivo
+    if (activeLives.some(l => l.ownerDeviceId === deviceId)) return 'owner';
+    // Fallback para lives sem ownerDeviceId (não deve ocorrer em novas lives)
+    const myPin = userProfile.pin?.toUpperCase();
+    if (myPin && activeLives.some(l => l.ownerPin?.toUpperCase() === myPin && !l.ownerDeviceId)) return 'owner';
+    // Judge: sempre por PIN (é como o owner designa o juiz)
+    if (myPin && activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
     return 'observer';
-  }, [cloudLiveExists, userProfile.pin, activeLives]);
+  }, [cloudLiveExists, userProfile.pin, activeLives, deviceId]);
 
   // B1: tipo temporário — o que este dispositivo está fazendo agora
   const liveType = useMemo((): LiveType => {
@@ -871,13 +885,14 @@ const App: React.FC = () => {
         if (cloudData.isLiveClosed) {
           // Guard: se este device é o owner ativo da live, ignora isLiveClosed: true
           // vindo do Firebase — é quase certamente um artefato do próprio reload/reconnect.
-          // O owner vai reescrever isLiveClosed: false no próximo ciclo de sync.
-          // Observers e judges continuam sendo fechados normalmente.
+          // Usa ownerDeviceId (fixo) para identificar o dono, não commandOwnerId.
           const currentGs = gameStateRef.current;
           const thisDeviceIsActiveOwner =
             currentGs?.isMirroringActive &&
-            currentGs?.commandOwnerId === deviceId &&
-            currentGs?.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase();
+            (currentGs?.ownerDeviceId === deviceId ||
+              // fallback para lives sem ownerDeviceId
+              (currentGs?.commandOwnerId === deviceId &&
+                currentGs?.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase()));
 
           if (thisDeviceIsActiveOwner) {
             console.log("[Sync] isLiveClosed: true ignorado — owner ativo local, provável artefato de reload.");
@@ -1002,8 +1017,14 @@ const App: React.FC = () => {
   }, [targetListenPin, deviceId]);
 
   const prevIsCommandOwner = useRef(isCommandOwner);
+  const prevCommandOwnerIdWasSelf = useRef(gameState?.commandOwnerId === deviceId);
   useEffect(() => {
-    if (prevIsCommandOwner.current === true && isCommandOwner === false && gameState?.isMirroringActive && !gameState.isLiveClosed) {
+    // Só dispara se este device REALMENTE tinha o commandOwnerId antes —
+    // isCommandOwner é true também quando !isMirroringActive, o que causava
+    // falso positivo quando o celular recebia a live pela primeira vez.
+    const hadControl = prevCommandOwnerIdWasSelf.current;
+    const hasControl = gameState?.commandOwnerId === deviceId;
+    if (hadControl && !hasControl && gameState?.isMirroringActive && !gameState.isLiveClosed) {
       setModalConfig({
         title: "Controle alterado",
         message: "Outro dispositivo assumiu o controle da transmissão. Você agora está no modo de observador.",
@@ -1012,7 +1033,8 @@ const App: React.FC = () => {
       setShowLiveControlOverlay(false);
     }
     prevIsCommandOwner.current = isCommandOwner;
-  }, [isCommandOwner, gameState?.isMirroringActive, gameState?.isLiveClosed]);
+    prevCommandOwnerIdWasSelf.current = hasControl;
+  }, [isCommandOwner, gameState?.commandOwnerId, gameState?.isMirroringActive, gameState?.isLiveClosed]);
 
   useEffect(() => {
     if (!prevSettingsRef.current) { prevSettingsRef.current = { ...matchSettings }; return; }
@@ -1826,7 +1848,7 @@ const App: React.FC = () => {
       p2: { name: configToUse.p2Name, partnerName: configToUse.p2Partner, score: '0', games: 0, sets: [], color: configToUse.p2Color },
       server: configToUse.initialServer, servingOrderOffset: configToUse.initialServer === 1 ? 0 : 1,
       pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode }, history: [], currentSet: 0, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
-      isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin,
+      isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin, ownerDeviceId: deviceId,
       liveSessionCounter: globalLiveCount, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, 
       controllers: { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: true, role: 'owner' } },
       ...tournamentMeta
@@ -2836,12 +2858,12 @@ const App: React.FC = () => {
                       </div>
                     )}
 
-                    {/* ── Encerrar (owner OU controller) — R11 ──────────── */}
-                    {(livePapel === 'owner' || isCurrentController) && (
+                    {/* ── Encerrar (owner controlando OU controller ativo) — R11 ──────────── */}
+                    {(livePapel === 'owner' && isCurrentController) || (!isOriginalOwner && isCurrentController) ? (
                       <button onClick={() => setConfirmDeleteLive(true)} className="w-full py-4 text-red-500 font-black text-xs active:scale-95 flex items-center justify-center gap-2 mt-1">
                         <Trash2 size={16} /> Encerrar transmissão
                       </button>
-                    )}
+                    ) : null}
 
                   </div>
                 </>
@@ -3137,7 +3159,7 @@ const App: React.FC = () => {
           const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
           const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
         const nextControllers = { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: isOriginalOwner ? 'owner' : 'judge' as const, deviceType: getDeviceType() } };
-          const stateToSave = sanitizeForFirestore({...gameState, isMirroringActive: true, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, controllers: nextControllers, isLiveClosed: false});
+          const stateToSave = sanitizeForFirestore({...gameState, isMirroringActive: true, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, ownerDeviceId: deviceId, controllers: nextControllers, isLiveClosed: false});
           if (stateToSave && targetPin) { setDoc(doc(db, "live_matches", targetPin), stateToSave).catch(() => {}); }
         }
         setGameState(p => p ? {...p, isMirroringActive: a, isLiveClosed: false, commandOwnerId: a ? deviceId : p.commandOwnerId} : null); 
