@@ -472,9 +472,10 @@ const App: React.FC = () => {
       if (!targetPin) return;
 
       const isActiveController = gs.commandOwnerId === deviceId;
-      // Grace period de 5s após perder o controle — evita que visibilitychange
-      // causado pela própria troca de controlador feche a live prematuramente.
-      const justLostControl = (Date.now() - lostControlAtRef.current) < 5000;
+      // Grace period de 30s após perder o controle — evita que visibilitychange
+      // causado pela própria troca de controlador (ex: owner cedendo para relógio)
+      // feche a live prematuramente. 5s era curto demais para o fluxo celular→relógio.
+      const justLostControl = (Date.now() - lostControlAtRef.current) < 30000;
       // Grace period de 15s após assumir o controle — evita que um snapshot intermediário
       // do Firebase (que ainda não reflete o novo commandOwnerId) cause fechamento indevido.
       const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
@@ -489,7 +490,18 @@ const App: React.FC = () => {
           (c: ControllerRecord) => c.role === 'judge' && (Date.now() - (c.lastSeen || 0)) < 60000
         ));
 
-        if (hasActiveJudge) {
+        // Fix: também não fecha se outro device do próprio owner ainda está ativo
+        // (ex: celular cedeu controle para relógio e foi para background).
+        // Identifica "outro device do owner" como qualquer controller com role='owner'
+        // que não seja este deviceId e tenha sido visto nos últimos 60s.
+        const controllersEntries = Object.entries(gs.controllers || {});
+        const hasActiveOwnerDevice = controllersEntries.some(([id, c]) =>
+          id !== deviceId &&
+          (c as ControllerRecord).role === 'owner' &&
+          (Date.now() - ((c as ControllerRecord).lastSeen || 0)) < 60000
+        );
+
+        if (hasActiveJudge || hasActiveOwnerDevice) {
           // T4.1: Owner sai com judge ativo — remove apenas o registro deste device via
           // field-path (deleteField). Não lê/reescreve o objeto controllers inteiro.
           const presenceUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
