@@ -1099,8 +1099,13 @@ const App: React.FC = () => {
     // momentaneamente (ex: reload do app, reconexão), aguardamos 3s antes
     // de concluir que não há mais live e desativar o mirroring local.
     // Se activeLives voltar a ter entradas dentro desse tempo, o timer é cancelado.
-    if (!hasAnyLive && gameState?.isMirroringActive) {
+    // Guard extra: se este device acabou de assumir o controle (grace period de 15s),
+    // não desativa — o Firebase ainda pode estar propagando o novo commandOwnerId.
+    const justTookControlRecently = (Date.now() - tookControlAtRef.current) < 15000;
+    if (!hasAnyLive && gameState?.isMirroringActive && !justTookControlRecently) {
       const debounceTimer = setTimeout(() => {
+        // Re-verifica o grace period dentro do timeout — pode ter assumido controle nesse intervalo
+        if ((Date.now() - tookControlAtRef.current) < 15000) return;
         setGameState(prev => {
           if (!prev || !prev.isMirroringActive) return prev;
           return { ...prev, isMirroringActive: false };
@@ -1168,6 +1173,11 @@ const App: React.FC = () => {
       // (não é controller localmente). Isso trata o refresh de observadores sem
       // interferir com o controller que acabou de assumir o controle.
       if (currentScreen === 'scoreboard' && thisDeviceIsControllerLocal) return;
+
+      // Grace period: se acabou de assumir o controle (últimos 15s), não reabre overlay —
+      // activeLives pode ainda não ter refletido o novo commandOwnerId do Firebase.
+      const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
+      if (justTookControl) return;
 
       const observerLive = activeLives.reduce((latest, l) =>
         (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
