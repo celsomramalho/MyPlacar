@@ -887,6 +887,23 @@ const App: React.FC = () => {
             if (!prev) return null;
             return { ...prev, isMirroringActive: false, isLiveClosed: true, isConfirmedFinished: cloudData.isConfirmedFinished || prev.isConfirmedFinished };
           });
+
+          // E1: notifica observers/juiz sobre encerramento da partida
+          const isMatchDone = cloudData.isConfirmedFinished || cloudData.isMatchOver;
+          if (isMatchDone) {
+            const p1Name = cloudData.p1?.name || 'Jogador 1';
+            const p2Name = cloudData.p2?.name || 'Jogador 2';
+            const p1SetsWon = (cloudData.p1?.sets || []).filter((s: number, i: number) => s > (cloudData.p2?.sets?.[i] ?? 0)).length;
+            const p2SetsWon = (cloudData.p2?.sets || []).filter((s: number, i: number) => s > (cloudData.p1?.sets?.[i] ?? 0)).length;
+            const winner = p1SetsWon > p2SetsWon ? p1Name : p2SetsWon > p1SetsWon ? p2Name : null;
+            setModalConfig({
+              title: 'Partida encerrada 🏆',
+              message: winner ? `Vencedor: ${winner}\nA transmissão foi encerrada.` : 'A partida foi encerrada e a transmissão foi finalizada.',
+              icon: <Trophy className="text-yellow-500 w-16 h-16" />,
+              confirmLabel: 'Ok',
+              onConfirm: () => setModalConfig(null)
+            });
+          }
           return;
         }
 
@@ -943,11 +960,23 @@ const App: React.FC = () => {
           });
         }
       } else {
+        // E1: snap não existe = live foi deletada após encerramento.
+        // Notifica observers que ainda estão conectados (não receberam o isLiveClosed).
+        const prevGs = gameStateRef.current;
+        if (prevGs?.isMirroringActive && !prevGs?.isLiveClosed) {
+          setModalConfig({
+            title: 'Live encerrada',
+            message: 'A transmissão foi encerrada pelo proprietário.',
+            icon: <WifiOff className="text-slate-400 w-16 h-16" />,
+            confirmLabel: 'Ok',
+            onConfirm: () => setModalConfig(null)
+          });
+        }
         setCloudLiveExists(false);
         setGameState(prev => {
           if (!prev) return null;
           if (prev.isMirroringActive) {
-            return { ...prev, isMirroringActive: false, isLiveClosed: false };
+            return { ...prev, isMirroringActive: false, isLiveClosed: true };
           }
           return prev;
         });
@@ -1585,15 +1614,22 @@ const App: React.FC = () => {
       const myPin = userProfile.pin?.toUpperCase();
       const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
       const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : state.ownerPin?.toUpperCase());
-      // Regra 9: a live pode permanecer aberta para nova partida — apenas marca como encerrada,
-      // não deleta. O documento será substituído quando o owner iniciar uma nova partida.
+      // E1: partida encerrada = live também encerrada.
+      // 1) Propaga isLiveClosed:true para todos os observers via onSnapshot (notificação).
+      // 2) Após 4s (tempo para observers receberem o evento), deleta o documento.
       if (targetPin && navigator.onLine) {
         updateDoc(doc(db, "live_matches", targetPin), {
           isMatchOver: true,
           isConfirmedFinished: true,
           matchEndedAt: Date.now(),
-          lastActivityAt: Date.now()  // D1: mantém TTL atualizado ao encerrar a partida
+          isLiveClosed: true,
+          isMirroringActive: false,
+          lastActivityAt: Date.now()
         }).catch(() => {});
+        // Deleta após 4s para garantir que todos os listeners receberam a notificação
+        setTimeout(() => {
+          deleteDoc(doc(db, "live_matches", targetPin)).catch(() => {});
+        }, 4000);
       }
       return;
     }
@@ -3069,11 +3105,27 @@ const App: React.FC = () => {
         const myPin = userProfile.pin?.toUpperCase();
         const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
         const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
-        // A1: R9 — live permanece aberta após confirmar resultado.
-        // isLiveClosed NÃO é enviado — apenas marca a partida como confirmada+encerrada.
-        // finalizeMatchInternal também usa esse padrão (T2.1).
-        if (db && targetPin && navigator.onLine) try { await updateDoc(doc(db, "live_matches", targetPin), { isConfirmedFinished: true, isMatchOver: true, matchEndedAt: Date.now() }); } catch {} 
-        setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false} : null);
+        // E1: confirmar resultado = encerrar a live para todos.
+        // 1) grava isLiveClosed:true → propaga notificação a todos via onSnapshot.
+        // 2) após 4s deleta o documento do Firestore.
+        if (db && targetPin && navigator.onLine) {
+          try {
+            await updateDoc(doc(db, "live_matches", targetPin), {
+              isConfirmedFinished: true,
+              isMatchOver: true,
+              matchEndedAt: Date.now(),
+              isLiveClosed: true,
+              isMirroringActive: false
+            });
+            setTimeout(() => {
+              deleteDoc(doc(db, "live_matches", targetPin)).catch(() => {});
+            }, 4000);
+          } catch {}
+        }
+        setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false, isLiveClosed: true} : null);
+        setCloudLiveExists(false);
+        setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
+        try { localStorage.removeItem('myPlacarActiveGameState'); } catch {};
       }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={livePapel} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as unknown as TournamentEvent); setCurrentScreen('event-detail'); }} />}
