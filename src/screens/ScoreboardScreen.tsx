@@ -528,22 +528,32 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           ([pid, pd]: [string, any]) => pid !== id && pd.label === c.label
         );
         if (labelJaPresente) return;
-        const roleLabel = c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
+        // Fix D4: usa commandOwnerId para determinar se é controlador, não apenas c.role
+        // (phone pode entrar como 'observer' via handleObserveLive e logo assumir controle)
+        const isCtrl = id === gameState.commandOwnerId;
+        const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
         addLiveLog('participant_join', `${c.label || id}: entrou na live (${roleLabel})`, true, {
           deviceType: c.deviceType,
           participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
-          isController: id === gameState.commandOwnerId,
+          isController: isCtrl,
         });
       }
     });
     Object.keys(prev).forEach(id => {
       if (!cur[id]) {
         const c = prev[id] as any;
-        const roleLabel = c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
+        // Fix D4: guard contra saídas espúreas durante writes sequenciais.
+        // Se o label ainda está presente em cur sob outro id, não loga saída.
+        const labelAindaPresente = Object.values(cur).some(
+          (cd: any) => cd.label === c.label
+        );
+        if (labelAindaPresente) return;
+        const isCtrl = id === gameState.commandOwnerId;
+        const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
         addLiveLog('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false, {
           deviceType: c.deviceType,
           participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
-          isController: id === gameState.commandOwnerId,
+          isController: isCtrl,
         });
       }
     });
@@ -771,7 +781,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     server: gameState.server, servingOrderOffset: gameState.servingOrderOffset, voiceCommands: gameState.matchConfig.voiceCommands, actionCooldownSec: gameState.matchConfig.actionCooldown || 5, stateLockoutSec: gameState.matchConfig.stateLockout || 2
   });
 
-  useEffect(() => { setVoiceLogs([]); currentGameStateRef.current = gameState; }, [gameState.matchId]);
+  useEffect(() => { setVoiceLogs([]); }, [gameState.matchId]);
+  currentGameStateRef.current = gameState;
 
   useEffect(() => {
     if (!gameState.matchConfig.isWatchMode) return;
@@ -903,7 +914,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     setScorePressProgress(null);
     
     if (!isLongPressActive.current && !hasDraggedRef.current && correctionMode === 'none' && !currentGameStateRef.current.isConfirmedFinished && !currentGameStateRef.current.isMatchOver && !currentGameStateRef.current.isLiveClosed) {
-      if (currentGameStateRef.current.isMirroringActive && currentGameStateRef.current.commandOwnerId !== currentDeviceId) return;
+      if (currentGameStateRef.current.isMirroringActive && !isCommandOwner) return;
       
       // Item 8: Retirar incremento do placar do game nos botões de set (matchSet) e gameSet
       if (type === 'matchSet' || type === 'gameSet') return;

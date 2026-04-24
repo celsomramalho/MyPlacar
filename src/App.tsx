@@ -29,8 +29,8 @@ import { findUserByPin, getDb, clearFirestoreCache, deleteCloudMatch, deleteClou
 // getDeviceType movido para src/utils/device.ts
 import { getAuthInstance } from '@infra/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore, deleteField } from 'firebase/firestore';
-import { AlertCircle, Trash2, RotateCw, Wifi, X, CheckCircle, Eye, Loader2, ArrowLeftRight, Crown, UserCheck } from 'lucide-react';
+import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore, deleteField, FieldValue } from 'firebase/firestore';
+import { AlertCircle, Trash2, RotateCw, Wifi, X, CheckCircle, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Trophy, WifiOff } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator.tsx';
 import { useAppLogger } from './hooks/useAppLogger.ts';
 import { useInstallPwa } from './hooks/useInstallPwa.ts';
@@ -475,7 +475,7 @@ const App: React.FC = () => {
         if (hasActiveJudge) {
           // T4.1: Owner sai com judge ativo — remove apenas o registro deste device via
           // field-path (deleteField). Não lê/reescreve o objeto controllers inteiro.
-          const presenceUpdate: Record<string, unknown> = {
+          const presenceUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
             [`controllers.${deviceId}`]: deleteField()
           };
           if (isActiveController) {
@@ -490,7 +490,7 @@ const App: React.FC = () => {
       } else {
         // T4.1: Judge ou observer saiu — remove apenas o registro deste device via field-path.
         // Se era o controller ativo, libera o controle (commandOwnerId = null).
-        const presenceUpdate: Record<string, unknown> = {
+        const presenceUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
           [`controllers.${deviceId}`]: deleteField()
         };
         if (isActiveController) {
@@ -1970,7 +1970,7 @@ const App: React.FC = () => {
 
       // Judge ou observer: remove dos controllers e libera controle se necessário.
       // T4.1: field-path com deleteField() — atômico, sem getDoc.
-      const leaveUpdate: Record<string, unknown> = {
+      const leaveUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
         [`controllers.${deviceId}`]: deleteField()
       };
       if (isActiveController) {
@@ -2048,7 +2048,7 @@ const App: React.FC = () => {
           // Eliminando o último ponto que reescrevia o objeto controllers inteiro.
 
           // Rebaixa o controller anterior para observer via field-path (sem rewrite geral).
-          const prevDemoteUpdate: Record<string, unknown> = {};
+          const prevDemoteUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {};
           if (currentControllerId && currentControllerId !== deviceId) {
             const prevEntry = (cloudState.controllers || {})[currentControllerId];
             if (prevEntry) {
@@ -2072,13 +2072,27 @@ const App: React.FC = () => {
             await updateDoc(doc(db, "live_matches", targetPin), {
               [`controllers.${deviceId}`]: { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() }
             }).catch(() => {});
-            // T3.2: marca o timestamp de controle para o grace period do guard duplo
+            // Fix D4: monta o objeto controllers local que corresponde ao estado final do Firestore.
+            // Sem isso, setGameState ficaria com controllers:undefined causando log "todos saíram".
+            const localControllers: Record<string, unknown> = { ...(cloudState.controllers || {}) };
+            // Aplica demoção do controller anterior (igual ao Write 2)
+            if (currentControllerId && currentControllerId !== deviceId) {
+              const prevEntry = (cloudState.controllers || {})[currentControllerId];
+              if (prevEntry) {
+                const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : 'observer';
+                localControllers[currentControllerId] = { ...prevEntry, role: demotedRole };
+              }
+            }
+            // Registra este device como novo controller (igual ao Write 3)
+            localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() };
+
             tookControlAtRef.current = Date.now();
             prevSettingsRef.current = JSON.parse(JSON.stringify(syncedSettings)); setMatchSettings(syncedSettings); 
             try { localStorage.setItem('myPlacarSettings', JSON.stringify(syncedSettings)); } catch {}
             setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
-            setGameState({ ...updatedState, isMirroringActive: true, matchConfig: { ...updatedState.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
             try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
+
             overlayAcceptedRef.current = targetPin; // impede que o modal reabra após setCurrentScreen
             setShowLiveControlOverlay(false); if (currentScreen !== 'scoreboard') setCurrentScreen('scoreboard');
             setModalConfig({ title: "Sucesso", message: "Controle da partida assumido com sucesso.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
@@ -2133,6 +2147,10 @@ const App: React.FC = () => {
             setMatchSettings(prev => ({ ...prev, ...cloudData.matchConfig }));
           }
 
+          const nextControllers = {
+            ...(cloudData.controllers || {}),
+            [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType() }
+          };
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           overlayAcceptedRef.current = pinUpper; // impede que o modal reabra após setCurrentScreen
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
@@ -2287,7 +2305,7 @@ const App: React.FC = () => {
             await setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
           } else {
             // D2b: field-path com deleteField — sem getDoc prévio, sem rewrite inteiro.
-            const logoutUpdate: Record<string, unknown> = {
+            const logoutUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
               [`controllers.${deviceId}`]: deleteField()
             };
             if (gameState.commandOwnerId === deviceId) {
