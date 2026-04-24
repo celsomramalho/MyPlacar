@@ -383,11 +383,18 @@ const App: React.FC = () => {
   const lostControlAtRef = useRef<number>(0);
 
   const sanitizeForFirestore = (obj: unknown) => {
+    // campos undefined são convertidos para null pelo JSON.stringify abaixo.
+    // O deepClean depois remove campos null que NÃO devem sobrescrever dados
+    // existentes no Firestore via merge (ex: controllers: undefined -> null
+    // apagaria todos os controllers registrados por outros devices).
     const clean = JSON.parse(JSON.stringify(obj, (key, value) => value === undefined ? null : value));
     const fieldsToRemove = ['isWatchMode', 'brightness', 'volume', 'deviceLabel', 'selectedVoiceURI', 'voiceEnabled', 'voiceScoring', 'actionCooldown', 'stateLockout', 'screenDimTimeout', 'customSportIcon', 'customSportIcons', 'customCategoryIcons', 'cloudSportIcons', 'cloudCategoryIcons'];
+    // nullFieldsToRemove: quando null, remover do payload para nao sobrescrever no Firestore
+    const nullFieldsToRemove = ['controllers'];
     const deepClean = (target: Record<string, unknown>) => {
       if (!target || typeof target !== 'object') return;
       fieldsToRemove.forEach(f => { if (target[f] !== undefined) delete target[f]; });
+      nullFieldsToRemove.forEach(f => { if (target[f] === null) delete target[f]; });
       Object.keys(target).forEach(key => { if (target[key] && typeof target[key] === 'object') deepClean(target[key] as Record<string, unknown>); });
     };
     deepClean(clean);
@@ -1770,6 +1777,7 @@ const App: React.FC = () => {
           const updatedMatchConfig = { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode };
           const stateToSync = sanitizeForFirestore({
              ...gameState,
+             controllers: undefined,  // gerenciado via field-path, nunca sobrescrever
              p1: { ...gameState.p1, name: configToUse.p1Name, partnerName: configToUse.p1Partner, color: configToUse.p1Color },
              p2: { ...gameState.p2, name: configToUse.p2Name, partnerName: configToUse.p2Partner, color: configToUse.p2Color },
              matchConfig: updatedMatchConfig,
@@ -2485,6 +2493,7 @@ const App: React.FC = () => {
           const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
           const stateToSync = sanitizeForFirestore({
             ...gameState,
+            controllers: undefined,  // gerenciado via field-path, nunca sobrescrever
             p1: { ...gameState.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, color: matchSettings.p1Color },
             p2: { ...gameState.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, color: matchSettings.p2Color },
             matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode }
@@ -2549,7 +2558,7 @@ const App: React.FC = () => {
         const db = getDb();
         if (db) {
           const targetPin = isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState.ownerPin?.toUpperCase();
-          const stateToSync = sanitizeForFirestore(nextState);
+          const stateToSync = sanitizeForFirestore({ ...nextState, controllers: undefined });
           if (stateToSync && targetPin) setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
         }
       }
@@ -2621,7 +2630,7 @@ const App: React.FC = () => {
       const db = getDb();
       if (db) {
         const targetPin = isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState.ownerPin?.toUpperCase();
-        const stateToSync = sanitizeForFirestore(nextState);
+        const stateToSync = sanitizeForFirestore({ ...nextState, controllers: undefined });
         if (stateToSync && targetPin) setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
       }
     }
