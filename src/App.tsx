@@ -461,11 +461,14 @@ const App: React.FC = () => {
       // Grace period de 5s após perder o controle — evita que visibilitychange
       // causado pela própria troca de controlador feche a live prematuramente.
       const justLostControl = (Date.now() - lostControlAtRef.current) < 5000;
+      // Grace period de 15s após assumir o controle — evita que um snapshot intermediário
+      // do Firebase (que ainda não reflete o novo commandOwnerId) cause fechamento indevido.
+      const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
 
       // Item 5: o owner fecha a live ao sair independentemente de ser o controller atual.
       // Antes exigia isActiveController — o que impedia o owner de fechar se havia cedido
       // o controle para outro device antes de sair.
-      if (isOriginalOwner && !justLostControl) {
+      if (isOriginalOwner && !justLostControl && !justTookControl) {
         // Owner saiu: verifica se há judge ativo antes de fechar a live (Regra 8).
         // Judge ativo = designado E visto nos últimos 60s.
         const hasActiveJudge = !!(gs.judgePin && Object.values(gs.controllers || {}).some(
@@ -909,6 +912,16 @@ const App: React.FC = () => {
 
         setCloudLiveExists(true);
         if (cloudData.commandOwnerId !== deviceId) {
+          // Grace period: se este device acabou de assumir o controle (últimos 15s),
+          // ignora snapshots que ainda não refletem o novo commandOwnerId — são writes
+          // intermediários chegando fora de ordem (Write 1 chegou, Write 3 ainda não).
+          // Sobrescrever o gameState aqui reverteria o handleControlLive.
+          const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
+          if (justTookControl) {
+            console.log("[Sync] Snapshot com commandOwnerId antigo ignorado — grace period pós-takeControl.");
+            return;
+          }
+
           // Se este device era o controlador antes e agora não é mais, marca o momento
           const currentGs = gameStateRef.current;
           if (currentGs?.commandOwnerId === deviceId) {
