@@ -956,8 +956,40 @@ const App: React.FC = () => {
             return;
           }
 
-          // Se este device era o controlador antes e agora não é mais, marca o momento
+          // FIX: Se commandOwnerId é null/vazio e este device é o owner original,
+          // reassume o controle silenciosamente — o controller anterior (relógio/juiz)
+          // saiu e liberou o controle. A live NÃO deve ser encerrada, apenas retomada.
+          const controllerLeft = !cloudData.commandOwnerId;
           const currentGs = gameStateRef.current;
+          const thisIsOwner = currentGs?.ownerDeviceId === deviceId ||
+            currentGs?.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase();
+          if (controllerLeft && thisIsOwner) {
+            console.log("[Sync] commandOwnerId liberado — owner reassumindo controle automaticamente.");
+            tookControlAtRef.current = Date.now();
+            const db2 = getDb();
+            if (db2) {
+              updateDoc(doc(db2, "live_matches", listenPin), {
+                commandOwnerId: deviceId,
+                commandOwner: matchSettingsRef.current.deviceLabel
+                  ? `${matchSettingsRef.current.deviceLabel} - ${userProfile.nickname || userProfile.name?.split(" ")[0] || "Dono"}`
+                  : (userProfile.nickname || userProfile.name?.split(" ")[0] || "Dono"),
+                [`controllers.${deviceId}`]: {
+                  label: currentGs?.controllers?.[deviceId]?.label || deviceId,
+                  lastSeen: Date.now(),
+                  isOwner: true,
+                  role: 'owner',
+                  deviceType: getDeviceType()
+                }
+              }).catch(() => {});
+            }
+            setGameState(prev => {
+              if (!prev) return prev;
+              return { ...prev, commandOwnerId: deviceId, isMirroringActive: true, isLiveClosed: false };
+            });
+            return;
+          }
+
+          // Se este device era o controlador antes e agora não é mais, marca o momento
           if (currentGs?.commandOwnerId === deviceId) {
             lostControlAtRef.current = Date.now();
           }
@@ -3101,17 +3133,18 @@ const App: React.FC = () => {
               onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('new-game'); },
               onCancel: () => setModalConfig(null),
             });
-          } else if (livePapel === 'judge' && isCurrentController) {
-            // Juiz controlando: avisa que libera o controle ao sair
+          } else if (isCurrentController) {
+            // Qualquer controller ativo não-owner (relógio, juiz, observer que assumiu):
+            // avisa que libera o controle ao sair — controle volta para o proprietário.
             setModalConfig({
               title: "Sair da live?",
-              message: "Você está no controle. Ao sair, o controle do placar será liberado.",
+              message: "Você está no controle. Ao sair, o controle voltará para o proprietário.",
               confirmLabel: "Sair e liberar controle",
               onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('new-game'); },
               onCancel: () => setModalConfig(null),
             });
           } else {
-            // Observer ou juiz não-controller: sai silenciosamente
+            // Observer sem controle: sai silenciosamente
             handleLeaveLive(); setCurrentScreen('new-game');
           }
         } else {
@@ -3129,10 +3162,11 @@ const App: React.FC = () => {
               onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('settings'); },
               onCancel: () => setModalConfig(null),
             });
-          } else if (livePapel === 'judge' && isCurrentController) {
+          } else if (isCurrentController) {
+            // Qualquer controller ativo não-owner: avisa que libera o controle ao sair.
             setModalConfig({
               title: "Sair da live?",
-              message: "Você está no controle. Ao sair, o controle do placar será liberado.",
+              message: "Você está no controle. Ao sair, o controle voltará para o proprietário.",
               confirmLabel: "Sair e liberar controle",
               onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('settings'); },
               onCancel: () => setModalConfig(null),
