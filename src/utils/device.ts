@@ -13,3 +13,16 @@ export const isWatchDevice = (): boolean => {
   
   return isWatchUA || isSmallScreen;
 };
+/**
+ * Detecta o tipo do dispositivo atual.
+ * Usado para ícones e registro nos controllers da live.
+ */
+export const getDeviceType = (): 'watch' | 'phone' | 'tablet' | 'laptop' => {
+  if (isWatchDevice()) return 'watch';
+  const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (isMobile) return 'phone';
+  // Consulta o label salvo para distinguir notebook/PC de tablet genérico
+  const label = (localStorage.getItem('myPlacar_LocalDeviceLabel') || '').toLowerCase();
+  const isLaptop = label.includes('note') || label.includes('laptop') || label.includes('pc') || label.includes('computador');
+  return isLaptop ? 'laptop' : 'tablet';
+};

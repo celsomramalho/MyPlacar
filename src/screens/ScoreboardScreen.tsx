@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2 } from 'lucide-react';
+import { getDeviceType } from '../utils/device.ts';
 import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -396,9 +397,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     const isNowActive = gameState.isMirroringActive && !gameState.isLiveClosed;
     if (!prevIsMirroringRef.current && isNowActive) {
       const label = currentDeviceFullLabel || 'Dispositivo';
-      const ownerController = gameState.controllers?.[currentDeviceId || ''] as any;
       addLiveLog('live_created', `${label}: criou a live às ${nowTime()}`, true, {
-        deviceType: ownerController?.deviceType,
+        deviceType: getDeviceType(),
         participantRole: 'owner',
         isController: true,
       });

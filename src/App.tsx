@@ -22,19 +22,11 @@ import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './co
 import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
 import { initPickleballState } from './utils/pickleballEngine.ts';
 import { applyGoldenRule } from './utils/formatters.ts';
-import { isWatchDevice } from './utils/device.ts';
+import { isWatchDevice, getDeviceType } from './utils/device.ts';
 import { findUserByPin, getDb, clearFirestoreCache, deleteCloudMatch, deleteCloudMatches } from '@infra/firebase';
 
 /** Detecta o tipo físico do dispositivo atual para gravar no ControllerRecord */
-const getDeviceType = (): 'watch' | 'phone' | 'tablet' | 'laptop' => {
-  if (isWatchDevice()) return 'watch';
-  const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  if (isMobile) return 'phone';
-  // Consulta o label salvo para distinguir notebook/PC de tablet genérico
-  const label = (localStorage.getItem('myPlacar_LocalDeviceLabel') || '').toLowerCase();
-  const isLaptop = label.includes('note') || label.includes('laptop') || label.includes('pc') || label.includes('computador');
-  return isLaptop ? 'laptop' : 'tablet';
-};
+// getDeviceType movido para src/utils/device.ts
 import { getAuthInstance } from '@infra/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore } from 'firebase/firestore';
