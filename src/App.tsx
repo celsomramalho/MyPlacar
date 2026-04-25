@@ -487,20 +487,15 @@ const App: React.FC = () => {
       // do Firebase (que ainda não reflete o novo commandOwnerId) cause fechamento indevido.
       const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
 
-      // Item 5: o owner fecha a live ao sair independentemente de ser o controller atual.
-      // Antes exigia isActiveController — o que impedia o owner de fechar se havia cedido
-      // o controle para outro device antes de sair.
-      if (isOriginalOwner && !justLostControl && !justTookControl) {
-        // Owner saiu: verifica se há judge ativo antes de fechar a live (Regra 8).
-        // Judge ativo = designado E visto nos últimos 60s.
+      // Regra: o owner só fecha a live via performExit se ELE é o controller ativo.
+      // Se outro device (relógio, juiz) está controlando, o owner saindo da tela
+      // apenas remove sua presença — a live continua sob o controle do outro device.
+      // Quando o outro device sair, o onSnapshot devolve o controle ao owner.
+      if (isOriginalOwner && isActiveController && !justLostControl && !justTookControl) {
+        // Owner saiu sendo o controller ativo: verifica se há judge ou outro owner ativo.
         const hasActiveJudge = !!(gs.judgePin && Object.values(gs.controllers || {}).some(
           (c: ControllerRecord) => c.role === 'judge' && (Date.now() - (c.lastSeen || 0)) < 60000
         ));
-
-        // Fix: também não fecha se outro device do próprio owner ainda está ativo
-        // (ex: celular cedeu controle para relógio e foi para background).
-        // Identifica "outro device do owner" como qualquer controller com role='owner'
-        // que não seja este deviceId e tenha sido visto nos últimos 60s.
         const controllersEntries = Object.entries(gs.controllers || {});
         const hasActiveOwnerDevice = controllersEntries.some(([id, c]) =>
           id !== deviceId &&
@@ -509,20 +504,23 @@ const App: React.FC = () => {
         );
 
         if (hasActiveJudge || hasActiveOwnerDevice) {
-          // T4.1: Owner sai com judge ativo — remove apenas o registro deste device via
-          // field-path (deleteField). Não lê/reescreve o objeto controllers inteiro.
+          // Há outro device ativo — apenas remove a presença deste
           const presenceUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
-            [`controllers.${deviceId}`]: deleteField()
+            [`controllers.${deviceId}`]: deleteField(),
+            commandOwnerId: null,
+            commandOwner: null
           };
-          if (isActiveController) {
-            presenceUpdate.commandOwnerId = null;
-            presenceUpdate.commandOwner = null;
-          }
           updateDoc(doc(db, "live_matches", targetPin), presenceUpdate).catch(() => {});
         } else {
-          // Owner sai sem judge ativo — fecha a live para todos
+          // Owner era o único controlador ativo — fecha a live
           setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
         }
+      } else if (isOriginalOwner && !isActiveController) {
+        // Owner saiu mas NÃO era o controller — apenas remove sua presença.
+        // A live continua ativa sob controle do outro device.
+        updateDoc(doc(db, "live_matches", targetPin), {
+          [`controllers.${deviceId}`]: deleteField()
+        }).catch(() => {});
       } else {
         // T4.1: Judge ou observer saiu — remove apenas o registro deste device via field-path.
         // Se era o controller ativo, libera o controle (commandOwnerId = null).
