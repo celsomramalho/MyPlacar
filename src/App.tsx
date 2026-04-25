@@ -473,24 +473,23 @@ const App: React.FC = () => {
       if (!db) return;
       const myPin = userProfile.pin?.toUpperCase();
       const judgeMatch = lives.find(l => l.judgePin?.toUpperCase() === myPin);
-      // Usa isOwnerViaRef (calculado via refs) para determinar targetPin —
-      // evita closure stale onde celular/relógio se consideram owner antes do snapshot.
-      const targetPin = (judgeMatch && judgeMatch.ownerPin)
-        ? judgeMatch.ownerPin.toUpperCase()
-        : (isOwnerViaRef ? myPin : gs.ownerPin?.toUpperCase());
-      if (!targetPin) return;
 
-      const isActiveController = gs.commandOwnerId === deviceId;
       // Calcula isOwner via refs (não via closure) — evita stale value em devices
       // secundários do mesmo usuário que ainda não receberam o snapshot com ownerDeviceId.
-      // Regra: só é owner se ownerDeviceId === deviceId OU se não há ownerDeviceId gravado
-      // (live antiga sem ownerDeviceId) E nenhum outro device está como owner.
       const gsOwnerDeviceId = gs.ownerDeviceId;
       const isOwnerByDeviceId = !!gsOwnerDeviceId && gsOwnerDeviceId === deviceId;
       const isOwnerByPin = !gsOwnerDeviceId &&
         gs.ownerPin?.toUpperCase() === myPin &&
         !lives.some(l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin);
       const isOwnerViaRef = isOwnerByDeviceId || isOwnerByPin;
+
+      // Usa isOwnerViaRef para determinar targetPin — deve vir após o cálculo acima.
+      const targetPin = (judgeMatch && judgeMatch.ownerPin)
+        ? judgeMatch.ownerPin.toUpperCase()
+        : (isOwnerViaRef ? myPin : gs.ownerPin?.toUpperCase());
+      if (!targetPin) return;
+
+      const isActiveController = gs.commandOwnerId === deviceId;
 
       // Grace period de 30s após perder o controle.
       const justLostControl = (Date.now() - lostControlAtRef.current) < 30000;
