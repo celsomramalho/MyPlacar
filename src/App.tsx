@@ -2225,8 +2225,26 @@ const App: React.FC = () => {
 
     if (!targetPin && userProfile.pin) {
       const myPin = userProfile.pin.toUpperCase();
+      // 1. Judge: usa ownerPin da live onde este device é judge
       const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-      if (judgeMatch && judgeMatch.ownerPin) pinToObserve = judgeMatch.ownerPin;
+      if (judgeMatch && judgeMatch.ownerPin) {
+        pinToObserve = judgeMatch.ownerPin;
+      } else {
+        // 2. Mesmo usuário em outro device: busca a live cujo ownerPin === myPin
+        //    mas ownerDeviceId é diferente (ex: note abriu a live, celular quer observar)
+        const ownerLive = activeLives.find(l =>
+          l.ownerPin?.toUpperCase() === myPin && l.ownerDeviceId && l.ownerDeviceId !== deviceId
+        );
+        if (ownerLive && ownerLive.ownerPin) {
+          pinToObserve = ownerLive.ownerPin.toUpperCase();
+        } else {
+          // 3. Fallback: qualquer live ativa mais recente
+          const latestLive = activeLives.reduce((latest, l) =>
+            (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
+            , activeLives[0]);
+          if (latestLive?.ownerPin) pinToObserve = latestLive.ownerPin.toUpperCase();
+        }
+      }
     }
 
     if (db && pinToObserve) {
