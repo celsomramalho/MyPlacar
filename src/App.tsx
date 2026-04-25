@@ -473,25 +473,34 @@ const App: React.FC = () => {
       if (!db) return;
       const myPin = userProfile.pin?.toUpperCase();
       const judgeMatch = lives.find(l => l.judgePin?.toUpperCase() === myPin);
+      // Usa isOwnerViaRef (calculado via refs) para determinar targetPin —
+      // evita closure stale onde celular/relógio se consideram owner antes do snapshot.
       const targetPin = (judgeMatch && judgeMatch.ownerPin)
         ? judgeMatch.ownerPin.toUpperCase()
-        : (isOriginalOwner ? myPin : gs.ownerPin?.toUpperCase());
+        : (isOwnerViaRef ? myPin : gs.ownerPin?.toUpperCase());
       if (!targetPin) return;
 
       const isActiveController = gs.commandOwnerId === deviceId;
-      // Grace period de 30s após perder o controle — evita que visibilitychange
-      // causado pela própria troca de controlador (ex: owner cedendo para relógio)
-      // feche a live prematuramente. 5s era curto demais para o fluxo celular→relógio.
+      // Calcula isOwner via refs (não via closure) — evita stale value em devices
+      // secundários do mesmo usuário que ainda não receberam o snapshot com ownerDeviceId.
+      // Regra: só é owner se ownerDeviceId === deviceId OU se não há ownerDeviceId gravado
+      // (live antiga sem ownerDeviceId) E nenhum outro device está como owner.
+      const gsOwnerDeviceId = gs.ownerDeviceId;
+      const isOwnerByDeviceId = !!gsOwnerDeviceId && gsOwnerDeviceId === deviceId;
+      const isOwnerByPin = !gsOwnerDeviceId &&
+        gs.ownerPin?.toUpperCase() === myPin &&
+        !lives.some(l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin);
+      const isOwnerViaRef = isOwnerByDeviceId || isOwnerByPin;
+
+      // Grace period de 30s após perder o controle.
       const justLostControl = (Date.now() - lostControlAtRef.current) < 30000;
-      // Grace period de 15s após assumir o controle — evita que um snapshot intermediário
-      // do Firebase (que ainda não reflete o novo commandOwnerId) cause fechamento indevido.
+      // Grace period de 15s após assumir o controle.
       const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
 
       // Regra: o owner só fecha a live via performExit se ELE é o controller ativo.
       // Se outro device (relógio, juiz) está controlando, o owner saindo da tela
       // apenas remove sua presença — a live continua sob o controle do outro device.
-      // Quando o outro device sair, o onSnapshot devolve o controle ao owner.
-      if (isOriginalOwner && isActiveController && !justLostControl && !justTookControl) {
+      if (isOwnerViaRef && isActiveController && !justLostControl && !justTookControl) {
         // Owner saiu sendo o controller ativo: verifica se há judge ou outro owner ativo.
         const hasActiveJudge = !!(gs.judgePin && Object.values(gs.controllers || {}).some(
           (c: ControllerRecord) => c.role === 'judge' && (Date.now() - (c.lastSeen || 0)) < 60000
@@ -515,7 +524,7 @@ const App: React.FC = () => {
           // Owner era o único controlador ativo — fecha a live
           setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
         }
-      } else if (isOriginalOwner && !isActiveController) {
+      } else if (isOwnerViaRef && !isActiveController) {
         // Owner saiu mas NÃO era o controller — apenas remove sua presença.
         // A live continua ativa sob controle do outro device.
         updateDoc(doc(db, "live_matches", targetPin), {
