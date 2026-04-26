@@ -1250,40 +1250,60 @@ const App: React.FC = () => {
   // Não é resetado ao trocar de tela — só quando a live realmente encerra.
   // Isso impede que o modal reabra após setCurrentScreen('scoreboard') no aceite.
   const overlayAcceptedRef = useRef<string | null>(null);
+  // Ref para handleObserveLive — permite chamá-lo dentro de useEffect
+  // que é declarado antes da função (evita "used before declaration").
+  const autoJoinObserverRef = useRef<((pin: string) => void) | null>(null);
 
   useEffect(() => {
     if (!userProfile.pin || !userProfile.email) return;
-    // Guard 1 (Firebase): activeLives já reflete este dispositivo como controller?
+    const myPin = userProfile.pin.toUpperCase();
+
+    // Guard 1: este device já é controller (cloud ou local)?
     const thisDeviceIsControllerInCloud = activeLives.some(l => l.commandOwnerId === deviceId);
-    // Guard 2 (local — anti-race): o gameState local já marca este dispositivo como controller?
-    // Necessário porque activeLives vem do Firebase e pode estar atrasado após handleControlLive.
     const thisDeviceIsControllerLocal = gameState?.commandOwnerId === deviceId;
     const thisDeviceIsController = thisDeviceIsControllerInCloud || thisDeviceIsControllerLocal;
+    if (thisDeviceIsController) return;
 
-    if (!thisDeviceIsController && activeLives.length > 0) {
-      // No scoreboard: só mostra overlay se o dispositivo for genuinamente observador
-      // (não é controller localmente). Isso trata o refresh de observadores sem
-      // interferir com o controller que acabou de assumir o controle.
-      if (currentScreen === 'scoreboard' && thisDeviceIsControllerLocal) return;
+    // Grace period pós-takeControl
+    const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
+    if (justTookControl) return;
 
-      // Grace period: se acabou de assumir o controle (últimos 15s), não reabre overlay —
-      // activeLives pode ainda não ter refletido o novo commandOwnerId do Firebase.
-      const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
-      if (justTookControl) return;
-
+    if (activeLives.length > 0) {
       const observerLive = activeLives.reduce((latest, l) =>
         (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
       );
       const liveId = observerLive.ownerPin?.toUpperCase() || '';
-      // Guard 3: usuário já aceitou este liveId (observer ou controller) — não reabre o modal.
-      // overlayAcceptedRef só é resetado quando a live encerra (activeLives.length === 0),
-      // nunca ao trocar de tela, evitando o duplo disparo após setCurrentScreen('scoreboard').
+
+      // Guard: já entrou nesta live como observer ou controller
       if (liveId && overlayAcceptedRef.current === liveId) return;
-      if (liveId && overlayShownForLiveRef.current !== liveId) {
-        overlayShownForLiveRef.current = liveId;
-        setShowLiveControlOverlay(true);
+      if (liveId && overlayShownForLiveRef.current === liveId) return;
+      overlayShownForLiveRef.current = liveId;
+
+      // Determina se este device deve entrar automaticamente como observador:
+      // 1. Device secundário do mesmo usuário (mesmo ownerPin, ownerDeviceId diferente)
+      // 2. Judge nomeado pelo owner
+      // Nesses casos: entra direto no scoreboard como observer, SEM modal.
+      // O modal só aparece se o usuário clicar voluntariamente (LiveIndicator, menu, etc).
+      const isSameUserOtherDevice =
+        observerLive.ownerPin?.toUpperCase() === myPin &&
+        observerLive.ownerDeviceId &&
+        observerLive.ownerDeviceId !== deviceId;
+
+      const isNamedJudge = observerLive.judgePin?.toUpperCase() === myPin;
+
+      if (isSameUserOtherDevice || isNamedJudge) {
+        // Entra automaticamente como observador — sem modal.
+        // Usa setTimeout para garantir que handleObserveLive (declarado abaixo)
+        // já esteja estável no closure antes de ser invocado.
+        overlayAcceptedRef.current = liveId;
+        setTimeout(() => autoJoinObserverRef.current?.(liveId), 0);
+        return;
       }
+
+      // Outros devices (observers externos): mostra o overlay normalmente
+      setShowLiveControlOverlay(true);
     }
+
     if (activeLives.length === 0) {
       overlayShownForLiveRef.current = null;
       overlayAcceptedRef.current = null;
@@ -2217,6 +2237,10 @@ const App: React.FC = () => {
     setIsSelectingJudge(false);
     setCurrentScreen('scoreboard');
   };
+
+  // Popula o ref usado pelo activeLives effect (declarado antes desta função)
+  // para auto-join como observer sem modal.
+  autoJoinObserverRef.current = (pin: string) => handleObserveLive(pin);
 
   const handleObserveLive = async (targetPin?: string) => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para observar.", onConfirm: () => setModalConfig(null) }); return; }
