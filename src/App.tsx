@@ -995,9 +995,14 @@ const App: React.FC = () => {
             return;
           }
 
-          // Se este device era o controlador antes e agora não é mais, marca o momento
+          // Se este device era o controlador antes e agora não é mais:
+          // marca o momento e notifica com um toast simples (sem modal bloqueante).
           if (currentGs?.commandOwnerId === deviceId) {
             lostControlAtRef.current = Date.now();
+            const newControllerLabel = cloudData.commandOwner || 'outro dispositivo';
+            // Notificação leve auto-dismiss (2s) — sem botão de confirmação
+            setModalConfig({ title: "Controle transferido", message: `${newControllerLabel} assumiu o controle da partida.`, variant: 'info', onConfirm: () => setModalConfig(null) });
+            setTimeout(() => setModalConfig(null), 2000);
           }
           // Lê matchSettings via ref para não forçar resubscribe do listener
           const localSettings = matchSettingsRef.current;
@@ -1362,15 +1367,11 @@ const App: React.FC = () => {
       }
 
       // ── Owner heartbeat (quando NÃO é o controller ativo) ──────────────────
-      // T4.1: usa field-path direto (sem getDoc) — zero leituras extras a cada 30s
-      // Garante que o owner aparece como "presente" nos Dispositivos participantes
-      // mesmo quando o judge está controlando a partida.
       const ownerMatch = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin);
       const isOwnerControlling = ownerMatch?.commandOwnerId === deviceId;
       if (ownerMatch && !isOwnerControlling) {
         const docRef = doc(db, "live_matches", myPin);
         try {
-          // Owner que não está controlando mantém role 'owner', não vira 'observer'
           await updateDoc(docRef, {
             [`controllers.${deviceId}`]: {
               label: currentFullDeviceName,
@@ -1382,6 +1383,43 @@ const App: React.FC = () => {
             }
           });
         } catch {}
+      }
+
+      // ── Observer heartbeat ───────────────────────────────────────────────────
+      // Devices secundários do mesmo usuário ou observers externos que estão no
+      // scoreboard como observadores precisam renovar o lastSeen a cada 30s —
+      // sem isso, o log do proprietário os remove após 60s (TTL do lastSeen).
+      const isObserving =
+        gameStateRef.current?.isMirroringActive &&
+        !gameStateRef.current?.isLiveClosed &&
+        gameStateRef.current?.commandOwnerId !== deviceId; // não é controller ativo
+
+      if (isObserving) {
+        const observerLivePin = gameStateRef.current?.ownerPin?.toUpperCase();
+        // Não re-envia heartbeat se já foi coberto pelo judge ou owner heartbeat acima
+        const alreadyCovered =
+          judgeMatches.some(m => m.ownerPin?.toUpperCase() === observerLivePin) ||
+          (ownerMatch && ownerMatch.ownerPin?.toUpperCase() === observerLivePin);
+
+        if (observerLivePin && !alreadyCovered) {
+          const docRef = doc(db, "live_matches", observerLivePin);
+          const existingRole = gameStateRef.current?.controllers?.[deviceId]?.role;
+          // Preserva role existente (owner/judge não devem virar observer no heartbeat)
+          const heartbeatRole = (existingRole === 'owner' || existingRole === 'judge')
+            ? existingRole
+            : 'observer';
+          try {
+            await updateDoc(docRef, {
+              [`controllers.${deviceId}`]: {
+                label: currentFullDeviceName,
+                nickname: myNickname,
+                lastSeen: now,
+                role: heartbeatRole,
+                deviceType: myDeviceType
+              }
+            });
+          } catch {}
+        }
       }
     }, 30000);
     return () => clearInterval(interval);
@@ -2118,26 +2156,8 @@ const App: React.FC = () => {
         if (snap.exists() && snap.data().isLiveClosed !== true) {
           const cloudState = snap.data() as GameState;
 
-          // ── Guard: bloqueia assumir controle se já há um controller ativo (visto há menos de 30s)
-          // e esse controller NÃO é este dispositivo.
-          // EXCEÇÃO: o owner original tem prioridade máxima e nunca é bloqueado —
-          // ele sempre pode retomar o controle independentemente de quem está controlando.
+          // Identifica controller atual e se é um device diferente ativo
           const currentControllerId = cloudState.commandOwnerId;
-          if (!isOriginalOwner && currentControllerId && currentControllerId !== deviceId) {
-            const controllerRecord = cloudState.controllers?.[currentControllerId];
-            const lastSeen = controllerRecord?.lastSeen || 0;
-            const isActiveController = (Date.now() - lastSeen) < 30000;
-            if (isActiveController) {
-              const activeLabel = controllerRecord?.label || 'outro dispositivo';
-              setModalConfig({
-                title: "Controle em uso",
-                message: `O dispositivo "${activeLabel}" está controlando a partida agora. Aguarde ou peça para ele liberar o controle.`,
-                onConfirm: () => setModalConfig(null)
-              });
-              return;
-            }
-          }
-          // ──────────────────────────────────────────────────────────────────────
 
           const myCommandName = currentFullDeviceName;
           // Role do novo controller: owner se ownerPin bate, senão judge
@@ -2216,10 +2236,12 @@ const App: React.FC = () => {
             setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: !!matchSettings.isWatchMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
             try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
 
-            overlayAcceptedRef.current = targetPin; // impede que o modal reabra após setCurrentScreen
-            setShowLiveControlOverlay(false); if (currentScreen !== 'scoreboard') setCurrentScreen('scoreboard');
-            setModalConfig({ title: "Sucesso", message: "Controle da partida assumido com sucesso.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
-            setTimeout(() => setModalConfig(null), 3000);
+            overlayAcceptedRef.current = targetPin;
+            setShowLiveControlOverlay(false);
+            setModalConfig(null); // limpa qualquer modal anterior
+            if (currentScreen !== 'scoreboard') setCurrentScreen('scoreboard');
+            // Sem modal de sucesso — a troca é silenciosa para quem assume.
+            // O device que perdeu o controle será notificado via onSnapshot.
           }
         } else {
           setCloudLiveExists(false);

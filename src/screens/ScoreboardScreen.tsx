@@ -552,7 +552,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         if (id === currentDeviceId) return; // próprio device já logado em live_created
         const c = stable[id] as any;
         const lastSeen = c.lastSeen || 0;
-        if ((now - lastSeen) > 30000) return; // lastSeen antigo = dado stale, não é entrada real
+        if ((now - lastSeen) > 60000) return; // lastSeen antigo = dado stale, não é entrada real
         const isCtrl = id === (gameState.controllers ? gameState.commandOwnerId : null);
         const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
         addLiveLog('participant_join', `${c.label || id}: entrou na live (${roleLabel})`, true, {
