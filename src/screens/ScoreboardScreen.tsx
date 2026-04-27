@@ -104,6 +104,7 @@ interface Props {
   isSavingJudge?: boolean;
   onAddJudge?: () => void;
   onDeleteJudge?: () => void;
+  onDeleteLive?: () => void;
   isJudgeOnline?: boolean;
   onSelectJudgeFromPartners?: () => void;
   liveLogs?: LiveLogEntry[];
@@ -299,7 +300,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive } = props;
 
   // Usar props se fornecidas, caso contrário usar estado local (fallback para compatibilidade)
   const effectiveLiveLogs = liveLogs !== undefined ? liveLogs : [];
@@ -536,80 +537,76 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [gameState.commandOwnerId, gameState.isMirroringActive, gameState.isLiveClosed, addLiveLog]);
 
   // ── Participante entrou / saiu ─────────────────────────────────────────────
-  // Inicializado com {} — na primeira execução estável, todos os devices presentes
-  // são registrados como "já na live", garantindo que o log mostre o estado inicial completo.
   const prevControllersRef = useRef<Record<string, any>>({});
+  const loggedDeviceIdsRef = useRef<Set<string>>(new Set()); // IDs já registrados no log
   const controllersInitializedRef = useRef(false);
   const controllersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Refs sempre atualizadas — lidas DENTRO do setTimeout para evitar closure stale
+  // (o useEffect captura o valor do render em que rodou, não o do momento do disparo)
+  const latestControllersRef = useRef<Record<string, any>>(gameState.controllers || {});
+  const latestCommandOwnerIdRef = useRef(gameState.commandOwnerId);
+  useEffect(() => { latestControllersRef.current = gameState.controllers || {}; }, [gameState.controllers]);
+  useEffect(() => { latestCommandOwnerIdRef.current = gameState.commandOwnerId; }, [gameState.commandOwnerId]);
 
   useEffect(() => {
     if (!gameState.isMirroringActive || gameState.isLiveClosed) {
-      // Fora da live: reseta baseline e flag de inicialização para o próximo ciclo
       prevControllersRef.current = {};
+      loggedDeviceIdsRef.current = new Set();
       controllersInitializedRef.current = false;
       return;
     }
 
-    // Debounce de 1.5s: aguarda writes sequenciais do Firebase se estabilizarem
+    // Debounce de 2s: reinicia a cada snapshot do Firebase — o timeout só dispara
+    // quando os controllers pararem de mudar, garantindo o estado estável completo
     if (controllersDebounceRef.current) clearTimeout(controllersDebounceRef.current);
     controllersDebounceRef.current = setTimeout(() => {
+      // Lê das refs, não do closure — valor mais atual do Firebase no momento do disparo
+      const stable = latestControllersRef.current;
+      const commandOwnerId = latestCommandOwnerIdRef.current;
       const prev = prevControllersRef.current;
-      const stable = gameState.controllers || {};
       const checkTime = Date.now();
 
-      if (!controllersInitializedRef.current) {
-        // Primeira execução estável: loga todos os devices já presentes (exceto o próprio
-        // criador que já foi registrado em live_created), com label "já na live"
-        Object.keys(stable).forEach(id => {
-          if (id === currentDeviceId) return; // criador já logado em live_created
-          const c = stable[id] as any;
-          const lastSeen = c.lastSeen || 0;
-          if ((checkTime - lastSeen) > 120000) return; // inativo = dado stale
-          const isCtrl = id === gameState.commandOwnerId;
-          const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
-          addLiveLog('participant_join', `${c.label || id}: já está na live (${roleLabel})`, true, {
-            deviceType: c.deviceType,
-            participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
-            isController: isCtrl,
-          });
-        });
-        prevControllersRef.current = stable;
-        controllersInitializedRef.current = true;
-        return;
-      }
-
-      // Entrou: deviceId novo com lastSeen recente — mudança de role NÃO é entrada
+      // Loga qualquer participante ativo que ainda não foi registrado no log.
+      // Usa loggedDeviceIdsRef como fonte da verdade — não prevControllersRef —
+      // para evitar que um device seja ignorado por ter sido visto em um snapshot
+      // anterior mas ainda não ter sido logado (race condition de debounce).
       Object.keys(stable).forEach(id => {
-        if (prev[id]) return; // já estava no baseline
-        if (id === currentDeviceId) return; // próprio device já logado em live_created
         const c = stable[id] as any;
-        const lastSeen = c.lastSeen || 0;
-        if ((checkTime - lastSeen) > 90000) return; // lastSeen antigo = dado stale
-        const isCtrl = id === gameState.commandOwnerId;
-        const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
-        addLiveLog('participant_join', `${c.label || id}: entrou na live (${roleLabel})`, true, {
+        // Pula o próprio device se for owner — já logado em live_created
+        if (id === currentDeviceId && c.role === 'owner') return;
+        // Pula se já foi logado antes
+        if (loggedDeviceIdsRef.current.has(id)) return;
+        // Pula se inativo (TTL menor para novos entrantes após inicialização)
+        const maxAge = controllersInitializedRef.current ? 90000 : 120000;
+        if ((checkTime - (c.lastSeen || 0)) > maxAge) return;
+        const isCtrl = id === commandOwnerId;
+        const verb = controllersInitializedRef.current ? 'entrou na live' : 'já está na live';
+        const roleLabel = isCtrl ? 'Controlador' : c.role === 'judge' ? 'Juiz' : 'Observador';
+        addLiveLog('participant_join', `${c.label || id}: ${verb} (${roleLabel})`, true, {
           deviceType: c.deviceType,
           participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
           isController: isCtrl,
         });
+        loggedDeviceIdsRef.current.add(id);
       });
 
-      // Saiu: deviceId sumiu E lastSeen era recente — mudança de role NÃO é saída
+      // Saiu: deviceId que estava em prev e sumiu do stable com lastSeen recente
       Object.keys(prev).forEach(id => {
-        if (stable[id]) return; // ainda está
+        if (stable[id]) return;
         const c = prev[id] as any;
-        const lastSeen = c.lastSeen || 0;
-        if ((checkTime - lastSeen) > 120000) return; // inativo há mais de 2min = TTL expirado
-        const roleLabel = c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
+        if ((checkTime - (c.lastSeen || 0)) > 120000) return;
+        const roleLabel = c.role === 'judge' ? 'Juiz' : 'Observador';
         addLiveLog('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false, {
           deviceType: c.deviceType,
           participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
-          isController: id === gameState.commandOwnerId,
+          isController: id === commandOwnerId,
         });
+        loggedDeviceIdsRef.current.delete(id); // permite re-logar se o device voltar
       });
 
       prevControllersRef.current = stable;
-    }, 1500);
+      controllersInitializedRef.current = true;
+    }, 2000);
 
     return () => {
       if (controllersDebounceRef.current) clearTimeout(controllersDebounceRef.current);
@@ -895,7 +892,13 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   const handleToggleMirroringLocal = (active: boolean) => { 
     if (!gameState.isMatchOver && !gameState.isConfirmedFinished && !gameState.isLiveClosed) {
-       if (isCommandOwner && !active) onOpenLiveControl?.();
+       if (isCommandOwner && !active) {
+         // Ao desligar a live, vai direto para confirmação de encerramento —
+         // sem passar pelo overlay de controle. Chama onDeleteLive se disponível,
+         // senão abre o overlay (fallback).
+         if (onDeleteLive) onDeleteLive();
+         else onOpenLiveControl?.();
+       }
        else onToggleMirroring(active);
     }
   };

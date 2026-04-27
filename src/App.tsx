@@ -1091,12 +1091,17 @@ const App: React.FC = () => {
     const hadControl = prevCommandOwnerIdWasSelf.current;
     const hasControl = gameState?.commandOwnerId === deviceId;
     if (hadControl && !hasControl && gameState?.isMirroringActive && !gameState.isLiveClosed) {
-      setModalConfig({
-        title: "Controle alterado",
-        message: "Outro dispositivo assumiu o controle da transmissão. Você agora está no modo de observador.",
-        onConfirm: () => setModalConfig(null)
-      });
+      // Fecha o overlay IMEDIATAMENTE antes de mostrar a notificação
       setShowLiveControlOverlay(false);
+      // Após fechar o overlay, exibe apenas a notificação com botão "Ok"
+      setTimeout(() => {
+        setModalConfig({
+          title: "Controle alterado",
+          message: "Outro dispositivo assumiu o controle da transmissão. Você agora está no modo de observador.",
+          confirmLabel: "Ok",
+          onConfirm: () => setModalConfig(null)
+        });
+      }, 100);
     }
     prevIsCommandOwner.current = isCommandOwner;
     prevCommandOwnerIdWasSelf.current = hasControl;
@@ -1568,6 +1573,8 @@ const App: React.FC = () => {
     setGameState(state);
     setHistoryStack([state]);
     historyStackRef.current = [state];
+    setLiveLogs([]); // Zera logs ao iniciar nova partida
+    setVoiceLogs([]); // Zera voice logs ao iniciar nova partida
     try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(state)); } catch {}
   }, []);
   const startGameRef = useRef(startGame);
@@ -2064,15 +2071,18 @@ const App: React.FC = () => {
     if (!targetPin) { setModalConfig({ title: "Erro", message: "PIN da transmissão não encontrado.", onConfirm: () => setModalConfig(null) }); return; }
     
     try {
-      // C1: marca isLiveClosed:true em vez de deleteDoc — documento fica para rastreamento;
-      // Cloud Function (D1) fará a limpeza física após 3h de inatividade.
-      await updateDoc(doc(db, "live_matches", targetPin), {
+      const liveRef = doc(db, "live_matches", targetPin);
+      // 1) Propaga isLiveClosed:true para todos os devices via onSnapshot
+      await updateDoc(liveRef, {
         isLiveClosed: true,
         isMirroringActive: false,
         closedAt: Date.now(),
         closedBy: deviceId,
         closedByRole: livePapel
       });
+      // 2) Após 4s (tempo para observers receberem o snapshot), deleta o documento
+      setTimeout(() => deleteDoc(liveRef).catch(() => {}), 4000);
+
       setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: false, isLiveClosed: true }; });
       setCloudLiveExists(false); setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
       try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
@@ -2939,12 +2949,6 @@ const App: React.FC = () => {
                       </button>
                     )}
 
-                    {isCurrentController && (
-                      <button onClick={() => { setShowLiveControlOverlay(false); }} className="w-full py-5 bg-slate-100 text-slate-700 rounded-[2rem] font-black text-base active:scale-95 transition-all flex items-center justify-center gap-3">
-                        <Eye size={24} /> Continuar assistindo
-                      </button>
-                    )}
-
                     {/* ── Gestão (só proprietário) ───────────────────────── */}
                     {livePapel === 'owner' && (
                       <div className="w-full mt-2 pt-4 border-t border-gray-100 space-y-3">
@@ -2963,12 +2967,6 @@ const App: React.FC = () => {
                           </div>
                         )}
 
-                        {/* B3: Zerar partida — só owner-controller */}
-                        {isCurrentController && (
-                          <button onClick={() => { setShowLiveControlOverlay(false); handleResetMatch?.(); }} className="w-full py-4 bg-amber-50 text-amber-700 border border-amber-200 rounded-2xl font-black text-xs active:scale-95 transition-all flex items-center justify-center gap-2">
-                            <RotateCw size={16} /> Zerar partida
-                          </button>
-                        )}
                       </div>
                     )}
 
@@ -3305,7 +3303,16 @@ const App: React.FC = () => {
         setCloudLiveExists(false);
         setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
         try { localStorage.removeItem('myPlacarActiveGameState'); } catch {};
-      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={livePapel} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} liveLogs={liveLogs} setLiveLogs={setLiveLogs} voiceLogs={voiceLogs} setVoiceLogs={setVoiceLogs} />}
+      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onDeleteLive={() => {
+              setModalConfig({
+                title: "Encerrar a live?",
+                message: "Todos os participantes perderão a conexão.",
+                confirmLabel: "Encerrar",
+                variant: 'danger',
+                onConfirm: async () => { setModalConfig(null); await handleCloseCloudLive(); },
+                onCancel: () => setModalConfig(null)
+              });
+            }} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={livePapel} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} liveLogs={liveLogs} setLiveLogs={setLiveLogs} voiceLogs={voiceLogs} setVoiceLogs={setVoiceLogs} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as unknown as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={handleAddTournamentPartner} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
