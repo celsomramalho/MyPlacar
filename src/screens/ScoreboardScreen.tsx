@@ -536,15 +536,17 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [gameState.commandOwnerId, gameState.isMirroringActive, gameState.isLiveClosed, addLiveLog]);
 
   // ── Participante entrou / saiu ─────────────────────────────────────────────
-  // prevControllersRef: inicializado com os controllers do momento de montagem.
-  // Qualquer controller novo após a montagem será detectado corretamente.
-  const prevControllersRef = useRef<Record<string, any>>(gameState.controllers || {});
+  // Inicializado com {} — na primeira execução estável, todos os devices presentes
+  // são registrados como "já na live", garantindo que o log mostre o estado inicial completo.
+  const prevControllersRef = useRef<Record<string, any>>({});
+  const controllersInitializedRef = useRef(false);
   const controllersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!gameState.isMirroringActive || gameState.isLiveClosed) {
-      // Fora da live: reseta baseline para o próximo ciclo
+      // Fora da live: reseta baseline e flag de inicialização para o próximo ciclo
       prevControllersRef.current = {};
+      controllersInitializedRef.current = false;
       return;
     }
 
@@ -552,16 +554,37 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (controllersDebounceRef.current) clearTimeout(controllersDebounceRef.current);
     controllersDebounceRef.current = setTimeout(() => {
       const prev = prevControllersRef.current;
-      const stable = gameState.controllers || {}; // lê o valor mais recente no momento do disparo
-      const checkTime = Date.now(); // timestamp atual (dentro do setTimeout, mais preciso)
+      const stable = gameState.controllers || {};
+      const checkTime = Date.now();
 
-      // Entrou: chave nova com lastSeen recente (evento real, não dado stale)
+      if (!controllersInitializedRef.current) {
+        // Primeira execução estável: loga todos os devices já presentes (exceto o próprio
+        // criador que já foi registrado em live_created), com label "já na live"
+        Object.keys(stable).forEach(id => {
+          if (id === currentDeviceId) return; // criador já logado em live_created
+          const c = stable[id] as any;
+          const lastSeen = c.lastSeen || 0;
+          if ((checkTime - lastSeen) > 120000) return; // inativo = dado stale
+          const isCtrl = id === gameState.commandOwnerId;
+          const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
+          addLiveLog('participant_join', `${c.label || id}: já está na live (${roleLabel})`, true, {
+            deviceType: c.deviceType,
+            participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
+            isController: isCtrl,
+          });
+        });
+        prevControllersRef.current = stable;
+        controllersInitializedRef.current = true;
+        return;
+      }
+
+      // Entrou: deviceId novo com lastSeen recente — mudança de role NÃO é entrada
       Object.keys(stable).forEach(id => {
         if (prev[id]) return; // já estava no baseline
         if (id === currentDeviceId) return; // próprio device já logado em live_created
         const c = stable[id] as any;
         const lastSeen = c.lastSeen || 0;
-        if ((checkTime - lastSeen) > 90000) return; // lastSeen antigo = dado stale, não é entrada real
+        if ((checkTime - lastSeen) > 90000) return; // lastSeen antigo = dado stale
         const isCtrl = id === gameState.commandOwnerId;
         const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
         addLiveLog('participant_join', `${c.label || id}: entrou na live (${roleLabel})`, true, {
@@ -571,18 +594,17 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         });
       });
 
-      // Saiu: chave sumiu E o lastSeen era recente (confirma que estava ativo)
+      // Saiu: deviceId sumiu E lastSeen era recente — mudança de role NÃO é saída
       Object.keys(prev).forEach(id => {
         if (stable[id]) return; // ainda está
         const c = prev[id] as any;
         const lastSeen = c.lastSeen || 0;
-        if ((checkTime - lastSeen) > 120000) return; // inativo há mais de 2min = TTL expirado, não saída real
-        const isCtrl = id === gameState.commandOwnerId;
-        const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
+        if ((checkTime - lastSeen) > 120000) return; // inativo há mais de 2min = TTL expirado
+        const roleLabel = c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
         addLiveLog('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false, {
           deviceType: c.deviceType,
           participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
-          isController: isCtrl,
+          isController: id === gameState.commandOwnerId,
         });
       });
 

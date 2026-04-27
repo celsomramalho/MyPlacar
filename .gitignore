@@ -13,6 +13,7 @@ NovosArquivos
 dist
 dist-ssr
 *.local
+.tmp.driveupload
 
 # Editor directories and files
 .vscode/*
