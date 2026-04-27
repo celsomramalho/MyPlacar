@@ -15,7 +15,7 @@ import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 // import { Input } from './components/Input.tsx'; // unused
 import type { Partner, QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
-import { GameState, MatchSettings, Screen, UserProfile, PointType, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab, LivePapel, LiveType } from './types.ts';
+import { GameState, MatchSettings, Screen, UserProfile, PointType, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
@@ -199,6 +199,10 @@ const App: React.FC = () => {
   const { logs, clearLogs } = useAppLogger();
   const [showLogViewer, setShowLogViewer] = useState(false);
   const [_versionTapCount, setVersionTapCount] = useState(0);
+
+  // ─── Live Logs: persistem ao trocar de tela ────────────────────────────────
+  const [liveLogs, setLiveLogs] = useState<LiveLogEntry[]>([]);
+  const [voiceLogs, setVoiceLogs] = useState<{id: string, startTime: string, before: string, after: string, text: string, latency: number, timestamp: number, isError?: boolean, winner?: 1 | 2, isRemote?: boolean, liveSequence?: number, liveId?: number, source: string}[]>([]);
 
   // Captura de logs via useAppLogger
 
@@ -1891,15 +1895,8 @@ const App: React.FC = () => {
            try {
              const snap = await getDoc(doc(db, "live_matches", pinUpper));
              if (snap.exists()) {
-               const cloudData = snap.data();
-               const isClosed = cloudData.isLiveClosed === true;
-               if (!isClosed) {
-                 const data = cloudData as GameState;
-                 const ownerData = Object.values(data.controllers || {}).find((c: ControllerRecord) => c.label === data.commandOwner);
-                 const lastAct = ownerData?.lastSeen || data.startTime || 0;
-                 if ((Date.now() - lastAct) < (60 * 60 * 1000)) { setShowLiveControlOverlay(true); return; }
-                 await deleteDoc(doc(db, "live_matches", pinUpper)).catch(() => {});
-               }
+               // Sempre deletar live existente ao iniciar nova live
+               await deleteDoc(doc(db, "live_matches", pinUpper)).catch(() => {});
              }
            } catch {}
         }
@@ -1944,15 +1941,7 @@ const App: React.FC = () => {
     const db = getDb();
     if (db && userProfile.pin && navigator.onLine) { 
       try { 
-        const checkSnap = await getDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()));
-        if (checkSnap.exists() && checkSnap.data().isLiveClosed !== true) {
-          const controllerData = checkSnap.data() as GameState;
-          const ctrl = Object.values(controllerData.controllers || {}).find((c: ControllerRecord) => c.lastSeen && (Date.now() - c.lastSeen) < 30000);
-          if (ctrl) {
-            setShowLiveControlOverlay(true);
-            return;
-          }
-        }
+        // Sempre deletar live existente ao iniciar nova live
         await deleteDoc(doc(db, "live_matches", userProfile.pin.toUpperCase())).catch(() => {}); 
       } catch {} 
     }
@@ -2863,11 +2852,13 @@ const App: React.FC = () => {
         }
 
         startGame(resetState);
+        setLiveLogs([]);
+        setVoiceLogs([]);
         setModalConfig(null);
       },
       onCancel: () => setModalConfig(null)
     });
-  }, [gameState, startGame]);
+  }, [gameState, startGame, setLiveLogs, setVoiceLogs]);
 
   return (
     <ErrorBoundary>
@@ -3314,7 +3305,7 @@ const App: React.FC = () => {
         setCloudLiveExists(false);
         setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
         try { localStorage.removeItem('myPlacarActiveGameState'); } catch {};
-      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={livePapel} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} />}
+      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={livePapel} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} liveLogs={liveLogs} setLiveLogs={setLiveLogs} voiceLogs={voiceLogs} setVoiceLogs={setVoiceLogs} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as unknown as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={handleAddTournamentPartner} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}

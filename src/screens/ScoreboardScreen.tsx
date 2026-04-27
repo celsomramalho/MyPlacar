@@ -106,6 +106,10 @@ interface Props {
   onDeleteJudge?: () => void;
   isJudgeOnline?: boolean;
   onSelectJudgeFromPartners?: () => void;
+  liveLogs?: LiveLogEntry[];
+  setLiveLogs?: (logs: LiveLogEntry[] | ((prev: LiveLogEntry[]) => LiveLogEntry[])) => void;
+  voiceLogs?: {id: string, startTime: string, before: string, after: string, text: string, latency: number, timestamp: number, isError?: boolean, winner?: 1 | 2, isRemote?: boolean, liveSequence?: number, liveId?: number, source: string}[];
+  setVoiceLogs?: (logs: any[] | ((prev: any[]) => any[])) => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -295,7 +299,13 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs } = props;
+
+  // Usar props se fornecidas, caso contrário usar estado local (fallback para compatibilidade)
+  const effectiveLiveLogs = liveLogs !== undefined ? liveLogs : [];
+  const effectiveSetLiveLogs = setLiveLogs || (() => {});
+  const effectiveVoiceLogs = voiceLogs !== undefined ? voiceLogs : [];
+  const effectiveSetVoiceLogs = setVoiceLogs || (() => {});
 
   if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
     return (
@@ -337,7 +347,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const [isLogsOpen, setIsLogsOpen] = useState(gameState.matchConfig.isHistoryEnabled);
   const [isTimelineOpen, setIsTimelineOpen] = useState(gameState.matchConfig.isHistoryEnabled);
   const [isAudioLocked, setIsAudioLocked] = useState(false);
-  const [voiceLogs, setVoiceLogs] = useState<CommandLogEntry[]>([]);
   const [remoteActionFeedback, setRemoteActionFeedback] = useState<string | null>(null);
   const [isWaitingAck, setIsWaitingAck] = useState(false);
   const [correctionMode, setCorrectionMode] = useState<'none' | 'game' | 'gameSet' | 'matchSet'>('none');
@@ -360,11 +369,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const pendingLogIdRef = useRef<string | null>(null);
   const voiceLogsRef = useRef<CommandLogEntry[]>([]);
 
-  useEffect(() => { voiceLogsRef.current = voiceLogs; }, [voiceLogs]);
+  useEffect(() => { voiceLogsRef.current = effectiveVoiceLogs || []; }, [effectiveVoiceLogs]);
 
   // ─── Live Log state ────────────────────────────────────────────────────────
   const [isLiveLogOpen, setIsLiveLogOpen] = useState(true);
-  const [liveLogs, setLiveLogs] = useState<LiveLogEntry[]>([]);
 
   const nowTime = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
@@ -389,11 +397,28 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       ok,
       ...meta,
     };
-    setLiveLogs(prev => [entry, ...prev].slice(0, 60));
-  }, []);
+    effectiveSetLiveLogs(prev => [entry, ...(prev || [])].slice(0, 60));
+  }, [effectiveSetLiveLogs, nowTime]);
 
-  // Reset log ao iniciar nova partida
-  useEffect(() => { setLiveLogs([]); }, [gameState.matchId]);
+  // Reset log ao iniciar nova partida — APENAS quando a nova partida realmente começa
+  // Em vez de depender de matchId (que pode não estar definido), usamos o estado anterior
+  const prevMatchIdRef = useRef<string | undefined>(gameState.matchId);
+  useEffect(() => {
+    if (gameState.matchId && prevMatchIdRef.current !== gameState.matchId) {
+      // Partida realmente mudou
+      const wasReset = !!prevMatchIdRef.current; // true = foi um reset (não o primeiro load)
+      prevMatchIdRef.current = gameState.matchId;
+      // Se a live estava ativa durante o reset, adicionar log de início de nova partida
+      if (wasReset && gameState.isMirroringActive && !gameState.isLiveClosed) {
+        addLiveLog('new_match', `Partida zerada — nova partida iniciada às ${nowTime()}`, true, {
+          deviceType: getDeviceType(),
+          participantRole: 'owner',
+          isController: true,
+        });
+        addLiveLog('score', `${gameState.p1.name} 0 × 0 ${gameState.p2.name}`, true);
+      }
+    }
+  }, [gameState.matchId, gameState.isMirroringActive, gameState.isLiveClosed, currentDeviceFullLabel, addLiveLog]);
 
   // ── Live criada ────────────────────────────────────────────────────────────
   const prevIsMirroringRef = useRef(gameState.isMirroringActive && !gameState.isLiveClosed);
@@ -462,15 +487,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       ok: undefined,
     };
     pendingScoreLogIdRef.current = fbEntryId;
-    setLiveLogs(prev => [fbEntry, ...prev].slice(0, 60));
+    effectiveSetLiveLogs(prev => [fbEntry, ...(prev || [])].slice(0, 60));
 
     // Após ~1.5s marca FB ok com latência medida
     setTimeout(() => {
       const latency = Date.now() - sentAt;
-      setLiveLogs(prev => {
-        const idx = prev.findIndex(l => l.id === fbEntryId);
+      effectiveSetLiveLogs(prev => {
+        const idx = (prev || []).findIndex(l => l.id === fbEntryId);
         if (idx === -1) return prev;
-        const updated = [...prev];
+        const updated = [...(prev || [])];
         updated[idx] = { ...updated[idx], text: `✓ FB ok — ${latency}ms`, ok: true };
         return updated;
       });
@@ -511,31 +536,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [gameState.commandOwnerId, gameState.isMirroringActive, gameState.isLiveClosed, addLiveLog]);
 
   // ── Participante entrou / saiu ─────────────────────────────────────────────
-  // mountedAtRef: ignora diffs nos primeiros 5s após montagem — período de
-  // sincronização inicial onde snapshots intermediários causam falsos positivos.
-  const mountedAtRef = useRef<number>(Date.now());
-  const prevControllersRef = useRef<Record<string, any> | null>(null); // null = ainda não inicializado
+  // prevControllersRef: inicializado com os controllers do momento de montagem.
+  // Qualquer controller novo após a montagem será detectado corretamente.
+  const prevControllersRef = useRef<Record<string, any>>(gameState.controllers || {});
   const controllersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!gameState.isMirroringActive || gameState.isLiveClosed) {
-      // Fora da live: reseta para o próximo ciclo
-      prevControllersRef.current = null;
-      return;
-    }
-
-    const cur = gameState.controllers || {};
-    const now = Date.now();
-
-    // Ainda dentro do grace period de montagem: apenas atualiza o baseline sem logar
-    if (now - mountedAtRef.current < 5000) {
-      prevControllersRef.current = cur;
-      return;
-    }
-
-    // Primeira vez fora do grace period: inicializa o baseline sem logar
-    if (prevControllersRef.current === null) {
-      prevControllersRef.current = cur;
+      // Fora da live: reseta baseline para o próximo ciclo
+      prevControllersRef.current = {};
       return;
     }
 
@@ -543,17 +552,17 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (controllersDebounceRef.current) clearTimeout(controllersDebounceRef.current);
     controllersDebounceRef.current = setTimeout(() => {
       const prev = prevControllersRef.current;
-      if (!prev) return;
       const stable = gameState.controllers || {}; // lê o valor mais recente no momento do disparo
+      const checkTime = Date.now(); // timestamp atual (dentro do setTimeout, mais preciso)
 
       // Entrou: chave nova com lastSeen recente (evento real, não dado stale)
       Object.keys(stable).forEach(id => {
-        if (prev[id]) return; // já estava
+        if (prev[id]) return; // já estava no baseline
         if (id === currentDeviceId) return; // próprio device já logado em live_created
         const c = stable[id] as any;
         const lastSeen = c.lastSeen || 0;
-        if ((now - lastSeen) > 60000) return; // lastSeen antigo = dado stale, não é entrada real
-        const isCtrl = id === (gameState.controllers ? gameState.commandOwnerId : null);
+        if ((checkTime - lastSeen) > 90000) return; // lastSeen antigo = dado stale, não é entrada real
+        const isCtrl = id === gameState.commandOwnerId;
         const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
         addLiveLog('participant_join', `${c.label || id}: entrou na live (${roleLabel})`, true, {
           deviceType: c.deviceType,
@@ -567,7 +576,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         if (stable[id]) return; // ainda está
         const c = prev[id] as any;
         const lastSeen = c.lastSeen || 0;
-        if ((now - lastSeen) > 120000) return; // inativo há mais de 2min = TTL expirado, não saída real
+        if ((checkTime - lastSeen) > 120000) return; // inativo há mais de 2min = TTL expirado, não saída real
         const isCtrl = id === gameState.commandOwnerId;
         const roleLabel = isCtrl ? 'Controlador' : c.role === 'owner' ? 'Dono' : c.role === 'judge' ? 'Juiz' : 'Observador';
         addLiveLog('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false, {
@@ -660,10 +669,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   useEffect(() => {
     if (pendingLogIdRef.current) {
       const logId = pendingLogIdRef.current;
-      setVoiceLogs(prev => {
-        const idx = prev.findIndex(l => l.id === logId);
+      effectiveSetVoiceLogs(prev => {
+        const idx = (prev || []).findIndex(l => l.id === logId);
         if (idx === -1) return prev;
-        const updated = [...prev];
+        const updated = [...(prev || [])];
         const nowScore = `${gameState.p1.score}-${gameState.p2.score}`;
         updated[idx] = { 
           ...updated[idx], 
@@ -745,7 +754,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       liveId: 0,
       source: finalSourceToStore 
     };
-    setVoiceLogs(prev => [entry, ...prev].slice(0, 30)); 
+    effectiveSetVoiceLogs(prev => [entry, ...(prev || [])].slice(0, 30)); 
     if (!isError && afterScore === '...') pendingLogIdRef.current = entry.id;
     return entry.id;
   };
@@ -806,7 +815,16 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     server: gameState.server, servingOrderOffset: gameState.servingOrderOffset, voiceCommands: gameState.matchConfig.voiceCommands, actionCooldownSec: gameState.matchConfig.actionCooldown || 5, stateLockoutSec: gameState.matchConfig.stateLockout || 2
   });
 
-  useEffect(() => { setVoiceLogs([]); }, [gameState.matchId]);
+  // Reset voice logs ao iniciar nova partida — APENAS quando a nova partida realmente começa
+  // NÃO zeramos mais aqui — os logs agora persistem entre telas
+  const prevVoiceMatchIdRef = useRef<string | undefined>(gameState.matchId);
+  useEffect(() => {
+    if (gameState.matchId && prevVoiceMatchIdRef.current !== gameState.matchId) {
+      prevVoiceMatchIdRef.current = gameState.matchId;
+      // NÃO zeramos voiceLogs — os logs agora persistem
+    }
+  }, [gameState.matchId]);
+
   currentGameStateRef.current = gameState;
 
   useEffect(() => {
@@ -1192,10 +1210,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                </div>
                {isLogsOpen && (
                  <div className="flex flex-col gap-3 font-mono max-h-[420px] overflow-y-auto pr-2 no-scrollbar mt-4 animate-in slide-in-from-top-2 duration-300">
-                    {voiceLogs.length === 0 ? (
+                    {effectiveVoiceLogs.length === 0 ? (
                       <div className="py-10 flex items-center justify-center text-gray-300 text-[11px] font-bold italic text-center">Aguardando comandos...</div>
                     ) : (
-                      voiceLogs.map((log) => {
+                      effectiveVoiceLogs.map((log) => {
                          const [b1, b2] = log.before.split('-'); 
                          const [a1, a2] = log.after.split('-'); 
                          const cmdColor = log.winner === 1 ? TEXT_COLORS[gameState.p1.color || 'azul'] : log.winner === 2 ? TEXT_COLORS[gameState.p2.color || 'vermelho'] : log.isError ? 'text-red-600' : 'text-slate-500';
@@ -1391,8 +1409,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-sky-50 rounded-lg relative">
                       <Wifi size={18} className="text-sky-500" />
-                      {liveLogs.length > 0 && (
-                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-500 rounded-full text-[7px] font-black text-white flex items-center justify-center">{Math.min(liveLogs.length, 9)}</span>
+                      {effectiveLiveLogs.length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-500 rounded-full text-[7px] font-black text-white flex items-center justify-center">{Math.min(effectiveLiveLogs.length, 9)}</span>
                       )}
                     </div>
                     <span className="text-gray-900 font-black text-sm tracking-tight">Log Live</span>
@@ -1409,10 +1427,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 </div>
                 {isLiveLogOpen && (
                   <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1 no-scrollbar mt-5 animate-in slide-in-from-top-2 duration-300">
-                    {liveLogs.length === 0 ? (
+                    {effectiveLiveLogs.length === 0 ? (
                       <div className="py-10 flex items-center justify-center text-gray-300 text-[11px] font-bold italic text-center">Aguardando eventos da live...</div>
                     ) : (
-                      liveLogs.map(log => {
+                      effectiveLiveLogs.map(log => {
                         const iconMap: Record<LiveLogType, React.ReactNode> = {
                           live_created:     <QrCode size={12} />,
                           control_taken:    <Crown size={12} />,

@@ -20,6 +20,35 @@ export type LivePapel = 'owner' | 'judge' | 'observer' | 'spectator';
  */
 export type LiveType = 'controller' | 'watcher';
 
+export type LiveLogType =
+  | 'live_created'
+  | 'control_taken'
+  | 'match_started'
+  | 'score'
+  | 'participant_join'
+  | 'participant_leave'
+  | 'match_over'
+  | 'match_confirmed'
+  | 'fb_ack'
+  | 'observers_ack'
+  | 'live_closed'
+  | 'judge_added'
+  | 'judge_removed'
+  | 'new_match'
+  | 'match_reset';
+
+export interface LiveLogEntry {
+  id: string;
+  time: string;
+  timestamp: number;
+  type: LiveLogType;
+  text: string;
+  ok?: boolean;
+  deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop';
+  participantRole?: 'owner' | 'judge' | 'observer';
+  isController?: boolean;
+}
+
 export interface ControllerRecord {
   label: string;
   lastSeen: number;
