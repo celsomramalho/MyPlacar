@@ -375,7 +375,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   // ─── Live Log state ────────────────────────────────────────────────────────
   const [isLiveLogOpen, setIsLiveLogOpen] = useState(true);
 
-  const nowTime = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const nowTime = useCallback(() => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }), []);
 
   // Resolve o label de um deviceId a partir dos controllers do gameState atual
   const resolveLabel = (deviceId: string, controllers?: Record<string, any>): string => {
@@ -400,6 +400,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     };
     effectiveSetLiveLogs(prev => [entry, ...(prev || [])].slice(0, 60));
   }, [effectiveSetLiveLogs, nowTime]);
+  // Ref estável para addLiveLog — permite lê-lo dentro de setTimeouts sem
+  // incluí-lo nas dependências do useEffect (o que causaria reset do debounce a cada render)
+  const addLiveLogRef = useRef(addLiveLog);
+  useEffect(() => { addLiveLogRef.current = addLiveLog; }, [addLiveLog]);
 
   // Reset log ao iniciar nova partida — APENAS quando a nova partida realmente começa
   // Em vez de depender de matchId (que pode não estar definido), usamos o estado anterior
@@ -565,6 +569,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       const commandOwnerId = latestCommandOwnerIdRef.current;
       const prev = prevControllersRef.current;
       const checkTime = Date.now();
+      const log = addLiveLogRef.current; // ref estável — não depende do closure
 
       // Loga qualquer participante ativo que ainda não foi registrado no log.
       // Usa loggedDeviceIdsRef como fonte da verdade — não prevControllersRef —
@@ -582,7 +587,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         const isCtrl = id === commandOwnerId;
         const verb = controllersInitializedRef.current ? 'entrou na live' : 'já está na live';
         const roleLabel = isCtrl ? 'Controlador' : c.role === 'judge' ? 'Juiz' : 'Observador';
-        addLiveLog('participant_join', `${c.label || id}: ${verb} (${roleLabel})`, true, {
+        log('participant_join', `${c.label || id}: ${verb} (${roleLabel})`, true, {
           deviceType: c.deviceType,
           participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
           isController: isCtrl,
@@ -596,7 +601,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         const c = prev[id] as any;
         if ((checkTime - (c.lastSeen || 0)) > 120000) return;
         const roleLabel = c.role === 'judge' ? 'Juiz' : 'Observador';
-        addLiveLog('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false, {
+        log('participant_leave', `${c.label || id}: saiu da live (${roleLabel})`, false, {
           deviceType: c.deviceType,
           participantRole: c.role === 'owner' ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
           isController: id === commandOwnerId,
@@ -611,7 +616,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return () => {
       if (controllersDebounceRef.current) clearTimeout(controllersDebounceRef.current);
     };
-  }, [gameState.controllers, gameState.isMirroringActive, gameState.isLiveClosed, addLiveLog]);
+  }, [gameState.controllers, gameState.isMirroringActive, gameState.isLiveClosed]); // addLiveLog excluído intencionalmente — lido via ref para não reiniciar o debounce a cada render
 
   // ── Partida encerrada ─────────────────────────────────────────────────────
   const prevIsMatchOverRef = useRef(gameState.isMatchOver);
