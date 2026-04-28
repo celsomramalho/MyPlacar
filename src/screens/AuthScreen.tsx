@@ -671,15 +671,13 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
       if (userAuthMethod === 'pin' || !firebaseEmailSent) {
         setStatusText('Enviando dados de acesso por e-mail...');
-        const appBaseUrl = (window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost')) 
-          ? window.location.origin 
-          : (appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl);
 
         const emailSent = await emailService.sendEmail('recovery', {
           to_name: userName,
           email: cleanEmail,
           pin_code: userPin || undefined,
-          app_access_link: appBaseUrl,
+          reset_link: resetLink,
+          app_access_link: currentOrigin,
         });
 
         if (!emailSent && !firebaseEmailSent) {

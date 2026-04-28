@@ -125,7 +125,7 @@ const App: React.FC = () => {
     if (initialSpectatorMatchId || initialSpectatorPin) return 'spectator';
     
     const params = getUrlParams();
-    if (params.get('mode') === 'resetPassword') return 'auth';
+    if (params.get('mode') === 'resetPassword' || params.get('oobCode')) return 'auth';
 
     // Auto-login: se houver perfil salvo válido e completo, pula o AuthScreen
     try {
@@ -773,15 +773,18 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (userProfile.email && userProfile.pin) {
+      const params = getUrlParams();
+      const isResetting = params.get('mode') === 'resetPassword' || params.get('oobCode');
+      
       const pendingJoin = localStorage.getItem('myPlacarPendingJoinEvent');
       if (pendingJoin) {
           handleJoinTournament(pendingJoin, true, userProfile);
           localStorage.removeItem('myPlacarPendingJoinEvent');
-      } else if (currentScreen === 'auth') {
+      } else if (currentScreen === 'auth' && !isResetting) {
           setCurrentScreen('settings');
       }
     }
-  }, [userProfile.email, userProfile.pin]);
+  }, [userProfile.email, userProfile.pin, currentScreen]);
 
   const handleCheckUpdate = useCallback(async () => {
     if (!navigator.onLine) return false;
