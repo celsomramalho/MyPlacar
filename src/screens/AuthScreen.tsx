@@ -636,18 +636,27 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userUid = userData?.uid || userSnap.id;
 
       let firebaseEmailSent = false;
-      const isDev = window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost');
+      const hostname = window.location.hostname;
+      const isPrivateDev = hostname.startsWith('ais-dev-');
+      const isPublicShared = hostname.startsWith('ais-pre-');
+      const isDevEnv = hostname.includes('run.app') || hostname === 'localhost' || hostname === '127.0.0.1';
       
       let currentOrigin = window.location.origin;
       
-      // Ajuste para ambiente AI Studio: o link no e-mail funciona melhor com o prefixo 'ais-pre'
-      if (isDev && currentOrigin.includes('ais-dev-')) {
+      // Ajuste para ambiente AI Studio: o link no e-mail deve SEMPRE apontar para um domínio público.
+      // ais-dev- é restrito. ais-pre- é público.
+      if (isPrivateDev) {
         currentOrigin = currentOrigin.replace('ais-dev-', 'ais-pre-');
-      } else if (!isDev) {
+      } else if (!isDevEnv && !isPublicShared) {
+        // Se não for ambiente de dev/preview do AI Studio, assume o domínio de produção
         currentOrigin = "https://myplacar.app.br";
       }
       
       const resetLink = `${currentOrigin}/?mode=resetPassword&email=${encodeURIComponent(cleanEmail)}`;
+
+      if (isPrivateDev) {
+        setStatusText('Atenção: Gerando link público (ais-pre)...');
+      }
 
       // Usuários com senha → gera link de reset via Firebase mas envia pelo SES
       if (userAuthMethod === 'password') {
@@ -670,8 +679,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       }
 
       if (userAuthMethod === 'pin' || !firebaseEmailSent) {
-        setStatusText('Enviando dados de acesso por e-mail...');
-
+        setStatusText('Enviando dados de acesso...');
+        
         const emailSent = await emailService.sendEmail('recovery', {
           to_name: userName,
           email: cleanEmail,

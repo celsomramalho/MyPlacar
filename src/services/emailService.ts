@@ -4,13 +4,13 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 const ses = new SESClient({
   region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
   credentials: {
-    accessKeyId:     import.meta.env.VITE_AWS_ACCESS_KEY_ID,
+    accessKeyId:     import.meta.env.VITE_AWS_ACCESS_KEY || import.meta.env.VITE_AWS_ACCESS_KEY_ID,
     secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY,
   },
 });
 
-const FROM = 'MyPlacar <no-reply@myplacar.app.br>';
-const REPLY_TO = 'suporte@myplacar.app.br';
+const FROM = 'MyPlacar <celso@myplacar.app.br>';
+const REPLY_TO = 'celso@myplacar.app.br';
 
 // ─── Templates ───────────────────────────────────────────────────────────────
 
@@ -113,9 +113,33 @@ const buildRecoveryEmail = (params: {
   };
 };
 
+const buildAnnouncementEmail = (params: {
+  to_name: string;
+  title: string;
+  message: string;
+  app_url: string;
+}): { subject: string; html: string; text: string } => ({
+  subject: params.title,
+  html: `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff">
+      <img src="${params.app_url}/logo192.png" width="48" alt="MyPlacar" style="margin-bottom:24px"/>
+      <h2 style="color:#1e3a5f;margin:0 0 16px">${params.title}</h2>
+      <div style="color:#444;line-height:1.6;margin-bottom:32px">
+        ${params.message.replace(/\n/g, '<br>')}
+      </div>
+      <a href="${params.app_url}"
+         style="display:block;background:#2563eb;color:#fff;text-decoration:none;border-radius:10px;padding:14px;text-align:center;font-weight:700;font-size:16px;margin-bottom:24px">
+        Acessar o MyPlacar
+      </a>
+      <p style="color:#aaa;font-size:12px;margin:0">Enviado por MyPlacar Notification System</p>
+    </div>
+  `,
+  text: `${params.title}\n\n${params.message}\n\nAcesse: ${params.app_url}`,
+});
+
 // ─── Função principal ─────────────────────────────────────────────────────────
 
-type EmailTemplate = 'verification' | 'welcome' | 'recovery';
+type EmailTemplate = 'verification' | 'welcome' | 'recovery' | 'announcement';
 
 type TemplateParams = {
   verification: {
@@ -138,6 +162,13 @@ type TemplateParams = {
     reset_link?: string;
     app_access_link: string;
   };
+  announcement: {
+    to_name: string;
+    email: string;
+    title: string;
+    message: string;
+    app_url: string;
+  };
 };
 
 export const emailService = {
@@ -152,8 +183,10 @@ export const emailService = {
         content = buildVerificationEmail(params as TemplateParams['verification']);
       } else if (template === 'welcome') {
         content = buildWelcomeEmail(params as TemplateParams['welcome']);
-      } else {
+      } else if (template === 'recovery') {
         content = buildRecoveryEmail(params as TemplateParams['recovery']);
+      } else {
+        content = buildAnnouncementEmail(params as TemplateParams['announcement']);
       }
 
       const command = new SendEmailCommand({
