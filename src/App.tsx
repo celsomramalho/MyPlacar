@@ -123,6 +123,10 @@ const App: React.FC = () => {
   
   const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
     if (initialSpectatorMatchId || initialSpectatorPin) return 'spectator';
+    
+    const params = getUrlParams();
+    if (params.get('mode') === 'resetPassword') return 'auth';
+
     // Auto-login: se houver perfil salvo válido e completo, pula o AuthScreen
     try {
       const saved = localStorage.getItem('myPlacarUserProfile');
@@ -161,7 +165,10 @@ const App: React.FC = () => {
       if (snap.exists()) {
         const data = snap.data();
         if (data.appUrl) {
-          setAppUrl(data.appUrl);
+          const isDev = window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost');
+          if (!isDev) {
+            setAppUrl(data.appUrl);
+          }
         }
       }
     });
@@ -187,6 +194,14 @@ const App: React.FC = () => {
   const [activeCloudMatch, setActiveCloudMatch] = useState<{id: string, sport: string} | null>(null);
   const [cloudLiveExists, setCloudLiveExists] = useState<boolean>(false);
   const [activeLives, setActiveLives] = useState<GameState[]>([]);
+
+  useEffect(() => {
+    // Detecta se é um link de reset de senha e força a tela de auth
+    const params = getUrlParams();
+    if (params.get('mode') === 'resetPassword' || params.get('oobCode')) {
+      setCurrentScreen('auth');
+    }
+  }, []);
   const [unreadCommsCount, setUnreadCommsCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [appUrl, setAppUrl] = useState(() => {

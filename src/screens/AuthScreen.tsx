@@ -636,8 +636,18 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userUid = userData?.uid || userSnap.id;
 
       let firebaseEmailSent = false;
-      const appBaseUrlForLink = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
-      const resetLink = `${appBaseUrlForLink}/?mode=resetPassword&email=${encodeURIComponent(cleanEmail)}`;
+      const isDev = window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost');
+      
+      let currentOrigin = window.location.origin;
+      
+      // Ajuste para ambiente AI Studio: o link no e-mail funciona melhor com o prefixo 'ais-pre'
+      if (isDev && currentOrigin.includes('ais-dev-')) {
+        currentOrigin = currentOrigin.replace('ais-dev-', 'ais-pre-');
+      } else if (!isDev) {
+        currentOrigin = "https://myplacar.app.br";
+      }
+      
+      const resetLink = `${currentOrigin}/?mode=resetPassword&email=${encodeURIComponent(cleanEmail)}`;
 
       // Usuários com senha → gera link de reset via Firebase mas envia pelo SES
       if (userAuthMethod === 'password') {
@@ -661,7 +671,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
       if (userAuthMethod === 'pin' || !firebaseEmailSent) {
         setStatusText('Enviando dados de acesso por e-mail...');
-        const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+        const appBaseUrl = (window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost')) 
+          ? window.location.origin 
+          : (appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl);
+
         const emailSent = await emailService.sendEmail('recovery', {
           to_name: userName,
           email: cleanEmail,
@@ -682,16 +695,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             userUid
           });
         }
-      } else if (firebaseEmailSent) {
-        // Usuário com senha — reenviar pelo SES com o link gerado pelo Firebase
-        const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
-        await emailService.sendEmail('recovery', {
-          to_name: userName,
-          email: cleanEmail,
-          reset_link: resetLink,
-          app_access_link: appBaseUrl,
-        });
-      }
+      } 
+      // Removido o reenvio de reset_link via SES pois falta o oobCode que o Firebase gera internamente.
+      // O usuário receberá o e-mail oficial do Firebase que já contém o link funcional.
 
       setMode('recovery_sent');
       setShowRecoveryInfoModal(true);

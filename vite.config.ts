@@ -60,6 +60,7 @@ function htmlVersionPlugin(): Plugin {
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  appType: 'spa',
   plugins: [
     react(),
     htmlVersionPlugin(),
@@ -81,7 +82,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 3000,
   },
   optimizeDeps: {
     include: [

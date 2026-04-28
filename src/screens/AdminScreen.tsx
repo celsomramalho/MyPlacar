@@ -218,7 +218,12 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         if (data.voiceCommands) setVoiceCommands(data.voiceCommands);
         if (data.errorSoundType) setErrorSound(data.errorSoundType);
         if (data.appVersion) setRemoteAppVersion(data.appVersion);
-        if (data.appUrl) setAppUrl(data.appUrl);
+        if (data.appUrl) {
+          const isDev = window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost');
+          if (!isDev) {
+            setAppUrl(data.appUrl);
+          }
+        }
         if (data.buckets && Array.isArray(data.buckets)) {
           setBuckets(data.buckets.includes(defaultBucketName) ? data.buckets : [defaultBucketName, ...data.buckets]);
         }
