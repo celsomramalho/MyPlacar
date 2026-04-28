@@ -636,7 +636,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userUid = userData?.uid || userSnap.id;
 
       let firebaseEmailSent = false;
-      const resetLink = `https://myplacar.app.br/?mode=resetPassword&email=${encodeURIComponent(cleanEmail)}`;
+      const appBaseUrlForLink = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+      const resetLink = `${appBaseUrlForLink}/?mode=resetPassword&email=${encodeURIComponent(cleanEmail)}`;
 
       // Usuários com senha → gera link de reset via Firebase mas envia pelo SES
       if (userAuthMethod === 'password') {

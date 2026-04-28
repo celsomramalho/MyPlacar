@@ -189,7 +189,15 @@ const App: React.FC = () => {
   const [activeLives, setActiveLives] = useState<GameState[]>([]);
   const [unreadCommsCount, setUnreadCommsCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [appUrl, setAppUrl] = useState("https://my-placar.vercel.app/");
+  const [appUrl, setAppUrl] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.origin) {
+      // Se estiver no AI Studio ou dev environment, usa o origin atual
+      if (window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost')) {
+        return window.location.origin;
+      }
+    }
+    return "https://myplacar.app.br/"; // Valor padrão de produção
+  });
 
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     const profile = safeJsonParse('myPlacarUserProfile', { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' });

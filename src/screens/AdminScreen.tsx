@@ -83,7 +83,14 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [remoteAppVersion, setRemoteAppVersion] = useState(LOCAL_VERSION);
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isVoiceSaved, setIsVoiceSaved] = useState(true);
-  const [appUrl, setAppUrl] = useState("https://myplacar.app.br/");
+  const [appUrl, setAppUrl] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.origin) {
+      if (window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost')) {
+        return window.location.origin;
+      }
+    }
+    return "https://myplacar.app.br/";
+  });
 
   const [userSearch, setUserSearch] = useState('');
   const [foundUsers, setFoundUsers] = useState<UserProfile[]>([]);
