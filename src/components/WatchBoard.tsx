@@ -24,6 +24,7 @@ interface WatchBoardProps {
   isCommandOwner: boolean;
   onResetMatch?: () => void;
   onOpenLiveControl?: () => void;
+  onSyncScoreboard?: () => Promise<void>;
   remoteActionFeedback: string | null;
   p1WonSets: number;
   p2WonSets: number;
@@ -72,7 +73,7 @@ const TEXT_COLORS: Record<string, string> = {
 export const WatchBoard: React.FC<WatchBoardProps> = ({
   gameState, onScoreUpdate, onSwitchServer, onBack, onConfirmMatch,
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
-  isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, remoteActionFeedback,
+  isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
   isEmbedded, scorePressProgress, cloudLiveExists, role
 }) => {
@@ -279,16 +280,29 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         </div>
         
         <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
-          <button onPointerDown={() => { resetDimTimer(); handleUndoWithLog(); }} disabled={!isCommandOwner} className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white active:scale-90 border border-white/5"><RotateCcw size={34} strokeWidth={4} /></button>
-          <button 
-            disabled={!isCommandOwner} 
-            onPointerDown={() => onScoreUpdate(gameState.server, 'ace', 'cb')} 
-            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
-              SOLID_COLORS[gameState.server === 1 ? (gameState.p1.color || 'azul') : (gameState.p2.color || 'vermelho')]
+          {/* Undo — desabilitado para observadores em live ativa */}
+          <button
+            onPointerDown={() => { if (!isCommandOwner) return; resetDimTimer(); handleUndoWithLog(); }}
+            disabled={!isCommandOwner}
+            className={`w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white border border-white/5 transition-all ${
+              !isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'
             }`}
+          >
+            <RotateCcw size={34} strokeWidth={4} />
+          </button>
+
+          {/* Ace — desabilitado para observadores em live ativa */}
+          <button
+            disabled={!isCommandOwner}
+            onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(gameState.server, 'ace', 'cb'); }}
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
+              SOLID_COLORS[gameState.server === 1 ? (gameState.p1.color || 'azul') : (gameState.p2.color || 'vermelho')]
+            } ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
           >
             <Zap size={30} fill="currentColor" />
           </button>
+
+          {/* Botão Live/Modal — sempre ativo */}
           <div
             role="button"
             onPointerDown={() => { resetDimTimer(); setIsMenuOpen(true); }}
@@ -303,21 +317,25 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
             }
           </div>
-          <button 
-            disabled={!isCommandOwner} 
-            onPointerDown={() => onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb')} 
-            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all ${
+
+          {/* Falta — desabilitado para observadores em live ativa */}
+          <button
+            disabled={!isCommandOwner}
+            onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb'); }}
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
               SOLID_COLORS[gameState.server === 1 ? (gameState.p2.color || 'vermelho') : (gameState.p1.color || 'azul')]
-            }`}
+            } ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
           >
             <X size={34} strokeWidth={5} />
           </button>
+
           {dimProgress > 0 && !isDimmed && (
             <div className="absolute bottom-0 left-0 right-0 h-2 bg-white/20 pointer-events-none">
               <div className="h-full bg-white transition-none" style={{ width: `${dimProgress}%` }} />
             </div>
           )}
         </div>
+
 
         {/* Bottom sheet — menu do botão wifi/live */}
         {isMenuOpen && (

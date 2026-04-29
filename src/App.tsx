@@ -30,7 +30,7 @@ import { findUserByPin, getDb, clearFirestoreCache, deleteCloudMatch, deleteClou
 import { getAuthInstance } from '@infra/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore, deleteField, FieldValue } from 'firebase/firestore';
-import { AlertCircle, Trash2, RotateCw, Wifi, X, CheckCircle, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Trophy, WifiOff } from 'lucide-react';
+import { AlertCircle, Trash2, RotateCw, RefreshCw, Wifi, X, CheckCircle, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Trophy, WifiOff } from 'lucide-react';
 import { LiveIndicator } from './components/LiveIndicator.tsx';
 import { useAppLogger } from './hooks/useAppLogger.ts';
 import { useInstallPwa } from './hooks/useInstallPwa.ts';
@@ -2896,6 +2896,68 @@ const App: React.FC = () => {
     });
   }, [gameState, startGame, setLiveLogs, setVoiceLogs]);
 
+  // ── Sincronizar Placar ────────────────────────────────────────────────────
+  // Controller (owner/judge): faz push do gameState atual para o Firestore.
+  // Observer: faz pull do estado mais recente do Firestore e aplica localmente.
+  // Ambos registram a ação na cronologia da partida (liveLogs).
+  const handleSyncScoreboard = useCallback(async () => {
+    if (!gameState || !gameState.isMirroringActive || gameState.isLiveClosed) return;
+    if (!navigator.onLine) {
+      setModalConfig({ title: "Sem conexão", message: "Verifique sua conexão com a internet e tente novamente.", onConfirm: () => setModalConfig(null) });
+      return;
+    }
+    const db = getDb();
+    if (!db) return;
+    const myPin = userProfile.pin?.toUpperCase();
+    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+    const targetPin = (judgeMatch && judgeMatch.ownerPin)
+      ? judgeMatch.ownerPin.toUpperCase()
+      : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+    if (!targetPin) return;
+
+    const isController = gameState.commandOwnerId === deviceId;
+
+    try {
+      if (isController) {
+        // ── Controller: push estado atual → Firestore ──────────────────────
+        const stateToSync = sanitizeForFirestore({ ...gameState, controllers: undefined });
+        if (stateToSync) {
+          await setDoc(doc(db, "live_matches", targetPin), { ...stateToSync, lastActivityAt: Date.now() }, { merge: true });
+        }
+      } else {
+        // ── Observer/non-controller: pull estado mais recente ← Firestore ──
+        const snap = await getDoc(doc(db, "live_matches", targetPin));
+        if (snap.exists()) {
+          const cloudData = snap.data() as GameState;
+          // Aplica o estado da nuvem preservando campos locais de controle
+          setGameState(prev => prev ? {
+            ...prev,
+            ...cloudData,
+            // Preserva campos de presença local — não sobrescreve com dados da nuvem
+            commandOwnerId: cloudData.commandOwnerId ?? prev.commandOwnerId,
+          } : cloudData);
+        }
+      }
+
+      // Registra na cronologia da partida
+      setLiveLogs(prev => {
+        const entry: LiveLogEntry = {
+          id: Math.random().toString(36).substr(2, 9),
+          time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+          timestamp: Date.now(),
+          type: 'score',
+          text: `↺ Placar sincronizado (${isController ? 'enviado' : 'recebido'}) — ${gameState.p1.name} ${gameState.p1.score} × ${gameState.p2.score} ${gameState.p2.name}`,
+          ok: true,
+          isController,
+        };
+        return [entry, ...(prev || [])].slice(0, 60);
+      });
+      setShowLiveControlOverlay(false);
+    } catch (_e) {
+      setModalConfig({ title: "Erro ao sincronizar", message: "Não foi possível sincronizar o placar. Tente novamente.", onConfirm: () => setModalConfig(null) });
+    }
+  }, [gameState, userProfile.pin, activeLives, isOriginalOwner, deviceId, setLiveLogs]);
+
   return (
     <ErrorBoundary>
       <div className="min-h-screen w-full bg-gray-50 flex flex-col">
@@ -2974,6 +3036,14 @@ const App: React.FC = () => {
                         {livePapel === 'owner' ? <Crown size={24} /> : livePapel === 'judge' ? <UserCheck size={24} /> : <Eye size={24} />} Controlar
                       </button>
                     )}
+
+                    {/* ── Sincronizar Placar — disponível para todos os participantes ── */}
+                    <button
+                      onClick={handleSyncScoreboard}
+                      className="w-full py-4 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl font-black text-sm active:scale-95 flex items-center justify-center gap-2 transition-all hover:bg-emerald-100"
+                    >
+                      <RefreshCw size={18} /> Sincronizar Placar
+                    </button>
 
                     {/* ── Gestão (só proprietário) ───────────────────────── */}
                     {livePapel === 'owner' && (
@@ -3308,8 +3378,6 @@ const App: React.FC = () => {
         const myPin = userProfile.pin?.toUpperCase();
         const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
         const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
-        // E1: confirmar resultado = encerrar a live para todos.
-        // 1) grava isLiveClosed:true → propaga notificação a todos via onSnapshot.
         // 2) após 4s deleta o documento do Firestore.
         if (db && targetPin && navigator.onLine) {
           try {

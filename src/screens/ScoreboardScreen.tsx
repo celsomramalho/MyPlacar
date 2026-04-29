@@ -88,6 +88,7 @@ interface Props {
   currentDeviceId?: string;
   currentDeviceFullLabel?: string;
   onOpenLiveControl?: () => void;
+  onSyncScoreboard?: () => Promise<void>;
   onResetMatch?: () => void;
   onOpenMenu?: () => void;
   isOfflineMode?: boolean;
@@ -300,7 +301,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive } = props;
 
   // Usar props se fornecidas, caso contrário usar estado local (fallback para compatibilidade)
   const effectiveLiveLogs = liveLogs !== undefined ? liveLogs : [];
@@ -1018,7 +1019,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
         isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
         handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
-        isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+        isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} onSyncScoreboard={onSyncScoreboard} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
         isOfflineMode={isOfflineMode}
         correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
         pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
@@ -1210,7 +1211,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
              onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
              isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
              handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
-             isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+             isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} onSyncScoreboard={onSyncScoreboard} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
              isOfflineMode={isOfflineMode}
              correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
              pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
