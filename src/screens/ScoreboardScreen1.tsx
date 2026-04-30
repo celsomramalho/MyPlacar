@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw } from 'lucide-react';
+import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2 } from 'lucide-react';
 import { getDeviceType } from '../utils/device.ts';
 import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
@@ -11,7 +11,6 @@ import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } 
 import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { isTennisTieBreak } from '../utils/tennisEngine';
-import { getTennisServerSide } from '../utils/tennisEngine';
 import { isWatchDevice } from '../utils/device';
 import { SPORT_LIST } from '../constants';
 import { getDb } from '@infra/firebase';
@@ -1227,211 +1226,22 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
              </div>
            </div>
 
+           <WatchBoard 
+             gameState={gameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
+             onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
+             isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
+             handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
+             isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} onSyncScoreboard={onSyncScoreboard} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+             isOfflineMode={isOfflineMode}
+             correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
+             pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
+             handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
+             isEmbedded
+             scorePressProgress={scorePressProgress}
+             cloudLiveExists={cloudLiveExists}
+             role={indicatorRole || role}
+           />
         </div>
-
-        {/* ── NOVO BLOCO: ScoreboardDisplay inline (ponta a ponta) ─────────── */}
-        {/* Este bloco substitui visualmente o placar superior. Após validação,  */}
-        {/* o bloco original acima (card com WatchBoard) será removido.          */}
-        {(() => {
-          const BG_COLORS_NEW: Record<string, string> = {
-            amarelo: 'bg-yellow-600', azul: 'bg-blue-700', laranja: 'bg-orange-600',
-            marrom: 'bg-amber-900', lilas: 'bg-violet-700', verde: 'bg-green-700',
-            vermelho: 'bg-red-700', roxo: 'bg-purple-700',
-          };
-          const SOLID_COLORS_NEW: Record<string, string> = {
-            amarelo: 'bg-yellow-500 text-white', azul: 'bg-blue-600 text-white',
-            laranja: 'bg-orange-500 text-white', marrom: 'bg-amber-800 text-white',
-            lilas: 'bg-violet-500 text-white', verde: 'bg-green-600 text-white',
-            vermelho: 'bg-red-600 text-white', roxo: 'bg-purple-600 text-white',
-          };
-          const TEXT_COLORS_NEW: Record<string, string> = {
-            azul: 'text-blue-600', vermelho: 'text-red-600', verde: 'text-green-600',
-            amarelo: 'text-yellow-600', laranja: 'text-orange-600',
-            lilas: 'text-violet-600', marrom: 'text-amber-800', roxo: 'text-purple-600',
-          };
-          const [newMenuOpen, setNewMenuOpen] = React.useState(false);
-          const isLiveActiveNew = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
-          const p1Color = gameState.p1.color || 'azul';
-          const p2Color = gameState.p2.color || 'vermelho';
-
-          const renderServerIndicatorNew = (team: 1 | 2) => {
-            const sport = gameState.matchConfig.sportType;
-            if (sport !== 'pickleball' && sport !== 'tennis' && sport !== 'beach-tennis') return null;
-            const isServing = gameState.server === team;
-            const isDoubles = gameState.matchConfig.isDoubles;
-            const pkl = gameState.pickleball;
-            const srvNum: 1 | 2 = pkl ? pkl.server.serverNumber : (gameState.servingOrderOffset >= 2 ? 2 : 1);
-            const label = isDoubles ? `S${srvNum}` : 'S';
-            const side = (sport === 'pickleball' && pkl) ? pkl.server.side : getTennisServerSide(gameState);
-            const justifyContent = side === 'even' ? 'flex-end' : 'flex-start';
-            const posClass = team === 1 ? 'bottom-3' : 'top-3';
-            const textColorClass = team === 1 ? TEXT_COLORS_NEW[p1Color] : TEXT_COLORS_NEW[p2Color];
-            return (
-              <div className={`absolute ${posClass} left-3 right-3 flex z-20 pointer-events-none`} style={{ justifyContent }}>
-                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center"
-                  style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.4)', opacity: isServing ? 1 : 0, transition: 'opacity 150ms' }}>
-                  <span className={`text-sm font-black leading-none ${textColorClass}`}>{label}</span>
-                </div>
-              </div>
-            );
-          };
-
-          // ── renderSetHistory inline ──────────────────────────────────────
-          const renderSetHistoryNew = (team: 1 | 2) => {
-            const p = team === 1 ? gameState.p1 : gameState.p2;
-            const currentSet = gameState.currentSet ?? 0;
-            const pastSets = (p?.sets || []).slice(0, currentSet);
-            return (
-              <div className="flex gap-2 items-end">
-                {pastSets.map((games: number, i: number) => (
-                  <span key={i} className="font-black leading-none text-white text-5xl opacity-50">{games}</span>
-                ))}
-                {pastSets.length > 0 && (
-                  <span className="font-black leading-none text-white/30 text-5xl select-none">|</span>
-                )}
-                <span className="font-black leading-none text-[#bef264] text-5xl">{p?.games ?? 0}</span>
-              </div>
-            );
-          };
-
-          // ── renderTeamBlock inline ───────────────────────────────────────
-          const renderTeamBlockNew = (team: 1 | 2) => {
-            const p = team === 1 ? gameState.p1 : gameState.p2;
-            const color = p.color || (team === 1 ? 'azul' : 'vermelho');
-            const isServing = gameState.server === team;
-            const pkl = gameState.pickleball;
-            const isDoubles = gameState.matchConfig.isDoubles;
-            const srvNum: 1 | 2 = pkl
-              ? pkl.server.serverNumber
-              : (gameState.servingOrderOffset >= 2 ? 2 : 1);
-            const p1IsServer = isServing && (!isDoubles || srvNum === 1);
-            const p2IsServer = isServing && isDoubles && srvNum === 2;
-
-            const names = (
-              <div className="z-10">
-                <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p1IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white'}`}>{p.name}</p>
-                {isDoubles && p.partnerName && (
-                  <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p2IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white/80'}`}>{p.partnerName}</p>
-                )}
-              </div>
-            );
-
-            const games = <div className="z-10">{renderSetHistoryNew(team)}</div>;
-
-            return (
-              <div
-                className={`flex-1 ${BG_COLORS_NEW[color]} relative flex flex-col p-5 overflow-hidden`}
-                onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', team)}
-                onPointerMove={handlePointerMove}
-                onPointerUp={() => handleScoreCardPointerUp('game', team)}
-              >
-                {scorePressProgress?.player === team && scorePressProgress?.type === 'game' && (
-                  <div className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} />
-                )}
-                {/* Número grande */}
-                <div className={`absolute left-0 right-0 flex justify-center z-0 ${team === 1 ? 'bottom-3 items-end' : 'top-3 items-start'}`}>
-                  <span
-                    className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
-                    style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}
-                  >
-                    {p.score}
-                  </span>
-                </div>
-                {/* Time 1: games no topo + nomes abaixo */}
-                {team === 1 && (
-                  <div className="z-10 flex flex-col gap-1">
-                    {games}
-                    {names}
-                  </div>
-                )}
-                {/* Time 2: nomes + games no fundo */}
-                {team === 2 && (
-                  <div className="z-10 flex flex-col gap-1 mt-auto">
-                    {names}
-                    {games}
-                  </div>
-                )}
-                {/* Indicador de sacador */}
-                {renderServerIndicatorNew(team)}
-              </div>
-            );
-          };
-
-          return (
-            <div className="-mx-4 mt-6 bg-black flex flex-col select-none touch-none overflow-hidden" style={{ height: '620px' }}>
-              {/* Time 1 */}
-              {renderTeamBlockNew(1)}
-
-              {/* Faixa central: 4 botões idênticos ao WatchBoard */}
-              <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
-                <button
-                  onPointerDown={() => { if (!isCommandOwner) return; handleUndoWithLog(); }}
-                  disabled={!isCommandOwner}
-                  className={`w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white border border-white/5 transition-all ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
-                >
-                  <RotateCcw size={34} strokeWidth={4} />
-                </button>
-                <button
-                  disabled={!isCommandOwner}
-                  onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(gameState.server, 'ace', 'cb'); }}
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${SOLID_COLORS_NEW[gameState.server === 1 ? p1Color : p2Color]} ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
-                >
-                  <Zap size={30} fill="currentColor" />
-                </button>
-                <div
-                  role="button"
-                  onPointerDown={() => setNewMenuOpen(true)}
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${isLiveActiveNew ? 'border-emerald-400 bg-white/5 text-emerald-400' : isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' : 'border-white bg-emerald-500 text-white'}`}
-                >
-                  {isLiveActiveNew
-                    ? <LiveIndicator role={indicatorRole || role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-full h-full pointer-events-none" />
-                    : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
-                  }
-                </div>
-                <button
-                  disabled={!isCommandOwner}
-                  onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb'); }}
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${SOLID_COLORS_NEW[gameState.server === 1 ? p2Color : p1Color]} ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
-                >
-                  <X size={34} strokeWidth={5} />
-                </button>
-              </div>
-
-              {/* Time 2 */}
-              {renderTeamBlockNew(2)}
-
-              {/* Bottom sheet modal */}
-              {newMenuOpen && (
-                <div className="fixed inset-0 z-[999999] flex flex-col justify-end" onPointerDown={() => setNewMenuOpen(false)}>
-                  <div className="bg-[#1e293b] rounded-t-3xl border-t border-white/10 p-4 space-y-2" onPointerDown={e => e.stopPropagation()}>
-                    <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3" />
-                    {isLiveActiveNew && (
-                      <div role="button" onPointerDown={() => { setNewMenuOpen(false); onOpenLiveControl?.(); }}
-                        className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer">
-                        <LiveIndicator role={indicatorRole || role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-8 h-8 shrink-0" />
-                        <span className="font-black text-sm">Live / Controle</span>
-                      </div>
-                    )}
-                    <button onPointerDown={() => { setNewMenuOpen(false); onBack(); }}
-                      className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors">
-                      <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl"><Settings size={18} /></div>
-                      <span className="font-black text-sm">Regras</span>
-                    </button>
-                    {isCommandOwner && onResetMatch && (
-                      <button onPointerDown={() => { setNewMenuOpen(false); onResetMatch(); }}
-                        className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-red-500/20 active:bg-red-500/30 text-red-400 transition-colors">
-                        <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-red-500/30 rounded-xl"><RefreshCw size={18} /></div>
-                        <span className="font-black text-sm">Zerar partida</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-        {/* ── FIM NOVO BLOCO ──────────────────────────────────────────────────── */}
-
         {!isOfflineMode && (
           <div className="flex flex-col gap-5 mt-8">
             <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">

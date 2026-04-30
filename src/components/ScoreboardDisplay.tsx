@@ -116,9 +116,10 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
     const isDoubles = gameState.matchConfig.isDoubles;
     const pkl = gameState.pickleball;
 
+    const offset = gameState.servingOrderOffset;
     const srvNum: 1 | 2 = pkl
       ? pkl.server.serverNumber
-      : (gameState.servingOrderOffset >= 2 ? 2 : 1);
+      : (team === 1 ? (offset === 2 ? 2 : 1) : (offset === 3 ? 2 : 1));
     const label = isDoubles ? `S${srvNum}` : 'S';
 
     const side: CourtSide = (sport === 'pickleball' && pkl)
@@ -205,18 +206,19 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
 
     const pkl = gameState.pickleball;
     const isDoubles = gameState.matchConfig.isDoubles;
+    const offset = gameState.servingOrderOffset;
     const srvNum: 1 | 2 = pkl
       ? pkl.server.serverNumber
-      : (gameState.servingOrderOffset >= 2 ? 2 : 1);
+      : (team === 1 ? (offset === 2 ? 2 : 1) : (offset === 3 ? 2 : 1));
     // Em duplas: só o jogador que está sacando recebe fundo amarelo
     const p1IsServer = isServing && (!isDoubles || srvNum === 1);
     const p2IsServer = isServing && isDoubles && srvNum === 2;
 
     const names = (
       <div className="z-10">
-        <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p1IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white'}`}>{p.name}</p>
+        <p className={`font-black text-2xl leading-tight uppercase px-1 rounded ${p1IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white'}`}>{p.name}</p>
         {p.partnerName && (
-          <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p2IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white/80'}`}>{p.partnerName}</p>
+          <p className={`font-black text-2xl leading-tight uppercase px-1 rounded ${p2IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white/80'}`}>{p.partnerName}</p>
         )}
       </div>
     );

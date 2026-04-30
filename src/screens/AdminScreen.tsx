@@ -11,7 +11,8 @@ import { Toggle } from '../components/Toggle.tsx';
 import { applyGoldenRule, formatPortugueseName } from '../utils/formatters.ts';
 import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
 import type { MatchHistoryItem } from '@modules/history';
-import { VoiceCommands, ErrorSoundType, UserProfile, TournamentEvent } from '../types.ts';
+import type { TournamentEvent } from '@modules/events';
+import { VoiceCommands, ErrorSoundType, UserProfile } from '../types.ts';
 import { playErrorBeep, unlockAudio } from '../hooks/useScoreAnnouncer.ts';
 
 import { CommunicationsPanel } from '../components/CommunicationsPanel.tsx';

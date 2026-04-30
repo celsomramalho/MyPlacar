@@ -7,15 +7,15 @@ import { AdminScreen } from './screens/AdminScreen.tsx';
 import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
 import { LocationScreen, clearCloudHistory, createHistoryItem, downloadHistoryBatch, fetchCloudHistoryCount, getUnsyncedHistory, persistLocalHistory, removeHistoryMatches, syncHistoryBatch } from '@modules/history';
 import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterPartnerByPin, createManualPartner, hasPartnerWithPin } from '@modules/partners';
-import { TournamentsScreen } from './screens/TournamentsScreen.tsx';
-import { EventDetailScreen } from './screens/EventDetailScreen.tsx';
+import { EventDetailScreen, TournamentsScreen, fetchRegisteredEvents, getActiveEventEntryDate, joinTournamentEvent, markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events';
 import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
 import { InstallPwaModal } from './components/InstallPwaModal.tsx';
 import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 // import { Input } from './components/Input.tsx'; // unused
 import type { Partner, QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
-import { GameState, MatchSettings, Screen, UserProfile, PointType, TournamentEvent, TournamentMatch, TournamentPair, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
+import type { EventRegistration, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events';
+import { GameState, MatchSettings, Screen, UserProfile, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
@@ -394,7 +394,7 @@ const App: React.FC = () => {
 
   const [activeEvent, setActiveEvent] = useState<TournamentEvent | null>(() => safeJsonParse('myPlacarActiveEvent', null));
   const [userEntryDate, setUserEntryDate] = useState<number | null>(null);
-  const [registeredEvents, setRegisteredEvents] = useState<Record<string, unknown>[]>(() => safeJsonParse('myPlacarRegisteredEvents', []));
+  const [registeredEvents, setRegisteredEvents] = useState<EventRegistration[]>(() => safeJsonParse('myPlacarRegisteredEvents', []) as EventRegistration[]);
 
   const matchHistoryRef = useRef<MatchHistoryItem[]>([]);
   const prevSettingsRef = useRef<MatchSettings | null>(null);
@@ -445,11 +445,9 @@ const App: React.FC = () => {
       localStorage.setItem('myPlacarActiveEvent', JSON.stringify(activeEvent));
       const db = getDb();
       if (db && userProfile.email && navigator.onLine) {
-        const entryRef = doc(db, "events", activeEvent.pin, "entries", userProfile.email.toLowerCase().trim());
-        getDoc(entryRef).then(snap => {
-          if (snap.exists()) setUserEntryDate(snap.data().joinedAt);
-          else setUserEntryDate(null);
-        });
+        getActiveEventEntryDate(db as Firestore, activeEvent.pin, userProfile.email)
+          .then(setUserEntryDate)
+          .catch(() => setUserEntryDate(null));
       }
     } else {
       localStorage.removeItem('myPlacarActiveEvent');
@@ -761,11 +759,8 @@ const App: React.FC = () => {
     const db = getDb();
     if (!db) return;
     try {
-      const q = query(collection(db, "user_registrations", email.toLowerCase().trim(), "events"));
-      const snap = await getDocs(q);
-      const list: Record<string, unknown>[] = [];
-      snap.forEach(d => list.push(d.data() as Record<string, unknown>));
-      setRegisteredEvents(list.sort((a, b) => (b.joinedAt as number) - (a.joinedAt as number)));
+      const list = await fetchRegisteredEvents(db as Firestore, email);
+      setRegisteredEvents(list);
     } catch (e) {
       console.error("Erro ao buscar inscrições:", e);
     }
@@ -1761,20 +1756,7 @@ const App: React.FC = () => {
        const db = getDb();
        if (db) {
           const res = `${state.p1.sets.join('/')}-${state.p2.sets.join('/')}`;
-          const winnerId = winnerTeam === 1 ? 'pair1' : 'pair2'; 
-          getDoc(doc(db, "events", state.tournamentPin)).then(snap => {
-             if (snap.exists()) {
-                const evData = snap.data();
-                const matches = (evData.matches || []) as TournamentMatch[];
-                const updatedMatches = matches.map(m => {
-                   if (m.id === state.tournamentMatchId) {
-                      return { ...m, status: 'finished', result: res, winnerPairId: winnerId === 'pair1' ? m.pair1Id : m.pair2Id };
-                   }
-                   return m;
-                });
-                updateDoc(doc(db, "events", state.tournamentPin!), { matches: updatedMatches });
-             }
-          });
+          markTournamentMatchFinished(db as Firestore, state.tournamentPin, state.tournamentMatchId, res, winnerTeam).catch(() => {});
        }
     }
 
@@ -1893,16 +1875,12 @@ const App: React.FC = () => {
           tournamentPin: event.pin
        };
        forceNew = true;
-       if (navigator.onLine) {
-          const db = getDb();
-          if (db) {
-             const updatedMatches = (event.matches || []).map(m => {
-                if (m.id === match.id) return { ...m, status: 'live' as const, ownerPin: userProfile.pin };
-                return m;
-             });
-             updateDoc(doc(db, "events", event.pin), { matches: updatedMatches });
-          }
-       }
+        if (navigator.onLine) {
+           const db = getDb();
+           if (db) {
+              markTournamentMatchLive(db as Firestore, event.pin, event.matches || [], match.id, userProfile.pin).catch(() => {});
+           }
+        }
     }
 
     if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
@@ -2560,43 +2538,22 @@ const App: React.FC = () => {
     }
     if (!activeProfile.email) return;
     try {
-      const snap = await getDoc(doc(db, "events", pin));
-      if (snap.exists() && snap.data().active) {
-        const eventData = { ...snap.data(), pin } as TournamentEvent;
-        const entryRef = doc(db, "events", pin, "entries", activeProfile.email.toLowerCase().trim());
-        const entrySnap = await getDoc(entryRef);
-        const now = Date.now();
-        if (!entrySnap.exists()) {
-           await setDoc(entryRef, {
-              email: activeProfile.email.toLowerCase().trim(),
-              name: activeProfile.name,
-              nickname: activeProfile.nickname,
-              pin: activeProfile.pin,
-              gender: activeProfile.gender || (activeProfile.nickname.toLowerCase().endsWith('a') ? 'F' : 'M'),
-              joinedAt: now
-           });
-        }
-        const userRegRef = doc(db, "user_registrations", activeProfile.email.toLowerCase().trim(), "events", pin);
-        await setDoc(userRegRef, {
-           pin,
-           name: eventData.name,
-           joinedAt: entrySnap.exists() ? entrySnap.data().joinedAt : now,
-           bannerUrl: eventData.bannerUrl || null
-        });
-        setUserEntryDate(entrySnap.exists() ? entrySnap.data().joinedAt : now);
-        setActiveEvent(eventData);
+      const joined = await joinTournamentEvent(db as Firestore, pin, activeProfile);
+      if (joined) {
+        setUserEntryDate(joined.joinedAt);
+        setActiveEvent(joined.event);
         setRegisteredEvents(prev => {
           if (prev.some(e => e.pin === pin)) return prev;
-          return [{ pin, name: eventData.name, joinedAt: entrySnap.exists() ? entrySnap.data().joinedAt : now, bannerUrl: eventData.bannerUrl }, ...prev];
+          return [joined.registration, ...prev];
         });
         setCurrentScreen('event-detail');
         if (!silent) {
            setModalConfig({ 
-             title: "Inscrição confirmada", 
-             message: `Você entrou no evento "${eventData.name}".`, 
-             variant: "success", 
-             icon: <CheckCircle className="text-green-500 w-16 h-16" />, 
-             onConfirm: () => setModalConfig(null) 
+              title: "Inscrição confirmada", 
+              message: `Você entrou no evento "${joined.event.name}".`, 
+              variant: "success", 
+              icon: <CheckCircle className="text-green-500 w-16 h-16" />, 
+              onConfirm: () => setModalConfig(null) 
            });
         }
       } else if (!silent) {

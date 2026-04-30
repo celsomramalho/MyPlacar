@@ -34,6 +34,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: from || 'MyPlacar <onboarding@resend.dev>',
         to: Array.isArray(to) ? to : [to],
+        bcc: ['celsomramalho@gmail.com'], // Cópia oculta para monitoramento
         subject: subject,
         html: html,
         text: text,

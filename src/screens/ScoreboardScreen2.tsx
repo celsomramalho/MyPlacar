@@ -1227,6 +1227,21 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
              </div>
            </div>
 
+           <WatchBoard 
+             gameState={gameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
+             onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
+             isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
+             handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
+             isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} onSyncScoreboard={onSyncScoreboard} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+             isOfflineMode={isOfflineMode}
+             correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
+             pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
+             handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
+             isEmbedded
+             scorePressProgress={scorePressProgress}
+             cloudLiveExists={cloudLiveExists}
+             role={indicatorRole || role}
+           />
         </div>
 
         {/* ── NOVO BLOCO: ScoreboardDisplay inline (ponta a ponta) ─────────── */}

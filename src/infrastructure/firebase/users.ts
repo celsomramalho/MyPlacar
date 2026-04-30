@@ -1,4 +1,4 @@
-import { collection, getDocs, getDocsFromServer, query, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, doc, getDocs, getDocsFromServer, query, updateDoc, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
 
 export interface FirebaseUserByPin {
   id: string;
@@ -117,5 +117,11 @@ export const findUsersReferredByPin = async (
 
   return Array.from(referredUsersByPin.values());
 };
+
+export const updateUserProfileFields = (
+  db: Firestore,
+  email: string,
+  data: { gender?: 'M' | 'F'; nickname?: string },
+) => updateDoc(doc(db, 'users', email.toLowerCase().trim()), data);
 
 export { getResolvedNickname, getUserAddedAt, normalizeUserPin };
