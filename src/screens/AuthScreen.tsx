@@ -554,7 +554,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         try {
           await createUserWithEmailAndPassword(auth, cleanEmail, storedPassword);
         } catch (e: any) {
-          console.log("Firebase Register Error Details:", { code: e.code, message: e.message, full: e });
+          console.error("DEBUG: Erro detalhado do Firebase ao criar usuário:", {
+            code: e.code,
+            message: e.message,
+            customData: e.customData,
+            fullError: e
+          });
           if (e.message?.includes('signup-are-blocked') || e.code === 'auth/operation-not-allowed') {
             throw new Error(`O cadastro de novos usuários está temporariamente desativado. Entre em contato com o suporte. (Erro: ${e.code})`);
           }
