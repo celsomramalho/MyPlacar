@@ -1,16 +1,5 @@
-import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
-
-// Credenciais via variáveis de ambiente do Vercel
-const ses = new SESClient({
-  region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId:     import.meta.env.VITE_AWS_ACCESS_KEY || import.meta.env.VITE_AWS_ACCESS_KEY_ID,
-    secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY,
-  },
-});
-
-const FROM = 'MyPlacar <celso@myplacar.app.br>';
-const REPLY_TO = 'celso@myplacar.app.br';
+const FROM = import.meta.env.VITE_RESEND_FROM || 'MyPlacar <onboarding@resend.dev>';
+const REPLY_TO = import.meta.env.VITE_AWS_SES_REPLY_TO || 'celso@myplacar.app.br';
 
 // ─── Templates ───────────────────────────────────────────────────────────────
 
@@ -71,7 +60,6 @@ const buildRecoveryEmail = (params: {
   reset_link?: string;
   app_access_link: string;
 }): { subject: string; html: string; text: string } => {
-  // Usuário com senha → envia link de reset
   if (params.reset_link) {
     return {
       subject: 'Redefinição de senha - MyPlacar',
@@ -91,7 +79,6 @@ const buildRecoveryEmail = (params: {
       text: `Olá, ${params.to_name}!\n\nLink para redefinir sua senha:\n${params.reset_link}\n\nExpira em 1 hora.`,
     };
   }
-  // Usuário com PIN → envia o PIN
   return {
     subject: 'Recuperação de acesso - MyPlacar',
     html: `
@@ -189,23 +176,38 @@ export const emailService = {
         content = buildAnnouncementEmail(params as TemplateParams['announcement']);
       }
 
-      const command = new SendEmailCommand({
-        Source: FROM,
-        ReplyToAddresses: [REPLY_TO],
-        Destination: { ToAddresses: [(params as { email: string }).email] },
-        Message: {
-          Subject: { Data: content.subject, Charset: 'UTF-8' },
-          Body: {
-            Html: { Data: content.html, Charset: 'UTF-8' },
-            Text: { Data: content.text, Charset: 'UTF-8' },
-          },
+      // IMPORTANTE: Chamamos a nossa própria API interna da Vercel
+      // Se estiver em dev, apontamos para a URL de produção ou localhost conforme o caso
+      const apiBase = (import.meta.env.DEV) 
+        ? 'https://myplacar.app.br' // Ajuste para sua URL de produção para testar em dev
+        : '';
+
+      const response = await fetch(`${apiBase}/api/enviar-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          from: FROM,
+          to: (params as { email: string }).email,
+          subject: content.subject,
+          html: content.html,
+          text: content.text,
+          reply_to: REPLY_TO,
+        }),
       });
 
-      await ses.send(command);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[emailService] Erro na API interna:', errorData);
+        return false;
+      }
+
+      const data = await response.json();
+      console.log('[emailService] E-mail enviado com sucesso via API interna:', data.id);
       return true;
     } catch (error) {
-      console.error('[emailService] Erro ao enviar via SES:', error);
+      console.error('[emailService] Erro ao enviar via API interna:', error);
       return false;
     }
   },

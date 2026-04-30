@@ -1,47 +1,56 @@
-import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import process from "node:process";
 
-   const ses = new SESClient({
-     region: process.env.AWS_REGION || 'us-east-1',
-     credentials: {
-       accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-     }
-   });
+export default async function handler(req, res) {
+  // CORS configuration
+  res.setHeader('Access-Control-Allow-Origin', '*'); 
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400');
 
-   export default async function handler(req, res) {
-     // CORS full (preflight + redirect)
-     res.setHeader('Access-Control-Allow-Origin', '*');  // Mude para 'https://www.myplacar.app.br' em prod
-     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-     res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') return res.status(204).end();
 
-     if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
 
-     if (req.method !== 'POST') return res.status(405).json({ error: 'POST apenas' });
+  const { to, subject, html, text, from, reply_to } = req.body || {};
 
-     const { to, subject, html, text } = req.body || {};
+  if (!to || !subject || (!html && !text)) {
+    return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
+  }
 
-     const params = {
-       Source: 'no-reply@myplacar.app.br',
-       Destination: { ToAddresses: [to] },
-       Message: {
-         Subject: { Data: subject || 'Teste' },
-         Body: { Html: { Data: html || '<h1>Teste</h1>' }, Text: { Data: text || 'Teste' } }
-       },
-       ReplyToAddresses: ['celso@myplacar.app.br']
-     };
+  const apiKey = process.env.RESEND_API_KEY;
 
-     try {
-       const command = new SendEmailCommand(params);
-       const result = await ses.send(command);
+  if (!apiKey) {
+    console.error('RESEND_API_KEY não configurada no servidor.');
+    return res.status(500).json({ error: 'Configuração do servidor incompleta' });
+  }
 
-       // Log para monitor (Vercel Logs + SES Console para bounces/DMARC)
-       console.log(`DMARC Monitor: Enviado para ${to} | MessageId: ${result.MessageId}`);
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: from || 'MyPlacar <onboarding@resend.dev>',
+        to: Array.isArray(to) ? to : [to],
+        subject: subject,
+        html: html,
+        text: text,
+        reply_to: reply_to || 'celso@myplacar.app.br',
+      }),
+    });
 
-       res.status(200).json({ success: true, messageId: result.MessageId });
-     } catch (err) {
-	   console.error(`DMARC Monitor Erro: ${err.message}`);
-       res.status(500).json({ error: err.message });
-     }
-   }
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Erro Resend:', result);
+      return res.status(response.status).json(result);
+    }
+
+    res.status(200).json({ success: true, id: result.id });
+  } catch (err) {
+    console.error(`Erro ao enviar e-mail: ${err.message}`);
+    res.status(500).json({ error: 'Falha interna ao enviar e-mail' });
+  }
+}
