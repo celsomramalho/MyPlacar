@@ -1071,6 +1071,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         cloudLiveExists={cloudLiveExists}
         isOfflineMode={isOfflineMode}
         role={indicatorRole || role}
+        onVoiceToggle={handleVoiceToggle}
+        isVoiceActive={isVoiceActive}
       />
     );
   }

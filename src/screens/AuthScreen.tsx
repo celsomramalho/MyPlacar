@@ -123,8 +123,19 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 2800);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+      console.log("MyPlacar: Splash removido via timer.");
+    }, 2800);
+    
+    // Fail-safe extra: garante que após 6 segundos a tela sempre saia, 
+    // mesmo que haja algum erro no render anterior.
+    const failSafe = setTimeout(() => setShowSplash(false), 6000);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(failSafe);
+    };
   }, []);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wifi, WifiOff, Settings, RefreshCw } from 'lucide-react';
+import { Wifi, WifiOff, Settings, RefreshCw, Mic } from 'lucide-react';
 import { GameState, CourtSide } from '../types.ts';
 import { LiveIndicator } from '../components/LiveIndicator.tsx';
 import { getTennisServerSide } from '../utils/tennisEngine.ts';
@@ -14,6 +14,8 @@ interface ScoreboardDisplayProps {
   cloudLiveExists?: boolean;
   isOfflineMode?: boolean;
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
+  onVoiceToggle?: () => void;
+  isVoiceActive?: boolean;
 }
 
 // ─── Cores por time ───────────────────────────────────────────────────────────
@@ -49,6 +51,8 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
   cloudLiveExists,
   isOfflineMode,
   role,
+  onVoiceToggle,
+  isVoiceActive = false,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLandscape, setIsLandscape] = useState(
@@ -158,6 +162,7 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
   if (!gameState?.p1?.sets || !gameState?.p2?.sets) return null;
 
   const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
+  const showMic = !!onVoiceToggle && gameState.matchConfig.voiceEnabled && (!isLiveActive || isCommandOwner);
 
   const p1Sets = gameState.p1.sets;
   const p2Sets = gameState.p2.sets;
@@ -178,21 +183,11 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
     const color = p.color || (team === 1 ? 'azul' : 'vermelho');
     const isServing = gameState.server === team;
 
-    const pkl = gameState.pickleball;
-    const isDoubles = gameState.matchConfig.isDoubles;
-    const srvNum: 1 | 2 = pkl
-      ? pkl.server.serverNumber
-      : (gameState.servingOrderOffset >= 2 ? 2 : 1);
-    // Em duplas: só o jogador que está sacando recebe o fundo amarelo
-    // srvNum 1 = p.name está sacando, srvNum 2 = p.partnerName está sacando
-    const p1IsServer = isServing && (!isDoubles || srvNum === 1);
-    const p2IsServer = isServing && isDoubles && srvNum === 2;
-
     const names = (
       <div className="z-10">
-        <p className={`font-black text-2xl leading-tight uppercase px-1 rounded ${p1IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white'}`}>{p.name}</p>
+        <p className="text-white font-black text-2xl leading-tight uppercase">{p.name}</p>
         {p.partnerName && (
-          <p className={`font-black text-2xl leading-tight uppercase px-1 rounded ${p2IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white/80'}`}>{p.partnerName}</p>
+          <p className="text-white/80 font-black text-2xl leading-tight uppercase">{p.partnerName}</p>
         )}
       </div>
     );
@@ -208,7 +203,7 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
         {/* Placar de pontos — ancorado ao indicador de sacador */}
         {/* time 1: bottom-3 alinha base do placar com base do indicador */}
         {/* time 2: top-14 alinha topo do placar com base inferior do indicador (top-3 + h-10) */}
-        <div className={`absolute left-0 right-0 flex justify-center z-0 ${team === 1 ? 'bottom-3' : 'top-0'}`}>
+        <div className={`absolute left-0 right-0 flex justify-center z-0 ${team === 1 ? 'bottom-3' : 'top-14'}`}>
           <span className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'}`}
             style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}>
             {p.score}
@@ -239,23 +234,40 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
 
   // ── Faixa central ──────────────────────────────────────────────────────────
   const renderCenterBar = (horizontal: boolean) => (
-    <div className={`bg-black flex items-center justify-center gap-3 shrink-0 z-10 relative ${horizontal ? 'flex-col py-4 w-16' : 'flex-row h-16'}`}>
+    <div className={`bg-black flex items-center justify-center shrink-0 z-10 relative ${horizontal ? 'flex-col py-4 w-16 gap-3' : 'flex-row h-16 gap-4'}`}>
+
+      {/* Botão microfone — só para controller ou fora da live */}
+      {showMic && (
+        <button
+          onPointerDown={onVoiceToggle}
+          className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform border-2 shadow-md ${
+            isVoiceActive ? 'bg-blue-600 border-blue-700' : 'bg-white border-blue-300'
+          }`}
+        >
+          <Mic size={18} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-white' : 'text-blue-600'} />
+        </button>
+      )}
+
       {/* Ícone de conexão — também é o botão do modal */}
       <div
         role="button"
         onPointerDown={() => setIsMenuOpen(true)}
-        className="w-10 h-10 rounded-xl flex items-center justify-center active:scale-90 transition-transform cursor-pointer"
+        className={`w-10 h-10 rounded-2xl flex items-center justify-center active:scale-95 transition-transform cursor-pointer border-2 shadow-lg ${
+          isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
+          isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
+          'border-white bg-emerald-500 text-white'
+        }`}
       >
         {isLiveActive
           ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-full h-full pointer-events-none" />
           : isOfflineMode
-            ? <WifiOff size={26} className="text-yellow-400" />
-            : <Wifi size={26} className="text-white/50" />
+            ? <WifiOff size={20} className="relative z-10" />
+            : <Wifi size={20} className="relative z-10" />
         }
       </div>
 
       {/* Cronômetro */}
-      <span className="text-white font-black text-xl tabular-nums tracking-tight">{formatTime(gameState.matchDuration || 0)}</span>
+      <span className="text-white font-black text-lg tabular-nums tracking-tight">{formatTime(gameState.matchDuration || 0)}</span>
     </div>
   );
 
