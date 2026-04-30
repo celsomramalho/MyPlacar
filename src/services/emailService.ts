@@ -37,7 +37,7 @@ const buildWelcomeEmail = (params: {
   subject: 'Seu PIN de acesso - MyPlacar',
   html: `
     <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff">
-      <img src="${params.app_access_link}/logo192.png" width="48" alt="MyPlacar" style="margin-bottom:24px"/>
+      <img src="https://myplacar.app.br/logo192.png" width="48" alt="MyPlacar" style="margin-bottom:24px"/>
       <h2 style="color:#1e3a5f;margin:0 0 8px">Bem-vindo, ${params.to_name}! 🎾</h2>
       <p style="color:#444;margin:0 0 24px">Seu cadastro foi confirmado. Guarde seu PIN de acesso:</p>
       <div style="background:#f4f7fb;border-radius:12px;padding:20px;text-align:center;margin-bottom:24px">
@@ -65,7 +65,7 @@ const buildRecoveryEmail = (params: {
       subject: 'Redefinição de senha - MyPlacar',
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff">
-          <img src="${params.app_access_link}/logo192.png" width="48" alt="MyPlacar" style="margin-bottom:24px"/>
+          <img src="https://myplacar.app.br/logo192.png" width="48" alt="MyPlacar" style="margin-bottom:24px"/>
           <h2 style="color:#1e3a5f;margin:0 0 8px">Olá, ${params.to_name}!</h2>
           <p style="color:#444;margin:0 0 24px">Recebemos uma solicitação para redefinir sua senha. Clique no botão abaixo:</p>
           <a href="${params.reset_link}"
@@ -83,7 +83,7 @@ const buildRecoveryEmail = (params: {
     subject: 'Recuperação de acesso - MyPlacar',
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff">
-        <img src="${params.app_access_link}/logo192.png" width="48" alt="MyPlacar" style="margin-bottom:24px"/>
+        <img src="https://myplacar.app.br/logo192.png" width="48" alt="MyPlacar" style="margin-bottom:24px"/>
         <h2 style="color:#1e3a5f;margin:0 0 8px">Olá, ${params.to_name}!</h2>
         <p style="color:#444;margin:0 0 24px">Seu PIN de acesso ao MyPlacar:</p>
         <div style="background:#f4f7fb;border-radius:12px;padding:20px;text-align:center;margin-bottom:24px">
