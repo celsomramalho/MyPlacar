@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wifi, WifiOff, Settings, RefreshCw, Mic } from 'lucide-react';
+import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw } from 'lucide-react';
 import { GameState, CourtSide } from '../types.ts';
 import { LiveIndicator } from '../components/LiveIndicator.tsx';
 import { getTennisServerSide } from '../utils/tennisEngine.ts';
@@ -55,18 +55,34 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
   isVoiceActive = false,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLandscape, setIsLandscape] = useState(
+  const [physicalLandscape, setPhysicalLandscape] = useState(
     () => window.innerWidth > window.innerHeight
   );
+  const [forceLayoutOverride, setForceLayoutOverride] = useState<boolean | null>(null);
+  // isLandscape: usa override manual se definido, senão usa a orientação física
+  const isLandscape = forceLayoutOverride !== null ? forceLayoutOverride : physicalLandscape;
 
   // ── Detecção de orientação ─────────────────────────────────────────────────
   useEffect(() => {
     const handleResize = () => {
-      setIsLandscape(window.innerWidth > window.innerHeight);
+      const physical = window.innerWidth > window.innerHeight;
+      setPhysicalLandscape(physical);
+      // Se o dispositivo girou fisicamente, reseta o override — orientação real assumiu
+      if (forceLayoutOverride !== null && physical === forceLayoutOverride) {
+        setForceLayoutOverride(null);
+      }
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [forceLayoutOverride]);
+
+  const handleToggleOrientation = () => {
+    // Alterna entre landscape e portrait manualmente
+    setForceLayoutOverride(prev => {
+      if (prev !== null) return prev ? false : true; // alterna override existente
+      return !physicalLandscape; // cria override oposto à orientação física
+    });
+  };
 
   // ── Cronômetro — lê diretamente do gameState (sincronizado via Firebase) ────
 
@@ -201,9 +217,9 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
     return (
       <div className={`${flex} ${BG_COLORS[color]} relative flex flex-col p-5 overflow-hidden`}>
         {/* Placar de pontos — ancorado ao indicador de sacador */}
-        {/* time 1: bottom-3 alinha base do placar com base do indicador */}
-        {/* time 2: top-14 alinha topo do placar com base inferior do indicador (top-3 + h-10) */}
-        <div className={`absolute left-0 right-0 flex justify-center z-0 ${team === 1 ? 'bottom-3' : 'top-14'}`}>
+        {/* time 1: bottom-3 + items-end ancora a base do número em bottom-3 */}
+        {/* time 2: top-3  + items-start ancora o topo do número em top-3, alinhado com o indicador */}
+        <div className={`absolute left-0 right-0 flex justify-center z-0 ${team === 1 ? 'bottom-3 items-end' : 'top-3 items-start'}`}>
           <span className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'}`}
             style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}>
             {p.score}
@@ -268,6 +284,17 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
 
       {/* Cronômetro */}
       <span className="text-white font-black text-lg tabular-nums tracking-tight">{formatTime(gameState.matchDuration || 0)}</span>
+
+      {/* Botão rotação — alterna layout portrait/landscape manualmente */}
+      <button
+        onPointerDown={handleToggleOrientation}
+        className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform border-2 shadow-md ${
+          forceLayoutOverride !== null ? 'bg-amber-400 border-amber-500 text-black' : 'bg-white/10 border-white/20 text-white'
+        }`}
+        title={isLandscape ? 'Mudar para retrato' : 'Mudar para paisagem'}
+      >
+        <RotateCcw size={16} strokeWidth={2.5} className={`transition-transform ${isLandscape ? 'rotate-90' : ''}`} />
+      </button>
     </div>
   );
 
