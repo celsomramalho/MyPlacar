@@ -158,13 +158,17 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
     const pastSets = (p?.sets || []).slice(0, currentSet);
 
     return (
-      <div className="flex gap-3 items-end">
-        {/* Sets encerrados — só os games do próprio time */}
+      <div className="flex gap-2 items-end">
+        {/* Sets encerrados — mesmo tamanho do set atual, opacity para diferenciar */}
         {pastSets.map((games, i) => (
-          <span key={i} className="font-black leading-none text-white text-2xl opacity-60">
+          <span key={i} className="font-black leading-none text-white text-5xl opacity-50">
             {games}
           </span>
         ))}
+        {/* Separador — só aparece se há sets passados */}
+        {pastSets.length > 0 && (
+          <span className="font-black leading-none text-white/30 text-5xl select-none">|</span>
+        )}
         {/* Set atual */}
         <span className="font-black leading-none text-[#bef264] text-5xl">
           {p?.games ?? 0}
@@ -199,11 +203,20 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
     const color = p.color || (team === 1 ? 'azul' : 'vermelho');
     const isServing = gameState.server === team;
 
+    const pkl = gameState.pickleball;
+    const isDoubles = gameState.matchConfig.isDoubles;
+    const srvNum: 1 | 2 = pkl
+      ? pkl.server.serverNumber
+      : (gameState.servingOrderOffset >= 2 ? 2 : 1);
+    // Em duplas: só o jogador que está sacando recebe fundo amarelo
+    const p1IsServer = isServing && (!isDoubles || srvNum === 1);
+    const p2IsServer = isServing && isDoubles && srvNum === 2;
+
     const names = (
       <div className="z-10">
-        <p className="text-white font-black text-2xl leading-tight uppercase">{p.name}</p>
+        <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p1IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white'}`}>{p.name}</p>
         {p.partnerName && (
-          <p className="text-white/80 font-black text-2xl leading-tight uppercase">{p.partnerName}</p>
+          <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p2IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white/80'}`}>{p.partnerName}</p>
         )}
       </div>
     );
