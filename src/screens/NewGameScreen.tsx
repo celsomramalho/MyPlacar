@@ -5,6 +5,7 @@ import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieB
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants';
 import { applyGoldenRule } from '../utils/formatters';
+import { isWatchDevice } from '../utils/device';
 import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '../components/LazySportIcon';
@@ -229,22 +230,30 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
 
       <div className="flex-1 px-4 pt-6 pb-40 space-y-6 max-w-2xl mx-auto w-full no-scrollbar overflow-y-auto">
         <div className="space-y-3">
-          <div className="flex items-center gap-2 px-2"><Watch size={20} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Otimização para relógios</h2></div>
+          <div className="flex items-center gap-2 px-2"><Watch size={20} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Otimização do placar</h2></div>
           <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
             <Toggle 
               id="toggle-watchmode" 
-              label="Modo relógio (interface gigante)" 
+              label="Modo relógio" 
               checked={isOfflineMode ? true : (settings.isWatchMode || false)} 
-              disabled={isOfflineMode || isReadOnly}
+              disabled={isWatchDevice()}
               onChange={v => { 
-                const next = {...settings, isWatchMode: v};
+                const next = {...settings, isWatchMode: v, isScoreboardMode: v ? false : settings.isScoreboardMode};
                 setSettings(next); 
                 localStorage.setItem('myPlacarSettings', JSON.stringify(next)); 
               }} 
             />
-            <p className={`text-[10px] font-bold text-black leading-tight px-1 transition-opacity ${isOfflineMode ? 'opacity-50' : 'opacity-100'}`}>
-              Ideal para telas de 200x200px. Divide a tela em dois botões massivos.
-            </p>
+            <Toggle 
+              id="toggle-scoreboardmode" 
+              label="Modo placar" 
+              checked={settings.isScoreboardMode || false} 
+              disabled={isWatchDevice()}
+              onChange={v => { 
+                const next = {...settings, isScoreboardMode: v, isWatchMode: v ? false : settings.isWatchMode};
+                setSettings(next); 
+                localStorage.setItem('myPlacarSettings', JSON.stringify(next)); 
+              }} 
+            />
           </div>
         </div>
 

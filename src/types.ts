@@ -345,6 +345,7 @@ export interface MatchSettings {
   goldenRuleEnabled: boolean;
   errorSoundType: ErrorSoundType;
   isWatchMode?: boolean;
+  isScoreboardMode?: boolean;
   deviceLabel?: string;
   isHistoryEnabled: boolean;
   initialServer: 1 | 2;

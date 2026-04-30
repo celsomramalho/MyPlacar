@@ -19,6 +19,7 @@ import { LazySportIcon } from '../components/LazySportIcon';
 import { LiveIndicator } from '../components/LiveIndicator';
 import { applyGoldenRule, maskPin } from '../utils/formatters';
 import { WatchBoard } from '../components/WatchBoard';
+import { ScoreboardDisplay } from '../components/ScoreboardDisplay';
 
 interface CommandLogEntry {
   id: string;
@@ -664,7 +665,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
     if (dimProgressIntervalRef.current) clearInterval(dimProgressIntervalRef.current);
     setDimProgress(0);
-    if (gameState.matchConfig.isWatchMode) {
+  if (gameState.matchConfig.isWatchMode) {
       const timeoutSec = (gameState.matchConfig.screenDimTimeout || 10);
       const timeoutMs = timeoutSec * 1000;
       const startTime = Date.now();
@@ -1058,6 +1059,21 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [isLiveActive, gameState.isLiveClosed, gameState.matchConfig.isWatchMode, gameState.commandOwnerId, gameState.commandOwner, gameState.isMirroringActive, currentDeviceId, isOriginalOwner]);
   const connType = connection?.type;
   const downlink = connection?.downlink;
+
+  if (gameState.matchConfig.isScoreboardMode) {
+    return (
+      <ScoreboardDisplay
+        gameState={gameState}
+        isCommandOwner={isCommandOwner}
+        onResetMatch={onResetMatch}
+        onOpenLiveControl={onOpenLiveControl}
+        onBack={onBack}
+        cloudLiveExists={cloudLiveExists}
+        isOfflineMode={isOfflineMode}
+        role={indicatorRole || role}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col relative font-sans">
