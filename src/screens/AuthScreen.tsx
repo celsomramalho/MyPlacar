@@ -554,16 +554,21 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         try {
           await createUserWithEmailAndPassword(auth, cleanEmail, storedPassword);
         } catch (e: any) {
-          console.error("DEBUG: Erro detalhado do Firebase ao criar usuário:", {
-            code: e.code,
-            message: e.message,
-            customData: e.customData,
-            fullError: e
-          });
-          if (e.message?.includes('signup-are-blocked') || e.code === 'auth/operation-not-allowed') {
-            throw new Error(`O cadastro de novos usuários está temporariamente desativado. Entre em contato com o suporte. (Erro: ${e.code})`);
+          if (e.code === 'auth/email-already-in-use') {
+            console.log("DEBUG: Usuário já existe no Auth, tentando apenas autenticar...");
+            try {
+              await signInWithEmailAndPassword(auth, cleanEmail, storedPassword);
+            } catch (loginErr: any) {
+              console.error("DEBUG: Erro ao autenticar usuário existente:", loginErr);
+              throw new Error("Este e-mail já está em uso e a senha fornecida está incorreta.");
+            }
+          } else {
+            console.error("DEBUG: Erro detalhado do Firebase ao criar usuário:", e);
+            if (e.message?.includes('signup-are-blocked') || e.code === 'auth/operation-not-allowed') {
+              throw new Error(`O cadastro de novos usuários está temporariamente desativado. (Erro: ${e.code})`);
+            }
+            throw new Error(`${e.message} (Código: ${e.code})`);
           }
-          throw new Error(`${e.message} (Código: ${e.code})`);
         }
       }
 
