@@ -141,10 +141,11 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request, { cache: 'no-store' })
         .then((res) => {
           // Atualiza o cache com o index.html mais recente (chave sem querystring)
-          const clone = res.clone();
+          const clone1 = res.clone();
+          const clone2 = res.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put('/index.html', clone);
-            cache.put('/', clone.clone());
+            cache.put('/index.html', clone1);
+            cache.put('/', clone2);
           });
           return res;
         })
