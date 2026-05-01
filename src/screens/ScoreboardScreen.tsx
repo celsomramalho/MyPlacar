@@ -973,13 +973,17 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }, duration);
   };
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const dist = Math.sqrt(Math.pow(e.clientX - touchStartPos.current.x, 2) + Math.pow(e.clientY - touchStartPos.current.y, 2));
-    if (dist > 10) {
+    const dx = e.clientX - touchStartPos.current.x;
+    const dy = e.clientY - touchStartPos.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    // Cancela se qualquer movimento > 10px, com prioridade extra para scroll vertical
+    const isScrolling = Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx);
+    if (dist > 10 || isScrolling) {
       hasDraggedRef.current = true;
     }
-    if (longPressTimer.current && dist > 10) { 
-      clearTimeout(longPressTimer.current); 
-      longPressTimer.current = null; 
+    if (longPressTimer.current && (dist > 10 || isScrolling)) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
       if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
       setScorePressProgress(null);
     }
@@ -1150,16 +1154,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         </div>
         <div className="flex items-center gap-2">
           {!isLiveActive && isWatchConnected && <div className="p-2 bg-sky-100 text-sky-600 rounded-xl animate-pulse flex items-center gap-2 px-3 border border-sky-200" title="Relógio conectado"><Watch size={18} /><span className="text-[9px] font-black tracking-tight hidden md:inline">Relógio conectado</span></div>}
-          {/* Botão modo relógio — disponível para qualquer dispositivo incluindo observador */}
-          {!isLiveActive && (
-          <button
-            onClick={onToggleWatchMode}
-            className={`p-2 rounded-xl flex items-center gap-1 px-3 border transition-all active:scale-90 ${gameState.matchConfig.isWatchMode ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
-            title={gameState.matchConfig.isWatchMode ? 'Sair do modo relógio' : 'Modo relógio'}
-          >
-            <Watch size={16} />
-          </button>
-          )}
           <button onClick={onBack} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
             <Settings size={22} />
             {isSettingsRegrasSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
@@ -1304,6 +1298,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 onPointerDown={(e) => handleScoreCardPointerDown(e, 'game', team)}
                 onPointerMove={handlePointerMove}
                 onPointerUp={() => handleScoreCardPointerUp('game', team)}
+                onPointerCancel={() => {
+                  if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+                  if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
+                  setScorePressProgress(null);
+                }}
               >
                 {scorePressProgress?.player === team && scorePressProgress?.type === 'game' && (
                   <div className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} />
@@ -1336,7 +1335,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           };
 
           return (
-            <div className="-mx-4 mt-6 bg-black flex flex-col select-none touch-none overflow-hidden" style={{ height: '620px' }}>
+            <div className="-mx-4 mt-6 bg-black flex flex-col select-none touch-pan-y overflow-hidden" style={{ height: '620px' }}>
               {/* Time 1 */}
               {renderTeamBlockNew(1)}
 
