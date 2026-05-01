@@ -1191,39 +1191,35 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
              </div>
              
              <div className="flex items-center justify-between w-full px-4 mt-4">
-               <div className="flex flex-col items-center flex-1 min-w-0">
-                 <div onClick={() => onSwitchServer(1, false)} className="text-center w-full cursor-pointer active:scale-95 transition-transform">
-                   <div className="flex items-center justify-center gap-2">
-                     <span className="text-xl md:text-2xl font-black text-gray-900 truncate">{gameState.p1.name}</span>
-                     {(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 0 && <span className="text-3xl animate-bounce">🎾</span>}
-                   </div>
-                 </div>
-                 {gameState.p1.partnerName && (
-                   <div onClick={() => onSwitchServer(1, true)} className="text-center w-full cursor-pointer active:scale-95 transition-transform mt-1">
-                     <div className="flex items-center justify-center gap-2">
-                       <span className="text-lg md:text-xl font-black text-gray-900 truncate">{gameState.p1.partnerName}</span>
-                       {(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 2 && <span className="text-2xl animate-bounce">🎾</span>}
+               {(() => {
+                 const isActive = !gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed;
+                 const o = gameState.servingOrderOffset;
+                 return (
+                   <>
+                     <div className="flex flex-col items-center flex-1 min-w-0">
+                       <div onClick={() => onSwitchServer(1, false)} className="text-center w-full cursor-pointer active:scale-95 transition-transform">
+                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 0 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-gray-900'}`}>{gameState.p1.name}</span>
+                       </div>
+                       {gameState.p1.partnerName && (
+                         <div onClick={() => onSwitchServer(1, true)} className="text-center w-full cursor-pointer active:scale-95 transition-transform mt-1">
+                           <span className={`text-lg md:text-xl font-black truncate px-1 rounded ${isActive && o === 2 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-gray-900'}`}>{gameState.p1.partnerName}</span>
+                         </div>
+                       )}
                      </div>
-                   </div>
-                 )}
-               </div>
-               <div className="w-8" />
-               <div className="flex flex-col items-center flex-1 min-w-0">
-                 <div onClick={() => onSwitchServer(2, false)} className="text-center w-full cursor-pointer active:scale-95 transition-transform">
-                   <div className="flex items-center justify-center gap-2">
-                     <span className="text-xl md:text-2xl font-black text-gray-900 truncate">{gameState.p2.name}</span>
-                     {(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 1 && <span className="text-xl md:text-3xl animate-bounce">🎾</span>}
-                   </div>
-                 </div>
-                 {gameState.p2.partnerName && (
-                   <div onClick={() => onSwitchServer(2, true)} className="text-center w-full cursor-pointer active:scale-95 transition-transform mt-1">
-                     <div className="flex items-center justify-center gap-2">
-                       <span className="text-lg md:text-xl font-black text-gray-900 truncate">{gameState.p2.partnerName}</span>
-                       {(!gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed) && gameState.servingOrderOffset === 3 && <span className="text-lg md:text-2xl animate-bounce">🎾</span>}
+                     <div className="w-8" />
+                     <div className="flex flex-col items-center flex-1 min-w-0">
+                       <div onClick={() => onSwitchServer(2, false)} className="text-center w-full cursor-pointer active:scale-95 transition-transform">
+                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 1 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-gray-900'}`}>{gameState.p2.name}</span>
+                       </div>
+                       {gameState.p2.partnerName && (
+                         <div onClick={() => onSwitchServer(2, true)} className="text-center w-full cursor-pointer active:scale-95 transition-transform mt-1">
+                           <span className={`text-lg md:text-xl font-black truncate px-1 rounded ${isActive && o === 3 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-gray-900'}`}>{gameState.p2.partnerName}</span>
+                         </div>
+                       )}
                      </div>
-                   </div>
-                 )}
-               </div>
+                   </>
+                 );
+               })()}
              </div>
            </div>
 
@@ -1282,14 +1278,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
             const currentSet = gameState.currentSet ?? 0;
             const pastSets = (p?.sets || []).slice(0, currentSet);
             return (
-              <div className="flex gap-2 items-end">
+              <div className="flex gap-3 items-end">
                 {pastSets.map((games: number, i: number) => (
-                  <span key={i} className="font-black leading-none text-white text-5xl opacity-50">{games}</span>
+                  <span key={i} className="font-black leading-none text-white text-7xl opacity-50">{games}</span>
                 ))}
                 {pastSets.length > 0 && (
-                  <span className="font-black leading-none text-white/30 text-5xl select-none">|</span>
+                  <span className="font-black leading-none text-white/30 text-7xl select-none">|</span>
                 )}
-                <span className="font-black leading-none text-[#bef264] text-5xl">{p?.games ?? 0}</span>
+                <span className="font-black leading-none text-[#bef264] text-7xl">{p?.games ?? 0}</span>
               </div>
             );
           };
@@ -1299,22 +1295,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
             const p = team === 1 ? gameState.p1 : gameState.p2;
             const color = p.color || (team === 1 ? 'azul' : 'vermelho');
             const isServing = gameState.server === team;
-            const pkl = gameState.pickleball;
-            const isDoubles = gameState.matchConfig.isDoubles;
-            const srvNum: 1 | 2 = pkl
-              ? pkl.server.serverNumber
-              : (gameState.servingOrderOffset >= 2 ? 2 : 1);
-            const p1IsServer = isServing && (!isDoubles || srvNum === 1);
-            const p2IsServer = isServing && isDoubles && srvNum === 2;
-
-            const names = (
-              <div className="z-10">
-                <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p1IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white'}`}>{p.name}</p>
-                {isDoubles && p.partnerName && (
-                  <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p2IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white/80'}`}>{p.partnerName}</p>
-                )}
-              </div>
-            );
 
             const games = <div className="z-10">{renderSetHistoryNew(team)}</div>;
 
@@ -1337,17 +1317,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     {p.score}
                   </span>
                 </div>
-                {/* Time 1: games no topo + nomes abaixo */}
+                {/* Time 1: games no topo */}
                 {team === 1 && (
                   <div className="z-10 flex flex-col gap-1">
                     {games}
-                    {names}
                   </div>
                 )}
-                {/* Time 2: nomes + games no fundo */}
+                {/* Time 2: games no fundo */}
                 {team === 2 && (
                   <div className="z-10 flex flex-col gap-1 mt-auto">
-                    {names}
                     {games}
                   </div>
                 )}
