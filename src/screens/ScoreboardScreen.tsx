@@ -1393,7 +1393,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 </button>
                 <div
                   role="button"
-                  onPointerDown={() => setNewMenuOpen(true)}
+                  onPointerDown={() => { if (isPublicView) return; setNewMenuOpen(true); }}
                   className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${isLiveActiveNew ? 'border-emerald-400 bg-white/5 text-emerald-400' : isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' : 'border-white bg-emerald-500 text-white'}`}
                 >
                   {isLiveActiveNew
@@ -1414,7 +1414,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
               {renderTeamBlockNew(2)}
 
               {/* Bottom sheet modal */}
-              {newMenuOpen && (
+              {newMenuOpen && !isPublicView && (
                 <div className="fixed inset-0 z-[999999] flex flex-col justify-end" onPointerDown={() => setNewMenuOpen(false)}>
                   <div className="bg-[#1e293b] rounded-t-3xl border-t border-white/10 p-4 space-y-2" onPointerDown={e => e.stopPropagation()}>
                     <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3" />
