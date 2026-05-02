@@ -1079,6 +1079,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         role={indicatorRole || role}
         onVoiceToggle={handleVoiceToggle}
         isVoiceActive={isVoiceActive}
+        fbSyncStatus={fbSyncStatus}
       />
     );
   }

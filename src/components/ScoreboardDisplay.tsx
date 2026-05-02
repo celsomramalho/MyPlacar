@@ -16,6 +16,7 @@ interface ScoreboardDisplayProps {
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
   onVoiceToggle?: () => void;
   isVoiceActive?: boolean;
+  fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
 }
 
 // ─── Cores por time ───────────────────────────────────────────────────────────
@@ -53,6 +54,7 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
   role,
   onVoiceToggle,
   isVoiceActive = false,
+  fbSyncStatus,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [physicalLandscape, setPhysicalLandscape] = useState(
@@ -216,9 +218,9 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
 
     const names = (
       <div className="z-10">
-        <p className={`font-black text-2xl leading-tight uppercase px-1 rounded ${p1IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white'}`}>{p.name}</p>
+        <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p1IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white'}`}>{p.name}</p>
         {p.partnerName && (
-          <p className={`font-black text-2xl leading-tight uppercase px-1 rounded ${p2IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white/80'}`}>{p.partnerName}</p>
+          <p className={`font-black text-2xl leading-tight uppercase px-1 rounded w-fit ${p2IsServer ? 'text-[#1a1a1a] bg-[#bef264]' : 'text-white/80'}`}>{p.partnerName}</p>
         )}
       </div>
     );
@@ -259,6 +261,14 @@ export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
 
         {/* Indicador de sacador */}
         {renderServerIndicator(team)}
+
+        {/* FB Sync Badge — centralizado verticalmente à direita, igual ao placar inline */}
+        {fbSyncStatus?.team === team && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-30 pointer-events-none flex items-center gap-2 bg-white/85 backdrop-blur-sm rounded-full px-4 py-2 shadow-md">
+            <span className="text-[18px] font-black text-gray-700 leading-none tabular-nums">FB|{fbSyncStatus.seq}</span>
+            <span className={`w-4 h-4 rounded-full animate-pulse flex-shrink-0 ${fbSyncStatus.isObserver ? 'bg-blue-500' : 'bg-green-500'}`} />
+          </div>
+        )}
       </div>
     );
   };
