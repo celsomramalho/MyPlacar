@@ -114,6 +114,7 @@ interface Props {
   voiceLogs?: {id: string, startTime: string, before: string, after: string, text: string, latency: number, timestamp: number, isError?: boolean, winner?: 1 | 2, isRemote?: boolean, liveSequence?: number, liveId?: number, source: string}[];
   setVoiceLogs?: (logs: any[] | ((prev: any[]) => any[])) => void;
   fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
+  onToggleScoreboardMode?: () => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -303,7 +304,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus, onToggleScoreboardMode } = props;
 
   // Usar props se fornecidas, caso contrário usar estado local (fallback para compatibilidade)
   const effectiveLiveLogs = liveLogs !== undefined ? liveLogs : [];
@@ -810,6 +811,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return appUrl.endsWith('/') ? appUrl : appUrl + '/';
   });
   const [isEditingUrl, setIsEditingUrl] = useState(false);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
   const mirrorLink = useMemo(() => {
     let base = customBaseUrl.trim();
     if (!base.startsWith('http')) base = 'https://' + base;
@@ -1080,6 +1082,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         onVoiceToggle={handleVoiceToggle}
         isVoiceActive={isVoiceActive}
         fbSyncStatus={fbSyncStatus}
+        onToggleScoreboardMode={onToggleScoreboardMode}
       />
     );
   }
@@ -1244,7 +1247,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
             amarelo: 'text-yellow-600', laranja: 'text-orange-600',
             lilas: 'text-violet-600', marrom: 'text-amber-800', roxo: 'text-purple-600',
           };
-          const [newMenuOpen, setNewMenuOpen] = React.useState(false);
           const isLiveActiveNew = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
           const p1Color = gameState.p1.color || 'azul';
           const p2Color = gameState.p2.color || 'vermelho';
@@ -1417,6 +1419,22 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                         className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer">
                         <LiveIndicator role={indicatorRole || role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-8 h-8 shrink-0" />
                         <span className="font-black text-sm">Live / Controle</span>
+                      </div>
+                    )}
+                    {/* Modo placar — logo abaixo de Live/Controle */}
+                    {!gameState.matchConfig.isWatchMode && (
+                      <div
+                        role="button"
+                        onPointerDown={() => { onToggleScoreboardMode?.(); }}
+                        className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
+                      >
+                        <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-slate-700 rounded-xl">
+                          <MonitorSmartphone size={18} />
+                        </div>
+                        <span className="font-black text-sm flex-1">Modo placar</span>
+                        <div className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${gameState.matchConfig.isScoreboardMode ? 'bg-emerald-500' : 'bg-white/20'}`}>
+                          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${gameState.matchConfig.isScoreboardMode ? 'left-7' : 'left-1'}`} />
+                        </div>
                       </div>
                     )}
                     <button onPointerDown={() => { setNewMenuOpen(false); onBack(); }}

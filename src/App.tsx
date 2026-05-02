@@ -114,6 +114,42 @@ const LogViewer: React.FC<{logs: {type: string, msg: string, time: string}[], on
   );
 };
 
+// ─── Helpers para persistência do ownerPin da live ────────────────────────────
+// O ownerPin é a chave do documento no Firestore (live_matches/<ownerPin>).
+// Persisti-lo no localStorage garante que qualquer resolução de targetPin
+// tenha uma fonte confiável mesmo antes de activeLives ser populado.
+const LIVE_OWNER_PIN_KEY = 'myPlacar_LiveOwnerPin';
+
+const persistLiveOwnerPin = (pin: string) => {
+  try { localStorage.setItem(LIVE_OWNER_PIN_KEY, pin.toUpperCase()); } catch {}
+};
+
+const clearLiveOwnerPin = () => {
+  try { localStorage.removeItem(LIVE_OWNER_PIN_KEY); } catch {}
+};
+
+const getPersistedLiveOwnerPin = (): string | null => {
+  try { return localStorage.getItem(LIVE_OWNER_PIN_KEY); } catch { return null; }
+};
+
+// Guard: valida que o targetPin é o PIN real do owner antes de qualquer
+// escrita em live_matches. Evita criar documentos com ID errado.
+// Retorna false e loga erro se a escrita for inválida.
+const assertOwnerPin = (targetPin: string | undefined, ownerPin: string | undefined, context: string): boolean => {
+  if (!targetPin) {
+    console.error(`[LiveGuard:${context}] targetPin indefinido — escrita abortada.`);
+    return false;
+  }
+  const persisted = getPersistedLiveOwnerPin();
+  // targetPin deve bater com ownerPin do gameState OU com o persisted do localStorage.
+  // Se nenhum referencial estiver disponível ainda, permite (primeira ativação).
+  if (ownerPin && targetPin !== ownerPin.toUpperCase() && persisted && targetPin !== persisted) {
+    console.error(`[LiveGuard:${context}] targetPin "${targetPin}" diverge do ownerPin "${ownerPin}" e do persisted "${persisted}" — escrita abortada.`);
+    return false;
+  }
+  return true;
+};
+
 const App: React.FC = () => {
   const urlParams = getUrlParams();
   const deviceId = getDeviceId();
@@ -323,6 +359,27 @@ const App: React.FC = () => {
     return isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState?.ownerPin?.toUpperCase();
   }, [isOriginalOwner, userProfile.pin, gameState?.ownerPin]);
 
+  // ─── resolveTargetPin: fonte única de verdade para o PIN do owner ────────────
+  // Ordem de prioridade (decrescente de confiabilidade):
+  //   1. judgeMatch.ownerPin  — judge sempre sabe para qual owner escrever
+  //   2. gameState.ownerPin   — gravado na criação da live, imutável
+  //   3. localStorage         — persiste entre recarregamentos, gravado em initGameStateInternal
+  //   4. isOriginalOwner + myPin — apenas se confirmado por ownerDeviceId (não só pelo PIN)
+  // Nunca retorna undefined silenciosamente — loga e retorna null para que o
+  // chamador possa abortar a escrita com segurança.
+  const resolveTargetPin = useCallback((context: string): string | null => {
+    const myPin = userProfile.pin?.toUpperCase();
+    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+    if (judgeMatch?.ownerPin) return judgeMatch.ownerPin.toUpperCase();
+    if (gameState?.ownerPin) return gameState.ownerPin.toUpperCase();
+    const persisted = getPersistedLiveOwnerPin();
+    if (persisted) return persisted;
+    // Último recurso: só usa myPin se ownerDeviceId confirma que este device é o owner
+    if (isOriginalOwner && myPin) return myPin;
+    console.error(`[resolveTargetPin:${context}] Não foi possível determinar o ownerPin — escrita abortada.`);
+    return null;
+  }, [userProfile.pin, activeLives, gameState?.ownerPin, isOriginalOwner]);
+
   const isCurrentController = useMemo(() => gameState?.commandOwnerId === deviceId, [gameState?.commandOwnerId, deviceId]);
   // A3: usa role='judge' em vez de comparação por nickname — robusto a nomes duplicados
   // e correto com o sub-objeto judge adicionado no T4.3.
@@ -350,26 +407,45 @@ const App: React.FC = () => {
 
   // Helper centralizado: "este dispositivo específico é o controller ativo?"
   // Usa deviceId em vez de pin para suportar múltiplos dispositivos do mesmo usuário.
+  // Fallback para gameState local: cobre a janela de latência logo após criar a live,
+  // quando activeLives ainda não foi atualizado pelo onSnapshot da collection.
   const isActiveController = useMemo(() => {
-    if (!activeLives.length) return false;
-    return activeLives.some(l => l.commandOwnerId === deviceId);
-  }, [activeLives, deviceId]);
+    if (activeLives.some(l => l.commandOwnerId === deviceId)) return true;
+    // Fallback local: live foi criada agora (activeLives ainda vazio ou desatualizado).
+    // Exige que ownerDeviceId também seja este device para não confundir com o celular
+    // secundário que herdou o gameState da cloud (com ownerDeviceId do Note).
+    if (
+      gameState?.isMirroringActive &&
+      gameState?.commandOwnerId === deviceId &&
+      (gameState?.ownerDeviceId === deviceId || !gameState?.ownerDeviceId)
+    ) return true;
+    return false;
+  }, [activeLives, deviceId, gameState?.isMirroringActive, gameState?.commandOwnerId, gameState?.ownerDeviceId]);
 
   // B1: papel permanente do usuário na live (não muda durante a live)
   // 'owner' = este deviceId é o ownerDeviceId da live
   // 'judge' = o PIN deste usuário é o judgePin da live
   // 'observer' = qualquer outro
   const livePapel = useMemo((): LivePapel => {
-    if (!cloudLiveExists) return 'spectator';
+    // Fallback local: cobre a janela de latência logo após criar/entrar na live,
+    // quando activeLives ainda não foi atualizado pelo onSnapshot da collection.
+    // Sem isso, cloudLiveExists=false → 'spectator' → UI mostra "Observador".
+    const liveIsActiveLocally = gameState?.isMirroringActive && !gameState?.isLiveClosed;
+    const effectivelyHasLive = cloudLiveExists || liveIsActiveLocally;
+    if (!effectivelyHasLive) return 'spectator';
     // Owner: baseado em deviceId — nunca por PIN, para não confundir multi-dispositivo
     if (activeLives.some(l => l.ownerDeviceId === deviceId)) return 'owner';
+    // Fallback local para owner: live criada agora, activeLives ainda não propagou.
+    // Exige que commandOwnerId também seja este device — confirma que foi quem criou a live.
+    // Sem essa restrição, o celular (mesmo PIN) poderia ser tratado como owner pelo fallback.
+    if (liveIsActiveLocally && gameState?.ownerDeviceId === deviceId && gameState?.commandOwnerId === deviceId) return 'owner';
     // Fallback para lives sem ownerDeviceId (não deve ocorrer em novas lives)
     const myPin = userProfile.pin?.toUpperCase();
     if (myPin && activeLives.some(l => l.ownerPin?.toUpperCase() === myPin && !l.ownerDeviceId)) return 'owner';
     // Judge: sempre por PIN (é como o owner designa o juiz)
     if (myPin && activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
     return 'observer';
-  }, [cloudLiveExists, userProfile.pin, activeLives, deviceId]);
+  }, [cloudLiveExists, userProfile.pin, activeLives, deviceId, gameState?.isMirroringActive, gameState?.isLiveClosed, gameState?.ownerDeviceId]);
 
   // B1: tipo temporário — o que este dispositivo está fazendo agora
   const liveType = useMemo((): LiveType => {
@@ -401,6 +477,7 @@ const App: React.FC = () => {
   const [fbSyncStatus, setFbSyncStatus] = useState<{ team: 1 | 2; seq: number; isObserver: boolean } | null>(null);
   const fbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFbScoreKeyRef = useRef<string>(''); // "p1score_p1games_p2score_p2games"
+  const hasAutoEnabledScoreboardRef = useRef(false); // evita loop: ativa modo placar 1x por sessão de observer
   const [newAppUrl, setNewAppUrl] = useState("");
 
   const [activeEvent, setActiveEvent] = useState<TournamentEvent | null>(() => safeJsonParse('myPlacarActiveEvent', null));
@@ -520,9 +597,11 @@ const App: React.FC = () => {
       const isOwnerViaRef = isOwnerByDeviceId || isOwnerByPin;
 
       // Usa isOwnerViaRef para determinar targetPin — deve vir após o cálculo acima.
+      // Fallback extra: localStorage persiste o ownerPin gravado na criação da live,
+      // cobrindo o caso em que gs.ownerPin está vazio por closure stale.
       const targetPin = (judgeMatch && judgeMatch.ownerPin)
         ? judgeMatch.ownerPin.toUpperCase()
-        : (isOwnerViaRef ? myPin : gs.ownerPin?.toUpperCase());
+        : (gs.ownerPin?.toUpperCase() || getPersistedLiveOwnerPin() || (isOwnerViaRef ? myPin : null));
       if (!targetPin) return;
 
       const isActiveController = gs.commandOwnerId === deviceId;
@@ -912,11 +991,17 @@ const App: React.FC = () => {
     const judgeInLive = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
     if (judgeInLive?.ownerPin) return judgeInLive.ownerPin.toUpperCase();
 
-    // Owner: escuta o próprio documento
-    const ownerOfLive = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin);
-    if (ownerOfLive) return myPin;
+    // Owner: escuta o próprio documento — identificado por ownerDeviceId, não só por PIN.
+    // Usar apenas PIN fazia qualquer outro device do mesmo usuário ser tratado como owner,
+    // causando reassunção indevida de controle pelo celular secundário.
+    const ownerOfLive = activeLives.find(l =>
+      l.ownerDeviceId === deviceId ||
+      // Fallback para lives antigas sem ownerDeviceId gravado
+      (!l.ownerDeviceId && l.ownerPin?.toUpperCase() === myPin)
+    );
+    if (ownerOfLive) return ownerOfLive.ownerPin?.toUpperCase() || myPin;
 
-    // Observer: escuta a live mais recente disponível
+    // Observer (inclui device secundário do mesmo usuário): escuta a live mais recente
     if (activeLives.length > 0) {
       const latest = activeLives.reduce((a, b) =>
         (b.liveSessionCounter || 0) > (a.liveSessionCounter || 0) ? b : a
@@ -924,9 +1009,13 @@ const App: React.FC = () => {
       if (latest.ownerPin) return latest.ownerPin.toUpperCase();
     }
 
-    // Fallback: ownerPin já gravado no gameState local (cobre latencia do onSnapshot da collection)
-    return gameStateRef.current?.ownerPin?.toUpperCase() || myPin;
-  }, [activeLives, userProfile.pin]);
+    // Fallback: ownerPin já gravado no gameState local (cobre latência do onSnapshot da collection).
+    // Só usa myPin como fallback se este device é realmente o owner — evita que device
+    // secundário do mesmo usuário escute no próprio PIN e acione lógica de ownership.
+    const localGs = gameStateRef.current;
+    if (localGs?.ownerDeviceId === deviceId) return myPin;
+    return localGs?.ownerPin?.toUpperCase() || null;
+  }, [activeLives, userProfile.pin, deviceId]);
 
   useEffect(() => {
     if (!navigator.onLine || !targetListenPin) return;
@@ -998,15 +1087,20 @@ const App: React.FC = () => {
             return;
           }
 
-          // FIX: Se commandOwnerId é null/vazio e este device é o owner original,
-          // reassume o controle silenciosamente — o controller anterior (relógio/juiz)
-          // saiu e liberou o controle. A live NÃO deve ser encerrada, apenas retomada.
+          // Reassunção automática: APENAS quando o controller não-owner saiu/perdeu conexão.
+          // Regra: troca de controle nunca é automática, exceto neste caso específico.
+          // Condições obrigatórias (todas devem ser verdadeiras):
+          // 1. commandOwnerId está vazio na cloud (controller liberou o controle)
+          // 2. Este device é o ownerDeviceId da live — por deviceId, NUNCA por PIN.
+          //    PIN identifica o usuário; qualquer device do mesmo usuário tem o mesmo PIN.
+          // 3. A live já estava ativa localmente — descarta o primeiro snapshot de live
+          //    recém-criada onde commandOwnerId ainda não propagou para todos os devices.
           const controllerLeft = !cloudData.commandOwnerId;
           const currentGs = gameStateRef.current;
-          const thisIsOwner = currentGs?.ownerDeviceId === deviceId ||
-            currentGs?.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase();
-          if (controllerLeft && thisIsOwner) {
-            console.log("[Sync] commandOwnerId liberado — owner reassumindo controle automaticamente.");
+          const thisDeviceIsOwner = cloudData.ownerDeviceId === deviceId;
+          const liveAlreadyActive = currentGs?.isMirroringActive === true;
+          if (controllerLeft && thisDeviceIsOwner && liveAlreadyActive) {
+            console.log("[Sync] commandOwnerId liberado pelo controller — ownerDevice reassumindo controle.");
             tookControlAtRef.current = Date.now();
             const db2 = getDb();
             if (db2) {
@@ -1056,8 +1150,18 @@ const App: React.FC = () => {
 
           setGameState(prev => {
             const baseConfig = prev?.matchConfig || localSettings;
+            // TRAVA DE PROPRIETÁRIO: ownerPin e ownerDeviceId NUNCA podem ser
+            // sobrescritos por dados vindos da nuvem. O proprietário é fixado
+            // no momento em que a live é criada (initGameStateInternal) e jamais
+            // muda durante toda a sessão da live — independentemente do que o
+            // Firestore enviar nos snapshots subsequentes.
+            const lockedOwnerPin = prev?.ownerPin || cloudData.ownerPin;
+            const lockedOwnerDeviceId = prev?.ownerDeviceId || cloudData.ownerDeviceId;
             return {
               ...cloudData,
+              // Restaura os campos de proprietário travados após o spread do cloudData
+              ownerPin: lockedOwnerPin,
+              ownerDeviceId: lockedOwnerDeviceId,
               isMirroringActive: true,
               isLiveClosed: false,
               isConfirmedFinished: cloudData.isConfirmedFinished,
@@ -1271,6 +1375,20 @@ const App: React.FC = () => {
     const thisDeviceIsController = activeLives.some(l => l.commandOwnerId === deviceId);
     const hasLive = activeLives.length > 0;
 
+    // Fix: owner nunca se registra como observer nos próprios controllers
+    const thisDeviceIsOwner = activeLives.some(l => l.ownerDeviceId === deviceId);
+    if (thisDeviceIsOwner) return;
+
+    // Fix: device secundário do mesmo usuário (mesmo PIN, deviceId diferente) não
+    // polui controllers com uma entrada de 'phone' extra — ele só observa silenciosamente.
+    const myPin = userProfile.pin?.toUpperCase();
+    const isSameUserSecondaryDevice = activeLives.some(l =>
+      l.ownerPin?.toUpperCase() === myPin &&
+      l.ownerDeviceId &&
+      l.ownerDeviceId !== deviceId
+    );
+    if (isSameUserSecondaryDevice) return;
+
     // Registro automático como observador/juiz: quando há live E este dispositivo NÃO é o controller
     if (!thisDeviceIsController && hasLive && navigator.onLine && userProfile.email) {
       const now = Date.now();
@@ -1338,24 +1456,41 @@ const App: React.FC = () => {
       if (liveId && overlayShownForLiveRef.current === liveId) return;
       overlayShownForLiveRef.current = liveId;
 
+      // Guard: se este device é o owner da live, nunca entra como observer.
+      // Usa ownerDeviceId quando disponível. Quando ownerDeviceId ainda não propagou
+      // (latência do Firestore logo após criar a live), só trata como owner se este
+      // device também é o commandOwnerId — confirmação que foi ele quem criou.
+      const thisDeviceIsOwner = observerLive.ownerDeviceId === deviceId ||
+        (!observerLive.ownerDeviceId &&
+          observerLive.ownerPin?.toUpperCase() === myPin &&
+          observerLive.commandOwnerId === deviceId);
+      if (thisDeviceIsOwner) return;
+
       // Determina se este device deve entrar automaticamente como observador:
-      // 1. Device secundário do mesmo usuário (mesmo ownerPin, ownerDeviceId diferente)
+      // 1. Device secundário do mesmo usuário (mesmo ownerPin, ownerDeviceId diferente OU
+      //    ownerDeviceId não propagado ainda mas commandOwnerId é de outro device)
       // 2. Judge nomeado pelo owner
       // Nesses casos: entra direto no scoreboard como observer, SEM modal.
       // O modal só aparece se o usuário clicar voluntariamente (LiveIndicator, menu, etc).
       const isSameUserOtherDevice =
         observerLive.ownerPin?.toUpperCase() === myPin &&
-        observerLive.ownerDeviceId &&
-        observerLive.ownerDeviceId !== deviceId;
+        (
+          // ownerDeviceId já propagou: confirma que é outro device
+          (observerLive.ownerDeviceId && observerLive.ownerDeviceId !== deviceId) ||
+          // ownerDeviceId ainda não propagou: usa commandOwnerId como proxy
+          (!observerLive.ownerDeviceId && observerLive.commandOwnerId && observerLive.commandOwnerId !== deviceId)
+        );
 
       const isNamedJudge = observerLive.judgePin?.toUpperCase() === myPin;
 
       if (isSameUserOtherDevice || isNamedJudge) {
         // Entra automaticamente como observador — sem modal.
-        // Usa setTimeout para garantir que handleObserveLive (declarado abaixo)
-        // já esteja estável no closure antes de ser invocado.
+        // Aguarda 2s para que o documento recém-criado pelo Note estabilize no Firestore
+        // antes de o celular fazer getDoc e gravar sua presença. Sem esse delay, o getDoc
+        // pode retornar o doc com commandOwnerId ainda não propagado, causando a race que
+        // faz o celular sobrescrever commandOwnerId como null e o Note virar observer.
         overlayAcceptedRef.current = liveId;
-        setTimeout(() => autoJoinObserverRef.current?.(liveId), 0);
+        setTimeout(() => autoJoinObserverRef.current?.(liveId), isSameUserOtherDevice ? 2000 : 0);
         return;
       }
 
@@ -1562,10 +1697,17 @@ const App: React.FC = () => {
               // T4.2: stateToSave não inclui controllers (gerenciados separadamente).
               // liveVersion é incrementado a cada write do controller ativo —
               // permite detectar e descartar writes stale no onSnapshot.
+              // TRAVA DE PROPRIETÁRIO: ownerPin e ownerDeviceId são campos imutáveis
+              // da live — fixados na criação e nunca alterados por nenhum write posterior,
+              // seja do owner, do judge ou de qualquer outro controller. Isso garante que
+              // o proprietário da live é sempre quem a criou, sem possibilidade de mutação.
               const stateToSave = sanitizeForFirestore({
                 ...gameState,
                 controllers: undefined,  // T4.1: presença gerenciada via field-path
-                liveVersion: (gameState.liveVersion || 0) + 1  // T4.2: versionamento
+                liveVersion: (gameState.liveVersion || 0) + 1,  // T4.2: versionamento
+                // Imutáveis: preserva os valores originais independente do estado corrente
+                ownerPin: gameState.ownerPin,
+                ownerDeviceId: gameState.ownerDeviceId,
               });
 
               if (stateToSave) {
@@ -1573,9 +1715,8 @@ const App: React.FC = () => {
                 if (strState !== lastSentStateRef.current) {
                   lastSentStateRef.current = strState;
                   lastSyncTimeRef.current = now;
-                  const myPin = userProfile.pin?.toUpperCase();
-                  const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-                  const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+                  const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
                   if (targetPin) {
                     // T4.1 — Write 1: placar + estado da partida (sem controllers)
                     // D1: lastActivityAt habilita TTL de 3h pelo Cloud Function scheduler
@@ -1629,6 +1770,22 @@ const App: React.FC = () => {
     return () => { if (fbSyncTimerRef.current) clearTimeout(fbSyncTimerRef.current); };
   }, [fbSyncStatus]);
 
+  // ── Observer: ativa modo placar automaticamente ao entrar na live ────────────
+  // Guard: só ativa se cloudLiveExists confirmou a live E este device não é ownerDeviceId.
+  // Sem essa guarda, a latência do Firestore faz livePapel ser 'observer' por um instante
+  // logo após o owner abrir a live, ativando isScoreboardMode indevidamente.
+  useEffect(() => {
+    const thisDeviceIsOwnerOfAnyLive = activeLives.some(l => l.ownerDeviceId === deviceId);
+    if (livePapel === 'observer' && cloudLiveExists && !thisDeviceIsOwnerOfAnyLive && !hasAutoEnabledScoreboardRef.current) {
+      hasAutoEnabledScoreboardRef.current = true;
+      setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
+      setGameState(prev => {
+        if (!prev) return prev;
+        return { ...prev, matchConfig: { ...prev.matchConfig, isScoreboardMode: true } };
+      });
+    }
+    if (livePapel !== 'observer') hasAutoEnabledScoreboardRef.current = false;
+  }, [livePapel, cloudLiveExists, activeLives, deviceId]);
 
   const [historyStack, setHistoryStack] = useState<GameState[]>([]);
   // Ref espelho do historyStack — garante que callbacks com closure stale
@@ -1835,12 +1992,11 @@ const App: React.FC = () => {
     });
 
     if (!state.matchConfig.isHistoryEnabled) {
-      try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
+      try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
       const db = getDb();
       if (!db) return;
-      const myPin = userProfile.pin?.toUpperCase();
-      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-      const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : state.ownerPin?.toUpperCase());
+      const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
       // E1: partida encerrada = live também encerrada.
       // 1) Propaga isLiveClosed:true para todos os observers via onSnapshot (notificação).
       // 2) Após 4s (tempo para observers receberem o evento), deleta o documento.
@@ -1872,7 +2028,7 @@ const App: React.FC = () => {
     } catch {}
     const historyItem = createHistoryItem(state, userProfile, partners, location);
     persistHistory([historyItem, ...matchHistoryRef.current]);
-    try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
+    try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
     const db = getDb();
     // Regra 9: a live pode permanecer aberta para nova partida — apenas marca como encerrada,
     // não deleta. O documento será substituído quando o owner iniciar uma nova partida.
@@ -1943,7 +2099,7 @@ const App: React.FC = () => {
              matchConfig: updatedMatchConfig,
              isLiveClosed: false
           });
-          const targetPin = isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState.ownerPin?.toUpperCase();
+          const targetPin = resolveTargetPin('initSync');
           if (stateToSync && targetPin) await setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
        }
     }
@@ -2032,6 +2188,10 @@ const App: React.FC = () => {
     }
     
     setMatchSettings(configToUse);
+    // PERSISTE ownerPin no localStorage imediatamente ao criar a live.
+    // Isso garante que resolveTargetPin tenha uma fonte confiável mesmo antes
+    // de activeLives ser populado pelo onSnapshot da collection.
+    if (userProfile.pin) persistLiveOwnerPin(userProfile.pin);
     startGame(newGameState);
     setCurrentScreen('scoreboard');
   };
@@ -2117,9 +2277,8 @@ const App: React.FC = () => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Sem conexão com a internet.", onConfirm: () => setModalConfig(null) }); return; }
     if (!userProfile.pin) { setModalConfig({ title: "Erro", message: "PIN não cadastrado.", onConfirm: () => setModalConfig(null) }); return; }
     
-    const myPin = userProfile.pin.toUpperCase();
-    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-    const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
+    const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
     
     if (!targetPin) { setModalConfig({ title: "Erro", message: "PIN da transmissão não encontrado.", onConfirm: () => setModalConfig(null) }); return; }
     
@@ -2158,11 +2317,7 @@ const App: React.FC = () => {
     if (!gameState?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
     const db = getDb();
     if (!db) return;
-    const myPin = userProfile.pin?.toUpperCase();
-    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-    const targetPin = (judgeMatch && judgeMatch.ownerPin)
-      ? judgeMatch.ownerPin.toUpperCase()
-      : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+    const targetPin = resolveTargetPin('handleLeaveLive');
     if (!targetPin) return;
 
     try {
@@ -2198,9 +2353,8 @@ const App: React.FC = () => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
     const db = getDb();
     if (db && userProfile.pin) {
-      const myPin = userProfile.pin.toUpperCase();
-      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-      const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
+      const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
       
       if (!targetPin) return;
       try {
@@ -2357,8 +2511,15 @@ const App: React.FC = () => {
           // Preserva role existente se o device já está registrado (ex: owner voltando como observer).
           const existingEntry = (cloudData.controllers || {})[deviceId];
           const joinRole = existingEntry?.role === 'owner' || existingEntry?.role === 'judge' ? existingEntry.role : 'observer';
+
+          // Guard: device secundário do mesmo usuário (mesmo PIN, ownerDeviceId diferente)
+          // nunca deve tocar em commandOwnerId — o Note (owner real) é quem controla.
+          // Só grava presença nos controllers, sem interferir no controle da live.
+          const myPin = userProfile.pin?.toUpperCase();
+          const isSecondaryDevice = cloudData.ownerPin?.toUpperCase() === myPin && cloudData.ownerDeviceId && cloudData.ownerDeviceId !== deviceId;
+
           await updateDoc(doc(db, "live_matches", pinUpper), {
-            [`controllers.${deviceId}`]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType() }
+            [`controllers.${deviceId}`]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType(), isOwner: false }
           }).catch(() => {});
           // lastActivityAt atualizado via D1 no mesmo updateDoc
           
@@ -2368,9 +2529,12 @@ const App: React.FC = () => {
 
           const nextControllers = {
             ...(cloudData.controllers || {}),
-            [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType() }
+            [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType(), isOwner: false }
           };
-          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: !!matchSettings.isScoreboardMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+          // Device secundário do mesmo usuário: preserva commandOwnerId da cloud (o Note).
+          // Se o celular sobrescrevesse commandOwnerId com o próprio deviceId, o Note viraria observer.
+          const resolvedCommandOwnerId = isSecondaryDevice ? cloudData.commandOwnerId : deviceId;
+          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: joinRole === 'observer' ? true : !!matchSettings.isScoreboardMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           overlayAcceptedRef.current = pinUpper; // impede que o modal reabra após setCurrentScreen
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
@@ -2516,9 +2680,8 @@ const App: React.FC = () => {
     if (gameState?.isMirroringActive && userProfile.email && navigator.onLine) {
       const db = getDb();
       if (db) {
-        const myPin = userProfile.pin?.toUpperCase();
-        const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-        const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
+        const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
         if (targetPin) {
           if (gameState.commandOwnerId === deviceId) {
             await setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
@@ -2621,9 +2784,8 @@ const App: React.FC = () => {
       if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
         const db = getDb();
         if (db) {
-          const myPin = userProfile.pin?.toUpperCase();
-          const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-          const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+          const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
           const stateToSync = sanitizeForFirestore({
             ...gameState,
             controllers: undefined,  // gerenciado via field-path, nunca sobrescrever
@@ -2690,7 +2852,7 @@ const App: React.FC = () => {
       if (nextState.isMirroringActive && userProfile.email && navigator.onLine && nextState.commandOwnerId === deviceId) {
         const db = getDb();
         if (db) {
-          const targetPin = isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState.ownerPin?.toUpperCase();
+          const targetPin = resolveTargetPin('initSync');
           const stateToSync = sanitizeForFirestore({ ...nextState, controllers: undefined });
           if (stateToSync && targetPin) setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
         }
@@ -2762,7 +2924,7 @@ const App: React.FC = () => {
     if (nextState.isMirroringActive && userProfile.email && navigator.onLine && nextState.commandOwnerId === deviceId) {
       const db = getDb();
       if (db) {
-        const targetPin = isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState.ownerPin?.toUpperCase();
+        const targetPin = resolveTargetPin('confirmMatch');
         const stateToSync = sanitizeForFirestore({ ...nextState, controllers: undefined });
         if (stateToSync && targetPin) setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
       }
@@ -2914,11 +3076,7 @@ const App: React.FC = () => {
     }
     const db = getDb();
     if (!db) return;
-    const myPin = userProfile.pin?.toUpperCase();
-    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-    const targetPin = (judgeMatch && judgeMatch.ownerPin)
-      ? judgeMatch.ownerPin.toUpperCase()
-      : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+    const targetPin = resolveTargetPin('liveControl');
     if (!targetPin) return;
 
     const isController = gameState.commandOwnerId === deviceId;
@@ -3347,8 +3505,8 @@ const App: React.FC = () => {
           const db = getDb();
           if (db && navigator.onLine && userProfile.pin) {
             const myPin = userProfile.pin.toUpperCase();
-            const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-            const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+            const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
             // Guard: consulta o Firestore diretamente pelo pin (não depende de activeLives
             // estar populado em memória — cobre o caso de reload/latência do onSnapshot).
             // Usamos o pin próprio como fallback adicional caso targetPin venha de activeLives vazio.
@@ -3373,18 +3531,25 @@ const App: React.FC = () => {
         const db = getDb();
         if (a && db && navigator.onLine) {
           const myPin = userProfile.pin?.toUpperCase();
-          const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-          const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState.ownerPin?.toUpperCase());
+          const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
         const nextControllers = { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: isOriginalOwner ? 'owner' : 'judge' as const, deviceType: getDeviceType() } };
-          const stateToSave = sanitizeForFirestore({...gameState, isMirroringActive: true, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, ownerDeviceId: deviceId, controllers: nextControllers, isLiveClosed: false});
-          if (stateToSave && targetPin) { setDoc(doc(db, "live_matches", targetPin), stateToSave).catch(() => {}); }
+          // TRAVA DE PROPRIETÁRIO: ownerPin e ownerDeviceId são imutáveis — NUNCA
+          // sobrescrever com o deviceId de quem está ativando o mirroring (pode ser
+          // um judge ou device secundário). Preserva os valores já gravados no gameState.
+          // ownerDeviceId só é definido se ainda não existir (primeira ativação pelo owner).
+          const lockedOwnerDeviceId = gameState.ownerDeviceId || (isOriginalOwner ? deviceId : undefined);
+          const lockedOwnerPin = gameState.ownerPin || userProfile.pin;
+          const stateToSave = sanitizeForFirestore({...gameState, isMirroringActive: true, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, ownerDeviceId: lockedOwnerDeviceId, ownerPin: lockedOwnerPin, controllers: nextControllers, isLiveClosed: false});
+          if (stateToSave && targetPin && assertOwnerPin(targetPin, lockedOwnerPin?.toUpperCase(), 'toggleMirroring')) {
+            setDoc(doc(db, "live_matches", targetPin), stateToSave).catch(() => {});
+          }
         }
         setGameState(p => p ? {...p, isMirroringActive: a, isLiveClosed: false, commandOwnerId: a ? deviceId : p.commandOwnerId} : null); 
       }} onCorrectScore={handleCorrectScore} isAdmin={isAdmin} onConfirmMatch={async () => {
         const db = getDb();
-        const myPin = userProfile.pin?.toUpperCase();
-        const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-        const targetPin = (judgeMatch && judgeMatch.ownerPin) ? judgeMatch.ownerPin.toUpperCase() : (isOriginalOwner ? myPin : gameState?.ownerPin?.toUpperCase());
+        const targetPin = resolveTargetPin('write');
+            if (!targetPin) return;
         // 2) após 4s deleta o documento do Firestore.
         if (db && targetPin && navigator.onLine) {
           try {
@@ -3403,7 +3568,7 @@ const App: React.FC = () => {
         setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false, isLiveClosed: true} : null);
         setCloudLiveExists(false);
         setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
-        try { localStorage.removeItem('myPlacarActiveGameState'); } catch {};
+        try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {};
       }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onDeleteLive={() => {
               setModalConfig({
                 title: "Encerrar a live?",
@@ -3413,7 +3578,7 @@ const App: React.FC = () => {
                 onConfirm: async () => { setModalConfig(null); await handleCloseCloudLive(); },
                 onCancel: () => setModalConfig(null)
               });
-            }} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={livePapel} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} liveLogs={liveLogs} setLiveLogs={setLiveLogs} voiceLogs={voiceLogs} setVoiceLogs={setVoiceLogs} />}
+            }} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} role={livePapel} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} onToggleScoreboardMode={() => { setMatchSettings(prev => ({ ...prev, isScoreboardMode: !prev.isScoreboardMode })); setGameState(p => p ? { ...p, matchConfig: { ...p.matchConfig, isScoreboardMode: !p.matchConfig.isScoreboardMode } } : null); }} liveLogs={liveLogs} setLiveLogs={setLiveLogs} voiceLogs={voiceLogs} setVoiceLogs={setVoiceLogs} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as unknown as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={handleAddTournamentPartner} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
