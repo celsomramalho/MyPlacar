@@ -820,7 +820,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return `${cleanBase}/?viewPin=${gameState.ownerPin?.toUpperCase()}`;
   }, [gameState.ownerPin, customBaseUrl]);
   const watchLink = useMemo(() => `${mirrorLink}&viewMode=watch`, [mirrorLink]);
-  // scoreboardLink: abre o modo placar público (sem login, sem LiveIndicator)
   const scoreboardLink = useMemo(() => `${mirrorLink}&viewMode=scoreboard`, [mirrorLink]);
   const qrCodeUrl = useMemo(() => `https://quickchart.io/qr?text=${encodeURIComponent(scoreboardLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`, [scoreboardLink]);
 
@@ -1149,15 +1148,17 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
               {isTieBreak && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ml-1">Tb</span>}
             </span>
           </button>
-          {isLiveActive && !isPublicView && (
-            <LiveIndicator 
-              role={role || 'observer'}
-              onClick={onOpenLiveControl} 
-              onPointerDown={startResetPress}
-              onPointerUp={stopResetPress}
-              onPointerLeave={stopResetPress}
-              progress={resetPressProgress}
-            />
+          {isLiveActive && (
+            isPublicView
+              ? <LiveIndicator role="observer" />
+              : <LiveIndicator
+                  role={role || 'observer'}
+                  onClick={onOpenLiveControl}
+                  onPointerDown={startResetPress}
+                  onPointerUp={stopResetPress}
+                  onPointerLeave={stopResetPress}
+                  progress={resetPressProgress}
+                />
           )}
         </div>
         <div className="flex items-center gap-2">
