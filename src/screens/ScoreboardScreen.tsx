@@ -115,6 +115,7 @@ interface Props {
   setVoiceLogs?: (logs: any[] | ((prev: any[]) => any[])) => void;
   fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
   onToggleScoreboardMode?: () => void;
+  isPublicView?: boolean;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -304,7 +305,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus, onToggleScoreboardMode } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus, onToggleScoreboardMode, isPublicView } = props;
 
   // Usar props se fornecidas, caso contrário usar estado local (fallback para compatibilidade)
   const effectiveLiveLogs = liveLogs !== undefined ? liveLogs : [];
@@ -819,7 +820,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return `${cleanBase}/?viewPin=${gameState.ownerPin?.toUpperCase()}`;
   }, [gameState.ownerPin, customBaseUrl]);
   const watchLink = useMemo(() => `${mirrorLink}&viewMode=watch`, [mirrorLink]);
-  const qrCodeUrl = useMemo(() => `https://quickchart.io/qr?text=${encodeURIComponent(mirrorLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`, [mirrorLink]);
+  // scoreboardLink: abre o modo placar público (sem login, sem LiveIndicator)
+  const scoreboardLink = useMemo(() => `${mirrorLink}&viewMode=scoreboard`, [mirrorLink]);
+  const qrCodeUrl = useMemo(() => `https://quickchart.io/qr?text=${encodeURIComponent(scoreboardLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`, [scoreboardLink]);
 
   // Tênis e beach tênis
   const { announceFullScore: announceFullScoreTennis, isAnnouncing: isAnnouncingTennis } =
@@ -923,11 +926,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const handleSaveBaseUrl = () => { localStorage.setItem('myPlacar_CustomHost', customBaseUrl); setIsEditingUrl(false); };
-  const handleCopyLink = () => navigator.clipboard.writeText(mirrorLink).then(() => window.alert("Link de espelhamento copiado com sucesso."));
+  const handleCopyLink = () => navigator.clipboard.writeText(scoreboardLink).then(() => window.alert("Link do placar copiado com sucesso."));
   const handleCopyWatchLink = () => navigator.clipboard.writeText(watchLink).then(() => window.alert("Link para relógio copiado com sucesso."));
   const handleShareWhatsApp = () => {
     const currentSportDef = SPORT_LIST.find(s => s.id === gameState.matchConfig.sportType) || SPORT_LIST[0];
-    const text = `Acompanhe meu jogo de ${currentSportDef.name} ao vivo no my placar. 🎾\n\n${mirrorLink}`;
+    const text = `Acompanhe meu jogo de ${currentSportDef.name} ao vivo no my placar. 🎾\n\n${scoreboardLink}`;
     globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -1146,7 +1149,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
               {isTieBreak && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ml-1">Tb</span>}
             </span>
           </button>
-          {isLiveActive && (
+          {isLiveActive && !isPublicView && (
             <LiveIndicator 
               role={role || 'observer'}
               onClick={onOpenLiveControl} 

@@ -16,6 +16,7 @@ import type { Partner, QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
 import type { EventRegistration, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events';
 import { GameState, MatchSettings, Screen, UserProfile, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
+// NOTA: adicionar 'public-scoreboard' ao tipo Screen em types.ts
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
@@ -156,8 +157,10 @@ const App: React.FC = () => {
   
   const initialSpectatorMatchId = urlParams.get('viewMatch');
   const initialSpectatorPin = urlParams.get('viewPin');
+  const initialViewMode = urlParams.get('viewMode'); // 'scoreboard' | 'watch' | null
   
   const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
+    if (initialSpectatorPin && initialViewMode === 'scoreboard') return 'public-scoreboard';
     if (initialSpectatorMatchId || initialSpectatorPin) return 'spectator';
     
     const params = getUrlParams();
@@ -1017,6 +1020,40 @@ const App: React.FC = () => {
     return localGs?.ownerPin?.toUpperCase() || null;
   }, [activeLives, userProfile.pin, deviceId]);
 
+  // ── Listener dedicado para modo placar público (viewMode=scoreboard) ──────────
+  // Visitantes sem login não têm userProfile.pin, então targetListenPin seria null.
+  // Este useEffect escuta diretamente o PIN da URL e alimenta o gameState.
+  useEffect(() => {
+    if (currentScreen !== 'public-scoreboard' || !initialSpectatorPin) return;
+    const db = getDb();
+    if (!db) return;
+    const pin = initialSpectatorPin.toUpperCase();
+    setIsWaitingSync(true);
+    const unsubscribe = onSnapshot(doc(db, 'live_matches', pin), (snap) => {
+      if (snap.exists()) {
+        const cloudData = snap.data() as GameState;
+        if (!isValidGameState(cloudData)) return;
+        setCloudLiveExists(!cloudData.isLiveClosed);
+        setGameState(prev => ({
+          ...(prev || {}),
+          ...cloudData,
+          isMirroringActive: true,
+          isLiveClosed: !!cloudData.isLiveClosed,
+          matchConfig: {
+            ...(prev?.matchConfig || {}),
+            ...cloudData.matchConfig,
+            isScoreboardMode: true,
+          },
+        } as GameState));
+        setIsWaitingSync(false);
+      } else {
+        setCloudLiveExists(false);
+        setIsWaitingSync(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [currentScreen, initialSpectatorPin]);
+
   useEffect(() => {
     if (!navigator.onLine || !targetListenPin) return;
     const db = getDb();
@@ -1675,11 +1712,25 @@ const App: React.FC = () => {
               prevState.matchConfig?.gamesPerSet !== gameState.matchConfig?.gamesPerSet ||
               prevState.matchConfig?.noAd !== gameState.matchConfig?.noAd ||
               prevState.matchConfig?.tieBreak !== gameState.matchConfig?.tieBreak ||
+              prevState.matchConfig?.tieBreakAt !== gameState.matchConfig?.tieBreakAt ||
+              prevState.matchConfig?.tieBreakPoints !== gameState.matchConfig?.tieBreakPoints ||
+              prevState.matchConfig?.tieBreakWinByTwo !== gameState.matchConfig?.tieBreakWinByTwo ||
+              prevState.matchConfig?.switchSidesOdd !== gameState.matchConfig?.switchSidesOdd ||
+              prevState.matchConfig?.tieBreakSideSwitchMode !== gameState.matchConfig?.tieBreakSideSwitchMode ||
+              prevState.matchConfig?.pickleballScoringMode !== gameState.matchConfig?.pickleballScoringMode ||
+              prevState.matchConfig?.pickleballServiceMode !== gameState.matchConfig?.pickleballServiceMode ||
+              prevState.matchConfig?.winnersStay !== gameState.matchConfig?.winnersStay ||
               prevState.matchConfig?.isDoubles !== gameState.matchConfig?.isDoubles;
 
-            // Controller escreve mudanças de partida; owner escreve mudanças de config.
+            // Owner OU controller ativo podem escrever mudanças de config (tela inicial e regras).
+            // isOwnerByDeviceId: verificação direta via ownerDeviceId, sem depender da latência
+            // do activeLives (que pode demorar segundos para confirmar isOriginalOwner).
+            const isOwnerByDeviceId = gameState.ownerDeviceId === deviceId;
+            const canWriteConfig = isOriginalOwner || isOwnerByDeviceId || controllerGuardOk;
+
+            // Controller escreve mudanças de partida; owner ou controller ativo escrevem config.
             if (isMatchStateChange && !controllerGuardOk) return;
-            if (!isMatchStateChange && isConfigChange && !isOriginalOwner) return;
+            if (!isMatchStateChange && isConfigChange && !canWriteConfig) return;
             if (!isMatchStateChange && !isConfigChange && !isThisDeviceController) return;
 
             const isCriticalChange = isMatchStateChange || isConfigChange;
@@ -3299,6 +3350,27 @@ const App: React.FC = () => {
       )}
       <InstallPwaModal isOpen={showInstallPwa} onClose={() => setShowInstallPwa(false)} deferredPrompt={deferredPrompt} />
       {currentScreen === 'spectator' && (spectatorMatchId || spectatorPin) && <SpectatorScreen matchId={spectatorMatchId || ''} spectatorPin={spectatorPin || ''} onExit={handleExitSpectator} />}
+      {/* Modo placar público: sem login, sem LiveIndicator — acesso via QR/link/WhatsApp */}
+      {currentScreen === 'public-scoreboard' && initialSpectatorPin && (gameState || isWaitingSync) && (
+        <ScoreboardScreen
+          appUrl={appUrl}
+          gameState={gameState!}
+          onScoreUpdate={() => {}}
+          onUndo={() => {}}
+          onSwitchServer={() => {}}
+          onTogglePause={() => {}}
+          onBack={() => {}}
+          onToggleMirroring={() => {}}
+          onToggleWatchMode={() => {}}
+          isAdmin={false}
+          isOriginalOwner={false}
+          isPublicView={true}
+          role="observer"
+          cloudLiveExists={cloudLiveExists}
+          userProfile={userProfile}
+          fbSyncStatus={fbSyncStatus}
+        />
+      )}
       {currentScreen === 'auth' && <AuthScreen appUrl={appUrl} onAuthSuccess={(p, s) => { 
         setIsOfflineMode(false);
         if (s) { 
@@ -3453,18 +3525,7 @@ const App: React.FC = () => {
               onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('new-game'); },
               onCancel: () => setModalConfig(null),
             });
-          } else if (isCurrentController) {
-            // Qualquer controller ativo não-owner (relógio, juiz, observer que assumiu):
-            // avisa que libera o controle ao sair — controle volta para o proprietário.
-            setModalConfig({
-              title: "Sair da live?",
-              message: "Você está no controle. Ao sair, o controle voltará para o proprietário.",
-              confirmLabel: "Sair e liberar controle",
-              onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('new-game'); },
-              onCancel: () => setModalConfig(null),
-            });
           } else {
-            // Observer sem controle: sai silenciosamente
             handleLeaveLive(); setCurrentScreen('new-game');
           }
         } else {
@@ -3479,15 +3540,6 @@ const App: React.FC = () => {
               title: "Você é o proprietário",
               message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",
               confirmLabel: "Sair da tela (live continua)",
-              onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('settings'); },
-              onCancel: () => setModalConfig(null),
-            });
-          } else if (isCurrentController) {
-            // Qualquer controller ativo não-owner: avisa que libera o controle ao sair.
-            setModalConfig({
-              title: "Sair da live?",
-              message: "Você está no controle. Ao sair, o controle voltará para o proprietário.",
-              confirmLabel: "Sair e liberar controle",
               onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('settings'); },
               onCancel: () => setModalConfig(null),
             });
