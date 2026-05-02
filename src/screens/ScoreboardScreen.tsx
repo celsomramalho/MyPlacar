@@ -1311,7 +1311,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 )}
                 {/* Número grande */}
                 {team === 1 && (
-                  <div className="absolute bottom-3 left-0 right-0 flex justify-center items-end z-0">
+                  <div className="absolute top-0 bottom-3 left-0 right-0 flex justify-center items-end z-0">
                     <span
                       className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
                       style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}
