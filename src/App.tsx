@@ -3351,10 +3351,15 @@ const App: React.FC = () => {
       <InstallPwaModal isOpen={showInstallPwa} onClose={() => setShowInstallPwa(false)} deferredPrompt={deferredPrompt} />
       {currentScreen === 'spectator' && (spectatorMatchId || spectatorPin) && <SpectatorScreen matchId={spectatorMatchId || ''} spectatorPin={spectatorPin || ''} onExit={handleExitSpectator} />}
       {/* Modo placar público: sem login, sem LiveIndicator — acesso via QR/link/WhatsApp */}
-      {currentScreen === 'public-scoreboard' && initialSpectatorPin && (gameState || isWaitingSync) && (
+      {currentScreen === 'public-scoreboard' && initialSpectatorPin && !gameState && (
+        <div className="flex items-center justify-center h-screen w-screen bg-slate-900">
+          <Loader2 className="animate-spin text-white w-10 h-10" />
+        </div>
+      )}
+      {currentScreen === 'public-scoreboard' && initialSpectatorPin && gameState && (
         <ScoreboardScreen
           appUrl={appUrl}
-          gameState={gameState!}
+          gameState={gameState}
           onScoreUpdate={() => {}}
           onUndo={() => {}}
           onSwitchServer={() => {}}
