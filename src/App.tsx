@@ -3365,8 +3365,11 @@ const App: React.FC = () => {
           onSwitchServer={() => {}}
           onTogglePause={() => {}}
           onBack={() => {}}
+          onHome={() => {}}
           onToggleMirroring={() => {}}
           onToggleWatchMode={() => {}}
+          isSettingsInicialSaved={false}
+          isSettingsRegrasSaved={false}
           isAdmin={false}
           isOriginalOwner={false}
           isPublicView={true}

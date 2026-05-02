@@ -1,5 +1,5 @@
 
-export type Screen = 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail' | 'communications';
+export type Screen = 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail' | 'communications' | 'public-scoreboard';
 export type Tab = 'config' | 'history' | 'help' | 'profile';
 export type AdminTab = 'configs' | 'users' | 'icons' | 'events' | 'comms';
 export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros';
