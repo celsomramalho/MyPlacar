@@ -395,6 +395,12 @@ const App: React.FC = () => {
   const [isRecoveryFromMatchOver, setIsRecoveryFromMatchOver] = useState(false);
   const [isWaitingSync, setIsWaitingSync] = useState(false);
   const [isServiceInterrupted, setIsServiceInterrupted] = useState(false);
+
+  // ── Indicador de sincronismo FB ────────────────────────────────────────────
+  // Aparece no card do time que marcou: verde (controller confirmado) / azul (observer recebeu)
+  const [fbSyncStatus, setFbSyncStatus] = useState<{ team: 1 | 2; seq: number; isObserver: boolean } | null>(null);
+  const fbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFbScoreKeyRef = useRef<string>(''); // "p1score_p1games_p2score_p2games"
   const [newAppUrl, setNewAppUrl] = useState("");
 
   const [activeEvent, setActiveEvent] = useState<TournamentEvent | null>(() => safeJsonParse('myPlacarActiveEvent', null));
@@ -1036,6 +1042,18 @@ const App: React.FC = () => {
           }
           // Lê matchSettings via ref para não forçar resubscribe do listener
           const localSettings = matchSettingsRef.current;
+
+          // FB badge — observer: detecta qual time marcou ao receber snapshot
+          const prevGs = gameStateRef.current;
+          if (prevGs && !prevGs.isLiveClosed) {
+            const p1Scored = cloudData.p1.games > prevGs.p1.games || (cloudData.p1.games === prevGs.p1.games && cloudData.p1.score !== prevGs.p1.score);
+            const p2Scored = cloudData.p2.games > prevGs.p2.games || (cloudData.p2.games === prevGs.p2.games && cloudData.p2.score !== prevGs.p2.score);
+            // seq = índice do último ponto no pointHistory (igual ao número visível no Firestore)
+            const pointSeq = cloudData.pointHistory?.length ?? 0;
+            if (p1Scored && !p2Scored) setFbSyncStatus({ team: 1, seq: pointSeq, isObserver: true });
+            else if (p2Scored && !p1Scored) setFbSyncStatus({ team: 2, seq: pointSeq, isObserver: true });
+          }
+
           setGameState(prev => {
             const baseConfig = prev?.matchConfig || localSettings;
             return {
@@ -1563,6 +1581,21 @@ const App: React.FC = () => {
                     // D1: lastActivityAt habilita TTL de 3h pelo Cloud Function scheduler
                     setDoc(doc(db, "live_matches", targetPin), { ...stateToSave, lastActivityAt: Date.now() }, { merge: true }).catch(() => {});
 
+                    // FB badge — detecta qual time marcou para exibir indicador verde no controller
+                    const curScoreKey = `${gameState.p1.score}_${gameState.p1.games}_${gameState.p2.score}_${gameState.p2.games}`;
+                    if (isMatchStateChange && lastFbScoreKeyRef.current && lastFbScoreKeyRef.current !== curScoreKey) {
+                      const parts = lastFbScoreKeyRef.current.split('_');
+                      const prevP1Games = parseInt(parts[1]);
+                      const prevP2Games = parseInt(parts[3]);
+                      const p1Scored = gameState.p1.games > prevP1Games || (gameState.p1.games === prevP1Games && gameState.p1.score !== parts[0]);
+                      const p2Scored = gameState.p2.games > prevP2Games || (gameState.p2.games === prevP2Games && gameState.p2.score !== parts[2]);
+                      // seq = índice do último ponto no pointHistory (igual ao número visível no Firestore)
+                      const pointSeq = gameState.pointHistory?.length ?? 0;
+                      if (p1Scored && !p2Scored) setFbSyncStatus({ team: 1, seq: pointSeq, isObserver: false });
+                      else if (p2Scored && !p1Scored) setFbSyncStatus({ team: 2, seq: pointSeq, isObserver: false });
+                    }
+                    lastFbScoreKeyRef.current = curScoreKey;
+
                     // T4.1 — Write 2 (presença): atualiza só o registro deste device via field-path.
                     // Não sobrescreve os registros de outros devices — elimina race condition.
                     if (shouldUpdateLastSeen) {
@@ -1587,6 +1620,15 @@ const App: React.FC = () => {
       }
     }
   }, [gameState, userProfile.pin, userProfile.email, currentFullDeviceName, deviceId]);
+
+  // ── Auto-clear do fbSyncStatus após 2.5s ──────────────────────────────────
+  useEffect(() => {
+    if (!fbSyncStatus) return;
+    if (fbSyncTimerRef.current) clearTimeout(fbSyncTimerRef.current);
+    fbSyncTimerRef.current = setTimeout(() => setFbSyncStatus(null), 2500);
+    return () => { if (fbSyncTimerRef.current) clearTimeout(fbSyncTimerRef.current); };
+  }, [fbSyncStatus]);
+
 
   const [historyStack, setHistoryStack] = useState<GameState[]>([]);
   // Ref espelho do historyStack — garante que callbacks com closure stale
@@ -3215,6 +3257,7 @@ const App: React.FC = () => {
         />
       )}
       {currentScreen === 'scoreboard' && (gameState || isWaitingSync) && <ScoreboardScreen 
+        fbSyncStatus={fbSyncStatus}
         appUrl={appUrl} 
         gameState={gameState!} 
         onScoreUpdate={handleScoreUpdate}

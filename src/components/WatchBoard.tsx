@@ -41,6 +41,7 @@ interface WatchBoardProps {
   scorePressProgress?: { player: 1 | 2; type: 'game' | 'gameSet' | 'matchSet'; progress: number } | null;
   cloudLiveExists?: boolean;
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
+  fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -75,7 +76,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
@@ -277,6 +278,13 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 ${gameState.server === 1 ? 'text-[#bef264]' : 'text-white'}`}>{gameState.p1.score}</span>
           {remoteActionFeedback === 'P1_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
           {renderServerIndicator(1)}
+          {/* FB Sync Badge — topo-esquerdo, compacto para display do relógio */}
+          {fbSyncStatus?.team === 1 && (
+            <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1">
+              <span className="text-[16px] font-black text-white leading-none tabular-nums">FB|{fbSyncStatus.seq}</span>
+              <span className={`w-3 h-3 rounded-full animate-pulse flex-shrink-0 ${fbSyncStatus.isObserver ? 'bg-blue-400' : 'bg-green-400'}`} />
+            </div>
+          )}
         </div>
         
         <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
@@ -399,6 +407,13 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 ${gameState.server === 2 ? 'text-[#bef264]' : 'text-white'}`}>{gameState.p2.score}</span>
           {remoteActionFeedback === 'P2_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
           {renderServerIndicator(2)}
+          {/* FB Sync Badge — topo-esquerdo, compacto para display do relógio */}
+          {fbSyncStatus?.team === 2 && (
+            <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1">
+              <span className="text-[16px] font-black text-white leading-none tabular-nums">FB|{fbSyncStatus.seq}</span>
+              <span className={`w-3 h-3 rounded-full animate-pulse flex-shrink-0 ${fbSyncStatus.isObserver ? 'bg-blue-400' : 'bg-green-400'}`} />
+            </div>
+          )}
         </div>
       </div>
 

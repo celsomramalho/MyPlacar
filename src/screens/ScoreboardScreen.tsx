@@ -113,6 +113,7 @@ interface Props {
   setLiveLogs?: (logs: LiveLogEntry[] | ((prev: LiveLogEntry[]) => LiveLogEntry[])) => void;
   voiceLogs?: {id: string, startTime: string, before: string, after: string, text: string, latency: number, timestamp: number, isError?: boolean, winner?: 1 | 2, isRemote?: boolean, liveSequence?: number, liveId?: number, source: string}[];
   setVoiceLogs?: (logs: any[] | ((prev: any[]) => any[])) => void;
+  fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -302,7 +303,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus } = props;
 
   // Usar props se fornecidas, caso contrário usar estado local (fallback para compatibilidade)
   const effectiveLiveLogs = liveLogs !== undefined ? liveLogs : [];
@@ -1031,6 +1032,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
         cloudLiveExists={cloudLiveExists}
         role={indicatorRole || role}
+        fbSyncStatus={fbSyncStatus}
       />
     );
   }
@@ -1311,20 +1313,20 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 )}
                 {/* Número grande */}
                 {team === 1 && (
-                  <div className="absolute top-0 bottom-3 left-0 right-0 flex justify-center items-end z-0">
+                  <div className="absolute top-[60px] bottom-0 left-0 right-0 flex justify-center items-center z-0">
                     <span
                       className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
-                      style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}
+                      style={{ fontSize: 'clamp(100px, 20vh, 220px)' }}
                     >
                       {p.score}
                     </span>
                   </div>
                 )}
                 {team === 2 && (
-                  <div className="absolute top-3 left-0 right-0 flex justify-center z-0">
+                  <div className="absolute top-0 bottom-[60px] left-0 right-0 flex justify-center items-center z-0">
                     <span
-                      className={`font-black tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
-                      style={{ fontSize: 'clamp(120px, 28vh, 260px)', lineHeight: 1, marginTop: '-0.1em' }}
+                      className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
+                      style={{ fontSize: 'clamp(100px, 20vh, 220px)' }}
                     >
                       {p.score}
                     </span>
@@ -1344,12 +1346,25 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 )}
                 {/* Indicador de sacador */}
                 {renderServerIndicatorNew(team)}
+                {/* FB Sync Badge — pílula discreta com contador e bolinha de status */}
+                {fbSyncStatus?.team === team && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 z-30 pointer-events-none flex items-center gap-2 bg-white/85 backdrop-blur-sm rounded-full px-4 py-2 shadow-md">
+                    <span className="text-[18px] font-black text-gray-700 leading-none tabular-nums">
+                      FB|{fbSyncStatus.seq}
+                    </span>
+                    <span
+                      className={`w-4 h-4 rounded-full animate-pulse flex-shrink-0 ${
+                        fbSyncStatus.isObserver ? 'bg-blue-500' : 'bg-green-500'
+                      }`}
+                    />
+                  </div>
+                )}
               </div>
             );
           };
 
           return (
-            <div className="-mx-4 mt-6 bg-black flex flex-col select-none touch-pan-y overflow-hidden" style={{ height: '620px' }}>
+            <div className="-mx-4 mt-6 bg-black flex flex-col select-none touch-pan-y overflow-hidden" style={{ height: '580px' }}>
               {/* Time 1 */}
               {renderTeamBlockNew(1)}
 
