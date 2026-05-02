@@ -249,14 +249,19 @@ const App: React.FC = () => {
       s.deviceLabel = localStorage.getItem('myPlacar_LocalDeviceLabel') || '';
       s.brightness = parseInt(localStorage.getItem('myPlacar_LocalBrightness') || '100');
       s.volume = parseInt(localStorage.getItem('myPlacar_LocalVolume') || '100');
-      // Se o usuário já salvou uma preferência explícita, respeita ela.
-      // Caso contrário, detecta automaticamente se é um relógio.
-      const savedWatchMode = localStorage.getItem('myPlacar_LocalWatchMode');
-      if (savedWatchMode !== null) {
-        s.isWatchMode = savedWatchMode === 'true';
+      // Se é um relógio, sempre ativa o modo relógio independente do valor salvo.
+      // Caso contrário, respeita a preferência salva ou detecta automaticamente.
+      if (isWatchDevice()) {
+        s.isWatchMode = true;
+        localStorage.setItem('myPlacar_LocalWatchMode', 'true');
       } else {
-        s.isWatchMode = isWatchDevice();
-        localStorage.setItem('myPlacar_LocalWatchMode', s.isWatchMode ? 'true' : 'false');
+        const savedWatchMode = localStorage.getItem('myPlacar_LocalWatchMode');
+        if (savedWatchMode !== null) {
+          s.isWatchMode = savedWatchMode === 'true';
+        } else {
+          s.isWatchMode = false;
+          localStorage.setItem('myPlacar_LocalWatchMode', 'false');
+        }
       }
 
       s.selectedVoiceURI = localStorage.getItem('myPlacar_LocalVoiceURI') || s.selectedVoiceURI;

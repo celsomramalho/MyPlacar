@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw } from 'lucide-react';
 import { getDeviceType } from '../utils/device.ts';
-import { SettingsTabs } from './settings/SettingsTabs';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { Input } from '../components/Input';
@@ -263,7 +262,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
   }, [history, p1Sets, p2Sets, isMatchOver]);
 
   return (
-    <div className="bg-white rounded-5xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 w-full overflow-hidden">
+    <div className="w-full overflow-hidden">
        <div ref={scrollRef} className="flex-1 overflow-x-auto py-2 timeline-scrollbar scroll-smooth no-scrollbar">
            <div className="flex items-start gap-1 min-w-max px-2 relative h-20 pt-4">
              <div className="absolute top-1/2 left-0 right-0 h-[1.5px] bg-gray-50 -translate-y-1/2" />
@@ -1165,8 +1164,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       {liveBanner}
 
       <main className={`flex-1 p-4 max-w-2xl mx-auto w-full pb-36 overflow-y-auto no-scrollbar transition-all duration-700 ${gameState.isLiveClosed && !isOfflineMode ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
-        <div className={`bg-white rounded-[2rem] shadow-sm border ${gameState.isConfirmedFinished ? 'border-emerald-400 ring-4 ring-emerald-50' : isTieBreak ? 'border-amber-300 ring-4 ring-amber-100' : 'border-gray-100'} p-4 md:p-8 flex flex-col items-center gap-4 relative`}>
-           <div className="flex flex-col w-full mb-4">
+        <div className="flex flex-col items-center gap-4 relative w-full">
+           <div className="flex flex-col w-full">
              <div className="flex items-center justify-between w-full mb-2 px-2">
                <div className="flex items-center gap-2"></div>
                <div className="flex flex-col items-center justify-center -mt-12 md:-mt-16">
@@ -1184,30 +1183,33 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${gameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(gameState.matchDuration)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${gameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{gameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
              </div>
              
-             <div className="flex items-center justify-between w-full px-4 mt-4">
+             <div className="flex flex-col w-full mt-4">
                {(() => {
                  const isActive = !gameState.isConfirmedFinished && !gameState.isMatchOver && !gameState.isLiveClosed;
                  const o = gameState.servingOrderOffset;
+                 const c1 = gameState.p1.color || 'azul';
+                 const c2 = gameState.p2.color || 'vermelho';
                  return (
                    <>
-                     <div className="flex flex-col items-center flex-1 min-w-0">
-                       <div onClick={() => onSwitchServer(1, false)} className="text-center w-full cursor-pointer active:scale-95 transition-transform">
-                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 0 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-gray-900'}`}>{gameState.p1.name}</span>
+                     {/* Linha 1 — Time 1 */}
+                     <div className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[c1]}`}>
+                       <div onClick={() => onSwitchServer(1, false)} className="cursor-pointer active:scale-95 transition-transform">
+                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 0 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{gameState.p1.name}</span>
                        </div>
                        {gameState.p1.partnerName && (
-                         <div onClick={() => onSwitchServer(1, true)} className="text-center w-full cursor-pointer active:scale-95 transition-transform mt-1">
-                           <span className={`text-lg md:text-xl font-black truncate px-1 rounded ${isActive && o === 2 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-gray-900'}`}>{gameState.p1.partnerName}</span>
+                         <div onClick={() => onSwitchServer(1, true)} className="cursor-pointer active:scale-95 transition-transform">
+                           <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 2 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{gameState.p1.partnerName}</span>
                          </div>
                        )}
                      </div>
-                     <div className="w-8" />
-                     <div className="flex flex-col items-center flex-1 min-w-0">
-                       <div onClick={() => onSwitchServer(2, false)} className="text-center w-full cursor-pointer active:scale-95 transition-transform">
-                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 1 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-gray-900'}`}>{gameState.p2.name}</span>
+                     {/* Linha 2 — Time 2 */}
+                     <div className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[c2]}`}>
+                       <div onClick={() => onSwitchServer(2, false)} className="cursor-pointer active:scale-95 transition-transform">
+                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 1 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{gameState.p2.name}</span>
                        </div>
                        {gameState.p2.partnerName && (
-                         <div onClick={() => onSwitchServer(2, true)} className="text-center w-full cursor-pointer active:scale-95 transition-transform mt-1">
-                           <span className={`text-lg md:text-xl font-black truncate px-1 rounded ${isActive && o === 3 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-gray-900'}`}>{gameState.p2.partnerName}</span>
+                         <div onClick={() => onSwitchServer(2, true)} className="cursor-pointer active:scale-95 transition-transform">
+                           <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 3 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{gameState.p2.partnerName}</span>
                          </div>
                        )}
                      </div>
@@ -1308,14 +1310,26 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   <div className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} />
                 )}
                 {/* Número grande */}
-                <div className={`absolute left-0 right-0 flex justify-center z-0 ${team === 1 ? 'bottom-3 items-end' : 'top-3 items-start'}`}>
-                  <span
-                    className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
-                    style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}
-                  >
-                    {p.score}
-                  </span>
-                </div>
+                {team === 1 && (
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center items-end z-0">
+                    <span
+                      className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
+                      style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}
+                    >
+                      {p.score}
+                    </span>
+                  </div>
+                )}
+                {team === 2 && (
+                  <div className="absolute top-0 left-0 right-0 flex justify-center z-0">
+                    <span
+                      className={`font-black tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
+                      style={{ fontSize: 'clamp(120px, 28vh, 260px)', lineHeight: 1, marginTop: '-0.1em' }}
+                    >
+                      {p.score}
+                    </span>
+                  </div>
+                )}
                 {/* Time 1: games no topo */}
                 {team === 1 && (
                   <div className="z-10 flex flex-col gap-1">
@@ -1324,7 +1338,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 )}
                 {/* Time 2: games no fundo */}
                 {team === 2 && (
-                  <div className="z-10 flex flex-col gap-1 mt-auto">
+                  <div className="absolute bottom-3 left-5 z-10">
                     {games}
                   </div>
                 )}
@@ -1759,17 +1773,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           </div>
         )}
       </main>
-      <SettingsTabs 
-        activeTab="none"
-        setActiveTab={(tab) => onNavigateToTab?.(tab)}
-        onOpenRules={() => onBack()}
-        isSettingsInicialSaved={isSettingsInicialSaved}
-        isSettingsRegrasSaved={isSettingsRegrasSaved}
-        isMirroringActive={isLiveActive}
-        onOpenMenu={() => onOpenMenu?.()}
-        isOfflineMode={isOfflineMode}
-        onExitOffline={onExitOffline}
-      />
     </div>
   );
 };
