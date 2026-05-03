@@ -1416,15 +1416,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
               {renderTeamBlockNew(2)}
 
               {/* Bottom sheet modal */}
-              {newMenuOpen && !isPublicView && (
+              {newMenuOpen && (
                 <div className="fixed inset-0 z-[999999] flex flex-col justify-end" onPointerDown={() => setNewMenuOpen(false)}>
                   <div className="bg-[#1e293b] rounded-t-3xl border-t border-white/10 p-4 space-y-2" onPointerDown={e => e.stopPropagation()}>
                     <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3" />
                     {isLiveActiveNew && (
-                      <div role="button" onPointerDown={() => { setNewMenuOpen(false); onOpenLiveControl?.(); }}
-                        className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer">
-                        <LiveIndicator role={indicatorRole || role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-8 h-8 shrink-0" />
-                        <span className="font-black text-sm">Live / Controle</span>
+                      <div role={isPublicView ? undefined : "button"} onPointerDown={() => { if (!isPublicView) { setNewMenuOpen(false); onOpenLiveControl?.(); } }}
+                        className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${isPublicView ? 'bg-white/5 opacity-40 cursor-not-allowed' : 'bg-white/5 active:bg-white/10 cursor-pointer text-white'}`}>
+                        <LiveIndicator role={indicatorRole || role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className={`w-8 h-8 shrink-0 ${isPublicView ? 'grayscale opacity-50' : ''}`} />
+                        <span className={`font-black text-sm ${isPublicView ? 'text-white/50' : ''}`}>Live / Controle</span>
                       </div>
                     )}
                     {/* Modo placar — logo abaixo de Live/Controle */}

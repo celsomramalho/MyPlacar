@@ -65,6 +65,7 @@ const [physicalLandscape, setPhysicalLandscape] = useState(
 const [forceLayoutOverride, setForceLayoutOverride] = useState<boolean | null>(null);
 // isLandscape: usa override manual se definido, senão usa a orientação física
 const isLandscape = forceLayoutOverride !== null ? forceLayoutOverride : physicalLandscape;
+const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
 
 // ── Detecção de orientação ─────────────────────────────────────────────────
 useEffect(() => {
@@ -341,11 +342,11 @@ onPointerDown={e => e.stopPropagation()}
 {/* Live / Controle */}
 {isLiveActive && (
 <div
-role="button"
-onPointerDown={() => { setIsMenuOpen(false); onOpenLiveControl?.(); }}
-className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
+role={isPublicView ? undefined : "button"}
+onPointerDown={() => { if (!isPublicView) { setIsMenuOpen(false); onOpenLiveControl?.(); } }}
+className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${isPublicView ? 'bg-white/5 opacity-40 cursor-not-allowed' : 'bg-white/5 active:bg-white/10 cursor-pointer'} text-white`}
 >
-<LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-8 h-8 shrink-0" />
+<LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className={`w-8 h-8 shrink-0 ${isPublicView ? 'grayscale opacity-50' : ''}`} />
 <span className="font-black text-sm">Live / Controle</span>
 </div>
 )}
