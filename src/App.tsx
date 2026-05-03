@@ -157,11 +157,15 @@ const App: React.FC = () => {
   
   const initialSpectatorMatchId = urlParams.get('viewMatch');
   const initialSpectatorPin = urlParams.get('viewPin');
-  const initialViewMode = urlParams.get('viewMode'); // 'scoreboard' | 'watch' | null
+  const initialViewMode = new URLSearchParams(window.location.search).get('viewMode'); // 'scoreboard' | 'watch' | null
   
   const [currentScreen, setCurrentScreenRaw] = useState<Screen>(() => {
-    if (initialSpectatorPin && initialViewMode === 'scoreboard') return 'public-scoreboard';
-    if (initialSpectatorMatchId || initialSpectatorPin) return 'spectator';
+    // Lê viewMode dentro do callback para garantir avaliação no momento correto
+    const _viewMode = new URLSearchParams(window.location.search).get('viewMode');
+    const _viewPin = new URLSearchParams(window.location.search).get('viewPin');
+    const _viewMatch = new URLSearchParams(window.location.search).get('viewMatch');
+    if (_viewPin && _viewMode === 'scoreboard') return 'public-scoreboard';
+    if (_viewMatch || _viewPin) return 'spectator';
     
     const params = getUrlParams();
     if (params.get('mode') === 'resetPassword' || params.get('oobCode')) return 'auth';
