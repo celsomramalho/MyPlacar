@@ -3374,7 +3374,6 @@ const App: React.FC = () => {
           isSettingsRegrasSaved={false}
           isAdmin={false}
           isOriginalOwner={false}
-          publicViewMode={true}
           role="observer"
           cloudLiveExists={cloudLiveExists}
           userProfile={userProfile}
