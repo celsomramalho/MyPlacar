@@ -115,7 +115,6 @@ interface Props {
   setVoiceLogs?: (logs: any[] | ((prev: any[]) => any[])) => void;
   fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
   onToggleScoreboardMode?: () => void;
-  publicViewMode?: boolean;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -305,7 +304,9 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus, onToggleScoreboardMode, publicViewMode: isPublicView } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus, onToggleScoreboardMode } = props;
+  // Detecta modo público diretamente pela URL — independente de props/minificação
+  const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
 
   // Usar props se fornecidas, caso contrário usar estado local (fallback para compatibilidade)
   const effectiveLiveLogs = liveLogs !== undefined ? liveLogs : [];
