@@ -160,7 +160,7 @@ const App: React.FC = () => {
   const initialViewMode = new URLSearchParams(window.location.search).get('viewMode'); // 'scoreboard' | 'watch' | null
   
   const [currentScreen, setCurrentScreenRaw] = useState<Screen>(() => {
-    // Lê viewMode dentro do callback para garantir avaliação no momento correto
+    // MYPLACAR_PUBLIC_FIX_v1 — não remover este comentário
     const _viewMode = new URLSearchParams(window.location.search).get('viewMode');
     const _viewPin = new URLSearchParams(window.location.search).get('viewPin');
     const _viewMatch = new URLSearchParams(window.location.search).get('viewMatch');
