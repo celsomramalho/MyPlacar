@@ -160,12 +160,12 @@ const App: React.FC = () => {
   const initialViewMode = new URLSearchParams(window.location.search).get('viewMode'); // 'scoreboard' | 'watch' | null
   
   const [currentScreen, setCurrentScreenRaw] = useState<Screen>(() => {
-    // MYPLACAR_PUBLIC_FIX_v1 — não remover este comentário
     const _viewMode = new URLSearchParams(window.location.search).get('viewMode');
     const _viewPin = new URLSearchParams(window.location.search).get('viewPin');
     const _viewMatch = new URLSearchParams(window.location.search).get('viewMatch');
-    if (_viewPin && _viewMode === 'scoreboard') return 'public-scoreboard';
-    if (_viewMatch || _viewPin) return 'spectator';
+    console.log('[DEBUG currentScreen init] viewMode:', _viewMode, 'viewPin:', _viewPin, 'viewMatch:', _viewMatch);
+    if (_viewPin && _viewMode === 'scoreboard') { console.log('[DEBUG] → public-scoreboard'); return 'public-scoreboard'; }
+    if (_viewMatch || _viewPin) { console.log('[DEBUG] → spectator'); return 'spectator'; }
     
     const params = getUrlParams();
     if (params.get('mode') === 'resetPassword' || params.get('oobCode')) return 'auth';
@@ -3504,7 +3504,7 @@ const App: React.FC = () => {
           onOpenMenu={() => setIsMenuOpen(true)}
         />
       )}
-      {currentScreen === 'scoreboard' && (gameState || isWaitingSync) && <ScoreboardScreen 
+      {currentScreen === 'scoreboard' && !initialViewMode?.includes('scoreboard') && (gameState || isWaitingSync) && <ScoreboardScreen 
         fbSyncStatus={fbSyncStatus}
         appUrl={appUrl} 
         gameState={gameState!} 
