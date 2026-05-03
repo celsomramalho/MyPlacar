@@ -294,9 +294,9 @@ className={`w-10 h-10 rounded-full flex items-center justify-center active:scale
 
 {/* Ícone de conexão — também é o botão do modal */}
 <div
-role="button"
-onPointerDown={() => setIsMenuOpen(true)}
-className={`w-16 h-16 rounded-2xl flex items-center justify-center active:scale-95 transition-transform cursor-pointer border-2 shadow-lg ${
+role={isPublicView ? undefined : "button"}
+onPointerDown={() => { if (!isPublicView) setIsMenuOpen(true); }}
+className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-transform border-2 shadow-lg ${isPublicView ? 'cursor-default' : 'active:scale-95 cursor-pointer'} ${
          isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
          isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
          'border-white bg-emerald-500 text-white'
