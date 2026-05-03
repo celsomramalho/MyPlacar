@@ -1056,6 +1056,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!navigator.onLine || !targetListenPin) return;
+    // Visitante público tem seu próprio listener dedicado — não usar o listener principal
+    if (currentScreen === 'public-scoreboard') return;
     const db = getDb();
     if (!db) return;
 
@@ -1266,7 +1268,7 @@ const App: React.FC = () => {
   // targetListenPin é reativo (useMemo sobre activeLives) — quando o PIN alvo muda
   // (ex: judge adicionado, live nova detectada), o listener é recriado automaticamente.
   // deviceId permanece para garantir que o guard de ownership funcione corretamente.
-  }, [targetListenPin, deviceId]);
+  }, [targetListenPin, deviceId, currentScreen]);
 
   const prevIsCommandOwner = useRef(isCommandOwner);
   const prevCommandOwnerIdWasSelf = useRef(gameState?.commandOwnerId === deviceId);
@@ -2496,7 +2498,7 @@ const App: React.FC = () => {
             overlayAcceptedRef.current = targetPin;
             setShowLiveControlOverlay(false);
             setModalConfig(null); // limpa qualquer modal anterior
-            if (currentScreen !== 'scoreboard') setCurrentScreen('scoreboard');
+            if (currentScreen !== 'scoreboard' && currentScreen !== 'public-scoreboard') setCurrentScreen('scoreboard');
             // Sem modal de sucesso — a troca é silenciosa para quem assume.
             // O device que perdeu o controle será notificado via onSnapshot.
           }
