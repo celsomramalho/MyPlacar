@@ -1392,8 +1392,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   <Zap size={30} fill="currentColor" />
                 </button>
                 <div
-                  role="button"
-                  onPointerDown={() => { if (isPublicView) return; setNewMenuOpen(true); }}
+                  role={isPublicView ? undefined : "button"}
+                  onPointerDown={isPublicView ? undefined : () => setNewMenuOpen(true)}
+                  style={isPublicView ? { pointerEvents: 'none', cursor: 'default' } : undefined}
                   className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${isLiveActiveNew ? 'border-emerald-400 bg-white/5 text-emerald-400' : isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' : 'border-white bg-emerald-500 text-white'}`}
                 >
                   {isLiveActiveNew
