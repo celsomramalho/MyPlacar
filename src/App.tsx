@@ -3504,7 +3504,7 @@ const App: React.FC = () => {
           onOpenMenu={() => setIsMenuOpen(true)}
         />
       )}
-      {currentScreen === 'scoreboard' && !initialViewMode?.includes('scoreboard') && (gameState || isWaitingSync) && <ScoreboardScreen 
+      {currentScreen === 'scoreboard' && initialViewMode !== 'scoreboard' && (gameState || isWaitingSync) && <ScoreboardScreen 
         fbSyncStatus={fbSyncStatus}
         appUrl={appUrl} 
         gameState={gameState!} 
