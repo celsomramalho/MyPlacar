@@ -159,7 +159,7 @@ const App: React.FC = () => {
   const initialSpectatorPin = urlParams.get('viewPin');
   const initialViewMode = urlParams.get('viewMode'); // 'scoreboard' | 'watch' | null
   
-  const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
+  const [currentScreen, setCurrentScreenRaw] = useState<Screen>(() => {
     if (initialSpectatorPin && initialViewMode === 'scoreboard') return 'public-scoreboard';
     if (initialSpectatorMatchId || initialSpectatorPin) return 'spectator';
     
@@ -178,6 +178,11 @@ const App: React.FC = () => {
     } catch {}
     return 'auth';
   });
+  // Proteção: se currentScreen foi inicializado como 'public-scoreboard', nunca permite sair.
+  const setCurrentScreen = (screen: Screen | ((prev: Screen) => Screen)) => {
+    if (currentScreen === 'public-scoreboard') return;
+    setCurrentScreenRaw(screen as Screen);
+  };
 
   // authReady: true quando o Firebase Auth terminou de restaurar a sessão.
   // Impede que listeners do Firestore disparem com request.auth == null no refresh.
