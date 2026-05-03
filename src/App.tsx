@@ -155,14 +155,14 @@ const App: React.FC = () => {
   const urlParams = getUrlParams();
   const deviceId = getDeviceId();
   
-	const initialSpectatorMatchId = urlParams.get('viewMatch');
-	const initialSpectatorPin = urlParams.get('viewPin');
-	const initialViewMode = urlParams.get('viewMode');
-
-	const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
-	  if (initialSpectatorPin && initialViewMode === 'scoreboard') return 'public-scoreboard';
-	  if (initialSpectatorMatchId || initialSpectatorPin) return 'spectator';    
-	  
+  const initialSpectatorMatchId = urlParams.get('viewMatch');
+  const initialSpectatorPin = urlParams.get('viewPin');
+  const initialViewMode = urlParams.get('viewMode'); // 'scoreboard' | 'watch' | null
+  
+  const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
+    if (initialSpectatorPin && initialViewMode === 'scoreboard') return 'public-scoreboard';
+    if (initialSpectatorMatchId || initialSpectatorPin) return 'spectator';
+    
     const params = getUrlParams();
     if (params.get('mode') === 'resetPassword' || params.get('oobCode')) return 'auth';
 
@@ -3374,7 +3374,7 @@ const App: React.FC = () => {
           isSettingsRegrasSaved={false}
           isAdmin={false}
           isOriginalOwner={false}
-          isPublicView={true}
+          publicViewMode={true}
           role="observer"
           cloudLiveExists={cloudLiveExists}
           userProfile={userProfile}
