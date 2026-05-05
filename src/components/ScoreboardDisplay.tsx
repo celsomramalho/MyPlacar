@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw, MonitorSmartphone } from 'lucide-react';
+import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw, MonitorSmartphone, Trophy } from 'lucide-react';
 import { GameState, CourtSide } from '../types.ts';
 import { LiveIndicator } from '../components/LiveIndicator.tsx';
 import { getTennisServerSide } from '../utils/tennisEngine.ts';
@@ -396,7 +396,49 @@ className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-red-500/20 ac
 ) : null
 );
 
-// ── Layout portrait (cima/baixo) ───────────────────────────────────────────
+// ── Overlay de fim de partida (espectador) ─────────────────────────────────
+const [matchOverDismissed, setMatchOverDismissed] = useState(false);
+
+// Reseta o dismiss se a partida for zerada (novo matchId)
+useEffect(() => {
+  setMatchOverDismissed(false);
+}, [gameState.matchId]);
+
+const showMatchOverOverlay =
+  gameState.isMatchOver &&
+  !matchOverDismissed &&
+  (isPublicView || role === 'spectator');
+
+const winnerName = p1WonSets > p2WonSets
+  ? gameState.p1.name
+  : p2WonSets > p1WonSets
+  ? gameState.p2.name
+  : null;
+
+const renderMatchOverOverlay = () =>
+  showMatchOverOverlay ? (
+    <div className="fixed inset-0 z-[999998] bg-black/70 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-500">
+      <div className="bg-white rounded-[3rem] p-8 w-full max-w-sm shadow-2xl border border-white/50 flex flex-col items-center gap-6 animate-in zoom-in duration-300">
+        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shadow-inner">
+          <Trophy size={40} />
+        </div>
+        <div className="text-center space-y-2">
+          <h3 className="text-2xl font-black text-black tracking-tight leading-none">Partida encerrada</h3>
+          {winnerName && (
+            <p className="text-sm font-bold text-slate-500">Vencedor: {winnerName}</p>
+          )}
+        </div>
+        <button
+          onClick={() => setMatchOverDismissed(true)}
+          className="w-full py-5 bg-slate-800 text-white rounded-3xl font-black text-base shadow-xl active:scale-95 transition-all"
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+
 if (!isLandscape) {
 return (
 <div className="fixed inset-0 w-full h-full z-[99999] flex flex-col bg-black select-none touch-none overflow-hidden">
@@ -404,6 +446,7 @@ return (
 {renderCenterBar(false)}
 {renderTeamBlock(2, 'flex-1')}
 {renderModal()}
+{renderMatchOverOverlay()}
 </div>
 );
 }
@@ -415,6 +458,7 @@ return (
 {renderCenterBar(true)}
 {renderTeamBlock(2, 'flex-1')}
 {renderModal()}
+{renderMatchOverOverlay()}
 </div>
 );
 };

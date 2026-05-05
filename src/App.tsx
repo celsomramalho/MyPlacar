@@ -1205,6 +1205,15 @@ const App: React.FC = () => {
             // Firestore enviar nos snapshots subsequentes.
             const lockedOwnerPin = prev?.ownerPin || cloudData.ownerPin;
             const lockedOwnerDeviceId = prev?.ownerDeviceId || cloudData.ownerDeviceId;
+            // Se este device perdeu o controle (era controller, agora não é mais):
+            // volta para ScoreboardDisplay (isScoreboardMode: true), exceto se for relógio.
+            const justLostControl = prev?.commandOwnerId === deviceId && cloudData.commandOwnerId !== deviceId;
+            const isWatchMode = baseConfig.isWatchMode;
+            const resolvedScoreboardMode = isWatchMode
+              ? baseConfig.isScoreboardMode  // relógio: preserva modo atual
+              : justLostControl
+                ? true                        // perdeu controle → volta ao placar
+                : baseConfig.isScoreboardMode; // demais: preserva preferência local
             return {
               ...cloudData,
               // Restaura os campos de proprietário travados após o spread do cloudData
@@ -1216,7 +1225,7 @@ const App: React.FC = () => {
               matchConfig: {
                 ...cloudData.matchConfig,
                 isWatchMode: baseConfig.isWatchMode,
-                isScoreboardMode: baseConfig.isScoreboardMode,
+                isScoreboardMode: resolvedScoreboardMode,
                 brightness: baseConfig.brightness,
                 volume: baseConfig.volume,
                 deviceLabel: baseConfig.deviceLabel,
@@ -1228,6 +1237,11 @@ const App: React.FC = () => {
               }
             };
           });
+          // Sincroniza matchSettings local quando device perde controle → volta a ser observer
+          if (gameStateRef.current?.commandOwnerId === deviceId && cloudData.commandOwnerId !== deviceId) {
+            const localWatchMode = matchSettingsRef.current.isWatchMode;
+            if (!localWatchMode) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
+          }
           setIsWaitingSync(false);
         } else {
           // T4.2: Descarta write stale — versão cloud menor que a local indica ex-controller
@@ -1833,12 +1847,21 @@ const App: React.FC = () => {
   }, [fbSyncStatus]);
 
   // ── Observer: ativa modo placar automaticamente ao entrar na live ────────────
-  // Guard: só ativa se cloudLiveExists confirmou a live E este device não é ownerDeviceId.
-  // Sem essa guarda, a latência do Firestore faz livePapel ser 'observer' por um instante
-  // logo após o owner abrir a live, ativando isScoreboardMode indevidamente.
+  // Guards:
+  //   1. cloudLiveExists confirmado — evita ativar durante latência do onSnapshot
+  //   2. Não é ownerDeviceId de nenhuma live — evita ativar no owner durante flutuação de livePapel
+  //   3. Não é controller ativo — evita sobrescrever isScoreboardMode:false de quem controla
+  //   4. hasAutoEnabledScoreboardRef — evita dupla ativação na mesma sessão
   useEffect(() => {
     const thisDeviceIsOwnerOfAnyLive = activeLives.some(l => l.ownerDeviceId === deviceId);
-    if (livePapel === 'observer' && cloudLiveExists && !thisDeviceIsOwnerOfAnyLive && !hasAutoEnabledScoreboardRef.current) {
+    const thisDeviceIsActiveController = activeLives.some(l => l.commandOwnerId === deviceId);
+    if (
+      livePapel === 'observer' &&
+      cloudLiveExists &&
+      !thisDeviceIsOwnerOfAnyLive &&
+      !thisDeviceIsActiveController &&
+      !hasAutoEnabledScoreboardRef.current
+    ) {
       hasAutoEnabledScoreboardRef.current = true;
       setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
       setGameState(prev => {
@@ -1846,7 +1869,8 @@ const App: React.FC = () => {
         return { ...prev, matchConfig: { ...prev.matchConfig, isScoreboardMode: true } };
       });
     }
-    if (livePapel !== 'observer') hasAutoEnabledScoreboardRef.current = false;
+    // Reset do ref: só quando sai de observer E não é controller (evita reset durante troca de controle)
+    if (livePapel !== 'observer' && !thisDeviceIsActiveController) hasAutoEnabledScoreboardRef.current = false;
   }, [livePapel, cloudLiveExists, activeLives, deviceId]);
 
   const [historyStack, setHistoryStack] = useState<GameState[]>([]);
@@ -2498,10 +2522,13 @@ const App: React.FC = () => {
             localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() };
 
             tookControlAtRef.current = Date.now();
-            prevSettingsRef.current = JSON.parse(JSON.stringify(syncedSettings)); setMatchSettings(syncedSettings); 
-            try { localStorage.setItem('myPlacarSettings', JSON.stringify(syncedSettings)); } catch {}
+            // Controller sempre usa ScoreboardScreen (isScoreboardMode: false).
+            // Relógio (isWatchMode) é preservado — tem prioridade na renderização e não interfere.
+            const settingsAsController = { ...syncedSettings, isScoreboardMode: false };
+            prevSettingsRef.current = JSON.parse(JSON.stringify(settingsAsController)); setMatchSettings(settingsAsController); 
+            try { localStorage.setItem('myPlacarSettings', JSON.stringify(settingsAsController)); } catch {}
             setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
-            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: !!matchSettings.isScoreboardMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
             try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
 
             overlayAcceptedRef.current = targetPin;
@@ -2596,7 +2623,12 @@ const App: React.FC = () => {
           // Device secundário do mesmo usuário: preserva commandOwnerId da cloud (o Note).
           // Se o celular sobrescrevesse commandOwnerId com o próprio deviceId, o Note viraria observer.
           const resolvedCommandOwnerId = isSecondaryDevice ? cloudData.commandOwnerId : deviceId;
-          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: joinRole === 'observer' ? true : !!matchSettings.isScoreboardMode, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+          // Observers entram sempre em modo placar (ScoreboardDisplay), nunca em ScoreboardScreen.
+          // isWatchMode: false — relógio tem sua própria lógica e não deve ser forçado aqui.
+          // Controllers (judge assumindo controle via handleObserveLive) ficam com isScoreboardMode: false.
+          const enterAsObserver = joinRole === 'observer';
+          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: false, isScoreboardMode: enterAsObserver ? true : false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+          if (enterAsObserver) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true, isWatchMode: false }));
           overlayAcceptedRef.current = pinUpper; // impede que o modal reabra após setCurrentScreen
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
@@ -3615,7 +3647,10 @@ const App: React.FC = () => {
             setDoc(doc(db, "live_matches", targetPin), stateToSave).catch(() => {});
           }
         }
-        setGameState(p => p ? {...p, isMirroringActive: a, isLiveClosed: false, commandOwnerId: a ? deviceId : p.commandOwnerId} : null); 
+        // Owner que abre a live entra sempre em ScoreboardScreen (isScoreboardMode: false).
+        // isScoreboardMode é preferência local — não afeta observers nem é gravado na cloud.
+        if (a) { setMatchSettings(prev => ({ ...prev, isScoreboardMode: false })); }
+        setGameState(p => p ? {...p, isMirroringActive: a, isLiveClosed: false, commandOwnerId: a ? deviceId : p.commandOwnerId, matchConfig: { ...p.matchConfig, isScoreboardMode: a ? false : p.matchConfig.isScoreboardMode } } : null); 
       }} onCorrectScore={handleCorrectScore} isAdmin={isAdmin} onConfirmMatch={async () => {
         const db = getDb();
         const targetPin = resolveTargetPin('write');
