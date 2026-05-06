@@ -800,10 +800,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (!gameState.matchConfig.voiceEnabled || gameState.isLiveClosed || !isCommandOwner || gameState.isMatchOver) return;
     if (voiceWasManuallyStopped) {
       setVoiceWasManuallyStopped(false);
-      start();
     } else {
       setVoiceWasManuallyStopped(true);
-      stop();
     }
   };
 
@@ -1023,6 +1021,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return (currentSportDef.engine === 'tennis' && !isTieBreak ? ['0', '15', '30', '40', 'Ad'] : Array.from({ length: 31 }, (_, i) => i.toString()));
   }, [correctionMode, currentSportDef, isTieBreak, gameState.matchConfig.gamesPerSet]);
   
+  const isVoiceActive = isListening && !voiceWasManuallyStopped && gameState.matchConfig.voiceEnabled && !gameState.isLiveClosed && isCommandOwner && !gameState.isMatchOver;
+  
   if (gameState.matchConfig.isWatchMode) {
     return (
       <WatchBoard 
@@ -1038,11 +1038,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         cloudLiveExists={cloudLiveExists}
         role={indicatorRole || role}
         fbSyncStatus={fbSyncStatus}
+        onVoiceToggle={handleVoiceToggle}
+        isVoiceActive={isVoiceActive}
       />
     );
   }
 
-  const isVoiceActive = isListening && !voiceWasManuallyStopped && gameState.matchConfig.voiceEnabled && !gameState.isLiveClosed && isCommandOwner && !gameState.isMatchOver;
   const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
 
   // Banner "quem está controlando" — calculado fora do JSX para evitar IIFE com const

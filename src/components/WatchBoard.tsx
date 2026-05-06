@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw } from 'lucide-react';
+import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../types.ts';
 import { LiveIndicator } from './LiveIndicator.tsx';
 import { getTennisServerSide } from '../utils/tennisEngine.ts';
@@ -42,6 +41,8 @@ interface WatchBoardProps {
   cloudLiveExists?: boolean;
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
   fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
+  onVoiceToggle?: () => void;
+  isVoiceActive?: boolean;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -76,10 +77,27 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [showMic, setShowMic] = React.useState(false);
+  const pauseRotationUntil = React.useRef(0);
 
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      if (Date.now() < pauseRotationUntil.current) return;
+      setShowMic(prev => !prev);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMicInteraction = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    onVoiceToggle?.();
+    setShowMic(true);
+    resetDimTimer();
+    pauseRotationUntil.current = Date.now() + 6000;
+  };
 
   const renderWatchInitial = (team: 1 | 2, isPartner: boolean) => {
     const offset = gameState.servingOrderOffset;
@@ -227,12 +245,22 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             <span className="text-5xl font-black text-black relative z-10">{gameState.p1.games}</span>
           </div>
         </div>
-        <div className={`h-16 flex items-center justify-center rounded-2xl gap-1 transition-all ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}>
-          <span className={`text-5xl font-black leading-none ${isDimmed ? 'text-black' : 'text-white'}`}>{gameState.currentSet + 1}</span>
-          <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold ${isDimmed ? 'text-white/70' : 'text-slate-400'}`}>
-            <span>S</span>
-            <span>e</span>
-            <span>t</span>
+        <div className={`h-16 flex items-center justify-center rounded-2xl transition-all relative overflow-hidden ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}>
+          <div className={`absolute inset-0 flex items-center justify-center gap-1 transition-opacity duration-500 ${showMic ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+            <span className="text-5xl font-black leading-none text-white">{gameState.currentSet + 1}</span>
+            <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold ${isDimmed ? 'text-white/70' : 'text-slate-400'}`}>
+              <span>S</span>
+              <span>e</span>
+              <span>t</span>
+            </div>
+          </div>
+          <div 
+            role="button"
+            onPointerDown={handleMicInteraction}
+            className={`absolute inset-0 flex items-center justify-center transition-all duration-500 cursor-pointer ${showMic ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}`}
+          >
+            <Mic size={32} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-blue-400' : 'text-slate-400'} />
+            {!isVoiceActive && <div className="absolute w-8 h-[2.5px] bg-red-500 -rotate-45 pointer-events-none shadow-sm" />}
           </div>
         </div>
         <div className="flex-1 flex flex-col gap-1">

@@ -154,6 +154,9 @@ export const useGeminiReferee = ({
     );
     if (!SpeechRecognition) {
       setError("Reconhecimento de voz não suportado neste navegador.");
+      if (callbacksRef.current.onCommandError) {
+        callbacksRef.current.onCommandError("Dispositivo/Navegador não suporta a API de voz.");
+      }
       return;
     }
 
@@ -183,6 +186,13 @@ export const useGeminiReferee = ({
       if (event.error === 'not-allowed') {
         setError("Permissão negada");
         recognitionRef.current = null;
+        if (callbacksRef.current.onCommandError) {
+          callbacksRef.current.onCommandError("Permissão de microfone negada");
+        }
+      } else {
+        if (callbacksRef.current.onCommandError) {
+          callbacksRef.current.onCommandError(`Erro no microfone: ${event.error}`);
+        }
       }
     };
 
