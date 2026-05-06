@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AuthScreen } from './screens/AuthScreen.tsx';
 import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { ScoreboardScreen } from './screens/ScoreboardScreen.tsx';
 import { NewGameScreen } from './screens/NewGameScreen.tsx';
 import { AdminScreen } from './screens/AdminScreen.tsx';
 import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
 import { LocationScreen, clearCloudHistory, createHistoryItem, downloadHistoryBatch, fetchCloudHistoryCount, getUnsyncedHistory, persistLocalHistory, removeHistoryMatches, syncHistoryBatch } from '@modules/history';
+import { AuthScreen } from '@modules/auth';
 import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterPartnerByPin, createManualPartner, hasPartnerWithPin } from '@modules/partners';
 import { EventDetailScreen, TournamentsScreen, fetchRegisteredEvents, getActiveEventEntryDate, joinTournamentEvent, markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events';
 import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
@@ -14,8 +14,9 @@ import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 // import { Input } from './components/Input.tsx'; // unused
 import type { Partner, QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
+import type { UserProfile } from '@modules/auth';
 import type { EventRegistration, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events';
-import { GameState, MatchSettings, Screen, UserProfile, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
+import { GameState, MatchSettings, Screen, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
 // NOTA: adicionar 'public-scoreboard' ao tipo Screen em types.ts
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
@@ -508,6 +509,10 @@ const App: React.FC = () => {
   // Registra quando este device PERDEU o controle (via onSnapshot).
   // Usado para evitar que visibilitychange feche a live logo após uma troca de controlador.
   const lostControlAtRef = useRef<number>(0);
+  // Sinaliza que o encerramento foi iniciado INTENCIONALMENTE por este device.
+  // O onSnapshot usa este ref para distinguir "sinal de encerramento real" de
+  // "artefato de reload" — sem ele, o owner ignora o próprio isLiveClosed: true.
+  const isClosingLiveRef = useRef<boolean>(false);
 
   const sanitizeForFirestore = (obj: unknown) => {
     // campos undefined são convertidos para null pelo JSON.stringify abaixo.
@@ -1092,10 +1097,15 @@ const App: React.FC = () => {
               (currentGs?.commandOwnerId === deviceId &&
                 currentGs?.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase()));
 
-          if (thisDeviceIsActiveOwner) {
+          // Só ignora o isLiveClosed se NÃO foi este device que iniciou o encerramento.
+          // isClosingLiveRef é marcado true em handleCloseCloudLive antes do updateDoc,
+          // garantindo que o owner não ignore o próprio sinal de encerramento.
+          if (thisDeviceIsActiveOwner && !isClosingLiveRef.current) {
             console.log("[Sync] isLiveClosed: true ignorado — owner ativo local, provável artefato de reload.");
             return;
           }
+          // Encerramento intencional confirmado — reset do ref.
+          isClosingLiveRef.current = false;
 
           console.log("[Sync] Live fechada detected!");
           setCloudLiveExists(false);
@@ -1266,9 +1276,15 @@ const App: React.FC = () => {
         }
       } else {
         // E1: snap não existe = live foi deletada após encerramento.
-        // Notifica observers que ainda estão conectados (não receberam o isLiveClosed).
+        // Correção 4: limpa o estado de live SEMPRE, independente dos flags locais
+        // (isMirroringActive, isLiveClosed). O estado anterior pode estar inconsistente
+        // — por exemplo, quando o encerramento veio direto pelo console do Firebase
+        // sem passar pelo fluxo normal do app, ou quando o owner ainda tinha
+        // isMirroringActive: false localmente mas cloudLiveExists: true.
         const prevGs = gameStateRef.current;
-        if (prevGs?.isMirroringActive && !prevGs?.isLiveClosed) {
+        const wasActiveLocally = prevGs?.isMirroringActive && !prevGs?.isLiveClosed;
+        // Notifica observers que ainda não receberam o isLiveClosed (só se relevante)
+        if (wasActiveLocally) {
           setModalConfig({
             title: 'Live encerrada',
             message: 'A transmissão foi encerrada pelo proprietário.',
@@ -1277,13 +1293,13 @@ const App: React.FC = () => {
             onConfirm: () => setModalConfig(null)
           });
         }
+        // Sempre limpa — independente de wasActiveLocally
+        isClosingLiveRef.current = false;
         setCloudLiveExists(false);
+        setActiveLives([]);
         setGameState(prev => {
           if (!prev) return null;
-          if (prev.isMirroringActive) {
-            return { ...prev, isMirroringActive: false, isLiveClosed: true };
-          }
-          return prev;
+          return { ...prev, isMirroringActive: false, isLiveClosed: true };
         });
       }
     });
@@ -2364,10 +2380,29 @@ const App: React.FC = () => {
     if (!userProfile.pin) { setModalConfig({ title: "Erro", message: "PIN não cadastrado.", onConfirm: () => setModalConfig(null) }); return; }
     
     const targetPin = resolveTargetPin('write');
-            if (!targetPin) return;
-    
     if (!targetPin) { setModalConfig({ title: "Erro", message: "PIN da transmissão não encontrado.", onConfirm: () => setModalConfig(null) }); return; }
-    
+
+    // Correção 1: sinaliza encerramento intencional ANTES do updateDoc.
+    // O guard do onSnapshot usa este ref para não ignorar o isLiveClosed: true
+    // que o próprio owner vai receber de volta como eco do Firestore.
+    isClosingLiveRef.current = true;
+
+    // Correção 2: desliga isMirroringActive localmente de forma SÍNCRONA,
+    // antes de qualquer await. Isso impede que o loop de sync periódico
+    // (que roda a cada poucos segundos) recrie o documento no Firestore
+    // durante a janela entre o updateDoc e o deleteDoc (4s).
+    setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: false, isLiveClosed: true }; });
+
+    // Correção 3 (timeout de segurança): se após 6s o cloudLiveExists ainda for true
+    // (ex: snapshot não chegou por falha de rede parcial), força o encerramento local.
+    const safetyTimer = setTimeout(() => {
+      isClosingLiveRef.current = false;
+      setCloudLiveExists(false);
+      setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
+      try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
+      setShowLiveControlOverlay(false); setConfirmDeleteLive(false);
+    }, 6000);
+
     try {
       const liveRef = doc(db, "live_matches", targetPin);
       // 1) Propaga isLiveClosed:true para todos os devices via onSnapshot
@@ -2381,13 +2416,18 @@ const App: React.FC = () => {
       // 2) Após 4s (tempo para observers receberem o snapshot), deleta o documento
       setTimeout(() => deleteDoc(liveRef).catch(() => {}), 4000);
 
-      setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: false, isLiveClosed: true }; });
+      clearTimeout(safetyTimer);
+      isClosingLiveRef.current = false;
       setCloudLiveExists(false); setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
-      try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
+      try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
       setShowLiveControlOverlay(false); setConfirmDeleteLive(false); setCurrentScreen('settings');
       setModalConfig({ title: "Transmissão encerrada", message: "Todos os participantes foram desconectados.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
       setTimeout(() => setModalConfig(null), 3000);
     } catch (_e) { 
+      clearTimeout(safetyTimer);
+      isClosingLiveRef.current = false;
+      // Reverte o estado local se o Firestore rejeitou o encerramento
+      setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: true, isLiveClosed: false }; });
       console.error("Erro ao encerrar live:", _e);
       setModalConfig({ title: "Erro", message: `Erro ao encerrar: ${_e instanceof Error ? _e.message : 'Tente novamente'}`, onConfirm: () => setModalConfig(null) }); 
     }
