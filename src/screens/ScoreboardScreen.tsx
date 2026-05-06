@@ -11,6 +11,7 @@ import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { isTennisTieBreak } from '../utils/tennisEngine';
 import { getTennisServerSide } from '../utils/tennisEngine';
+import { isWatchDevice } from '../utils/device';
 import { SPORT_LIST } from '../constants';
 import { getDb } from '@infra/firebase';
 import { doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';

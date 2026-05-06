@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { AuthScreen } from './screens/AuthScreen.tsx';
 import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { ScoreboardScreen } from './screens/ScoreboardScreen.tsx';
 import { NewGameScreen } from './screens/NewGameScreen.tsx';
 import { AdminScreen } from './screens/AdminScreen.tsx';
 import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
 import { LocationScreen, clearCloudHistory, createHistoryItem, downloadHistoryBatch, fetchCloudHistoryCount, getUnsyncedHistory, persistLocalHistory, removeHistoryMatches, syncHistoryBatch } from '@modules/history';
-import { AuthScreen } from '@modules/auth';
 import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterPartnerByPin, createManualPartner, hasPartnerWithPin } from '@modules/partners';
 import { EventDetailScreen, TournamentsScreen, fetchRegisteredEvents, getActiveEventEntryDate, joinTournamentEvent, markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events';
 import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
@@ -14,9 +14,8 @@ import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 // import { Input } from './components/Input.tsx'; // unused
 import type { Partner, QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
-import type { UserProfile } from '@modules/auth';
 import type { EventRegistration, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events';
-import { GameState, MatchSettings, Screen, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
+import { GameState, MatchSettings, Screen, UserProfile, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
 // NOTA: adicionar 'public-scoreboard' ao tipo Screen em types.ts
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
@@ -1467,11 +1466,6 @@ const App: React.FC = () => {
     );
     if (isSameUserSecondaryDevice) return;
 
-    // Fix: controller ativo local (gameState) nunca se registra como observer —
-    // cobre a janela de latência em que activeLives ainda não propagou o novo commandOwnerId.
-    const isLocalController = gameStateRef.current?.commandOwnerId === deviceId;
-    if (isLocalController) return;
-
     // Registro automático como observador/juiz: quando há live E este dispositivo NÃO é o controller
     if (!thisDeviceIsController && hasLive && navigator.onLine && userProfile.email) {
       const now = Date.now();
@@ -2668,13 +2662,12 @@ const App: React.FC = () => {
           // Device secundário do mesmo usuário: preserva commandOwnerId da cloud (o Note).
           // Se o celular sobrescrevesse commandOwnerId com o próprio deviceId, o Note viraria observer.
           const resolvedCommandOwnerId = isSecondaryDevice ? cloudData.commandOwnerId : deviceId;
-          // Observers entram em modo placar (ScoreboardDisplay) se não forem relógio.
-          // Relógio (isWatchMode=true) preserva sua preferência local e renderiza WatchBoard.
+          // Observers entram sempre em modo placar (ScoreboardDisplay), nunca em ScoreboardScreen.
+          // isWatchMode: false — relógio tem sua própria lógica e não deve ser forçado aqui.
           // Controllers (judge assumindo controle via handleObserveLive) ficam com isScoreboardMode: false.
           const enterAsObserver = joinRole === 'observer';
-          const localIsWatch = !!matchSettings.isWatchMode;
-          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: localIsWatch, isScoreboardMode: enterAsObserver && !localIsWatch ? true : false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
-          if (enterAsObserver && !localIsWatch) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
+          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: false, isScoreboardMode: enterAsObserver ? true : false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+          if (enterAsObserver) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true, isWatchMode: false }));
           overlayAcceptedRef.current = pinUpper; // impede que o modal reabra após setCurrentScreen
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
@@ -3609,14 +3602,42 @@ const App: React.FC = () => {
         if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner) return; 
         setGameState(p => p ? {...p, isPaused: !p.isPaused} : null); 
       }} onBack={() => {
-        // C2: navegação interna — live continua ativa independente do papel.
-        // O controller pode sair da tela do placar para ver regras/tela inicial sem interrupção.
-        // O modal de confirmação foi removido pois é desnecessário: a live não é encerrada
-        // ao trocar de tela; o performExit só dispara no visibilitychange/beforeunload.
-        setCurrentScreen('new-game');
+        // C2: diálogos de saída por papel
+        const liveAtiva = gameState?.isMirroringActive && !gameState.isLiveClosed && !gameState.isConfirmedFinished;
+        if (liveAtiva) {
+          if (isOriginalOwner) {
+            // Owner: 2 opções — sair da tela (live continua) ou encerrar transmissão
+            setModalConfig({
+              title: "Você é o proprietário",
+              message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",
+              confirmLabel: "Sair da tela (live continua)",
+              onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('new-game'); },
+              onCancel: () => setModalConfig(null),
+            });
+          } else {
+            handleLeaveLive(); setCurrentScreen('new-game');
+          }
+        } else {
+          handleLeaveLive(); setCurrentScreen('new-game');
+        }
       }} onHome={() => {
-        // C2: mesma lógica — live continua, apenas muda de tela
-        setCurrentScreen('settings');
+        // C2: mesma lógica de diálogos, destino = settings
+        const liveAtiva = gameState?.isMirroringActive && !gameState.isLiveClosed && !gameState.isConfirmedFinished;
+        if (liveAtiva) {
+          if (isOriginalOwner) {
+            setModalConfig({
+              title: "Você é o proprietário",
+              message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",
+              confirmLabel: "Sair da tela (live continua)",
+              onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('settings'); },
+              onCancel: () => setModalConfig(null),
+            });
+          } else {
+            handleLeaveLive(); setCurrentScreen('settings');
+          }
+        } else {
+          handleLeaveLive(); setCurrentScreen('settings');
+        }
       }} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={async a => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isLiveClosed) return; 
         if (a) { 
