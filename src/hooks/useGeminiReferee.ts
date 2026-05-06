@@ -68,6 +68,7 @@ export const useGeminiReferee = ({
   
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const shouldRunRef = useRef<boolean>(false); // controla se onend deve reiniciar
+  const isStartingRef = useRef<boolean>(false); // guard: true entre start() e onstart — impede stop() prematuro
   const lastActionTimeRef = useRef<number>(0);
   const lastProcessedTextRef = useRef<string>('');
 
@@ -162,8 +163,9 @@ export const useGeminiReferee = ({
     recognition.continuous = true;
     recognition.interimResults = false;
 
-    recognition.onstart = () => setIsListening(true);
+    recognition.onstart = () => { isStartingRef.current = false; setIsListening(true); };
     recognition.onend = () => {
+      isStartingRef.current = false;
       setIsListening(false);
       // Reinicia automaticamente APENAS se shouldRunRef ainda está ativo
       // Usar recognitionRef aqui causava race condition: stop() zeraria o ref
@@ -180,6 +182,7 @@ export const useGeminiReferee = ({
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      isStartingRef.current = false;
       if (event.error === 'not-allowed') {
         setError("Permissão negada");
         recognitionRef.current = null;
@@ -188,7 +191,8 @@ export const useGeminiReferee = ({
 
     recognitionRef.current = recognition;
     shouldRunRef.current = true;
-    try { recognition.start(); } catch {}
+    isStartingRef.current = true;
+    try { recognition.start(); } catch { isStartingRef.current = false; }
   }, [handleTranscriptResult]);
 
   useEffect(() => {
@@ -197,9 +201,19 @@ export const useGeminiReferee = ({
     } else {
       // Zera shouldRunRef ANTES de stop() para que onend não reinicie
       shouldRunRef.current = false;
-      if (recognitionRef.current) {
+      if (recognitionRef.current && !isStartingRef.current) {
         recognitionRef.current.onend = null;
-        recognitionRef.current.stop();
+        try { recognitionRef.current.stop(); } catch {}
+        recognitionRef.current = null;
+      } else if (recognitionRef.current && isStartingRef.current) {
+        // recognition.start() foi chamado mas onstart ainda não disparou —
+        // agenda o stop() para após o onstart para evitar estado inválido no browser
+        const pendingRef = recognitionRef.current;
+        pendingRef.onstart = () => {
+          isStartingRef.current = false;
+          pendingRef.onend = null;
+          try { pendingRef.stop(); } catch {}
+        };
         recognitionRef.current = null;
       }
       setIsListening(false);
@@ -207,9 +221,17 @@ export const useGeminiReferee = ({
 
     return () => {
       shouldRunRef.current = false;
-      if (recognitionRef.current) {
+      if (recognitionRef.current && !isStartingRef.current) {
         recognitionRef.current.onend = null;
-        recognitionRef.current.stop();
+        try { recognitionRef.current.stop(); } catch {}
+        recognitionRef.current = null;
+      } else if (recognitionRef.current && isStartingRef.current) {
+        const pendingRef = recognitionRef.current;
+        pendingRef.onstart = () => {
+          isStartingRef.current = false;
+          pendingRef.onend = null;
+          try { pendingRef.stop(); } catch {}
+        };
         recognitionRef.current = null;
       }
     };
@@ -224,9 +246,17 @@ export const useGeminiReferee = ({
 
   const stop = useCallback(() => {
     shouldRunRef.current = false;
-    if (recognitionRef.current) {
+    if (recognitionRef.current && !isStartingRef.current) {
       recognitionRef.current.onend = null;
-      recognitionRef.current.stop();
+      try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
+    } else if (recognitionRef.current && isStartingRef.current) {
+      const pendingRef = recognitionRef.current;
+      pendingRef.onstart = () => {
+        isStartingRef.current = false;
+        pendingRef.onend = null;
+        try { pendingRef.stop(); } catch {}
+      };
       recognitionRef.current = null;
     }
     setIsListening(false);
