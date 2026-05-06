@@ -1467,6 +1467,11 @@ const App: React.FC = () => {
     );
     if (isSameUserSecondaryDevice) return;
 
+    // Fix: controller ativo local (gameState) nunca se registra como observer —
+    // cobre a janela de latência em que activeLives ainda não propagou o novo commandOwnerId.
+    const isLocalController = gameStateRef.current?.commandOwnerId === deviceId;
+    if (isLocalController) return;
+
     // Registro automático como observador/juiz: quando há live E este dispositivo NÃO é o controller
     if (!thisDeviceIsController && hasLive && navigator.onLine && userProfile.email) {
       const now = Date.now();
@@ -3604,42 +3609,14 @@ const App: React.FC = () => {
         if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner) return; 
         setGameState(p => p ? {...p, isPaused: !p.isPaused} : null); 
       }} onBack={() => {
-        // C2: diálogos de saída por papel
-        const liveAtiva = gameState?.isMirroringActive && !gameState.isLiveClosed && !gameState.isConfirmedFinished;
-        if (liveAtiva) {
-          if (isOriginalOwner) {
-            // Owner: 2 opções — sair da tela (live continua) ou encerrar transmissão
-            setModalConfig({
-              title: "Você é o proprietário",
-              message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",
-              confirmLabel: "Sair da tela (live continua)",
-              onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('new-game'); },
-              onCancel: () => setModalConfig(null),
-            });
-          } else {
-            handleLeaveLive(); setCurrentScreen('new-game');
-          }
-        } else {
-          handleLeaveLive(); setCurrentScreen('new-game');
-        }
+        // C2: navegação interna — live continua ativa independente do papel.
+        // O controller pode sair da tela do placar para ver regras/tela inicial sem interrupção.
+        // O modal de confirmação foi removido pois é desnecessário: a live não é encerrada
+        // ao trocar de tela; o performExit só dispara no visibilitychange/beforeunload.
+        setCurrentScreen('new-game');
       }} onHome={() => {
-        // C2: mesma lógica de diálogos, destino = settings
-        const liveAtiva = gameState?.isMirroringActive && !gameState.isLiveClosed && !gameState.isConfirmedFinished;
-        if (liveAtiva) {
-          if (isOriginalOwner) {
-            setModalConfig({
-              title: "Você é o proprietário",
-              message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",
-              confirmLabel: "Sair da tela (live continua)",
-              onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('settings'); },
-              onCancel: () => setModalConfig(null),
-            });
-          } else {
-            handleLeaveLive(); setCurrentScreen('settings');
-          }
-        } else {
-          handleLeaveLive(); setCurrentScreen('settings');
-        }
+        // C2: mesma lógica — live continua, apenas muda de tela
+        setCurrentScreen('settings');
       }} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={async a => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isLiveClosed) return; 
         if (a) { 
