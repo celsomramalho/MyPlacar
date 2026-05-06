@@ -2663,12 +2663,13 @@ const App: React.FC = () => {
           // Device secundário do mesmo usuário: preserva commandOwnerId da cloud (o Note).
           // Se o celular sobrescrevesse commandOwnerId com o próprio deviceId, o Note viraria observer.
           const resolvedCommandOwnerId = isSecondaryDevice ? cloudData.commandOwnerId : deviceId;
-          // Observers entram sempre em modo placar (ScoreboardDisplay), nunca em ScoreboardScreen.
-          // isWatchMode: false — relógio tem sua própria lógica e não deve ser forçado aqui.
+          // Observers entram em modo placar (ScoreboardDisplay) se não forem relógio.
+          // Relógio (isWatchMode=true) preserva sua preferência local e renderiza WatchBoard.
           // Controllers (judge assumindo controle via handleObserveLive) ficam com isScoreboardMode: false.
           const enterAsObserver = joinRole === 'observer';
-          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: false, isScoreboardMode: enterAsObserver ? true : false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
-          if (enterAsObserver) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true, isWatchMode: false }));
+          const localIsWatch = !!matchSettings.isWatchMode;
+          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: localIsWatch, isScoreboardMode: enterAsObserver && !localIsWatch ? true : false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+          if (enterAsObserver && !localIsWatch) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
           overlayAcceptedRef.current = pinUpper; // impede que o modal reabra após setCurrentScreen
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
