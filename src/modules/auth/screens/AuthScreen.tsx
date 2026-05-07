@@ -630,7 +630,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         setStatusText('Atenção: Gerando link público (ais-pre)...');
       }
 
-      // Usuários com senha → gera link de reset via Firebase mas envia pelo SES
+      // Usuarios com senha: o unico link valido de reset e o e-mail oficial do Firebase,
+      // porque o oobCode nao fica disponivel no cliente para reenvio por template proprio.
       if (userAuthMethod === 'password') {
         try {
           await sendPasswordResetEmail(auth, cleanEmail, buildPasswordResetActionCodeSettings(cleanEmail));
@@ -643,7 +644,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             userUid
           });
         } catch (_e) {
-          // Firebase falhou ao gerar o link — cairá no envio do PIN abaixo
+          // Firebase falhou ao gerar o link; se ainda houver PIN legado, cai no envio do PIN abaixo.
         }
       }
 
@@ -654,7 +655,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           to_name: userName,
           email: cleanEmail,
           pin_code: userPin || undefined,
-          reset_link: resetLink,
           app_access_link: currentOrigin,
         });
 
@@ -672,8 +672,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           });
         }
       } 
-      // Removido o reenvio de reset_link via SES pois falta o oobCode que o Firebase gera internamente.
-      // O usuário receberá o e-mail oficial do Firebase que já contém o link funcional.
+      // Nao enviar reset_link via template proprio: sem oobCode, o link so abre a tela incompleta.
+      // O reset real depende do e-mail oficial do Firebase.
 
       setMode('recovery_sent');
       setShowRecoveryInfoModal(true);
