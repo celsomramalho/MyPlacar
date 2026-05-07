@@ -4,8 +4,7 @@ import { Input } from '@shared/components/Input';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { UserProfile } from '../types';
-import { getDb, getAuthInstance } from '@infra/firebase';
-import { doc, getDoc, getDocFromServer, setDoc, serverTimestamp, collection, query, where, getDocs, Firestore, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { createWatchLoginToken, deleteWatchLoginToken, fetchEventByPin, fetchUserProfile, fetchUserProfileFromServer, findUserByPin, findUserProfileByPasskeyCredentialId, getAuthInstance, getDb, saveNewUserProfile, subscribeWatchLoginToken } from '@infra/firebase';
 import { mirrorUser } from '../../../services/supabaseMirror.ts';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
@@ -13,6 +12,9 @@ import { emailService } from '../../../services/emailService.ts';
 import { formatPortugueseName, applyGoldenRule } from '@shared/utils/formatters';
 import { APP_VERSION } from '../../../constants.ts';
 import { isWatchDevice } from '@shared/utils/device';
+import { generateEmailVerificationCode, generateUserPin, generateWatchCode } from '../services/authCodes';
+import { clearPasswordResetSession, clearPendingRegistration, forgetEmail, forgetPin, getOfflineProfile, getPendingName, getPendingPassword, getPendingVerifyCode, getSavedAuthMethod, getSavedEmail, getSavedPin, rememberEmail, rememberPin, savePendingRegistration, saveUrlVerificationCode, saveWatchLoginCache } from '../services/authSession';
+import { validatePassword } from '../services/passwordPolicy';
 
 interface Props {
   onAuthSuccess: (profile: UserProfile, stayConnected: boolean) => void;
@@ -43,28 +45,19 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [watchStatus, setWatchStatus] = useState<'idle' | 'waiting' | 'approved' | 'expired'>('idle');
   const watchUnsubRef = useRef<(() => void) | null>(null);
 
-  const [email, setEmail] = useState(() => localStorage.getItem('MyPlacarSavedEmail') || '');
-  const [pin, setPin] = useState(() => localStorage.getItem('MyPlacarSavedPin') || ''); 
+  const [email, setEmail] = useState(() => getSavedEmail());
+  const [pin, setPin] = useState(() => getSavedPin()); 
   const [password, setPassword] = useState('');
   const [authMethod, setAuthMethod] = useState<'pin' | 'password'>(() => {
-    // Inicializa a partir do perfil salvo no localStorage quando disponível
-    // (resolve offline e evita piscar de PIN → senha para usuários recorrentes)
-    try {
-      const savedProfile = localStorage.getItem('MyPlacarUserProfile');
-      if (savedProfile) {
-        const profile = JSON.parse(savedProfile) as UserProfile;
-        if (profile?.authMethod === 'pin' || profile?.authMethod === 'password') return profile.authMethod;
-      }
-    } catch (e) {}
-    return 'password'; // padrão: senha (não PIN)
+    return getSavedAuthMethod();
   });
   const [isCheckingAuthMethod, setIsCheckingAuthMethod] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
   const [verificationCode, setVerificationCode] = useState('');
-  const [generatedVerifyCode, setGeneratedVerifyCode] = useState(() => localStorage.getItem('MyPlacarPendingVerifyCode') || '');
+  const [generatedVerifyCode, setGeneratedVerifyCode] = useState(() => getPendingVerifyCode());
   const [showPin, setShowPin] = useState(false);
-  const [name, setName] = useState(() => localStorage.getItem('MyPlacarPendingName') || '');
+  const [name, setName] = useState(() => getPendingName());
   
   const [referralPin, setReferralPin] = useState(() => {
     const params = new URLSearchParams(globalThis.location.search);
@@ -162,10 +155,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const auth = getAuthInstance();
       if (auth) {
         auth.signOut().then(() => {
-          localStorage.removeItem('MyPlacarSavedEmail');
-          localStorage.removeItem('MyPlacarSavedPin');
-          localStorage.removeItem('MyPlacarUser');
-          localStorage.removeItem('MyPlacarRememberMe');
+          clearPasswordResetSession();
           
           setOobCode(codeParam);
           setMode('reset_password');
@@ -188,12 +178,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     if (eventPin && isOnline) {
         const db = getDb();
         if (db) {
-            getDoc(doc(db as Firestore, "events", eventPin)).then(snap => {
-                if (snap.exists()) {
-                    const data = snap.data();
-                    if (data.active) {
-                      setEventDetails({ name: data.name, bannerUrl: data.bannerUrl });
-                    }
+            fetchEventByPin(db, eventPin).then(event => {
+                if (event?.active) {
+                  setEventDetails({ name: event.name, bannerUrl: event.bannerUrl });
                 }
             });
         }
@@ -215,7 +202,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         setIsLoading(true);
         setStatusText('Verificando seu e-mail automaticamente...');
         
-        localStorage.setItem('MyPlacarPendingVerifyCode', urlCode);
+        saveUrlVerificationCode(urlCode);
         setGeneratedVerifyCode(urlCode);
 
         try {
@@ -250,11 +237,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         try {
           const db = getDb();
           if (!db) return;
-          const q = query(collection(db as any, "users"), where("pin", "==", clean));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const data = snap.docs[0].data();
-            setLookupName(`${data.nickname || data.name.split(' ')[0]} te convidou`);
+          const user = await findUserByPin(db, clean);
+          if (user) {
+            setLookupName(`${user.nickname || user.name?.split(' ')[0]} te convidou`);
           } else {
             setLookupName('Pin não localizado');
           }
@@ -333,12 +318,11 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         if (db) {
           setIsCheckingAuthMethod(true);
           try {
-            const userSnap = await getDoc(doc(db as Firestore, "users", cleanEmail));
-            if (userSnap.exists()) {
-              const data = userSnap.data();
+            const userData = await fetchUserProfile(db, cleanEmail);
+            if (userData) {
               // Fallback 'password': usuários sem authMethod explícito são antigos
               // que ainda não migraram — PIN só aparece quando confirmado pelo Firestore
-              setAuthMethod(data.authMethod === 'pin' ? 'pin' : 'password');
+              setAuthMethod(userData.authMethod === 'pin' ? 'pin' : 'password');
             } else {
               // E-mail não encontrado — mantém 'password' como padrão
               setAuthMethod('password');
@@ -355,20 +339,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     return () => clearTimeout(timer);
   }, [email, isOnline]);
 
-  const validatePassword = (pass: string) => {
-    const hasMinLength = pass.length >= 6;
-    const hasUpper = /[A-Z]/.test(pass);
-    const hasLower = /[a-z]/.test(pass);
-    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
-    return {
-      hasMinLength,
-      hasUpper,
-      hasLower,
-      hasSpecial,
-      isValid: hasMinLength && hasUpper && hasLower && hasSpecial
-    };
-  };
-
   const passwordValidation = validatePassword(password);
 
   const handleLogin = async () => {
@@ -379,10 +349,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
     // Lógica de Login Offline
     if (!isOnline) {
-      const savedProfileStr = localStorage.getItem('MyPlacarUserProfile');
-      if (savedProfileStr) {
-        try {
-          const savedProfile = JSON.parse(savedProfileStr) as UserProfile;
+      const savedProfile = getOfflineProfile();
+      if (savedProfile) {
           if (savedProfile.email.toLowerCase().trim() === email.toLowerCase().trim()) {
             // Usa o authMethod do perfil salvo — mais confiável que o estado
             // da tela que pode não ter sido verificado sem conexão
@@ -402,7 +370,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               return;
             }
           }
-        } catch (e) {}
       }
       setError("Acesso offline disponível apenas para o último usuário logado.");
       return;
@@ -421,14 +388,13 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         try {
           const cleanPassword = password.trim();
           await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
-          const userSnap = await getDocFromServer(doc(db as Firestore, "users", cleanEmail));
-          if (userSnap.exists()) {
-            const userData = userSnap.data() as UserProfile;
+          const userData = await fetchUserProfileFromServer(db, cleanEmail);
+          if (userData) {
             const enriched = { ...userData, isAdmin: userData.isAdmin === true };
             if (rememberMe) {
-              localStorage.setItem('MyPlacarSavedEmail', cleanEmail);
+              rememberEmail(cleanEmail);
             } else {
-              localStorage.removeItem('MyPlacarSavedEmail');
+              forgetEmail();
             }
             onAuthSuccess(enriched, rememberMe);
           }
@@ -443,16 +409,15 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           }
         }
       } else {
-        const userSnap = await getDocFromServer(doc(db as Firestore, "users", cleanEmail));
-        if (userSnap.exists()) {
-          const userData = userSnap.data() as UserProfile;
+        const userData = await fetchUserProfileFromServer(db, cleanEmail);
+        if (userData) {
           if (userData.pin === pin.toUpperCase().trim()) {
             if (rememberMe) {
-              localStorage.setItem('MyPlacarSavedEmail', cleanEmail);
-              localStorage.setItem('MyPlacarSavedPin', pin.toUpperCase().trim());
+              rememberEmail(cleanEmail);
+              rememberPin(pin.toUpperCase().trim());
             } else {
-              localStorage.removeItem('MyPlacarSavedEmail');
-              localStorage.removeItem('MyPlacarSavedPin');
+              forgetEmail();
+              forgetPin();
             }
             const enriched = { ...userData, isAdmin: userData.isAdmin === true };
             onAuthSuccess(enriched, rememberMe);
@@ -498,18 +463,14 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const db = getDb();
       if (!db) throw new Error("Erro de conexão.");
       const cleanEmail = email.toLowerCase().trim();
-      const userRef = doc(db as Firestore, "users", cleanEmail);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
+      const existingUser = await fetchUserProfile(db, cleanEmail);
+      if (existingUser) {
         setError("Este e-mail já possui cadastro. Use a recuperação de senha.");
         return;
       }
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const code = generateEmailVerificationCode();
       
-      localStorage.setItem('MyPlacarPendingVerifyCode', code);
-      localStorage.setItem('MyPlacarPendingName', name);
-      localStorage.setItem('MyPlacarSavedEmail', cleanEmail);
-      localStorage.setItem('MyPlacarPendingPassword', password);
+      savePendingRegistration({ code, name, email: cleanEmail, password });
       setGeneratedVerifyCode(code);
       
       setStatusText('Enviando seu código por e-mail...');
@@ -539,7 +500,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   const handleConfirmEmailInternal = async (targetEmail: string, code: string) => {
     handleConfirmEmailInternalRef.current = handleConfirmEmailInternal;
-    const expectedCode = localStorage.getItem('MyPlacarPendingVerifyCode') || generatedVerifyCode;
+    const expectedCode = getPendingVerifyCode() || generatedVerifyCode;
     
     if (code !== expectedCode) {
       setError("Código de segurança incorreto.");
@@ -556,9 +517,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (!db) throw new Error("Erro de conexão.");
       
       const cleanEmail = targetEmail.toLowerCase().trim();
-      const storedName = localStorage.getItem('MyPlacarPendingName') || name || "Jogador";
-      const storedPassword = localStorage.getItem('MyPlacarPendingPassword') || password;
-      const finalPin = Math.random().toString(36).substring(2, 7).toUpperCase();
+      const storedName = getPendingName() || name || "Jogador";
+      const storedPassword = getPendingPassword() || password;
+      const finalPin = generateUserPin();
       
       const auth = getAuthInstance();
       if (auth && storedPassword) {
@@ -580,7 +541,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         }
       }
 
-      const newProfile = {
+      const newProfile: UserProfile = {
         name: formatPortugueseName(storedName),
         nickname: storedName.split(' ')[0],
         email: cleanEmail,
@@ -589,11 +550,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         authMethod: 'password',
         isProfileComplete: true,
         emailVerified: true,
-        referredByPin: referralPin.toUpperCase().trim(),
-        createdAt: serverTimestamp()
+        referredByPin: referralPin.toUpperCase().trim()
       };
       
-      await setDoc(doc(db as Firestore, "users", cleanEmail), newProfile);
+      await saveNewUserProfile(db, cleanEmail, newProfile);
       mirrorUser(newProfile as unknown as UserProfile);
       const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
       await emailService.sendEmail('welcome', {
@@ -603,13 +563,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         app_access_link: appBaseUrl,
       });
 
-      localStorage.removeItem('MyPlacarPendingPassword');
-
       setMode('verifying');
-      localStorage.removeItem('MyPlacarPendingReferral');
-      localStorage.removeItem('MyPlacarPendingReferralPin');
-      localStorage.removeItem('MyPlacarPendingVerifyCode');
-      localStorage.removeItem('MyPlacarPendingName');
+      clearPendingRegistration();
       
       setTimeout(() => onAuthSuccess(newProfile as unknown as UserProfile, rememberMe), 2500);
     } catch (e: any) {
@@ -640,18 +595,16 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const auth = getAuthInstance();
       if (!db || !auth) throw new Error("Erro de conexão.");
       const cleanEmail = email.toLowerCase().trim();
-      const userRef = doc(db as Firestore, "users", cleanEmail);
-      const userSnap = await getDoc(userRef);
+      const userData = await fetchUserProfile(db, cleanEmail);
       
-      if (!userSnap.exists()) {
+      if (!userData) {
         throw new Error("E-mail não localizado no sistema.");
       }
       
-      const userData = userSnap.data();
       const userPin = userData?.pin || '';
       const userName = userData?.nickname || userData?.name || "Jogador";
       const userAuthMethod = userData?.authMethod || 'pin';
-      const userUid = userData?.uid || userSnap.id;
+      const userUid = userData?.uid || cleanEmail;
 
       let firebaseEmailSent = false;
       const hostname = window.location.hostname;
@@ -733,12 +686,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     }
   };
 
-  // ── Watch Login — gera código e aguarda aprovação ─────────────────────────
-  const generateWatchCode = (): string => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem O,0,I,1 para evitar confusão
-    return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  };
-
   const handleStartWatchLogin = async () => {
     const db = getDb();
     if (!db) return;
@@ -748,8 +695,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setMode('watch_login');
 
     const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
-    const tokenRef = doc(db, 'watch_tokens', code);
-    await setDoc(tokenRef, { code, status: 'pending', expiresAt, createdAt: Date.now() });
+    await createWatchLoginToken(db, code, expiresAt);
 
     // Expira automaticamente no cliente após 15 min
     const expireTimer = setTimeout(() => {
@@ -758,28 +704,26 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     }, 15 * 60 * 1000);
 
     // Listener: aguarda celular aprovar
-    const unsub = onSnapshot(tokenRef, async (snap) => {
-      if (!snap.exists()) return;
-      const data = snap.data();
+    const unsub = subscribeWatchLoginToken(db, code, async (data) => {
+      if (!data) return;
       if (data.status === 'approved' && data.email && data.pin) {
         clearTimeout(expireTimer);
         watchUnsubRef.current?.();
         setWatchStatus('approved');
 
         // Salva para próximos logins sem precisar do celular
-        localStorage.setItem('MyPlacarSavedEmail', data.email);
-        localStorage.setItem('MyPlacarSavedPin', data.pin);
-        if (data.rememberMe) {
-          localStorage.setItem('myPlacarUserProfile', JSON.stringify(data.profile));
-        }
+        saveWatchLoginCache({
+          email: data.email,
+          pin: data.pin,
+          rememberMe: data.rememberMe,
+          profile: data.profile,
+        });
 
         // Busca perfil completo e autentica
-        const userRef = doc(db, 'users', data.email.toLowerCase().trim());
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const profile = userSnap.data() as UserProfile;
-          await deleteDoc(tokenRef); // token de uso único
-          onAuthSuccess(profile, true);
+        const profile = await fetchUserProfile(db, data.email);
+        if (profile) {
+          await deleteWatchLoginToken(db, code); // token de uso único
+          onAuthSuccess(profile as UserProfile, true);
         }
       }
       if (data.status === 'expired' || (data.expiresAt && Date.now() > data.expiresAt)) {
@@ -799,7 +743,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setMode('login');
     // Limpa token pendente
     const db = getDb();
-    if (db && watchCode) deleteDoc(doc(db, 'watch_tokens', watchCode)).catch(() => {});
+    if (db && watchCode) deleteWatchLoginToken(db, watchCode).catch(() => {});
   };
 
   const handlePasskeyLogin = async () => {
@@ -833,17 +777,14 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         const db = getDb();
         if (!db) throw new Error("Erro de conexão.");
         
-        const usersRef = collection(db as Firestore, "users");
-        const q = query(usersRef, where("passkeyCredentialId", "==", rawId));
-        const querySnapshot = await getDocs(q);
+        const userData = await findUserProfileByPasskeyCredentialId(db, rawId);
         
-        if (querySnapshot.empty) {
+        if (!userData) {
           throw new Error("Biometria não reconhecida ou não cadastrada.");
         }
         
-        const userData = querySnapshot.docs[0].data() as UserProfile;
         const enriched = { ...userData, isAdmin: userData.isAdmin === true };
-        onAuthSuccess(enriched, rememberMe);
+        onAuthSuccess(enriched as UserProfile, rememberMe);
       }
     } catch (err: any) {
       console.error(err);
@@ -905,16 +846,14 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       
       if (user && user.email) {
         const cleanEmail = user.email.toLowerCase().trim();
-        const userRef = doc(db as Firestore, "users", cleanEmail);
-        const userSnap = await getDocFromServer(userRef);
+        const userData = await fetchUserProfileFromServer(db, cleanEmail);
         
-        if (userSnap.exists()) {
-          const userData = userSnap.data() as UserProfile;
+        if (userData) {
           const enriched = { ...userData, isAdmin: userData.isAdmin === true };
-          onAuthSuccess(enriched, rememberMe);
+          onAuthSuccess(enriched as UserProfile, rememberMe);
         } else {
-          const finalPin = Math.random().toString(36).substring(2, 7).toUpperCase();
-          const newProfile = {
+          const finalPin = generateUserPin();
+          const newProfile: UserProfile = {
             name: formatPortugueseName(user.displayName || "Jogador"),
             nickname: (user.displayName || "Jogador").split(' ')[0],
             email: cleanEmail,
@@ -923,11 +862,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             authMethod: 'password',
             isProfileComplete: true,
             emailVerified: true,
-            referredByPin: referralPin.toUpperCase().trim(),
-            createdAt: serverTimestamp()
+            referredByPin: referralPin.toUpperCase().trim()
           };
           
-          await setDoc(userRef, newProfile);
+          await saveNewUserProfile(db, cleanEmail, newProfile);
           mirrorUser(newProfile as unknown as UserProfile);
           onAuthSuccess(newProfile as unknown as UserProfile, rememberMe);
         }

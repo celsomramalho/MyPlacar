@@ -4,7 +4,7 @@ export type Tab = 'config' | 'history' | 'help' | 'profile';
 export type AdminTab = 'configs' | 'users' | 'icons' | 'events' | 'comms';
 export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros';
 export type SportType = string;
-export type PlanType = 'free' | 'premium';
+export type { PlanType, UserProfile } from '@modules/auth';
 
 /**
  * B1 — Papel permanente do usuário na live.
@@ -109,25 +109,6 @@ export type TieBreakAt = '3-3' | '5-5' | '6-6';
 export type PointType = 'rally' | 'ace' | 'fault';
 export type GeminiVoiceName = 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr';
 export type GeminiPersona = 'Esportivo' | 'Waze' | 'Amigável' | 'Sério' | 'Robótico';
-
-export interface UserProfile {
-  name: string;
-  nickname: string;
-  email: string;
-  phone: string;
-  pin: string;
-  gender?: 'M' | 'F';
-  isProfileComplete: boolean;
-  emailVerified?: boolean;
-  authMethod?: 'pin' | 'password';
-  qrCodeData?: string; 
-  isAdmin?: boolean;
-  planType?: PlanType;
-  premiumUntil?: string; // ISO Date string
-  passkeyCredentialId?: string;
-  passkeyPublicKey?: string;
-  referredByPin?: string;
-}
 
 export interface PointEvent {
   winner: 1 | 2;

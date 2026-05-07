@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AuthScreen } from './screens/AuthScreen.tsx';
 import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { ScoreboardScreen } from './screens/ScoreboardScreen.tsx';
 import { NewGameScreen } from './screens/NewGameScreen.tsx';
 import { AdminScreen } from './screens/AdminScreen.tsx';
 import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
 import { LocationScreen, clearCloudHistory, createHistoryItem, downloadHistoryBatch, fetchCloudHistoryCount, getUnsyncedHistory, persistLocalHistory, removeHistoryMatches, syncHistoryBatch } from '@modules/history';
+import { AuthScreen } from '@modules/auth';
 import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterPartnerByPin, createManualPartner, hasPartnerWithPin } from '@modules/partners';
 import { EventDetailScreen, TournamentsScreen, fetchRegisteredEvents, getActiveEventEntryDate, joinTournamentEvent, markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events';
 import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
@@ -14,8 +14,9 @@ import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 // import { Input } from './components/Input.tsx'; // unused
 import type { Partner, QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
+import type { UserProfile } from '@modules/auth';
 import type { EventRegistration, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events';
-import { GameState, MatchSettings, Screen, UserProfile, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
+import { GameState, MatchSettings, Screen, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
 // NOTA: adicionar 'public-scoreboard' ao tipo Screen em types.ts
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
@@ -2068,14 +2069,11 @@ const App: React.FC = () => {
     const exitingPlayers: string[] = [];
     if (!winnersStay) {
         exitingPlayers.push(state.p1.name, state.p1.partnerName || '', state.p2.name, state.p2.partnerName || '');
-        setMatchSettings(prev => ({ ...prev, p1Name: '', p1Partner: '', p2Name: '', p2Partner: '', p1Verified: false, p1PartnerVerified: false, p2Verified: false, p2PartnerVerified: false }));
     } else {
         if (winnerTeam === 1) {
             exitingPlayers.push(state.p2.name, state.p2.partnerName || '');
-            setMatchSettings(prev => ({ ...prev, p2Name: '', p2Partner: '', p2Verified: false, p2PartnerVerified: false }));
         } else {
             exitingPlayers.push(state.p1.name, state.p1.partnerName || '');
-            setMatchSettings(prev => ({ ...prev, p1Name: '', p1Partner: '', p1Verified: false, p1PartnerVerified: false }));
         }
     }
 
