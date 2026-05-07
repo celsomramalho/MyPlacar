@@ -14,6 +14,7 @@ import { APP_VERSION } from '../../../constants.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { generateEmailVerificationCode, generateUserPin, generateWatchCode } from '../services/authCodes';
 import { clearPasswordResetSession, clearPendingRegistration, forgetEmail, forgetPin, getOfflineProfile, getPendingName, getPendingPassword, getPendingVerifyCode, getSavedAuthMethod, getSavedEmail, getSavedPin, rememberEmail, rememberPin, savePendingRegistration, saveUrlVerificationCode, saveWatchLoginCache } from '../services/authSession';
+import { buildPasswordResetContinueUrl, clearAuthUrlParams, getPublicAuthOrigin } from '../services/authUrls';
 import { validatePassword } from '../services/passwordPolicy';
 
 interface Props {
@@ -151,24 +152,38 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     const modeParam = params.get('mode');
     const codeParam = params.get('oobCode');
 
+    if (modeParam === 'resetPassword' && !codeParam) {
+      setMode('login');
+      setError('Link de recuperação incompleto. Solicite um novo e-mail de recuperação.');
+      clearAuthUrlParams();
+      return;
+    }
+
     if (modeParam === 'resetPassword' && codeParam) {
       const auth = getAuthInstance();
-      if (auth) {
-        auth.signOut().then(() => {
-          clearPasswordResetSession();
-          
-          setOobCode(codeParam);
-          setMode('reset_password');
-          
-          verifyPasswordResetCode(auth, codeParam).then(email => {
-            setEmail(email);
-            setPassword('');
-            setPin('');
-          }).catch(e => {
-            setError("Link de recuperação inválido ou expirado.");
-          });
-        });
+      if (!auth) {
+        setMode('login');
+        setError('Nao foi possivel conectar ao servico de autenticacao. Recarregue a pagina e tente novamente.');
+        return;
       }
+
+      auth.signOut().then(() => {
+        clearPasswordResetSession();
+
+        setOobCode(codeParam);
+        setMode('reset_password');
+
+        verifyPasswordResetCode(auth, codeParam).then(email => {
+          setEmail(email);
+          setPassword('');
+          setPin('');
+        }).catch(() => {
+          setMode('login');
+          setOobCode('');
+          setError('Link de recuperacao invalido ou expirado. Solicite um novo e-mail de recuperacao.');
+          clearAuthUrlParams();
+        });
+      });
     }
   }, []);
 
@@ -607,25 +622,10 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userUid = userData?.uid || cleanEmail;
 
       let firebaseEmailSent = false;
-      const hostname = window.location.hostname;
-      const isPrivateDev = hostname.startsWith('ais-dev-');
-      const isPublicShared = hostname.startsWith('ais-pre-');
-      const isDevEnv = hostname.includes('run.app') || hostname === 'localhost' || hostname === '127.0.0.1';
-      
-      let currentOrigin = window.location.origin;
-      
-      // Ajuste para ambiente AI Studio: o link no e-mail deve SEMPRE apontar para um domínio público.
-      // ais-dev- é restrito. ais-pre- é público.
-      if (isPrivateDev) {
-        currentOrigin = currentOrigin.replace('ais-dev-', 'ais-pre-');
-      } else if (!isDevEnv && !isPublicShared) {
-        // Se não for ambiente de dev/preview do AI Studio, assume o domínio de produção
-        currentOrigin = "https://myplacar.app.br";
-      }
-      
-      const resetLink = `${currentOrigin}/?mode=resetPassword&email=${encodeURIComponent(cleanEmail)}`;
+      const currentOrigin = getPublicAuthOrigin();
+      const resetLink = buildPasswordResetContinueUrl(cleanEmail);
 
-      if (isPrivateDev) {
+      if (window.location.hostname.startsWith('ais-dev-')) {
         setStatusText('Atenção: Gerando link público (ais-pre)...');
       }
 
@@ -815,13 +815,20 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     try {
       const auth = getAuthInstance();
       if (!auth) throw new Error("Erro de conexão.");
+      if (!oobCode) {
+        throw new Error('Link de recuperacao incompleto.');
+      }
       await confirmPasswordReset(auth, oobCode, password);
       setMode('login');
       setError(null);
+      setPassword('');
+      setPin('');
+      setOobCode('');
+      setStatusText('');
+      clearAuthUrlParams();
       alert("Senha redefinida com sucesso! Agora você pode entrar.");
-      globalThis.history.replaceState(null, '', globalThis.location.pathname);
     } catch (e: any) {
-      setError("Erro ao redefinir senha. O link pode ter expirado.");
+      setError("Erro ao redefinir senha. O link pode estar incompleto, expirado ou já ter sido usado.");
     } finally {
       setIsLoading(false);
     }
