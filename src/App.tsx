@@ -1316,7 +1316,7 @@ const App: React.FC = () => {
     // falso positivo quando o celular recebia a live pela primeira vez.
     const hadControl = prevCommandOwnerIdWasSelf.current;
     const hasControl = gameState?.commandOwnerId === deviceId;
-    if (hadControl && !hasControl && gameState?.isMirroringActive && !gameState.isLiveClosed) {
+    if (hadControl && !hasControl && gameState?.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed)) {
       // Fecha o overlay IMEDIATAMENTE antes de mostrar a notificação
       setShowLiveControlOverlay(false);
       // Após fechar o overlay, exibe apenas a notificação com botão "Ok"
@@ -1693,10 +1693,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | undefined;
-    if (gameState && !gameState.isPaused && !gameState.isMatchOver && !matchSettings.isWatchMode && !gameState.isLiveClosed) {
+    if (gameState && !gameState.isPaused && !gameState.isMatchOver && !matchSettings.isWatchMode && !(gameState.isMirroringActive && gameState.isLiveClosed)) {
       timer = setInterval(() => {
         setGameState(prev => {
-          if (!prev || prev.isPaused || prev.isMatchOver || prev.isLiveClosed) return prev;
+          if (!prev || prev.isPaused || prev.isMatchOver || (prev.isMirroringActive && prev.isLiveClosed)) return prev;
           return { ...prev, matchDuration: prev.matchDuration + 1 };
         });
       }, 1000);
@@ -1711,7 +1711,7 @@ const App: React.FC = () => {
     if (gameState) {
       try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(gameState)); } catch {}
       
-      if (gameState.isMirroringActive && userProfile.email && !gameState.isLiveClosed && navigator.onLine) {
+      if (gameState.isMirroringActive && userProfile.email && !(gameState.isMirroringActive && gameState.isLiveClosed) && navigator.onLine) {
         const db = getDb();
         if (db) {
             // ── Determina papel deste device ────────────────────────────────
@@ -2299,7 +2299,7 @@ const App: React.FC = () => {
 
   const handleScoreUpdate = (player: 1 | 2, type: PointType = 'rally', source: string = 'cb') => {
     const current = gameState;
-    if (!current || current.isConfirmedFinished || current.isMatchOver || current.isLiveClosed) return;
+    if (!current || current.isConfirmedFinished || current.isMatchOver || (current.isMirroringActive && (current.isMirroringActive && current.isLiveClosed))) return;
     // Bloqueia se outro device é o controller ativo (live em andamento)
     if (current.isMirroringActive && current.commandOwnerId !== deviceId) return;
     // Bloqueia se há juiz designado e este device não é o controller
@@ -2309,7 +2309,7 @@ const App: React.FC = () => {
     // Usa setState funcional para garantir que incrementScore opera
     // sempre sobre o estado mais recente, evitando closure stale
     setGameState(prev => {
-      if (!prev || prev.isConfirmedFinished || prev.isMatchOver || prev.isLiveClosed) return prev;
+      if (!prev || prev.isConfirmedFinished || prev.isMatchOver || (prev.isMirroringActive && (prev.isMirroringActive && prev.isLiveClosed))) return prev;
       const next = incrementScore(prev, player, type, source);
       next.isPaused = false;
       // Empilha na history dentro do mesmo ciclo de render
@@ -2323,7 +2323,7 @@ const App: React.FC = () => {
   };
 
   const handleCorrectScore = (type: 'game' | 'gameSet' | 'matchSet', value: string) => {
-    if (!gameState || gameState.isMatchOver || gameState.isLiveClosed) return;
+    if (!gameState || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
     if (gameState.isMirroringActive && gameState.commandOwnerId !== deviceId) return;
     setIsRecoveryFromMatchOver(false);
     const match = value.toLowerCase().match(/(\d+|ad)\s*[a-]\s*(\d+|ad)/);
@@ -3202,7 +3202,7 @@ const App: React.FC = () => {
   // Observer: faz pull do estado mais recente do Firestore e aplica localmente.
   // Ambos registram a ação na cronologia da partida (liveLogs).
   const handleSyncScoreboard = useCallback(async () => {
-    if (!gameState || !gameState.isMirroringActive || gameState.isLiveClosed) return;
+    if (!gameState || !gameState.isMirroringActive || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
     if (!navigator.onLine) {
       setModalConfig({ title: "Sem conexão", message: "Verifique sua conexão com a internet e tente novamente.", onConfirm: () => setModalConfig(null) });
       return;
@@ -3599,11 +3599,11 @@ const App: React.FC = () => {
           setHistoryStack(stack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false});
         } 
       }} onSwitchServer={handleSmartSwitchServer} onTogglePause={() => { 
-        if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || gameState.isLiveClosed || !isCommandOwner) return; 
+        if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner) return; 
         setGameState(p => p ? {...p, isPaused: !p.isPaused} : null); 
       }} onBack={() => {
         // C2: diálogos de saída por papel
-        const liveAtiva = gameState?.isMirroringActive && !gameState.isLiveClosed && !gameState.isConfirmedFinished;
+        const liveAtiva = gameState?.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed) && !gameState.isConfirmedFinished;
         if (liveAtiva) {
           if (isOriginalOwner) {
             // Owner: 2 opções — sair da tela (live continua) ou encerrar transmissão
@@ -3622,7 +3622,7 @@ const App: React.FC = () => {
         }
       }} onHome={() => {
         // C2: mesma lógica de diálogos, destino = settings
-        const liveAtiva = gameState?.isMirroringActive && !gameState.isLiveClosed && !gameState.isConfirmedFinished;
+        const liveAtiva = gameState?.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed) && !gameState.isConfirmedFinished;
         if (liveAtiva) {
           if (isOriginalOwner) {
             setModalConfig({
@@ -3639,7 +3639,7 @@ const App: React.FC = () => {
           handleLeaveLive(); setCurrentScreen('settings');
         }
       }} onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} onToggleMirroring={async a => { 
-        if(!gameState || gameState.isConfirmedFinished || gameState.isLiveClosed) return; 
+        if(!gameState || gameState.isConfirmedFinished || (gameState.isMirroringActive && gameState.isLiveClosed)) return; 
         if (a) { 
           const isStarted = (gameState.pointHistory?.length ?? 0) > 0 || gameState.p1.games > 0 || gameState.p2.games > 0 || (gameState.p1.score !== '0' && gameState.p1.score !== '') || (gameState.p2.score !== '0' && gameState.p2.score !== ''); 
           if (isStarted) { setModalConfig({ title: "Atenção", message: "Não é possível iniciar a live com a partida em andamento.", onConfirm: () => setModalConfig(null) }); return; } 
