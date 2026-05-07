@@ -33,10 +33,11 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [remoteVersionFound, setRemoteVersionFound] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
-  const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password' | 'watch_login'>(() => {
+  const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password' | 'reset_link_missing' | 'watch_login'>(() => {
     const params = new URLSearchParams(globalThis.location.search);
     const resetParams = getPasswordResetParams();
     if (resetParams.isResetPassword && resetParams.oobCode) return 'reset_password';
+    if (resetParams.isResetPassword) return 'reset_link_missing';
     return (params.get('ref') || params.get('pin_ref') || params.get('joinEvent')) ? 'register' : 'login';
   });
 
@@ -152,8 +153,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     const { email: resetEmail, isResetPassword, oobCode: codeParam } = getPasswordResetParams();
 
     if (isResetPassword && !codeParam) {
-      setMode('login');
-      setError('Link de recuperação incompleto. Solicite um novo e-mail de recuperação.');
+      if (resetEmail) setEmail(resetEmail);
+      setMode('reset_link_missing');
+      setError(null);
       return;
     }
 
@@ -1152,6 +1154,18 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           </div>
         )}
 
+        {mode === 'reset_link_missing' && (
+          <div className="flex flex-col items-center justify-center py-10 animate-in fade-in duration-500 text-center">
+            <div className="w-20 h-20 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mb-6 shadow-inner">
+              <AlertCircle size={40} strokeWidth={3} />
+            </div>
+            <p className="text-lg font-black text-black tracking-tight">Link de recuperação incompleto</p>
+            <p className="text-xs font-bold text-slate-500 mt-2 max-w-xs">
+              Este link chegou sem o código de segurança do Firebase. Solicite um novo e-mail de recuperação para continuar.
+            </p>
+          </div>
+        )}
+
         {mode === 'login' && (
           <div className="space-y-4">
             {authMethod === 'password' ? (
@@ -1235,7 +1249,17 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         {mode !== 'verifying' && mode !== 'recovery_sent' && mode !== 'watch_login' && (
           <Button 
             disabled={isLoading} 
-            onClick={mode === 'login' ? handleLogin : (mode === 'confirm_email' ? handleConfirmEmail : (mode === 'reset_password' ? handleResetPassword : handleRequestRegister))} 
+            onClick={
+              mode === 'login'
+                ? handleLogin
+                : mode === 'confirm_email'
+                  ? handleConfirmEmail
+                  : mode === 'reset_password'
+                    ? handleResetPassword
+                    : mode === 'reset_link_missing'
+                      ? handleForgotPassword
+                      : handleRequestRegister
+            } 
             className="w-full py-6 rounded-4xl font-black shadow-xl text-xl !bg-brand-600 text-white gap-3"
           >
             {isLoading ? (
@@ -1246,7 +1270,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             ) : (
               <div className="flex items-center gap-2">
                 {mode === 'login' ? <><LogIn size={24} /> Entrar no MyPlacar</> : (
-                  mode === 'confirm_email' ? 'Validar código de segurança' : <><UserPlus size={20} className="text-white" /> Solicitar cadastro</>
+                  mode === 'confirm_email' ? 'Validar código de segurança' : (
+                    mode === 'reset_link_missing' ? <><MailCheck size={20} className="text-white" /> Reenviar recuperação</> : <><UserPlus size={20} className="text-white" /> Solicitar cadastro</>
+                  )
                 )}
               </div>
             )}
