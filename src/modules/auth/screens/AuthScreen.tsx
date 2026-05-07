@@ -14,7 +14,7 @@ import { APP_VERSION } from '../../../constants.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { generateEmailVerificationCode, generateUserPin, generateWatchCode } from '../services/authCodes';
 import { clearPasswordResetSession, clearPendingRegistration, forgetEmail, forgetPin, getOfflineProfile, getPendingName, getPendingPassword, getPendingVerifyCode, getSavedAuthMethod, getSavedEmail, getSavedPin, rememberEmail, rememberPin, savePendingRegistration, saveUrlVerificationCode, saveWatchLoginCache } from '../services/authSession';
-import { buildPasswordResetContinueUrl, clearAuthUrlParams, getPublicAuthOrigin } from '../services/authUrls';
+import { buildPasswordResetContinueUrl, clearAuthUrlParams, getPasswordResetParams, getPublicAuthOrigin } from '../services/authUrls';
 import { validatePassword } from '../services/passwordPolicy';
 
 interface Props {
@@ -35,11 +35,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   
   const [mode, setMode] = useState<'login' | 'register' | 'confirm_email' | 'verifying' | 'recovery_sent' | 'reset_password' | 'watch_login'>(() => {
     const params = new URLSearchParams(globalThis.location.search);
-    if (params.get('mode') === 'resetPassword' && params.get('oobCode')) return 'reset_password';
+    const resetParams = getPasswordResetParams();
+    if (resetParams.isResetPassword && resetParams.oobCode) return 'reset_password';
     return (params.get('ref') || params.get('pin_ref') || params.get('joinEvent')) ? 'register' : 'login';
   });
 
-  const [oobCode, setOobCode] = useState(() => new URLSearchParams(globalThis.location.search).get('oobCode') || '');
+  const [oobCode, setOobCode] = useState(() => getPasswordResetParams().oobCode);
 
   // ── Watch Login ────────────────────────────────────────────────────────────
   const [watchCode, setWatchCode] = useState<string>('');
@@ -148,18 +149,15 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   }, [onCheckUpdate, isOnline]);
 
   useEffect(() => {
-    const params = new URLSearchParams(globalThis.location.search);
-    const modeParam = params.get('mode');
-    const codeParam = params.get('oobCode');
+    const { email: resetEmail, isResetPassword, oobCode: codeParam } = getPasswordResetParams();
 
-    if (modeParam === 'resetPassword' && !codeParam) {
+    if (isResetPassword && !codeParam) {
       setMode('login');
       setError('Link de recuperação incompleto. Solicite um novo e-mail de recuperação.');
-      clearAuthUrlParams();
       return;
     }
 
-    if (modeParam === 'resetPassword' && codeParam) {
+    if (isResetPassword && codeParam) {
       const auth = getAuthInstance();
       if (!auth) {
         setMode('login');
@@ -172,6 +170,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
         setOobCode(codeParam);
         setMode('reset_password');
+        if (resetEmail) setEmail(resetEmail);
 
         verifyPasswordResetCode(auth, codeParam).then(email => {
           setEmail(email);
