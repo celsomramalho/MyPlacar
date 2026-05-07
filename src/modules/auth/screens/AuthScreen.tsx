@@ -622,58 +622,71 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const userAuthMethod = userData?.authMethod || 'pin';
       const userUid = userData?.uid || cleanEmail;
 
-      let firebaseEmailSent = false;
       const currentOrigin = getPublicAuthOrigin();
-      const resetLink = buildPasswordResetContinueUrl(cleanEmail);
+      const continueUrl = buildPasswordResetContinueUrl(cleanEmail);
 
       if (window.location.hostname.startsWith('ais-dev-')) {
         setStatusText('Atenção: Gerando link público (ais-pre)...');
       }
 
-      // Usuarios com senha: o unico link valido de reset e o e-mail oficial do Firebase,
-      // porque o oobCode nao fica disponivel no cliente para reenvio por template proprio.
+      let generatedResetLink: string | undefined = undefined;
+
       if (userAuthMethod === 'password') {
+        setStatusText('Gerando link de redefinição...');
         try {
-          await sendPasswordResetEmail(auth, cleanEmail, buildPasswordResetActionCodeSettings(cleanEmail));
-          firebaseEmailSent = true;
-          setRecoveryInfo({
-            type: 'link',
-            value: resetLink,
-            userName,
-            userEmail: cleanEmail,
-            userUid
+          const apiBase = (import.meta.env.DEV) 
+            ? 'https://myplacar.app.br' 
+            : '';
+
+          const response = await fetch(`${apiBase}/api/gerar-link-reset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cleanEmail, continueUrl })
           });
-        } catch (_e) {
-          // Firebase falhou ao gerar o link; se ainda houver PIN legado, cai no envio do PIN abaixo.
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.link) {
+              generatedResetLink = data.link;
+              setRecoveryInfo({
+                type: 'link',
+                value: generatedResetLink,
+                userName,
+                userEmail: cleanEmail,
+                userUid
+              });
+            }
+          } else {
+             console.warn("Falha na API de reset link. Certifique-se de ter configurado FIREBASE_SERVICE_ACCOUNT na Vercel.");
+          }
+        } catch (err) {
+          console.error("Erro ao chamar API de reset:", err);
         }
       }
 
-      if (userAuthMethod === 'pin' || !firebaseEmailSent) {
-        setStatusText('Enviando dados de acesso...');
-        
-        const emailSent = await emailService.sendEmail('recovery', {
-          to_name: userName,
-          email: cleanEmail,
-          pin_code: userPin || undefined,
-          app_access_link: currentOrigin,
+      setStatusText('Enviando dados de acesso...');
+      
+      const emailSent = await emailService.sendEmail('recovery', {
+        to_name: userName,
+        email: cleanEmail,
+        pin_code: userPin || undefined,
+        reset_link: generatedResetLink,
+        app_access_link: currentOrigin,
+      });
+
+      if (!emailSent) {
+        throw new Error("Não foi possível enviar o e-mail de recuperação.");
+      }
+
+      if (userPin && userAuthMethod === 'pin') {
+        setRecoveryInfo({
+          type: 'pin',
+          value: userPin,
+          userName,
+          userEmail: cleanEmail,
+          userUid
         });
-
-        if (!emailSent && !firebaseEmailSent) {
-          throw new Error("Não foi possível enviar o e-mail de recuperação.");
-        }
-
-        if (userPin) {
-          setRecoveryInfo({
-            type: 'pin',
-            value: userPin,
-            userName,
-            userEmail: cleanEmail,
-            userUid
-          });
-        }
-      } 
-      // Nao enviar reset_link via template proprio: sem oobCode, o link so abre a tela incompleta.
-      // O reset real depende do e-mail oficial do Firebase.
+      }
 
       setMode('recovery_sent');
       setShowRecoveryInfoModal(true);
