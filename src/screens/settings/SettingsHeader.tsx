@@ -1,8 +1,9 @@
 
 import React, { useMemo } from 'react';
-import { Play, User, X, Clock, Trash2, Share2, Check, Bell } from 'lucide-react';
+import { Play, User, X, Clock, Trash2, Share2, Check, Bell, Menu } from 'lucide-react';
 import { ScoreboardIcon } from '../../components/ScoreboardIcon';
 import { LiveIndicator } from '../../components/LiveIndicator';
+import { isWatchDevice } from '../../utils/device';
 
 interface Props {
   isSelectionMode: boolean;
@@ -20,6 +21,7 @@ interface Props {
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
   onOpenCommunications?: () => void;
   unreadCount?: number;
+  onOpenMenu?: () => void;
 }
 
 export const SettingsHeader: React.FC<Props> = ({ 
@@ -37,7 +39,8 @@ export const SettingsHeader: React.FC<Props> = ({
   onOpenLiveControl,
   role,
   onOpenCommunications,
-  unreadCount = 0
+  unreadCount = 0,
+  onOpenMenu
 }) => {
   const isHistory = activeTab === 'history';
   const isProfile = activeTab === 'profile';
@@ -96,7 +99,7 @@ export const SettingsHeader: React.FC<Props> = ({
         </div>
       ) : (
         <>
-          <div className="w-16 flex items-center justify-start gap-1">
+          <div className={`${isWatchDevice() ? 'w-24' : 'w-16'} flex items-center justify-start gap-1`}>
             <button 
               onClick={onOpenCommunications}
               className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors relative"
@@ -108,6 +111,14 @@ export const SettingsHeader: React.FC<Props> = ({
                 </span>
               )}
             </button>
+            {isWatchDevice() && (
+              <button
+                onClick={onOpenMenu}
+                className="p-2 text-slate-400 hover:text-brand-600 transition-colors active:scale-90"
+              >
+                <Menu size={22} />
+              </button>
+            )}
             {isMirroringActive && <LiveIndicator onClick={onOpenLiveControl} role={role} />}
           </div>
           <div className="flex items-center justify-center gap-2 flex-1">

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { isWatchDevice } from '../utils/device';
 import type { Partner, QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
 import { HistorySection } from '@modules/history';
@@ -236,9 +235,10 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           role={props.role}
           onOpenCommunications={props.onOpenCommunications}
           unreadCount={props.unreadCount}
+          onOpenMenu={props.onOpenMenu}
         />
       )}
-      <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} ${isWatchDevice() ? '' : 'pb-32'} no-scrollbar`}>
+      <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} pb-32 no-scrollbar`}>
         <div className={props.activeTab === 'help' ? "w-full h-full" : "max-w-md mx-auto"}>
           {renderActiveContent()}
         </div>
