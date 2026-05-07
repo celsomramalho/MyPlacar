@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock, Settings, User, Menu, Check, LogOut } from 'lucide-react';
 import { ScoreboardIcon } from '../../components/ScoreboardIcon';
+import { isWatchDevice } from '../../utils/device';
 
 interface Props {
   activeTab: string;
@@ -29,7 +30,9 @@ export const SettingsTabs: React.FC<Props> = ({
 }) => {
   const getBtnClass = (isActive: boolean) => 
     `flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] ${isActive ? 'opacity-100 scale-110' : 'opacity-40'}`;
-  
+
+  if (isWatchDevice()) return null;
+
   // Layout simplificado para o modo Offline
   if (isOfflineMode) {
     return (

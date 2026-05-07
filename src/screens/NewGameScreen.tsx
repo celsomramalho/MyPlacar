@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
 import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../types';
@@ -10,7 +10,6 @@ import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '../components/LazySportIcon';
 import { Button } from '../components/Button';
-import { LiveIndicator } from '../components/LiveIndicator';
 import { SettingsTabs } from './settings/SettingsTabs';
 
 interface Props {
@@ -57,11 +56,35 @@ type DbSport = {
   isActive: boolean;
 };
 
-export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, onOpenMenu, userProfile, isOfflineMode, onExitOffline }) => {
+export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, onOpenMenu, userProfile, isOfflineMode, onExitOffline, onHome }) => {
   const [activeGroupId, setActiveGroupId] = useState<string>(() => (SPORT_LIST.find(s => s.id === settings.sportType)?.group as string) || 'raquetes');
   const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
   const [dbSports, setDbSports] = useState<DbSport[]>([]);
   const [isGeneralOpen, setIsGeneralOpen] = useState(false);
+
+  const [resetPressProgress, setResetPressProgress] = useState(0);
+  const resetPressTimerRef = useRef<number | null>(null);
+  const resetProgressIntervalRef = useRef<number | null>(null);
+
+  const startResetPress = () => {
+    if (!onExitOffline) return;
+    setResetPressProgress(0);
+    const startTime = Date.now();
+    resetProgressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      setResetPressProgress(Math.min((elapsed / 3000) * 100, 100));
+    }, 50);
+    resetPressTimerRef.current = setTimeout(() => {
+      stopResetPress();
+      onExitOffline();
+    }, 3000);
+  };
+
+  const stopResetPress = () => {
+    if (resetPressTimerRef.current) clearTimeout(resetPressTimerRef.current);
+    if (resetProgressIntervalRef.current) clearInterval(resetProgressIntervalRef.current);
+    setResetPressProgress(0);
+  };
 
   const isLiveActive = useMemo(() => {
     return !!(gameState?.isMirroringActive || cloudLiveExists);
@@ -194,21 +217,32 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
 
   return (
     <div className="min-h-screen bg-[#E5E7EB] flex flex-col relative font-sans">
-      <header className="px-6 py-4 flex items-center bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="flex-1 flex items-center gap-2">
-          {isLiveActive && (
-            <LiveIndicator 
-              onClick={onOpenLiveControl} 
-              role={role} 
-            />
+      <header className="px-6 py-4 flex items-center bg-white border-b border-gray-100 sticky top-0 z-50 relative">
+        <div className="flex items-center gap-3">
+          {!isOfflineMode && (
+            <button onClick={onHome} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
+              <ScoreboardIcon className="w-6 h-6" />
+              {isSettingsInicialSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
+            </button>
           )}
           {isOfflineMode && (
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-black bg-yellow-500 shadow-md border-2 border-white">
-              <WifiOff size={22} />
-            </div>
+            <button 
+              onPointerDown={startResetPress}
+              onPointerUp={stopResetPress}
+              onPointerLeave={stopResetPress}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-black bg-yellow-500 shadow-md border-2 border-white relative overflow-hidden active:scale-95 transition-transform"
+            >
+              {resetPressProgress > 0 && (
+                <div 
+                  className="absolute inset-0 bg-black/10 origin-left transition-all duration-75" 
+                  style={{ transform: `scaleX(${resetPressProgress / 100})` }} 
+                />
+              )}
+              <WifiOff size={22} className="relative z-10" />
+            </button>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-colors duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
             <Settings size={22} />
             {isSettingsRegrasSaved && isLiveActive && (
