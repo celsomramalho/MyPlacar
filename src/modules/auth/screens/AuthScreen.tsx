@@ -14,7 +14,7 @@ import { APP_VERSION } from '../../../constants.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { generateEmailVerificationCode, generateUserPin, generateWatchCode } from '../services/authCodes';
 import { clearPasswordResetSession, clearPendingRegistration, forgetEmail, forgetPin, getOfflineProfile, getPendingName, getPendingPassword, getPendingVerifyCode, getSavedAuthMethod, getSavedEmail, getSavedPin, rememberEmail, rememberPin, savePendingRegistration, saveUrlVerificationCode, saveWatchLoginCache } from '../services/authSession';
-import { buildPasswordResetContinueUrl, clearAuthUrlParams, getPasswordResetParams, getPublicAuthOrigin } from '../services/authUrls';
+import { buildPasswordResetActionCodeSettings, buildPasswordResetContinueUrl, clearAuthUrlParams, getPasswordResetParams, getPublicAuthOrigin } from '../services/authUrls';
 import { validatePassword } from '../services/passwordPolicy';
 
 interface Props {
@@ -631,10 +631,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       // Usuários com senha → gera link de reset via Firebase mas envia pelo SES
       if (userAuthMethod === 'password') {
         try {
-          await sendPasswordResetEmail(auth, cleanEmail, {
-            url: resetLink,
-            handleCodeInApp: true,
-          });
+          await sendPasswordResetEmail(auth, cleanEmail, buildPasswordResetActionCodeSettings(cleanEmail));
           firebaseEmailSent = true;
           setRecoveryInfo({
             type: 'link',

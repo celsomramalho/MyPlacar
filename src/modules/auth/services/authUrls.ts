@@ -1,4 +1,5 @@
 const PRODUCTION_ORIGIN = 'https://myplacar.app.br';
+const PRODUCTION_LINK_DOMAIN = 'myplacar.app.br';
 
 export const getPublicAuthOrigin = () => {
   const { hostname, origin } = globalThis.location;
@@ -19,10 +20,23 @@ export const getPublicAuthOrigin = () => {
 };
 
 export const buildPasswordResetContinueUrl = (email: string) => {
-  const url = new URL(getPublicAuthOrigin());
+  const { hostname, origin } = globalThis.location;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+  const url = new URL(isLocalhost ? origin : PRODUCTION_ORIGIN);
   url.searchParams.set('mode', 'resetPassword');
   url.searchParams.set('email', email.toLowerCase().trim());
   return url.toString();
+};
+
+export const buildPasswordResetActionCodeSettings = (email: string) => {
+  const { hostname } = globalThis.location;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  return {
+    url: buildPasswordResetContinueUrl(email),
+    handleCodeInApp: true,
+    ...(isLocalhost ? {} : { linkDomain: PRODUCTION_LINK_DOMAIN }),
+  };
 };
 
 export const getPasswordResetParams = () => {
