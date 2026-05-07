@@ -1,6 +1,4 @@
 const PRODUCTION_ORIGIN = 'https://myplacar.app.br';
-const PRODUCTION_LINK_DOMAIN = 'myplacar.app.br';
-
 export const getPublicAuthOrigin = () => {
   const { hostname, origin } = globalThis.location;
   const isPrivateAiStudio = hostname.startsWith('ais-dev-');
@@ -29,13 +27,9 @@ export const buildPasswordResetContinueUrl = (email: string) => {
 };
 
 export const buildPasswordResetActionCodeSettings = (email: string) => {
-  const { hostname } = globalThis.location;
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-
   return {
     url: buildPasswordResetContinueUrl(email),
-    handleCodeInApp: true,
-    ...(isLocalhost ? {} : { linkDomain: PRODUCTION_LINK_DOMAIN }),
+    handleCodeInApp: false,
   };
 };
 
