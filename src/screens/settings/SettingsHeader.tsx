@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { Play, User, X, Clock, Trash2, Share2, Check, Bell, Menu } from 'lucide-react';
+import { Play, User, X, Clock, Trash2, Share2, Check, Bell, Menu, LogOut } from 'lucide-react';
 import { ScoreboardIcon } from '../../components/ScoreboardIcon';
 import { LiveIndicator } from '../../components/LiveIndicator';
 import { isWatchDevice } from '../../utils/device';
@@ -22,6 +22,8 @@ interface Props {
   onOpenCommunications?: () => void;
   unreadCount?: number;
   onOpenMenu?: () => void;
+  isOfflineMode?: boolean;
+  onExitOffline?: () => void;
 }
 
 export const SettingsHeader: React.FC<Props> = ({ 
@@ -40,7 +42,9 @@ export const SettingsHeader: React.FC<Props> = ({
   role,
   onOpenCommunications,
   unreadCount = 0,
-  onOpenMenu
+  onOpenMenu,
+  isOfflineMode = false,
+  onExitOffline,
 }) => {
   const isHistory = activeTab === 'history';
   const isProfile = activeTab === 'profile';
@@ -134,13 +138,22 @@ export const SettingsHeader: React.FC<Props> = ({
               {isHistory ? 'Histórico' : 'Nova partida'}
             </h1>
           </div>
-          <button 
-            onClick={onStart} 
-            disabled={!canStartMatch}
-            className={`p-2 -mr-2 active:scale-90 transition-all ${canStartMatch ? 'text-green-500' : 'text-slate-300 opacity-50 cursor-not-allowed'}`}
-          >
-            <Play size={30} fill="currentColor" />
-          </button>
+          {isWatchDevice() && isOfflineMode ? (
+            <button
+              onClick={onExitOffline}
+              className="p-2 -mr-2 active:scale-90 transition-all text-red-500"
+            >
+              <LogOut size={26} />
+            </button>
+          ) : (
+            <button 
+              onClick={onStart} 
+              disabled={!canStartMatch}
+              className={`p-2 -mr-2 active:scale-90 transition-all ${canStartMatch ? 'text-green-500' : 'text-slate-300 opacity-50 cursor-not-allowed'}`}
+            >
+              <Play size={30} fill="currentColor" />
+            </button>
+          )}
         </>
       )}
     </header>

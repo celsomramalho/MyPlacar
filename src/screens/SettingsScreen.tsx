@@ -236,6 +236,8 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           onOpenCommunications={props.onOpenCommunications}
           unreadCount={props.unreadCount}
           onOpenMenu={props.onOpenMenu}
+          isOfflineMode={props.isOfflineMode}
+          onExitOffline={props.onExitOffline}
         />
       )}
       <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} pb-32 no-scrollbar`}>
