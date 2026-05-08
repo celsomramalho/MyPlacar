@@ -650,7 +650,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               generatedResetLink = data.link;
               setRecoveryInfo({
                 type: 'link',
-                value: generatedResetLink,
+                value: generatedResetLink as string,
                 userName,
                 userEmail: cleanEmail,
                 userUid
