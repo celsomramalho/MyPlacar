@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, LogOut } from 'lucide-react';
+import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
 import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../types';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -241,11 +241,6 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
               <WifiOff size={22} className="relative z-10" />
             </button>
           )}
-          {isWatchDevice() && isOfflineMode && (
-            <button onClick={onExitOffline} className="p-2 active:scale-90 transition-all text-red-500">
-              <LogOut size={26} />
-            </button>
-          )}
         </div>
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-colors duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
@@ -275,7 +270,7 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
               id="toggle-watchmode" 
               label="Modo relógio" 
               checked={isOfflineMode ? true : (settings.isWatchMode || false)} 
-              disabled={isWatchDevice()}
+              disabled={isWatchDevice() && !!isOfflineMode}
               onChange={v => { 
                 const next = {...settings, isWatchMode: v, isScoreboardMode: v ? false : settings.isScoreboardMode};
                 setSettings(next); 
