@@ -47,10 +47,22 @@ export default async function handler(req, res) {
       handleCodeInApp: true,
     } : undefined;
 
-    // Gera o link completo contendo o oobCode
-    const link = await admin.auth().generatePasswordResetLink(email, actionCodeSettings);
+    // O Firebase pode gerar o link com o domínio errado dependendo da configuração no Console (Action URL).
+    // Para evitar isso, extraímos apenas o token (oobCode) e montamos nosso próprio link limpo.
+    const rawLink = await admin.auth().generatePasswordResetLink(email, actionCodeSettings);
+    
+    const urlObj = new URL(rawLink);
+    const oobCode = urlObj.searchParams.get('oobCode');
 
-    res.status(200).json({ success: true, link });
+    let finalLink = rawLink;
+    if (oobCode && continueUrl) {
+      const separator = continueUrl.includes('?') ? '&' : '?';
+      finalLink = `${continueUrl}${separator}oobCode=${oobCode}`;
+    } else if (oobCode) {
+      finalLink = `https://www.myplacar.app.br/?mode=resetPassword&oobCode=${oobCode}&email=${encodeURIComponent(email)}`;
+    }
+
+    res.status(200).json({ success: true, link: finalLink });
   } catch (err) {
     console.error(`Erro ao gerar link de reset: ${err.message}`);
     res.status(500).json({ error: 'Falha interna ao gerar link de reset' });
