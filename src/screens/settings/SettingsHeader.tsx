@@ -99,7 +99,17 @@ export const SettingsHeader: React.FC<Props> = ({
             </div>
             <h1 className="text-lg font-bold text-black tracking-tight">Meu perfil</h1>
           </div>
-          <div className="w-10" />
+          {isWatchDevice() ? (
+            <button
+              onClick={onStart}
+              disabled={!canStartMatch}
+              className={`p-2 -mr-2 active:scale-90 transition-all ${canStartMatch ? 'text-green-500' : 'text-slate-300 opacity-50 cursor-not-allowed'}`}
+            >
+              <Play size={30} fill="currentColor" />
+            </button>
+          ) : (
+            <div className="w-10" />
+          )}
         </div>
       ) : (
         <>
