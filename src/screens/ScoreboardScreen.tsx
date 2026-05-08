@@ -1283,7 +1283,23 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           const renderSetHistoryNew = (team: 1 | 2) => {
             const p = team === 1 ? gameState.p1 : gameState.p2;
             const currentSet = gameState.currentSet ?? 0;
-            const pastSets = (p?.sets || []).slice(0, currentSet);
+            const isMatchOver = gameState.isMatchOver;
+
+            let isMatchWinner = false;
+            if (isMatchOver) {
+              const p1WonSets = gameState.p1.sets.filter((s, i) => s > (gameState.p2.sets[i] ?? 0)).length;
+              const p2WonSets = gameState.p2.sets.filter((s, i) => s > (gameState.p1.sets[i] ?? 0)).length;
+              isMatchWinner = team === 1 ? p1WonSets > p2WonSets : p2WonSets > p1WonSets;
+            }
+
+            const pastSets = isMatchOver 
+              ? (p?.sets || []).slice(0, -1) 
+              : (p?.sets || []).slice(0, currentSet);
+
+            const currentScore = isMatchOver 
+              ? (p?.sets && p.sets.length > 0 ? p.sets[p.sets.length - 1] : 0)
+              : (p?.games ?? 0);
+
             return (
               <div className="flex gap-3 items-end">
                 {pastSets.map((games: number, i: number) => (
@@ -1292,7 +1308,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 {pastSets.length > 0 && (
                   <span className="font-black leading-none text-white/30 text-7xl select-none">|</span>
                 )}
-                <span className="font-black leading-none text-[#bef264] text-7xl">{p?.games ?? 0}</span>
+                <span className="font-black leading-none text-[#bef264] text-7xl flex items-center gap-2">
+                  {currentScore}
+                  {isMatchOver && isMatchWinner && (
+                    <Trophy size={48} className="text-yellow-400 animate-bounce" style={{ animationIterationCount: 3 }} />
+                  )}
+                </span>
               </div>
             );
           };

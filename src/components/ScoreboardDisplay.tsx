@@ -160,8 +160,24 @@ transition: 'opacity 150ms',
 const renderSetHistory = useCallback((player: 1 | 2) => {
 const p = player === 1 ? gameState.p1 : gameState.p2;
 const currentSet = gameState.currentSet ?? 0;
-// sets[] guarda apenas sets encerrados; o set atual usa p.games
-const pastSets = (p?.sets || []).slice(0, currentSet);
+const isMatchOver = gameState.isMatchOver;
+
+// Calcula o vencedor global se a partida acabou
+let isMatchWinner = false;
+if (isMatchOver) {
+  const p1WonSets = gameState.p1.sets.filter((s, i) => s > (gameState.p2.sets[i] ?? 0)).length;
+  const p2WonSets = gameState.p2.sets.filter((s, i) => s > (gameState.p1.sets[i] ?? 0)).length;
+  isMatchWinner = player === 1 ? p1WonSets > p2WonSets : p2WonSets > p1WonSets;
+}
+
+// Se a partida acabou, o último set jogado já está em p.sets.
+const pastSets = isMatchOver 
+  ? (p?.sets || []).slice(0, -1) 
+  : (p?.sets || []).slice(0, currentSet);
+
+const currentScore = isMatchOver 
+  ? (p?.sets && p.sets.length > 0 ? p.sets[p.sets.length - 1] : 0)
+  : (p?.games ?? 0);
 
 return (
 <div className="flex gap-2 items-end">
@@ -176,8 +192,11 @@ return (
 <span className="font-black leading-none text-white/30 text-5xl select-none">|</span>
 )}
 {/* Set atual */}
-<span className="font-black leading-none text-[#bef264] text-5xl">
-{p?.games ?? 0}
+<span className="font-black leading-none text-[#bef264] text-5xl flex items-center gap-2">
+{currentScore}
+{isMatchOver && isMatchWinner && (
+  <Trophy size={36} className="text-yellow-400 animate-bounce" style={{ animationIterationCount: 3 }} />
+)}
 </span>
 </div>
 );
@@ -188,7 +207,7 @@ return (
 if (!gameState?.p1?.sets || !gameState?.p2?.sets) return null;
 
 const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
-const showMic = !!onVoiceToggle && gameState.matchConfig.voiceEnabled && (!isLiveActive || isCommandOwner);
+const showMic = !isPublicView && !!onVoiceToggle && gameState.matchConfig.voiceEnabled && (!isLiveActive || isCommandOwner);
 
 const p1Sets = gameState.p1.sets;
 const p2Sets = gameState.p2.sets;
