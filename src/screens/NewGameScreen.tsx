@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon } from 'lucide-react';
+import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, LogOut } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
 import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../types';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
@@ -256,9 +256,15 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
           </h1>
         </div>
         <div className="flex-1 flex justify-end">
-          <button onClick={onPlayShortcut} disabled={!canStartMatch} className={`p-2 active:scale-90 transition-all ${canStartMatch ? 'text-emerald-500' : 'text-slate-200 opacity-50'}`}>
-            <Play size={28} fill="currentColor" />
-          </button>
+          {isWatchDevice() && isOfflineMode ? (
+            <button onClick={onExitOffline} className="p-2 active:scale-90 transition-all text-red-500">
+              <LogOut size={26} />
+            </button>
+          ) : (
+            <button onClick={onPlayShortcut} disabled={!canStartMatch} className={`p-2 active:scale-90 transition-all ${canStartMatch ? 'text-emerald-500' : 'text-slate-200 opacity-50'}`}>
+              <Play size={28} fill="currentColor" />
+            </button>
+          )}
         </div>
       </header>
 
