@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic } from 'lucide-react';
+import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../types.ts';
 import { LiveIndicator } from './LiveIndicator.tsx';
 import { getTennisServerSide } from '../utils/tennisEngine.ts';
@@ -43,6 +43,7 @@ interface WatchBoardProps {
   fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
   onVoiceToggle?: () => void;
   isVoiceActive?: boolean;
+  onToggleWatchMode?: () => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -77,7 +78,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive, onToggleWatchMode
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [showMic, setShowMic] = React.useState(false);
@@ -397,6 +398,21 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                   <span className="font-black text-sm">Live / Controle</span>
                 </div>
               )}
+
+              {/* Modo relógio */}
+              <div
+                role="button"
+                onPointerDown={() => { onToggleWatchMode?.(); }}
+                className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
+              >
+                <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-slate-700 rounded-xl">
+                  <Watch size={18} />
+                </div>
+                <span className="font-black text-sm flex-1">Modo relógio</span>
+                <div className="w-12 h-6 rounded-full relative transition-colors duration-200 bg-emerald-500">
+                  <div className="absolute top-1 left-7 w-4 h-4 bg-white rounded-full shadow transition-all duration-200" />
+                </div>
+              </div>
 
               {/* Regras */}
               <button
