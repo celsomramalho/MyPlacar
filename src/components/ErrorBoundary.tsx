@@ -24,17 +24,27 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
+  private handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   private handleReset = () => {
     try {
       localStorage.removeItem('myPlacarActiveGameState');
-      globalThis.location.reload();
     } catch (e) {}
+    this.setState({ hasError: false, error: null });
   };
 
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in relative">
+          <button
+            onClick={this.handleRetry}
+            className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-gray-100 text-gray-500 rounded-full active:scale-90 transition-all"
+          >
+            <span className="text-xl font-black leading-none">×</span>
+          </button>
           <div className="w-20 h-20 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-6 shadow-inner">
             <AlertCircle size={40} />
           </div>
@@ -45,7 +55,7 @@ export class ErrorBoundary extends Component<Props, State> {
           
           <div className="flex flex-col w-full gap-3 max-w-xs">
             <button 
-              onClick={() => globalThis.location.reload()} 
+              onClick={this.handleRetry}
               className="w-full py-4 bg-blue-600 text-white rounded-3xl font-black text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               <RotateCw size={18} />

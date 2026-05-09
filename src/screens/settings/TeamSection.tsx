@@ -484,7 +484,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
           }`}
         >
            <div className="flex items-center justify-center pl-4">
-             <Play size={44} fill="white" className="text-white" />
+             <Play size={44} fill="currentColor" className="text-green-600" />
            </div>
            <div className="flex flex-col items-center justify-center">
              <span className="text-xl opacity-90 leading-none mb-1">Iniciar partida:</span>
