@@ -3,6 +3,7 @@ import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw, MonitorSmartphone, 
 import { GameState, CourtSide } from '../types.ts';
 import { LiveIndicator } from '../components/LiveIndicator.tsx';
 import { getTennisServerSide } from '../utils/tennisEngine.ts';
+import { useMatchTimer } from '../hooks/useMatchTimer.ts';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface ScoreboardDisplayProps {
@@ -66,6 +67,8 @@ const [forceLayoutOverride, setForceLayoutOverride] = useState<boolean | null>(n
 // isLandscape: usa override manual se definido, senão usa a orientação física
 const isLandscape = forceLayoutOverride !== null ? forceLayoutOverride : physicalLandscape;
 const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
+
+const displayTime = useMatchTimer(gameState);
 
 // ── Detecção de orientação ─────────────────────────────────────────────────
 useEffect(() => {
@@ -330,7 +333,7 @@ className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-tr
 </div>
 
 {/* Cronômetro */}
-<span className="text-white font-black text-lg tabular-nums tracking-tight">{formatTime(gameState.matchDuration || 0)}</span>
+<span className="text-white font-black text-lg tabular-nums tracking-tight">{formatTime(displayTime)}</span>
 
 {/* Botão rotação — alterna layout portrait/landscape manualmente */}
 <button

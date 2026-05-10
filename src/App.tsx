@@ -37,6 +37,7 @@ import { LiveIndicator } from './components/LiveIndicator.tsx';
 import { useAppLogger } from './hooks/useAppLogger.ts';
 import { useInstallPwa } from './hooks/useInstallPwa.ts';
 import { useOnlineSync } from './hooks/useOnlineSync.ts';
+import { useWakeLock } from './hooks/useWakeLock.ts';
 import { mirrorUser } from './services/supabaseMirror.ts';
 import { deleteSupabaseMatch, deleteSupabaseMatches } from '@infra/supabase';
 
@@ -194,6 +195,9 @@ const App: React.FC = () => {
     if (currentScreen === 'public-scoreboard') return;
     setCurrentScreenRaw(screen as Screen);
   };
+
+  // Mantém a tela acesa enquanto o placar estiver visível — independente de remounts do ScoreboardScreen.
+  useWakeLock(currentScreen === 'scoreboard' || currentScreen === 'public-scoreboard');
 
   // authReady: true quando o Firebase Auth terminou de restaurar a sessão.
   // Impede que listeners do Firestore disparem com request.auth == null no refresh.
@@ -1231,6 +1235,7 @@ const App: React.FC = () => {
                 : baseConfig.isScoreboardMode; // demais: preserva preferência local
             return {
               ...cloudData,
+              matchDuration: Math.max(prev?.matchDuration || 0, cloudData.matchDuration || 0),
               // Restaura os campos de proprietário travados após o spread do cloudData
               ownerPin: lockedOwnerPin,
               ownerDeviceId: lockedOwnerDeviceId,
@@ -1697,18 +1702,9 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [activeLives, userProfile.pin, userProfile.name, userProfile.nickname, deviceId, currentFullDeviceName]);
 
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | undefined;
-    if (gameState && !gameState.isPaused && !gameState.isMatchOver && !gameState.matchConfig?.isWatchMode && !(gameState.isMirroringActive && gameState.isLiveClosed)) {
-      timer = setInterval(() => {
-        setGameState(prev => {
-          if (!prev || prev.isPaused || prev.isMatchOver || (prev.isMirroringActive && prev.isLiveClosed)) return prev;
-          return { ...prev, matchDuration: prev.matchDuration + 1 };
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [gameState?.isPaused, gameState?.isMatchOver, gameState?.isLiveClosed, !!gameState, gameState?.matchConfig?.isWatchMode]);
+  // O timer de 1 segundo (matchDuration) foi removido.
+  // A duração da partida agora é baseada em timestamp (startTime, lastPauseTime, accumulatedPausedTime)
+  // calculada na hora da exibição (ScoreboardScreen e ScoreboardDisplay).
 
   const lastSeenUpdateRef = useRef<number>(0);
   const lastSyncTimeRef = useRef<number>(0);
@@ -3603,7 +3599,22 @@ const App: React.FC = () => {
         } 
       }} onSwitchServer={handleSmartSwitchServer} onTogglePause={() => { 
         if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner) return; 
-        setGameState(p => p ? {...p, isPaused: !p.isPaused} : null); 
+        setGameState(p => {
+          if (!p) return null;
+          const isNowPaused = !p.isPaused;
+          const now = Date.now();
+          if (isNowPaused) {
+            return { ...p, isPaused: true, lastPauseTime: now };
+          } else {
+            const pausedDuration = p.lastPauseTime ? now - p.lastPauseTime : 0;
+            return { 
+              ...p, 
+              isPaused: false, 
+              accumulatedPausedTime: (p.accumulatedPausedTime || 0) + pausedDuration,
+              lastPauseTime: undefined
+            };
+          }
+        }); 
       }} onBack={() => {
         // C2: diálogos de saída por papel
         const liveAtiva = gameState?.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed) && !gameState.isConfirmedFinished;

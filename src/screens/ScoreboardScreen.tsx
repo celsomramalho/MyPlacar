@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw } from 'lucide-react';
 import { getDeviceType } from '../utils/device.ts';
 import { Button } from '../components/Button';
@@ -8,7 +8,7 @@ import { GameState, PointType, PointEvent, UserProfile } from '../types';
 import { useGeminiReferee } from '../hooks/useGeminiReferee';
 import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../hooks/useScoreAnnouncer';
 import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer';
-import { useWakeLock } from '../hooks/useWakeLock';
+import { useMatchTimer } from '../hooks/useMatchTimer.ts';
 import { isTennisTieBreak } from '../utils/tennisEngine';
 import { getTennisServerSide } from '../utils/tennisEngine';
 import { isWatchDevice } from '../utils/device';
@@ -315,25 +315,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const effectiveVoiceLogs = voiceLogs !== undefined ? voiceLogs : [];
   const effectiveSetVoiceLogs = setVoiceLogs || (() => {});
 
-  // ─── Wake Lock — deve ficar ANTES de qualquer return condicional (regra dos hooks) ───
-  // Mantém a tela acesa enquanto o ScoreboardScreen estiver montado.
-  useWakeLock(true);
+  const displayTime = useMatchTimer(gameState);
 
-  // Fallback para iOS < 16.4 e Safari sem suporte à Wake Lock API:
-  // um <video> mudo em loop engana o sistema e impede o bloqueio de tela.
-  useEffect(() => {
-    if ('wakeLock' in navigator) return; // API nativa disponível — fallback desnecessário
-    const video = document.createElement('video');
-    video.setAttribute('playsinline', '');
-    video.setAttribute('muted', '');
-    video.setAttribute('loop', '');
-    // Vídeo 1x1 transparente em base64 (não exige rede)
-    video.src = 'data:video/mp4;base64,AAAAIGZ0eXBtcDQyAAAAAG1wNDJtcDQxaXNvbWF2YwAAABRtZGF0';
-    video.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;';
-    document.body.appendChild(video);
-    video.play().catch(() => {});
-    return () => { video.pause(); document.body.removeChild(video); };
-  }, []);
+  // ─── Wake Lock gerenciado no App.tsx — estável independente de remounts ───
 
   if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
     return (
@@ -1212,7 +1196,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                    </button>
                  )}
                </div>
-               <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${gameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(gameState.matchDuration)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${gameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{gameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
+               <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${gameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(displayTime)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${gameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{gameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
              </div>
              
              <div className="flex flex-col w-full mt-4">

@@ -45,7 +45,17 @@ export const createHistoryItem = (
     p2Sets: [...state.p2.sets],
     winner: winnerTeam === 1 ? state.p1.name : state.p2.name,
     winnerTeam,
-    duration: state.matchDuration,
+    duration: (() => {
+      // Usa o matchDuration antigo como fallback, mas calcula dinamicamente se startTime for válido
+      if (!state.startTime) return state.matchDuration || 0;
+      let elapsedMs = Date.now() - state.startTime;
+      if (state.isPaused && state.lastPauseTime) {
+        elapsedMs = state.lastPauseTime - state.startTime;
+      }
+      const totalPaused = state.accumulatedPausedTime || 0;
+      elapsedMs -= totalPaused;
+      return Math.max(0, Math.floor(elapsedMs / 1000));
+    })(),
     isSynced: false,
     ownerEmail: userProfile.email?.toLowerCase().trim() || '',
     pointHistory,

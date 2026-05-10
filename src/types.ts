@@ -213,6 +213,8 @@ export interface GameState {
   isConfirmedFinished?: boolean;
   matchDuration: number; 
   isPaused: boolean;
+  accumulatedPausedTime?: number;
+  lastPauseTime?: number;
   isMirroringActive?: boolean;
   remoteCommand?: { action: string; timestamp: number };
   lastRemotePing?: number;
