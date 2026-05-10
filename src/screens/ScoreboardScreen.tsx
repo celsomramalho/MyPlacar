@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+﻿import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw } from 'lucide-react';
 import { getDeviceType } from '../utils/device.ts';
 import { Button } from '../components/Button';
@@ -96,7 +96,8 @@ interface Props {
   onExitOffline?: () => void;
   appUrl: string;
   cloudLiveExists?: boolean;
-  role?: 'owner' | 'judge' | 'observer' | 'spectator';
+  livePapel?: 'owner' | 'judge' | 'observer' | 'spectator';
+  isController?: boolean;
   indicatorRole?: 'owner' | 'judge' | 'observer' | 'spectator';
   isOriginalOwner?: boolean;
   judgePinInput?: string;
@@ -304,7 +305,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, role, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus, onToggleScoreboardMode } = props;
+  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, cloudLiveExists, livePapel: rolePapel, isController, indicatorRole, isOriginalOwner, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, liveLogs, setLiveLogs, voiceLogs, setVoiceLogs, onDeleteLive, fbSyncStatus, onToggleScoreboardMode } = props;
   // Detecta modo público diretamente pela URL — independente de props/minificação
   const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
 
@@ -313,6 +314,26 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const effectiveSetLiveLogs = setLiveLogs || (() => {});
   const effectiveVoiceLogs = voiceLogs !== undefined ? voiceLogs : [];
   const effectiveSetVoiceLogs = setVoiceLogs || (() => {});
+
+  // ─── Wake Lock — deve ficar ANTES de qualquer return condicional (regra dos hooks) ───
+  // Mantém a tela acesa enquanto o ScoreboardScreen estiver montado.
+  useWakeLock(true);
+
+  // Fallback para iOS < 16.4 e Safari sem suporte à Wake Lock API:
+  // um <video> mudo em loop engana o sistema e impede o bloqueio de tela.
+  useEffect(() => {
+    if ('wakeLock' in navigator) return; // API nativa disponível — fallback desnecessário
+    const video = document.createElement('video');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('muted', '');
+    video.setAttribute('loop', '');
+    // Vídeo 1x1 transparente em base64 (não exige rede)
+    video.src = 'data:video/mp4;base64,AAAAIGZ0eXBtcDQyAAAAAG1wNDJtcDQxaXNvbWF2YwAAABRtZGF0';
+    video.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;';
+    document.body.appendChild(video);
+    video.play().catch(() => {});
+    return () => { video.pause(); document.body.removeChild(video); };
+  }, []);
 
   if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
     return (
@@ -933,7 +954,6 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const isTieBreak = isTennisTieBreak(gameState);
-  useWakeLock(true);
   useEffect(() => { const interval = setInterval(() => setIsAudioLocked(getSharedAudioContext()?.state !== 'running'), 1500); return () => clearInterval(interval); }, []);
 
   const openCorrection = (type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => { if (!gameState.isConfirmedFinished && !gameState.isMatchOver && !isRecoveryFromMatchOver && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner) { if (isListening) stop(); setCorrectionMode(type); setCorrectionPlayer(player); } };
@@ -1036,7 +1056,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
         handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
         cloudLiveExists={cloudLiveExists}
-        role={indicatorRole || role}
+        role={indicatorRole}
         fbSyncStatus={fbSyncStatus}
         onVoiceToggle={handleVoiceToggle}
         isVoiceActive={isVoiceActive}
@@ -1082,7 +1102,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         onBack={onBack}
         cloudLiveExists={cloudLiveExists}
         isOfflineMode={isOfflineMode}
-        role={indicatorRole || role}
+        role={indicatorRole}
         onVoiceToggle={handleVoiceToggle}
         isVoiceActive={isVoiceActive}
         fbSyncStatus={fbSyncStatus}
@@ -1154,7 +1174,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
             isPublicView
               ? <LiveIndicator role="observer" />
               : <LiveIndicator
-                  role={role || 'observer'}
+                  role={indicatorRole || (rolePapel ?? 'observer')}
                   onClick={onOpenLiveControl}
                   onPointerDown={startResetPress}
                   onPointerUp={stopResetPress}
@@ -1421,7 +1441,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${isLiveActiveNew ? 'border-emerald-400 bg-white/5 text-emerald-400' : isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' : 'border-white bg-emerald-500 text-white'}`}
                 >
                   {isLiveActiveNew
-                    ? <LiveIndicator role={indicatorRole || role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-full h-full pointer-events-none" />
+                    ? <LiveIndicator role={indicatorRole} variant="header" className="w-full h-full pointer-events-none" />
                     : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
                   }
                 </div>
@@ -1445,7 +1465,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     {isLiveActiveNew && (
                       <div role={isPublicView ? undefined : "button"} onPointerDown={() => { if (!isPublicView) { setNewMenuOpen(false); onOpenLiveControl?.(); } }}
                         className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${isPublicView ? 'bg-white/5 opacity-40 cursor-not-allowed' : 'bg-white/5 active:bg-white/10 cursor-pointer text-white'}`}>
-                        <LiveIndicator role={indicatorRole || role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className={`w-8 h-8 shrink-0 ${isPublicView ? 'grayscale opacity-50' : ''}`} />
+                        <LiveIndicator role={indicatorRole} variant="header" className={`w-8 h-8 shrink-0 ${isPublicView ? 'grayscale opacity-50' : ''}`} />
                         <span className={`font-black text-sm ${isPublicView ? 'text-white/50' : ''}`}>Live / Controle</span>
                       </div>
                     )}
@@ -1591,9 +1611,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     // Ícone 1: tipo físico do dispositivo
                     const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'laptop' ? Laptop : deviceType === 'tablet' ? Monitor : Smartphone;
                     // Ícone 2: papel na live
-                    const RoleIcon = role === 'owner' ? Crown : role === 'judge' ? Gavel : Eye;
-                    const roleColor = role === 'owner' ? 'text-blue-600' : role === 'judge' ? 'text-emerald-500' : 'text-cyan-400';
-                    const roleLabel = role === 'owner' ? 'Dono' : role === 'judge' ? 'Juiz' : 'Obs.';
+                     const isCtrlActive = isActiveController && !(gameState.isMirroringActive && gameState.isLiveClosed);
+                     const RoleIcon = isCtrlActive ? Gamepad2 : role === 'owner' ? Crown : role === 'judge' ? Gavel : Eye;
+                     const roleColor = isCtrlActive ? 'text-orange-500' : role === 'owner' ? 'text-blue-600' : role === 'judge' ? 'text-emerald-500' : 'text-gray-400';
+                     const roleLabel = isCtrlActive ? 'Ctrl' : role === 'owner' ? 'Dono' : role === 'judge' ? 'Juiz' : 'Part.';
                     // Nome curto: só a parte antes do " - "
                     const shortLabel = label.includes(' - ') ? label.split(' - ').slice(1).join(' - ') : label;
                     return (

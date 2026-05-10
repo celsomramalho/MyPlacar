@@ -29,7 +29,7 @@ interface Props {
   canStartMatch: boolean;
   cloudLiveExists?: boolean;
   onOpenLiveControl?: () => void;
-  role?: 'owner' | 'judge' | 'observer' | 'spectator';
+  isController?: boolean;
   activeEvent: TournamentEvent | null;
   onJoinTournament?: () => void;
   onExitTournament?: () => void;
@@ -56,7 +56,7 @@ type DbSport = {
   isActive: boolean;
 };
 
-export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, role, onOpenMenu, userProfile, isOfflineMode, onExitOffline, onHome }) => {
+export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, isController, onOpenMenu, userProfile, isOfflineMode, onExitOffline, onHome }) => {
   const [activeGroupId, setActiveGroupId] = useState<string>(() => (SPORT_LIST.find(s => s.id === settings.sportType)?.group as string) || 'raquetes');
   const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
   const [dbSports, setDbSports] = useState<DbSport[]>([]);
@@ -91,8 +91,8 @@ export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportC
   }, [gameState?.isMirroringActive, cloudLiveExists]);
 
   const isReadOnly = useMemo(() => {
-    return !!cloudLiveExists && role !== 'owner';
-  }, [cloudLiveExists, role]);
+    return !!cloudLiveExists && !isController;
+  }, [cloudLiveExists, isController]);
 
   useEffect(() => {
     if (isOfflineMode || !userProfile?.email) {
