@@ -20,6 +20,7 @@ import { LiveIndicator } from '../components/LiveIndicator';
 import { applyGoldenRule, maskPin } from '../utils/formatters';
 import { WatchBoard } from '../components/WatchBoard';
 import { useLive } from '@modules/live';
+import { useGame } from '@modules/game';
 import { ScoreboardDisplay } from '../components/ScoreboardDisplay';
 
 interface CommandLogEntry {
@@ -299,6 +300,13 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
   const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode } = props;
+
+  // ── Contexto Game (Passo 3.1) ─────────────────────────────────────────────
+  // Lê gameState do GameContext com fallback para a prop.
+  // Fase 3.2: a prop gameState será removida da interface Props e das chamadas.
+  const gameCtx = useGame();
+  const effectiveGameState = gameCtx.gameState ?? gameState;
+
   // Detecta modo público diretamente pela URL — independente de props/minificação
   const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
 
@@ -319,11 +327,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const effectiveVoiceLogs = voiceLogs !== undefined ? voiceLogs : [];
   const effectiveSetVoiceLogs = setVoiceLogs || (() => {});
 
-  const displayTime = useMatchTimer(gameState);
+  const displayTime = useMatchTimer(effectiveGameState);
 
   // ─── Wake Lock gerenciado no App.tsx — estável independente de remounts ───
 
-  if (!gameState || !gameState.p1 || !gameState.p2 || !gameState.matchConfig) {
+  if (!effectiveGameState || !effectiveGameState.p1 || !effectiveGameState.p2 || !effectiveGameState.matchConfig) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
@@ -360,8 +368,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const scoreProgressIntervalRef = useRef<number | null>(null);
   const hasDraggedRef = useRef(false);
 
-  const [isLogsOpen, setIsLogsOpen] = useState(gameState.matchConfig.isHistoryEnabled);
-  const [isTimelineOpen, setIsTimelineOpen] = useState(gameState.matchConfig.isHistoryEnabled);
+  const [isLogsOpen, setIsLogsOpen] = useState(effectiveGameState.matchConfig.isHistoryEnabled);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(effectiveGameState.matchConfig.isHistoryEnabled);
   const [isAudioLocked, setIsAudioLocked] = useState(false);
   const [remoteActionFeedback, setRemoteActionFeedback] = useState<string | null>(null);
   const [isWaitingAck, setIsWaitingAck] = useState(false);
@@ -372,7 +380,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const isLongPressActive = useRef(false);
   const touchStartPos = useRef({ x: 0, y: 0 });
   const lastRemoteCommandTimestamp = useRef(0);
-  const lastHistoryLengthOnWatch = useRef(gameState.pointHistory?.length ?? 0);
+  const lastHistoryLengthOnWatch = useRef(effectiveGameState.pointHistory?.length ?? 0);
   const [isPinging, setIsPinging] = useState(false);
   const [isMirrorExpanded, setIsMirrorExpanded] = useState(false);
   const [isLiveExpanded, setIsLiveExpanded] = useState(false);
@@ -381,7 +389,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const dimTimeoutRef = useRef<number | null>(null);
   const dimProgressIntervalRef = useRef<number | null>(null);
 
-  const currentGameStateRef = useRef(gameState);
+  const currentGameStateRef = useRef(effectiveGameState);
   const pendingLogIdRef = useRef<string | null>(null);
   const voiceLogsRef = useRef<CommandLogEntry[]>([]);
 
@@ -392,7 +400,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   const nowTime = useCallback(() => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }), []);
 
-  // Resolve o label de um deviceId a partir dos controllers do gameState atual
+  // Resolve o label de um deviceId a partir dos controllers do effectiveGameState atual
   const resolveLabel = (deviceId: string, controllers?: Record<string, any>): string => {
     const c = (controllers || {})[deviceId];
     return c?.label || deviceId;
@@ -422,28 +430,28 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   // Reset log ao iniciar nova partida — APENAS quando a nova partida realmente começa
   // Em vez de depender de matchId (que pode não estar definido), usamos o estado anterior
-  const prevMatchIdRef = useRef<string | undefined>(gameState.matchId);
+  const prevMatchIdRef = useRef<string | undefined>(effectiveGameState.matchId);
   useEffect(() => {
-    if (gameState.matchId && prevMatchIdRef.current !== gameState.matchId) {
+    if (effectiveGameState.matchId && prevMatchIdRef.current !== effectiveGameState.matchId) {
       // Partida realmente mudou
       const wasReset = !!prevMatchIdRef.current; // true = foi um reset (não o primeiro load)
-      prevMatchIdRef.current = gameState.matchId;
+      prevMatchIdRef.current = effectiveGameState.matchId;
       // Se a live estava ativa durante o reset, adicionar log de início de nova partida
-      if (wasReset && gameState.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed)) {
+      if (wasReset && effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) {
         addLiveLog('new_match', `Partida zerada — nova partida iniciada às ${nowTime()}`, true, {
           deviceType: getDeviceType(),
           participantRole: 'owner',
           isController: true,
         });
-        addLiveLog('score', `${gameState.p1.name} 0 × 0 ${gameState.p2.name}`, true);
+        addLiveLog('score', `${effectiveGameState.p1.name} 0 × 0 ${effectiveGameState.p2.name}`, true);
       }
     }
-  }, [gameState.matchId, gameState.isMirroringActive, (gameState.isMirroringActive && gameState.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
+  }, [effectiveGameState.matchId, effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
 
   // ── Live criada ────────────────────────────────────────────────────────────
-  const prevIsMirroringRef = useRef(gameState.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed));
+  const prevIsMirroringRef = useRef(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed));
   useEffect(() => {
-    const isNowActive = gameState.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed);
+    const isNowActive = effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
     if (!prevIsMirroringRef.current && isNowActive) {
       const label = currentDeviceFullLabel || 'Dispositivo';
       addLiveLog('live_created', `${label}: criou a live às ${nowTime()}`, true, {
@@ -453,43 +461,43 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       });
     }
     prevIsMirroringRef.current = isNowActive;
-  }, [gameState.isMirroringActive, (gameState.isMirroringActive && gameState.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
+  }, [effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
 
   // ── Partida iniciada (primeiro ponto) ─────────────────────────────────────
-  const prevHistLenRef = useRef(gameState.pointHistory?.length ?? 0);
+  const prevHistLenRef = useRef(effectiveGameState.pointHistory?.length ?? 0);
   useEffect(() => {
-    const cur = gameState.pointHistory?.length ?? 0;
+    const cur = effectiveGameState.pointHistory?.length ?? 0;
     const prev = prevHistLenRef.current;
-    if (prev === 0 && cur === 1 && gameState.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed)) {
+    if (prev === 0 && cur === 1 && effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) {
       addLiveLog('match_started', `Partida iniciada às ${nowTime()}`, true);
-      addLiveLog('score', `${gameState.p1.name} ${gameState.p1.score} × ${gameState.p2.score} ${gameState.p2.name}`, true);
+      addLiveLog('score', `${effectiveGameState.p1.name} ${effectiveGameState.p1.score} × ${effectiveGameState.p2.score} ${effectiveGameState.p2.name}`, true);
     }
     prevHistLenRef.current = cur;
-  }, [gameState.pointHistory?.length, addLiveLog]);
+  }, [effectiveGameState.pointHistory?.length, addLiveLog]);
 
   // ── Mudança de placar: FB enviando → FB ok → Observadores ok ──────────────
-  const prevScoreRef = useRef(`${gameState.p1.score}-${gameState.p2.score}-${gameState.p1.games}-${gameState.p2.games}`);
+  const prevScoreRef = useRef(`${effectiveGameState.p1.score}-${effectiveGameState.p2.score}-${effectiveGameState.p1.games}-${effectiveGameState.p2.games}`);
   const pendingScoreLogIdRef = useRef<string | null>(null);
   const pendingScoreSentAtRef = useRef<number>(0);
   useEffect(() => {
-    const curKey = `${gameState.p1.score}-${gameState.p2.score}-${gameState.p1.games}-${gameState.p2.games}`;
-    if (!gameState.isMirroringActive || (gameState.isMirroringActive && gameState.isLiveClosed) || curKey === prevScoreRef.current) {
+    const curKey = `${effectiveGameState.p1.score}-${effectiveGameState.p2.score}-${effectiveGameState.p1.games}-${effectiveGameState.p2.games}`;
+    if (!effectiveGameState.isMirroringActive || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || curKey === prevScoreRef.current) {
       prevScoreRef.current = curKey;
       return;
     }
-    const histLen = gameState.pointHistory?.length ?? 0;
+    const histLen = effectiveGameState.pointHistory?.length ?? 0;
     if (histLen === 0) { prevScoreRef.current = curKey; return; }
 
     // D3: identifica quem marcou o ponto (last entry no histórico)
-    const lastEvent = gameState.pointHistory?.[histLen - 1];
+    const lastEvent = effectiveGameState.pointHistory?.[histLen - 1];
     const scorerName = lastEvent?.winner === 1
-      ? gameState.p1.name
+      ? effectiveGameState.p1.name
       : lastEvent?.winner === 2
-      ? gameState.p2.name
+      ? effectiveGameState.p2.name
       : null;
     const scoreText = scorerName
-      ? `${scorerName}: ponto → ${gameState.p1.score} × ${gameState.p2.score}`
-      : `${gameState.p1.name} ${gameState.p1.score} × ${gameState.p2.score} ${gameState.p2.name}`;
+      ? `${scorerName}: ponto → ${effectiveGameState.p1.score} × ${effectiveGameState.p2.score}`
+      : `${effectiveGameState.p1.name} ${effectiveGameState.p1.score} × ${effectiveGameState.p2.score} ${effectiveGameState.p2.name}`;
     const sentAt = Date.now();
     pendingScoreSentAtRef.current = sentAt;
 
@@ -523,7 +531,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
       // Observadores online (role observer OU spectator, vistos nos últimos 2min)
       const now = Date.now();
-      const obsCount = Object.values(gameState.controllers || {}).filter(
+      const obsCount = Object.values(effectiveGameState.controllers || {}).filter(
         (c: any) => (c.role === 'observer' || c.role === 'spectator') && (now - (c.lastSeen || 0)) < 120000
       ).length;
       if (obsCount > 0) {
@@ -532,20 +540,20 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }, 1500);
 
     prevScoreRef.current = curKey;
-  }, [gameState.p1.score, gameState.p2.score, gameState.p1.games, gameState.p2.games, addLiveLog]);
+  }, [effectiveGameState.p1.score, effectiveGameState.p2.score, effectiveGameState.p1.games, effectiveGameState.p2.games, addLiveLog]);
 
   // ── Assumiu o controle ────────────────────────────────────────────────────
-  const prevCommandOwnerIdRef = useRef(gameState.commandOwnerId);
+  const prevCommandOwnerIdRef = useRef(effectiveGameState.commandOwnerId);
   useEffect(() => {
-    if (!gameState.isMirroringActive || (gameState.isMirroringActive && gameState.isLiveClosed)) { prevCommandOwnerIdRef.current = gameState.commandOwnerId; return; }
+    if (!effectiveGameState.isMirroringActive || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) { prevCommandOwnerIdRef.current = effectiveGameState.commandOwnerId; return; }
     const prev = prevCommandOwnerIdRef.current;
-    const cur = gameState.commandOwnerId;
+    const cur = effectiveGameState.commandOwnerId;
     if (prev !== cur && cur) {
       // Busca label nos controllers; fallback para currentDeviceFullLabel se for este device
       const label = cur === currentDeviceId
-        ? (currentDeviceFullLabel || resolveLabel(cur, gameState.controllers))
-        : resolveLabel(cur, gameState.controllers);
-      const ctrlRecord = gameState.controllers?.[cur] as any;
+        ? (currentDeviceFullLabel || resolveLabel(cur, effectiveGameState.controllers))
+        : resolveLabel(cur, effectiveGameState.controllers);
+      const ctrlRecord = effectiveGameState.controllers?.[cur] as any;
       addLiveLog('control_taken', `${label}: assumiu o controle da partida`, true, {
         deviceType: ctrlRecord?.deviceType,
         participantRole: ctrlRecord?.role === 'owner' ? 'owner' : ctrlRecord?.role === 'judge' ? 'judge' : undefined,
@@ -553,7 +561,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       });
     }
     prevCommandOwnerIdRef.current = cur;
-  }, [gameState.commandOwnerId, gameState.isMirroringActive, (gameState.isMirroringActive && gameState.isLiveClosed), addLiveLog]);
+  }, [effectiveGameState.commandOwnerId, effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), addLiveLog]);
 
   // ── Participante entrou / saiu ─────────────────────────────────────────────
   const prevControllersRef = useRef<Record<string, any>>({});
@@ -562,13 +570,13 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const controllersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Refs sempre atualizadas — lidas DENTRO do setTimeout para evitar closure stale
   // (o useEffect captura o valor do render em que rodou, não o do momento do disparo)
-  const latestControllersRef = useRef<Record<string, any>>(gameState.controllers || {});
-  const latestCommandOwnerIdRef = useRef(gameState.commandOwnerId);
-  useEffect(() => { latestControllersRef.current = gameState.controllers || {}; }, [gameState.controllers]);
-  useEffect(() => { latestCommandOwnerIdRef.current = gameState.commandOwnerId; }, [gameState.commandOwnerId]);
+  const latestControllersRef = useRef<Record<string, any>>(effectiveGameState.controllers || {});
+  const latestCommandOwnerIdRef = useRef(effectiveGameState.commandOwnerId);
+  useEffect(() => { latestControllersRef.current = effectiveGameState.controllers || {}; }, [effectiveGameState.controllers]);
+  useEffect(() => { latestCommandOwnerIdRef.current = effectiveGameState.commandOwnerId; }, [effectiveGameState.commandOwnerId]);
 
   useEffect(() => {
-    if (!gameState.isMirroringActive || (gameState.isMirroringActive && gameState.isLiveClosed)) {
+    if (!effectiveGameState.isMirroringActive || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) {
       prevControllersRef.current = {};
       loggedDeviceIdsRef.current = new Set();
       controllersInitializedRef.current = false;
@@ -631,55 +639,55 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return () => {
       if (controllersDebounceRef.current) clearTimeout(controllersDebounceRef.current);
     };
-  }, [gameState.controllers, gameState.isMirroringActive, (gameState.isMirroringActive && gameState.isLiveClosed)]); // addLiveLog excluído intencionalmente — lido via ref para não reiniciar o debounce a cada render
+  }, [effectiveGameState.controllers, effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)]); // addLiveLog excluído intencionalmente — lido via ref para não reiniciar o debounce a cada render
 
   // ── Partida encerrada ─────────────────────────────────────────────────────
-  const prevIsMatchOverRef = useRef(gameState.isMatchOver);
+  const prevIsMatchOverRef = useRef(effectiveGameState.isMatchOver);
   useEffect(() => {
-    if (!prevIsMatchOverRef.current && gameState.isMatchOver) {
-      const p1SetsWon = (gameState.p1.sets || []).filter((s: number, i: number) => s > (gameState.p2.sets?.[i] ?? 0)).length;
-      const p2SetsWon = (gameState.p2.sets || []).filter((s: number, i: number) => s > (gameState.p1.sets?.[i] ?? 0)).length;
-      const winner = p1SetsWon > p2SetsWon ? gameState.p1.name : p2SetsWon > p1SetsWon ? gameState.p2.name : null;
+    if (!prevIsMatchOverRef.current && effectiveGameState.isMatchOver) {
+      const p1SetsWon = (effectiveGameState.p1.sets || []).filter((s: number, i: number) => s > (effectiveGameState.p2.sets?.[i] ?? 0)).length;
+      const p2SetsWon = (effectiveGameState.p2.sets || []).filter((s: number, i: number) => s > (effectiveGameState.p1.sets?.[i] ?? 0)).length;
+      const winner = p1SetsWon > p2SetsWon ? effectiveGameState.p1.name : p2SetsWon > p1SetsWon ? effectiveGameState.p2.name : null;
       addLiveLog('match_over', `Partida encerrada${winner ? ` — Vencedor: ${winner}` : ''}`, true);
     }
-    prevIsMatchOverRef.current = gameState.isMatchOver;
-  }, [gameState.isMatchOver, addLiveLog]);
+    prevIsMatchOverRef.current = effectiveGameState.isMatchOver;
+  }, [effectiveGameState.isMatchOver, addLiveLog]);
 
   // ── Partida confirmada ────────────────────────────────────────────────────
-  const prevIsConfirmedRef = useRef(gameState.isConfirmedFinished);
+  const prevIsConfirmedRef = useRef(effectiveGameState.isConfirmedFinished);
   useEffect(() => {
-    if (!prevIsConfirmedRef.current && gameState.isConfirmedFinished) {
+    if (!prevIsConfirmedRef.current && effectiveGameState.isConfirmedFinished) {
       const label = currentDeviceFullLabel || 'Dispositivo';
       addLiveLog('match_confirmed', `${label}: confirmou o encerramento da partida`, true);
     }
-    prevIsConfirmedRef.current = gameState.isConfirmedFinished;
-  }, [gameState.isConfirmedFinished, currentDeviceFullLabel, addLiveLog]);
+    prevIsConfirmedRef.current = effectiveGameState.isConfirmedFinished;
+  }, [effectiveGameState.isConfirmedFinished, currentDeviceFullLabel, addLiveLog]);
 
   // ── Live encerrada ────────────────────────────────────────────────────────
-  const prevIsLiveClosedRef = useRef((gameState.isMirroringActive && gameState.isLiveClosed));
+  const prevIsLiveClosedRef = useRef((effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed));
   useEffect(() => {
-    if (!prevIsLiveClosedRef.current && (gameState.isMirroringActive && gameState.isLiveClosed)) {
+    if (!prevIsLiveClosedRef.current && (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) {
       addLiveLog('live_closed', 'Live encerrada', false);
     }
-    prevIsLiveClosedRef.current = (gameState.isMirroringActive && gameState.isLiveClosed);
-  }, [(gameState.isMirroringActive && gameState.isLiveClosed), addLiveLog]);
+    prevIsLiveClosedRef.current = (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
+  }, [(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), addLiveLog]);
   // ─────────────────────────────────────────────────────────────────────────
 
   const isCommandOwner = useMemo(() => {
-    if (!gameState.isMirroringActive) return true;
-    return currentDeviceId === gameState.commandOwnerId;
-  }, [gameState.isMirroringActive, gameState.commandOwnerId, currentDeviceId]);
+    if (!effectiveGameState.isMirroringActive) return true;
+    return currentDeviceId === effectiveGameState.commandOwnerId;
+  }, [effectiveGameState.isMirroringActive, effectiveGameState.commandOwnerId, currentDeviceId]);
 
   const isLiveActive = useMemo(() => {
-    return !!(gameState.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed)) || !!effectiveCloudLiveExists;
-  }, [gameState.isMirroringActive, (gameState.isMirroringActive && gameState.isLiveClosed), effectiveCloudLiveExists]);
+    return !!(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) || !!effectiveCloudLiveExists;
+  }, [effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), effectiveCloudLiveExists]);
 
   const resetDimTimer = useCallback(() => {
     if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
     if (dimProgressIntervalRef.current) clearInterval(dimProgressIntervalRef.current);
     setDimProgress(0);
-  if (gameState.matchConfig.isWatchMode) {
-      const timeoutSec = (gameState.matchConfig.screenDimTimeout || 10);
+  if (effectiveGameState.matchConfig.isWatchMode) {
+      const timeoutSec = (effectiveGameState.matchConfig.screenDimTimeout || 10);
       const timeoutMs = timeoutSec * 1000;
       const startTime = Date.now();
       // Atualiza a barra de progresso a cada 200ms
@@ -695,7 +703,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         setIsDimmed(true);
       }, timeoutMs);
     }
-  }, [gameState.matchConfig.isWatchMode, gameState.matchConfig.screenDimTimeout]);
+  }, [effectiveGameState.matchConfig.isWatchMode, effectiveGameState.matchConfig.screenDimTimeout]);
 
   useEffect(() => {
     resetDimTimer();
@@ -703,7 +711,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
       if (dimProgressIntervalRef.current) clearInterval(dimProgressIntervalRef.current);
     };
-  }, [gameState.p1.score, gameState.p2.score, resetDimTimer]);
+  }, [effectiveGameState.p1.score, effectiveGameState.p2.score, resetDimTimer]);
 
   useEffect(() => {
     if (pendingLogIdRef.current) {
@@ -712,7 +720,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         const idx = (prev || []).findIndex(l => l.id === logId);
         if (idx === -1) return prev;
         const updated = [...(prev || [])];
-        const nowScore = `${gameState.p1.score}-${gameState.p2.score}`;
+        const nowScore = `${effectiveGameState.p1.score}-${effectiveGameState.p2.score}`;
         updated[idx] = { 
           ...updated[idx], 
           after: nowScore, 
@@ -722,17 +730,17 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       });
       pendingLogIdRef.current = null;
     }
-  }, [gameState.p1.score, gameState.p2.score, (gameState.pointHistory?.length ?? 0)]);
+  }, [effectiveGameState.p1.score, effectiveGameState.p2.score, (effectiveGameState.pointHistory?.length ?? 0)]);
 
   const groupedControllers = useMemo(() => {
-    const list = Object.entries(gameState.controllers || {});
+    const list = Object.entries(effectiveGameState.controllers || {});
     const now = Date.now();
     // Considera online se visto nos últimos 2 minutos (alinhado com o TTL de limpeza)
     return list
       .map(([id, data]) => {
         const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop' };
         const isOnline = (now - d.lastSeen) < 120000;
-        const isActiveController = gameState.commandOwnerId === id;
+        const isActiveController = effectiveGameState.commandOwnerId === id;
         return { id, label: d.label, isOnline, isOwner: !!d.isOwner, role: d.role || 'observer', deviceType: d.deviceType || 'phone', isActiveController };
       })
       .filter(d => d.isOnline) // exibe apenas dispositivos que ainda estão ativos
@@ -744,7 +752,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         if (!a.isOwner && b.isOwner) return 1;
         return a.label.localeCompare(b.label);
       });
-  }, [gameState.controllers, gameState.commandOwnerId]);
+  }, [effectiveGameState.controllers, effectiveGameState.commandOwnerId]);
 
   const createCommandLog = (commandText: string, source: string = 'cb', isError = false, winner?: 1 | 2, isRemote = false) => {
     const now = Date.now();
@@ -799,14 +807,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const handleUndoWithLog = () => {
-    if (gameState.isConfirmedFinished || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner) return;
+    if (effectiveGameState.isConfirmedFinished || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner) return;
     createCommandLog('Desfazer', 'cb');
     onUndo();
     if (navigator.vibrate) navigator.vibrate(20);
   };
 
   const handleVoiceToggle = () => {
-    if (!gameState.matchConfig.voiceEnabled || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner || gameState.isMatchOver) return;
+    if (!effectiveGameState.matchConfig.voiceEnabled || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver) return;
     if (voiceWasManuallyStopped) {
       setVoiceWasManuallyStopped(false);
     } else {
@@ -825,93 +833,93 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     let base = customBaseUrl.trim();
     if (!base.startsWith('http')) base = 'https://' + base;
     const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
-    return `${cleanBase}/?viewPin=${gameState.ownerPin?.toUpperCase()}`;
-  }, [gameState.ownerPin, customBaseUrl]);
+    return `${cleanBase}/?viewPin=${effectiveGameState.ownerPin?.toUpperCase()}`;
+  }, [effectiveGameState.ownerPin, customBaseUrl]);
   const watchLink = useMemo(() => `${mirrorLink}&viewMode=watch`, [mirrorLink]);
   const scoreboardLink = useMemo(() => `${mirrorLink}&viewMode=scoreboard`, [mirrorLink]);
   const qrCodeUrl = useMemo(() => `https://quickchart.io/qr?text=${encodeURIComponent(scoreboardLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`, [scoreboardLink]);
 
   // Tênis e beach tênis
   const { announceFullScore: announceFullScoreTennis, isAnnouncing: isAnnouncingTennis } =
-    useScoreAnnouncer(gameState);
+    useScoreAnnouncer(effectiveGameState);
 
   // Pickleball — hook dedicado, isolado do motor de tênis
   const { announceFullScore: announceFullScorePickleball, isAnnouncing: isAnnouncingPickle } =
-    usePickleballAnnouncer(gameState);
+    usePickleballAnnouncer(effectiveGameState);
 
   // Dispatcher: encaminha para o hook correto conforme o esporte
-  const isPickleball = gameState.matchConfig.sportType === 'pickleball';
+  const isPickleball = effectiveGameState.matchConfig.sportType === 'pickleball';
   const announceFullScore = isPickleball ? announceFullScorePickleball : announceFullScoreTennis;
   const isAnnouncing = isPickleball ? isAnnouncingPickle : isAnnouncingTennis;
 
   const { isListening, start, stop } = useGeminiReferee({
-    onScoreP1: (type, text) => { if(!gameState.isConfirmedFinished && !gameState.isMatchOver && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner) { createCommandLog(text || `Ponto ${currentGameStateRef.current.p1.name}`, 'cv', false, 1); onScoreUpdate(1, type, 'cv'); } },
-    onScoreP2: (type, text) => { if(!gameState.isConfirmedFinished && !gameState.isMatchOver && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner) { createCommandLog(text || `Ponto ${currentGameStateRef.current.p2.name}`, 'cv', false, 2); onScoreUpdate(2, type, 'cv'); } },
-    onUndo: (text) => { if(!gameState.isConfirmedFinished && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner) { createCommandLog(text || 'Desfazer', 'cv'); onUndo(); } },
-    onCommandError: (text) => { if(!gameState.isConfirmedFinished && !gameState.isMatchOver && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner) { playErrorBeep(gameState.matchConfig.errorSoundType); if (navigator.vibrate) navigator.vibrate([100, 50, 100]); createCommandLog(text, 'cv', true); } },
-    onSwitchServer: () => onSwitchServer(gameState.server === 1 ? 2 : 1, false), onAnnounceScore: announceFullScore, isEnabled: gameState.matchConfig.voiceEnabled && !voiceWasManuallyStopped && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner && !gameState.isMatchOver,
-    p1Name: gameState.p1.name, p2Name: gameState.p2.name, p1Partner: gameState.p1.partnerName, p2Partner: gameState.p2.partnerName, p1Color: gameState.p1.color, p2Color: gameState.p2.color,
-    server: gameState.server, servingOrderOffset: gameState.servingOrderOffset, voiceCommands: gameState.matchConfig.voiceCommands, actionCooldownSec: gameState.matchConfig.actionCooldown || 5, stateLockoutSec: gameState.matchConfig.stateLockout || 2
+    onScoreP1: (type, text) => { if(!effectiveGameState.isConfirmedFinished && !effectiveGameState.isMatchOver && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner) { createCommandLog(text || `Ponto ${currentGameStateRef.current.p1.name}`, 'cv', false, 1); onScoreUpdate(1, type, 'cv'); } },
+    onScoreP2: (type, text) => { if(!effectiveGameState.isConfirmedFinished && !effectiveGameState.isMatchOver && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner) { createCommandLog(text || `Ponto ${currentGameStateRef.current.p2.name}`, 'cv', false, 2); onScoreUpdate(2, type, 'cv'); } },
+    onUndo: (text) => { if(!effectiveGameState.isConfirmedFinished && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner) { createCommandLog(text || 'Desfazer', 'cv'); onUndo(); } },
+    onCommandError: (text) => { if(!effectiveGameState.isConfirmedFinished && !effectiveGameState.isMatchOver && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner) { playErrorBeep(effectiveGameState.matchConfig.errorSoundType); if (navigator.vibrate) navigator.vibrate([100, 50, 100]); createCommandLog(text, 'cv', true); } },
+    onSwitchServer: () => onSwitchServer(effectiveGameState.server === 1 ? 2 : 1, false), onAnnounceScore: announceFullScore, isEnabled: effectiveGameState.matchConfig.voiceEnabled && !voiceWasManuallyStopped && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner && !effectiveGameState.isMatchOver,
+    p1Name: effectiveGameState.p1.name, p2Name: effectiveGameState.p2.name, p1Partner: effectiveGameState.p1.partnerName, p2Partner: effectiveGameState.p2.partnerName, p1Color: effectiveGameState.p1.color, p2Color: effectiveGameState.p2.color,
+    server: effectiveGameState.server, servingOrderOffset: effectiveGameState.servingOrderOffset, voiceCommands: effectiveGameState.matchConfig.voiceCommands, actionCooldownSec: effectiveGameState.matchConfig.actionCooldown || 5, stateLockoutSec: effectiveGameState.matchConfig.stateLockout || 2
   });
 
   // Reset voice logs ao iniciar nova partida — APENAS quando a nova partida realmente começa
   // NÃO zeramos mais aqui — os logs agora persistem entre telas
-  const prevVoiceMatchIdRef = useRef<string | undefined>(gameState.matchId);
+  const prevVoiceMatchIdRef = useRef<string | undefined>(effectiveGameState.matchId);
   useEffect(() => {
-    if (gameState.matchId && prevVoiceMatchIdRef.current !== gameState.matchId) {
-      prevVoiceMatchIdRef.current = gameState.matchId;
+    if (effectiveGameState.matchId && prevVoiceMatchIdRef.current !== effectiveGameState.matchId) {
+      prevVoiceMatchIdRef.current = effectiveGameState.matchId;
       // NÃO zeramos voiceLogs — os logs agora persistem
     }
-  }, [gameState.matchId]);
+  }, [effectiveGameState.matchId]);
 
-  currentGameStateRef.current = gameState;
-
-  useEffect(() => {
-    if (!gameState.matchConfig.isWatchMode) return;
-    if (isWaitingAck && (gameState.pointHistory?.length ?? 0) !== lastHistoryLengthOnWatch.current) {
-        setRemoteActionFeedback('CONFIRMED'); setIsWaitingAck(false); lastHistoryLengthOnWatch.current = (gameState.pointHistory?.length ?? 0); setTimeout(() => setRemoteActionFeedback(null), 1000);
-    } else { lastHistoryLengthOnWatch.current = (gameState.pointHistory?.length ?? 0); }
-  }, [gameState.pointHistory?.length, gameState.matchConfig.isWatchMode, isWaitingAck]);
+  currentGameStateRef.current = effectiveGameState;
 
   useEffect(() => {
-    if (!gameState.matchConfig.isWatchMode || !gameState.isMirroringActive || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
+    if (!effectiveGameState.matchConfig.isWatchMode) return;
+    if (isWaitingAck && (effectiveGameState.pointHistory?.length ?? 0) !== lastHistoryLengthOnWatch.current) {
+        setRemoteActionFeedback('CONFIRMED'); setIsWaitingAck(false); lastHistoryLengthOnWatch.current = (effectiveGameState.pointHistory?.length ?? 0); setTimeout(() => setRemoteActionFeedback(null), 1000);
+    } else { lastHistoryLengthOnWatch.current = (effectiveGameState.pointHistory?.length ?? 0); }
+  }, [effectiveGameState.pointHistory?.length, effectiveGameState.matchConfig.isWatchMode, isWaitingAck]);
+
+  useEffect(() => {
+    if (!effectiveGameState.matchConfig.isWatchMode || !effectiveGameState.isMirroringActive || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) return;
     const interval = setInterval(async () => {
-      const db = getDb(); if (!db || !gameState.ownerPin) return;
-      try { await setDoc(doc(db, "live_matches", gameState.ownerPin.toUpperCase()), { lastRemotePing: Date.now() }, { merge: true }); } catch (e) {}
+      const db = getDb(); if (!db || !effectiveGameState.ownerPin) return;
+      try { await setDoc(doc(db, "live_matches", effectiveGameState.ownerPin.toUpperCase()), { lastRemotePing: Date.now() }, { merge: true }); } catch (e) {}
     }, 10000);
     return () => clearInterval(interval);
-  }, [gameState.matchConfig.isWatchMode, gameState.isMirroringActive, gameState.ownerPin, (gameState.isMirroringActive && gameState.isLiveClosed)]);
+  }, [effectiveGameState.matchConfig.isWatchMode, effectiveGameState.isMirroringActive, effectiveGameState.ownerPin, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)]);
 
   const isWatchConnected = useMemo(() => {
-    if (!gameState.lastRemotePing || (gameState.isMirroringActive && gameState.isLiveClosed)) return false;
-    return (Date.now() - gameState.lastRemotePing) < 55000;
-  }, [gameState.lastRemotePing, (gameState.isMirroringActive && gameState.isLiveClosed)]);
+    if (!effectiveGameState.lastRemotePing || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) return false;
+    return (Date.now() - effectiveGameState.lastRemotePing) < 55000;
+  }, [effectiveGameState.lastRemotePing, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)]);
 
   useEffect(() => {
-    if (gameState.matchConfig.isWatchMode || !isAdmin || !gameState.isMirroringActive || !gameState.ownerPin || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
+    if (effectiveGameState.matchConfig.isWatchMode || !isAdmin || !effectiveGameState.isMirroringActive || !effectiveGameState.ownerPin || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) return;
     const db = getDb(); if (!db) return;
-    const liveRef = doc(db, "live_matches", gameState.ownerPin.toUpperCase());
+    const liveRef = doc(db, "live_matches", effectiveGameState.ownerPin.toUpperCase());
     const unsubscribe = onSnapshot(liveRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data(); const cmd = data.remoteCommand;
         if (cmd && cmd.timestamp > lastRemoteCommandTimestamp.current) {
           lastRemoteCommandTimestamp.current = cmd.timestamp;
           let logText = "";
-          if (cmd.action === 'P1_POINT') { onScoreUpdate(1, 'rally', 'wb'); logText = `Ponto ${gameState.p1.name} (remoto)`; }
-          else if (cmd.action === 'P2_POINT') { onScoreUpdate(2, 'rally', 'wb'); logText = `Ponto ${gameState.p2.name} (remoto)`; }
-          else if (cmd.action === 'P1_ACE') { onScoreUpdate(1, 'ace', 'wb'); logText = `Ace ${gameState.p1.name} (remoto)`; }
-          else if (cmd.action === 'P2_ACE') { onScoreUpdate(2, 'ace', 'wb'); logText = `Ace ${gameState.p2.name} (remoto)`; }
-          else if (cmd.action === 'P1_FAULT') { onScoreUpdate(2, 'fault', 'wb'); logText = `Saque errado ${gameState.p1.name} (remoto)`; }
+          if (cmd.action === 'P1_POINT') { onScoreUpdate(1, 'rally', 'wb'); logText = `Ponto ${effectiveGameState.p1.name} (remoto)`; }
+          else if (cmd.action === 'P2_POINT') { onScoreUpdate(2, 'rally', 'wb'); logText = `Ponto ${effectiveGameState.p2.name} (remoto)`; }
+          else if (cmd.action === 'P1_ACE') { onScoreUpdate(1, 'ace', 'wb'); logText = `Ace ${effectiveGameState.p1.name} (remoto)`; }
+          else if (cmd.action === 'P2_ACE') { onScoreUpdate(2, 'ace', 'wb'); logText = `Ace ${effectiveGameState.p2.name} (remoto)`; }
+          else if (cmd.action === 'P1_FAULT') { onScoreUpdate(2, 'fault', 'wb'); logText = `Saque errado ${effectiveGameState.p1.name} (remoto)`; }
           else if (cmd.action === 'UNDO') { onUndo(); logText = "Desfazer (remoto)"; }
           if (logText) createCommandLog(logText, 'wb', false, undefined, true);
         }
       }
     });
     return () => unsubscribe();
-  }, [gameState.ownerPin, gameState.matchConfig.isWatchMode, isAdmin, gameState.isMirroringActive, onScoreUpdate, onUndo, (gameState.isMirroringActive && gameState.isLiveClosed)]);
+  }, [effectiveGameState.ownerPin, effectiveGameState.matchConfig.isWatchMode, isAdmin, effectiveGameState.isMirroringActive, onScoreUpdate, onUndo, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)]);
 
   const handleToggleMirroringLocal = (active: boolean) => { 
-    if (!gameState.isMatchOver && !gameState.isConfirmedFinished && !(gameState.isMirroringActive && gameState.isLiveClosed)) {
+    if (!effectiveGameState.isMatchOver && !effectiveGameState.isConfirmedFinished && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) {
        if (isCommandOwner && !active) {
          // Ao desligar a live, vai direto para confirmação de encerramento —
          // sem passar pelo overlay de controle. Chama onDeleteLive se disponível,
@@ -923,10 +931,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }
   };
   const handlePingTest = async () => {
-    const db = getDb(); if (!db || !gameState.ownerPin || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
+    const db = getDb(); if (!db || !effectiveGameState.ownerPin || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) return;
     setIsPinging(true);
     try {
-      const liveRef = doc(db, "live_matches", gameState.ownerPin.toUpperCase());
+      const liveRef = doc(db, "live_matches", effectiveGameState.ownerPin.toUpperCase());
       await updateDoc(liveRef, { pingTimestamp: Date.now(), pingConfirmed: false });
       setTimeout(async () => { await updateDoc(liveRef, { pingConfirmed: true }); setTimeout(() => setIsPinging(false), 1000); }, 1500);
     } catch (e) { setIsPinging(false); }
@@ -936,23 +944,23 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const handleCopyLink = () => navigator.clipboard.writeText(scoreboardLink).then(() => window.alert("Link do placar copiado com sucesso."));
   const handleCopyWatchLink = () => navigator.clipboard.writeText(watchLink).then(() => window.alert("Link para relógio copiado com sucesso."));
   const handleShareWhatsApp = () => {
-    const currentSportDef = SPORT_LIST.find(s => s.id === gameState.matchConfig.sportType) || SPORT_LIST[0];
+    const currentSportDef = SPORT_LIST.find(s => s.id === effectiveGameState.matchConfig.sportType) || SPORT_LIST[0];
     const text = `Acompanhe meu jogo de ${currentSportDef.name} ao vivo no my placar. 🎾\n\n${scoreboardLink}`;
     globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const isTieBreak = isTennisTieBreak(gameState);
+  const isTieBreak = isTennisTieBreak(effectiveGameState);
   useEffect(() => { const interval = setInterval(() => setIsAudioLocked(getSharedAudioContext()?.state !== 'running'), 1500); return () => clearInterval(interval); }, []);
 
-  const openCorrection = (type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => { if (!gameState.isConfirmedFinished && !gameState.isMatchOver && !isRecoveryFromMatchOver && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner) { if (isListening) stop(); setCorrectionMode(type); setCorrectionPlayer(player); } };
-  const closeCorrection = () => { setCorrectionMode('none'); setCorrectionPlayer(null); if (gameState.matchConfig.voiceEnabled && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner) setTimeout(start, 300); };
+  const openCorrection = (type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => { if (!effectiveGameState.isConfirmedFinished && !effectiveGameState.isMatchOver && !isRecoveryFromMatchOver && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner) { if (isListening) stop(); setCorrectionMode(type); setCorrectionPlayer(player); } };
+  const closeCorrection = () => { setCorrectionMode('none'); setCorrectionPlayer(null); if (effectiveGameState.matchConfig.voiceEnabled && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner) setTimeout(start, 300); };
   const handleApplyPickerCorrection = (selectedVal: string) => {
     if (onCorrectScore && correctionPlayer && correctionMode !== 'none') {
       let otherVal = "";
       if (correctionMode === 'game') {
-        otherVal = correctionPlayer === 1 ? gameState.p2.score : gameState.p1.score;
+        otherVal = correctionPlayer === 1 ? effectiveGameState.p2.score : effectiveGameState.p1.score;
       } else if (correctionMode === 'gameSet') {
-        otherVal = (correctionPlayer === 1 ? gameState.p2.games : gameState.p1.games).toString();
+        otherVal = (correctionPlayer === 1 ? effectiveGameState.p2.games : effectiveGameState.p1.games).toString();
       } else if (correctionMode === 'matchSet') {
         otherVal = (correctionPlayer === 1 ? p2WonSets : p1WonSets).toString();
       }
@@ -961,12 +969,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const handleScoreCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => {
-    if (gameState.isConfirmedFinished || gameState.isMatchOver || isWaitingAck || isRecoveryFromMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner) return;
+    if (effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver || isWaitingAck || isRecoveryFromMatchOver || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner) return;
     isLongPressActive.current = false; 
     hasDraggedRef.current = false;
     touchStartPos.current = { x: e.clientX, y: e.clientY };
     
-    const duration = gameState.matchConfig.isWatchMode ? 4000 : 3000;
+    const duration = effectiveGameState.matchConfig.isWatchMode ? 4000 : 3000;
     const startTime = Date.now();
     setScorePressProgress({ player, type, progress: 0 });
     
@@ -1015,26 +1023,26 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }
   };
 
-  const p1WonSets = useMemo(() => gameState.p1.sets.filter((s, i) => s > gameState.p2.sets[i]).length, [gameState.p1.sets, gameState.p2.sets]);
-  const p2WonSets = useMemo(() => gameState.p2.sets.filter((s, i) => s > gameState.p1.sets[i]).length, [gameState.p1.sets, gameState.p2.sets]);
-  const currentSportDef = SPORT_LIST.find(s => s.id === gameState.matchConfig.sportType) || SPORT_LIST[0];
+  const p1WonSets = useMemo(() => effectiveGameState.p1.sets.filter((s, i) => s > effectiveGameState.p2.sets[i]).length, [effectiveGameState.p1.sets, effectiveGameState.p2.sets]);
+  const p2WonSets = useMemo(() => effectiveGameState.p2.sets.filter((s, i) => s > effectiveGameState.p1.sets[i]).length, [effectiveGameState.p1.sets, effectiveGameState.p2.sets]);
+  const currentSportDef = SPORT_LIST.find(s => s.id === effectiveGameState.matchConfig.sportType) || SPORT_LIST[0];
   const pickerOptions = useMemo(() => {
     if (correctionMode === 'matchSet') {
       return Array.from({ length: 4 }, (_, i) => i.toString());
     }
     if (correctionMode === 'gameSet') {
-      const maxGames = gameState.matchConfig.gamesPerSet || 6;
+      const maxGames = effectiveGameState.matchConfig.gamesPerSet || 6;
       return Array.from({ length: maxGames + 2 }, (_, i) => i.toString());
     }
     return (currentSportDef.engine === 'tennis' && !isTieBreak ? ['0', '15', '30', '40', 'Ad'] : Array.from({ length: 31 }, (_, i) => i.toString()));
-  }, [correctionMode, currentSportDef, isTieBreak, gameState.matchConfig.gamesPerSet]);
+  }, [correctionMode, currentSportDef, isTieBreak, effectiveGameState.matchConfig.gamesPerSet]);
   
-  const isVoiceActive = isListening && !voiceWasManuallyStopped && gameState.matchConfig.voiceEnabled && !(gameState.isMirroringActive && gameState.isLiveClosed) && isCommandOwner && !gameState.isMatchOver;
+  const isVoiceActive = isListening && !voiceWasManuallyStopped && effectiveGameState.matchConfig.voiceEnabled && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner && !effectiveGameState.isMatchOver;
   
-  if (gameState.matchConfig.isWatchMode) {
+  if (effectiveGameState.matchConfig.isWatchMode) {
     return (
       <WatchBoard 
-        gameState={gameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
+        gameState={effectiveGameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
         onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
         isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
         handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
@@ -1056,9 +1064,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   // Banner "quem está controlando" — calculado fora do JSX para evitar IIFE com const
   const liveBanner = useMemo(() => {
-    if (!isLiveActive || (gameState.isMirroringActive && gameState.isLiveClosed) || gameState.matchConfig.isWatchMode) return null;
-    const iAmController = currentDeviceId === gameState.commandOwnerId;
-    const controllerName = gameState.commandOwner || '';
+    if (!isLiveActive || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || effectiveGameState.matchConfig.isWatchMode) return null;
+    const iAmController = currentDeviceId === effectiveGameState.commandOwnerId;
+    const controllerName = effectiveGameState.commandOwner || '';
     if (iAmController) {
       return (
         <div className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-[11px] font-black tracking-tight">
@@ -1067,7 +1075,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         </div>
       );
     }
-    if (gameState.isMirroringActive && controllerName) {
+    if (effectiveGameState.isMirroringActive && controllerName) {
       return (
         <div className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white text-[11px] font-black tracking-tight">
           <Gavel size={13} />
@@ -1076,14 +1084,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       );
     }
     return null;
-  }, [isLiveActive, (gameState.isMirroringActive && gameState.isLiveClosed), gameState.matchConfig.isWatchMode, gameState.commandOwnerId, gameState.commandOwner, gameState.isMirroringActive, currentDeviceId, effectiveIsOriginalOwner]);
+  }, [isLiveActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), effectiveGameState.matchConfig.isWatchMode, effectiveGameState.commandOwnerId, effectiveGameState.commandOwner, effectiveGameState.isMirroringActive, currentDeviceId, effectiveIsOriginalOwner]);
   const connType = connection?.type;
   const downlink = connection?.downlink;
 
-  if (gameState.matchConfig.isScoreboardMode) {
+  if (effectiveGameState.matchConfig.isScoreboardMode) {
     return (
       <ScoreboardDisplay
-        gameState={gameState}
+        gameState={effectiveGameState}
         isCommandOwner={isCommandOwner}
         onResetMatch={onResetMatch}
         onOpenLiveControl={onOpenLiveControl}
@@ -1101,13 +1109,13 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col relative font-sans">
-       {gameState.isMatchOver && !gameState.isConfirmedFinished && (
+       {effectiveGameState.isMatchOver && !effectiveGameState.isConfirmedFinished && (
          <div className="fixed inset-0 z-[100001] bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-500">
             <div className="bg-white rounded-[3rem] p-8 w-full max-sm shadow-2xl border border-white/50 flex flex-col items-center gap-6 animate-in zoom-in duration-300">
                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shadow-inner"><Trophy size={40} /></div>
                <div className="text-center space-y-2">
                  <h3 className="text-2xl font-black text-black tracking-tight leading-none">Partida encerrada</h3>
-                 <p className="text-sm font-bold text-slate-500">Vencedor: {p1WonSets > p2WonSets ? gameState.p1.name : gameState.p2.name}</p>
+                 <p className="text-sm font-bold text-slate-500">Vencedor: {p1WonSets > p2WonSets ? effectiveGameState.p1.name : effectiveGameState.p2.name}</p>
                </div>
                <div className="flex flex-col w-full gap-3">
                  <button onClick={() => onConfirmMatch?.()} className="w-full py-5 bg-emerald-600 text-white rounded-3xl font-black text-base shadow-xl active:scale-95 transition-all">Confirmar resultado</button>
@@ -1121,9 +1129,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
          isOpen={correctionMode !== 'none'} 
          onClose={closeCorrection} 
          onConfirm={handleApplyPickerCorrection} 
-         title={`Corrigir ${correctionMode === 'game' ? 'game' : correctionMode === 'gameSet' ? 'games no set' : 'sets vencidos'}: ${correctionPlayer === 1 ? gameState.p1.name : gameState.p2.name}`} 
+         title={`Corrigir ${correctionMode === 'game' ? 'game' : correctionMode === 'gameSet' ? 'games no set' : 'sets vencidos'}: ${correctionPlayer === 1 ? effectiveGameState.p1.name : effectiveGameState.p2.name}`} 
          options={pickerOptions} 
-         initialValue={correctionPlayer === 1 ? (correctionMode === 'game' ? gameState.p1.score : correctionMode === 'gameSet' ? gameState.p1.games.toString() : p1WonSets.toString()) : (correctionMode === 'game' ? gameState.p2.score : correctionMode === 'gameSet' ? gameState.p2.games.toString() : p2WonSets.toString())} 
+         initialValue={correctionPlayer === 1 ? (correctionMode === 'game' ? effectiveGameState.p1.score : correctionMode === 'gameSet' ? effectiveGameState.p1.games.toString() : p1WonSets.toString()) : (correctionMode === 'game' ? effectiveGameState.p2.score : correctionMode === 'gameSet' ? effectiveGameState.p2.games.toString() : p2WonSets.toString())} 
        />
        <header className="px-4 py-3 flex items-center justify-between bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
@@ -1152,7 +1160,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         </div>
         <div className="flex-1 flex items-center justify-center gap-2">
           <button onClick={() => announceFullScore()} className="flex items-center gap-3 active:scale-95 transition-transform">
-            <LazySportIcon sportId={gameState.matchConfig.sportType} defaultIcon={currentSportDef.defaultIcon} className="w-10 h-10 rounded-full shadow-sm" />
+            <LazySportIcon sportId={effectiveGameState.matchConfig.sportType} defaultIcon={currentSportDef.defaultIcon} className="w-10 h-10 rounded-full shadow-sm" />
             <span className="text-xl font-black tracking-tighter text-gray-900 flex items-center gap-1">
               {currentSportDef.name} 
               {isTieBreak && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ml-1">Tb</span>}
@@ -1183,53 +1191,53 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       {/* Banner: indica quem está controlando o placar durante a live */}
       {liveBanner}
 
-      <main className={`flex-1 p-4 max-w-2xl mx-auto w-full pb-36 overflow-y-auto no-scrollbar transition-all duration-700 ${gameState.isMirroringActive && (gameState.isMirroringActive && gameState.isLiveClosed) && !isOfflineMode ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
+      <main className={`flex-1 p-4 max-w-2xl mx-auto w-full pb-36 overflow-y-auto no-scrollbar transition-all duration-700 ${effectiveGameState.isMirroringActive && (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && !isOfflineMode ? 'grayscale opacity-60 pointer-events-none' : ''}`}>
         <div className="flex flex-col items-center gap-4 relative w-full">
            <div className="flex flex-col w-full">
              <div className="flex items-center justify-between w-full mb-2 px-2">
                <div className="flex items-center gap-2"></div>
                <div className="flex flex-col items-center justify-center -mt-12 md:-mt-16">
                  {!isOfflineMode && (
-                   <button onClick={handleVoiceToggle} disabled={gameState.isConfirmedFinished || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner || gameState.isMatchOver} className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-2 ${isVoiceActive ? 'bg-blue-600 border-blue-700' : 'bg-white border-blue-600'}`}>
+                   <button onClick={handleVoiceToggle} disabled={effectiveGameState.isConfirmedFinished || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver} className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-2 ${isVoiceActive ? 'bg-blue-600 border-blue-700' : 'bg-white border-blue-600'}`}>
                      <div className="relative flex items-center justify-center">
                        <Mic size={32} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-white' : 'text-blue-600'} />
-                       {(voiceWasManuallyStopped || !gameState.matchConfig.voiceEnabled || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner || gameState.isMatchOver) && (
+                       {(voiceWasManuallyStopped || !effectiveGameState.matchConfig.voiceEnabled || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver) && (
                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-[2.5px] bg-red-600 -rotate-45 rounded-full shadow-sm pointer-events-none z-20" />
                        )}
                      </div>
                    </button>
                  )}
                </div>
-               <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${gameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(displayTime)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${gameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{gameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
+               <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${effectiveGameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(displayTime)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${effectiveGameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{effectiveGameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
              </div>
              
              <div className="flex flex-col w-full mt-4">
                {(() => {
-                 const isActive = !gameState.isConfirmedFinished && !gameState.isMatchOver && !(gameState.isMirroringActive && gameState.isLiveClosed);
-                 const o = gameState.servingOrderOffset;
-                 const c1 = gameState.p1.color || 'azul';
-                 const c2 = gameState.p2.color || 'vermelho';
+                 const isActive = !effectiveGameState.isConfirmedFinished && !effectiveGameState.isMatchOver && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
+                 const o = effectiveGameState.servingOrderOffset;
+                 const c1 = effectiveGameState.p1.color || 'azul';
+                 const c2 = effectiveGameState.p2.color || 'vermelho';
                  return (
                    <>
                      {/* Linha 1 — Time 1 */}
                      <div className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[c1]}`}>
                        <div onClick={() => onSwitchServer(1, false)} className="cursor-pointer active:scale-95 transition-transform">
-                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 0 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{gameState.p1.name}</span>
+                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 0 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p1.name}</span>
                        </div>
-                       {gameState.p1.partnerName && (
+                       {effectiveGameState.p1.partnerName && (
                          <div onClick={() => onSwitchServer(1, true)} className="cursor-pointer active:scale-95 transition-transform">
-                           <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 2 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{gameState.p1.partnerName}</span>
+                           <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 2 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p1.partnerName}</span>
                          </div>
                        )}
                      </div>
                      {/* Linha 2 — Time 2 */}
                      <div className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[c2]}`}>
                        <div onClick={() => onSwitchServer(2, false)} className="cursor-pointer active:scale-95 transition-transform">
-                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 1 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{gameState.p2.name}</span>
+                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 1 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p2.name}</span>
                        </div>
-                       {gameState.p2.partnerName && (
+                       {effectiveGameState.p2.partnerName && (
                          <div onClick={() => onSwitchServer(2, true)} className="cursor-pointer active:scale-95 transition-transform">
-                           <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 3 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{gameState.p2.partnerName}</span>
+                           <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 3 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p2.partnerName}</span>
                          </div>
                        )}
                      </div>
@@ -1261,19 +1269,19 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
             amarelo: 'text-yellow-600', laranja: 'text-orange-600',
             lilas: 'text-violet-600', marrom: 'text-amber-800', roxo: 'text-purple-600',
           };
-          const isLiveActiveNew = !!(gameState.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed)) || !!effectiveCloudLiveExists;
-          const p1Color = gameState.p1.color || 'azul';
-          const p2Color = gameState.p2.color || 'vermelho';
+          const isLiveActiveNew = !!(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) || !!effectiveCloudLiveExists;
+          const p1Color = effectiveGameState.p1.color || 'azul';
+          const p2Color = effectiveGameState.p2.color || 'vermelho';
 
           const renderServerIndicatorNew = (team: 1 | 2) => {
-            const sport = gameState.matchConfig.sportType;
+            const sport = effectiveGameState.matchConfig.sportType;
             if (sport !== 'pickleball' && sport !== 'tennis' && sport !== 'beach-tennis') return null;
-            const isServing = gameState.server === team;
-            const isDoubles = gameState.matchConfig.isDoubles;
-            const pkl = gameState.pickleball;
-            const srvNum: 1 | 2 = pkl ? pkl.server.serverNumber : (gameState.servingOrderOffset >= 2 ? 2 : 1);
+            const isServing = effectiveGameState.server === team;
+            const isDoubles = effectiveGameState.matchConfig.isDoubles;
+            const pkl = effectiveGameState.pickleball;
+            const srvNum: 1 | 2 = pkl ? pkl.server.serverNumber : (effectiveGameState.servingOrderOffset >= 2 ? 2 : 1);
             const label = isDoubles ? `S${srvNum}` : 'S';
-            const side = (sport === 'pickleball' && pkl) ? pkl.server.side : getTennisServerSide(gameState);
+            const side = (sport === 'pickleball' && pkl) ? pkl.server.side : getTennisServerSide(effectiveGameState);
             const justifyContent = side === 'even' ? 'flex-end' : 'flex-start';
             const posClass = team === 1 ? 'bottom-3' : 'top-3';
             const textColorClass = team === 1 ? TEXT_COLORS_NEW[p1Color] : TEXT_COLORS_NEW[p2Color];
@@ -1289,14 +1297,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
           // ── renderSetHistory inline ──────────────────────────────────────
           const renderSetHistoryNew = (team: 1 | 2) => {
-            const p = team === 1 ? gameState.p1 : gameState.p2;
-            const currentSet = gameState.currentSet ?? 0;
-            const isMatchOver = gameState.isMatchOver;
+            const p = team === 1 ? effectiveGameState.p1 : effectiveGameState.p2;
+            const currentSet = effectiveGameState.currentSet ?? 0;
+            const isMatchOver = effectiveGameState.isMatchOver;
 
             let isMatchWinner = false;
             if (isMatchOver) {
-              const p1WonSets = gameState.p1.sets.filter((s, i) => s > (gameState.p2.sets[i] ?? 0)).length;
-              const p2WonSets = gameState.p2.sets.filter((s, i) => s > (gameState.p1.sets[i] ?? 0)).length;
+              const p1WonSets = effectiveGameState.p1.sets.filter((s, i) => s > (effectiveGameState.p2.sets[i] ?? 0)).length;
+              const p2WonSets = effectiveGameState.p2.sets.filter((s, i) => s > (effectiveGameState.p1.sets[i] ?? 0)).length;
               isMatchWinner = team === 1 ? p1WonSets > p2WonSets : p2WonSets > p1WonSets;
             }
 
@@ -1328,9 +1336,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
           // ── renderTeamBlock inline ───────────────────────────────────────
           const renderTeamBlockNew = (team: 1 | 2) => {
-            const p = team === 1 ? gameState.p1 : gameState.p2;
+            const p = team === 1 ? effectiveGameState.p1 : effectiveGameState.p2;
             const color = p.color || (team === 1 ? 'azul' : 'vermelho');
-            const isServing = gameState.server === team;
+            const isServing = effectiveGameState.server === team;
 
             const games = <div className="z-10">{renderSetHistoryNew(team)}</div>;
 
@@ -1417,8 +1425,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 </button>
                 <button
                   disabled={!isCommandOwner}
-                  onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(gameState.server, 'ace', 'cb'); }}
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${SOLID_COLORS_NEW[gameState.server === 1 ? p1Color : p2Color]} ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
+                  onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(effectiveGameState.server, 'ace', 'cb'); }}
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${SOLID_COLORS_NEW[effectiveGameState.server === 1 ? p1Color : p2Color]} ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
                 >
                   <Zap size={30} fill="currentColor" />
                 </button>
@@ -1435,8 +1443,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 </div>
                 <button
                   disabled={!isCommandOwner}
-                  onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb'); }}
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${SOLID_COLORS_NEW[gameState.server === 1 ? p2Color : p1Color]} ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
+                  onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(effectiveGameState.server === 1 ? 2 : 1, 'fault', 'cb'); }}
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${SOLID_COLORS_NEW[effectiveGameState.server === 1 ? p2Color : p1Color]} ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
                 >
                   <X size={34} strokeWidth={5} />
                 </button>
@@ -1458,7 +1466,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       </div>
                     )}
                     {/* Modo placar — logo abaixo de Live/Controle */}
-                    {!gameState.matchConfig.isWatchMode && (
+                    {!effectiveGameState.matchConfig.isWatchMode && (
                       <div
                         role="button"
                         onPointerDown={() => { onToggleScoreboardMode?.(); }}
@@ -1468,8 +1476,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                           <MonitorSmartphone size={18} />
                         </div>
                         <span className="font-black text-sm flex-1">Modo placar</span>
-                        <div className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${gameState.matchConfig.isScoreboardMode ? 'bg-emerald-500' : 'bg-white/20'}`}>
-                          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${gameState.matchConfig.isScoreboardMode ? 'left-7' : 'left-1'}`} />
+                        <div className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${effectiveGameState.matchConfig.isScoreboardMode ? 'bg-emerald-500' : 'bg-white/20'}`}>
+                          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${effectiveGameState.matchConfig.isScoreboardMode ? 'left-7' : 'left-1'}`} />
                         </div>
                       </div>
                     )}
@@ -1518,18 +1526,18 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       effectiveVoiceLogs.map((log) => {
                          const [b1, b2] = log.before.split('-'); 
                          const [a1, a2] = log.after.split('-'); 
-                         const cmdColor = log.winner === 1 ? TEXT_COLORS[gameState.p1.color || 'azul'] : log.winner === 2 ? TEXT_COLORS[gameState.p2.color || 'vermelho'] : log.isError ? 'text-red-600' : 'text-slate-500';
+                         const cmdColor = log.winner === 1 ? TEXT_COLORS[effectiveGameState.p1.color || 'azul'] : log.winner === 2 ? TEXT_COLORS[effectiveGameState.p2.color || 'vermelho'] : log.isError ? 'text-red-600' : 'text-slate-500';
                          return (
                            <div key={log.id} className={`flex items-start gap-2.5 p-2.5 rounded-2xl border shadow-xs transition-all animate-in fade-in slide-in-from-left-2 duration-300 ${log.isError ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
                              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${log.isError ? 'bg-red-600 text-white' : (log.isRemote ? 'bg-sky-500 text-white' : 'bg-green-500 text-white')}`}>{log.isError ? <X size={14} className="stroke-[4]" /> : (log.source?.toLowerCase().includes('w') ? <Watch size={14} className="text-white" strokeWidth={3} /> : <CheckCircle size={14} className="text-white" strokeWidth={4} />)}</div>
                              <div className="flex-1 font-mono text-[11px] overflow-hidden leading-tight">
                                <div className="flex items-center flex-wrap gap-x-1.5 text-slate-500">
-                                 <span className={`font-black ${TEXT_COLORS[gameState.p1.color || 'azul']}`}>{log.source?.toUpperCase() || (log.isRemote ? 'WB' : 'CB')}#</span>
-                                 {!log.isError && <span className={`${TEXT_COLORS[gameState.p1.color || 'azul']} font-bold`}>[{log.liveSequence}]</span>}
+                                 <span className={`font-black ${TEXT_COLORS[effectiveGameState.p1.color || 'azul']}`}>{log.source?.toUpperCase() || (log.isRemote ? 'WB' : 'CB')}#</span>
+                                 {!log.isError && <span className={`${TEXT_COLORS[effectiveGameState.p1.color || 'azul']} font-bold`}>[{log.liveSequence}]</span>}
                                  {!log.isError && <>
                                      <span className="opacity-30">|</span>
-                                     <span className="font-bold"><span className="text-black">I: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{b1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{b2}</span></span>
-                                     <span className="font-black text-orange-500"><span className="text-black ml-1 mr-0.5"> F: </span><span className={TEXT_COLORS[gameState.p1.color || 'azul']}>{a1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[gameState.p2.color || 'vermelho']}>{a2}</span></span>
+                                     <span className="font-bold"><span className="text-black">I: </span><span className={TEXT_COLORS[effectiveGameState.p1.color || 'azul']}>{b1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[effectiveGameState.p2.color || 'vermelho']}>{b2}</span></span>
+                                     <span className="font-black text-orange-500"><span className="text-black ml-1 mr-0.5"> F: </span><span className={TEXT_COLORS[effectiveGameState.p1.color || 'azul']}>{a1}</span><span className="mx-0.5">-</span><span className={TEXT_COLORS[effectiveGameState.p2.color || 'vermelho']}>{a2}</span></span>
                                    </>}
                                </div>
                                <div className={`font-black mt-0.5 truncate ${cmdColor}`}>[ {log.text} ]</div>
@@ -1542,7 +1550,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                  </div>
                )}
             </div>
-            {gameState.matchConfig.isHistoryEnabled && (
+            {effectiveGameState.matchConfig.isHistoryEnabled && (
               <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">
                  <div 
                    className="flex items-center justify-between mb-0 cursor-pointer select-none"
@@ -1560,22 +1568,22 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                  </div>
                  {isTimelineOpen && (
                    <div className="mt-6 animate-in slide-in-from-top-2 duration-300">
-                     <MatchTimeline history={gameState.pointHistory ?? []} p1Sets={gameState.p1.sets} p2Sets={gameState.p2.sets} isMatchOver={gameState.isMatchOver} p1Color={gameState.p1.color} p2Color={gameState.p2.color} />
+                     <MatchTimeline history={effectiveGameState.pointHistory ?? []} p1Sets={effectiveGameState.p1.sets} p2Sets={effectiveGameState.p2.sets} isMatchOver={effectiveGameState.isMatchOver} p1Color={effectiveGameState.p1.color} p2Color={effectiveGameState.p2.color} />
                    </div>
                  )}
               </div>
             )}
-            <div className={`bg-[#0f172a] rounded-[3rem] p-4 pl-6 pr-6 shadow-2xl border border-white/50 w-full animate-in fade-in duration-700 flex flex-col gap-4 overflow-hidden transition-all duration-500 ${gameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+            <div className={`bg-[#0f172a] rounded-[3rem] p-4 pl-6 pr-6 shadow-2xl border border-white/50 w-full animate-in fade-in duration-700 flex flex-col gap-4 overflow-hidden transition-all duration-500 ${effectiveGameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                     <div className={`w-12 h-12 rounded-2xl transition-all duration-500 flex items-center justify-center shadow-lg ${gameState.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed) ? 'bg-sky-500' : 'bg-slate-800'}`}><QrCode size={24} className="text-white" /></div>
+                     <div className={`w-12 h-12 rounded-2xl transition-all duration-500 flex items-center justify-center shadow-lg ${effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? 'bg-sky-500' : 'bg-slate-800'}`}><QrCode size={24} className="text-white" /></div>
                      <div className="flex flex-col min-w-0"><h3 className="text-white font-black text-lg tracking-tight leading-none mb-1">Abrir live</h3><p className="text-[10px] font-bold text-slate-400 truncate tracking-tight">Compartilhe o placar em tempo real com qualquer dispositivo.</p></div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                      {isLiveActive && <button onClick={() => setIsMirrorExpanded(!isMirrorExpanded)} className="w-10 h-10 bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-90 transition-all border border-white/50">{isMirrorExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>}
                      <div className="flex items-center h-7 px-0.5">
                        <div className="relative inline-block w-12 h-7 align-middle select-none transition duration-200 ease-in">
-                         <input type="checkbox" id="toggle-mirroring" checked={isLiveActive || false} onChange={(e) => handleToggleMirroringLocal(e.target.checked)} disabled={gameState.isConfirmedFinished || (gameState.isMirroringActive && gameState.isLiveClosed)} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out shadow-sm top-[2px] left-[2px] checked:translate-x-full" />
+                         <input type="checkbox" id="toggle-mirroring" checked={isLiveActive || false} onChange={(e) => handleToggleMirroringLocal(e.target.checked)} disabled={effectiveGameState.isConfirmedFinished || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out shadow-sm top-[2px] left-[2px] checked:translate-x-full" />
                          <label htmlFor="toggle-mirroring" className={`toggle-label block overflow-hidden h-7 rounded-full cursor-pointer transition-colors duration-300 ease-in-out ${isLiveActive ? 'bg-[#22c55e]' : 'bg-slate-800'}`}></label>
                        </div>
                      </div>
@@ -1589,7 +1597,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                )}
             </div>
             {isLiveActive && (
-            <div className={`bg-white rounded-[2.5rem] p-4 pl-7 pr-7 shadow-sm border border-gray-100 w-full animate-in fade-in transition-all duration-500 ${gameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+            <div className={`bg-white rounded-[2.5rem] p-4 pl-7 pr-7 shadow-sm border border-gray-100 w-full animate-in fade-in transition-all duration-500 ${effectiveGameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner"><Wifi size={22} /></div><h3 className="text-gray-900 font-black text-lg tracking-tight leading-none">Live</h3></div>
                   <button onClick={() => setIsLiveExpanded(!isLiveExpanded)} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center active:scale-90 transition-all border border-gray-100">{isLiveExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
@@ -1599,14 +1607,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     // Ícone 1: tipo físico do dispositivo
                     const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'laptop' ? Laptop : deviceType === 'tablet' ? Monitor : Smartphone;
                     // Ícone 2: papel na live
-                     const isCtrlActive = isActiveController && !(gameState.isMirroringActive && gameState.isLiveClosed);
+                     const isCtrlActive = isActiveController && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
                      const RoleIcon = isCtrlActive ? Gamepad2 : role === 'owner' ? Crown : role === 'judge' ? Gavel : Eye;
                      const roleColor = isCtrlActive ? 'text-orange-500' : role === 'owner' ? 'text-blue-600' : role === 'judge' ? 'text-emerald-500' : 'text-gray-400';
                      const roleLabel = isCtrlActive ? 'Ctrl' : role === 'owner' ? 'Dono' : role === 'judge' ? 'Juiz' : 'Part.';
                     // Nome curto: só a parte antes do " - "
                     const shortLabel = label.includes(' - ') ? label.split(' - ').slice(1).join(' - ') : label;
                     return (
-                      <div key={id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isActiveController && !(gameState.isMirroringActive && gameState.isLiveClosed) ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'}`}>
+                      <div key={id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isActiveController && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'}`}>
                         <DeviceIcon size={12} className={isActiveController ? 'text-blue-500' : 'text-gray-400'} />
                         <span className="text-[10px] font-black">{shortLabel}</span>
                         <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${roleColor}`}>
@@ -1616,7 +1624,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       </div>
                     );
                   })}</div></div>
-                   <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex items-center gap-2.5"><CheckCircle size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Sincronização confirmada</span></div><div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-colors ${(gameState.isMirroringActive && gameState.isLiveClosed) ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{(gameState.isMirroringActive && gameState.isLiveClosed) ? <X size={12} strokeWidth={4} /> : <Check size={12} strokeWidth={4} />}<span className="text-[10px] font-black">{(gameState.isMirroringActive && gameState.isLiveClosed) ? 'Encerrado' : 'Ativo'}</span></div></div>
+                   <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex items-center gap-2.5"><CheckCircle size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Sincronização confirmada</span></div><div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-colors ${(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? <X size={12} strokeWidth={4} /> : <Check size={12} strokeWidth={4} />}<span className="text-[10px] font-black">{(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? 'Encerrado' : 'Ativo'}</span></div></div>
                     {/* Recurso de inserir juiz - Apenas para o proprietário */}
                     {effectiveIsOriginalOwner && (
                       <div className="w-full space-y-4">
@@ -1625,12 +1633,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                           <span className="text-[11px] font-bold text-gray-500">Juiz da partida</span>
                         </div>
 
-                        {gameState?.judgePin ? (
+                        {effectiveGameState?.judgePin ? (
                           <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                             <div className="flex items-center gap-3">
                               <div className="flex flex-col">
-                                <span className="text-xs font-black text-black">{gameState.judgeNickname}</span>
-                                <span className="text-[10px] font-bold text-slate-400">{maskPin(gameState.judgePin)}</span>
+                                <span className="text-xs font-black text-black">{effectiveGameState.judgeNickname}</span>
+                                <span className="text-[10px] font-bold text-slate-400">{maskPin(effectiveGameState.judgePin)}</span>
                               </div>
                               {/* Status do Juiz */}
                               <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black ${isJudgeOnline ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
@@ -1686,15 +1694,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       </div>
                     )}
 
-                    {gameState.judgeNickname && !isCommandOwner && (
+                    {effectiveGameState.judgeNickname && !isCommandOwner && (
                       <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
                         <div className="flex items-center gap-2.5">
                           <Gavel size={16} className="text-gray-400" />
                           <span className="text-[11px] font-bold text-gray-500">Juiz da partida</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          {gameState.commandOwner === gameState.judgeNickname && <CheckCircle size={14} className="text-blue-600" />}
-                          <span className="text-[10px] font-black text-blue-600">{gameState.judgeNickname}</span>
+                          {effectiveGameState.commandOwner === effectiveGameState.judgeNickname && <CheckCircle size={14} className="text-blue-600" />}
+                          <span className="text-[10px] font-black text-blue-600">{effectiveGameState.judgeNickname}</span>
                         </div>
                       </div>
                     )}
@@ -1717,7 +1725,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       )}
                     </div>
                     <span className="text-gray-900 font-black text-sm tracking-tight">Log Live</span>
-                    {gameState.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed) && (
+                    {effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && (
                       <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         <span className="text-[9px] font-black text-emerald-600">AO VIVO</span>

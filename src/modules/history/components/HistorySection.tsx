@@ -120,8 +120,8 @@ export const HistorySection: React.FC<Props> = ({
 
               <button
                 onClick={onDownloadHistory}
-                disabled={isDownloading || cloudMatchesCount === 0}
-                className={`w-14 h-14 rounded-2xl transition-all shadow-lg flex items-center justify-center border-2 ${(isDownloading || cloudMatchesCount === 0) ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50' : 'bg-emerald-600 text-white border-emerald-500 active:scale-90 shadow-emerald-100'}`}
+                disabled={isDownloading}
+                className={`w-14 h-14 rounded-2xl transition-all shadow-lg flex items-center justify-center border-2 ${isDownloading ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50' : 'bg-emerald-600 text-white border-emerald-500 active:scale-90 shadow-emerald-100'}`}
               >
                 {isDownloading ? <Loader2 size={24} className="animate-spin" /> : <CloudDownload size={24} />}
               </button>

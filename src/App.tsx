@@ -2000,7 +2000,7 @@ const AppInner: React.FC = () => {
     } catch {}
   }, [userProfile.email]);
 
-  useEffect(() => { if (userProfile.email) fetchCloudMatchesCount(true); }, [userProfile.email, matchHistory.length, fetchCloudMatchesCount]);
+  useEffect(() => { if (authReady && userProfile.email) fetchCloudMatchesCount(true); }, [authReady, userProfile.email, matchHistory.length, fetchCloudMatchesCount]);
 
   const syncHistoryToFirebase = useCallback(async (forcedHistory?: MatchHistoryItem[], forceAll = false) => {
     if (!navigator.onLine) return;

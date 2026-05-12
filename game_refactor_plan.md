@@ -9,7 +9,7 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 
 ---
 
-## 🚦 Status Atual: Fase 1 concluída ✅. Próximo: Fase 2 (Instalar o `<GameProvider>` no `App.tsx`).
+## 🚦 Status Atual: Fases 1, 2 e Passo 3.1 concluídos ✅. Próximo: Passo 3.2 (Remover props de jogo do `ScoreboardScreen`).
 
 ---
 
@@ -57,11 +57,11 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 
 ---
 
-### Fase 2: Instalar o `<GameProvider>` no `App.tsx` (Baixo Risco)
+### Fase 2: Instalar o `<GameProvider>` no `App.tsx` (Baixo Risco) ✅ CONCLUÍDA
 **Objetivo:** Montar o provider na árvore sem remover nenhum estado ainda.
 
-- [ ] Envolver o JSX do `AppInner` com `<GameProvider>`, passando `gameState`, `setGameState`, `gameStateRef`, `matchSettings`, `setMatchSettings`, `userProfile`, `setUserProfile`, `matchHistory`, `matchHistoryRef`, `partners`, `setPartners` como props.
-- [ ] Os estados permanecem declarados no `App.tsx`. O provider existirá mas ninguém o consome ainda.
+- [x] Envolver o JSX do `AppInner` com `<GameProvider>`, passando `gameState`, `setGameState`, `gameStateRef`, `matchSettings`, `setMatchSettings`, `userProfile`, `setUserProfile`, `matchHistory`, `matchHistoryRef`, `partners`, `setPartners` como props.
+- [x] Os estados permanecem declarados no `App.tsx`. O provider existirá mas ninguém o consome ainda.
 - **Teste de Validação:** `tsc --noEmit` passou. App funciona normalmente.
 
 ---
@@ -69,11 +69,13 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 ### Fase 3: Conectar o `ScoreboardScreen` ao `GameContext` (Risco Médio)
 **Objetivo:** Remover as props de jogo do `ScoreboardScreen`, que passará a ler diretamente do contexto.
 
-#### Passo 3.1 — Adicionar `useGame()` no `ScoreboardScreen` (somente leitura)
-- [ ] Adicionar `useGame()` no `ScoreboardScreen.tsx`.
-- [ ] Criar variáveis `effective*` para `gameState`, `matchSettings` e `userProfile` lendo do contexto com fallback para props.
-- [ ] Substituir todos os usos no JSX pelas variáveis `effective*`.
+#### Passo 3.1 — Adicionar `useGame()` no `ScoreboardScreen` (somente leitura) ✅ CONCLUÍDO
+- [x] Adicionar `import { useGame } from '@modules/game'` no `ScoreboardScreen.tsx`.
+- [x] Chamar `useGame()` no topo do componente e criar `effectiveGameState` com fallback para a prop: `const effectiveGameState = gameCtx.gameState ?? gameState`.
+- [x] Substituir todos os usos internos de `gameState` por `effectiveGameState` (~200 ocorrências).
+- [x] Props passadas para componentes filhos (`WatchBoard`, `ScoreboardDisplay`) mantidas como `gameState={effectiveGameState}` — nome da prop JSX preservado conforme contrato externo de cada filho.
 - Props **não removidas** ainda.
+- **Nota:** `userProfile` estava desestruturada das props mas não era usada em nenhum lugar — resquício pré-existente, não introduzido nesta fase.
 - **Validação:** `tsc --noEmit` passou. Componente funciona com ou sem props.
 
 #### Passo 3.2 — Remover as props de jogo do `ScoreboardScreen`
