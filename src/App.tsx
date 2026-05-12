@@ -9,6 +9,9 @@ import { AuthScreen } from '@modules/auth';
 import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterPartnerByPin, createManualPartner, hasPartnerWithPin } from '@modules/partners';
 import { EventDetailScreen, TournamentsScreen, fetchRegisteredEvents, getActiveEventEntryDate, joinTournamentEvent, markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events';
 import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
+import { LiveProvider, useLive } from '@modules/live';
+import { GameProvider } from '@modules/game';
+import { LiveControlOverlay } from '@modules/live/components/LiveControlOverlay.tsx';
 import { InstallPwaModal } from './components/InstallPwaModal.tsx';
 import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 // import { Input } from './components/Input.tsx'; // unused
@@ -31,9 +34,8 @@ import { findUserByPin, getDb, clearFirestoreCache, deleteCloudMatch, deleteClou
 // getDeviceType movido para src/utils/device.ts
 import { getAuthInstance } from '@infra/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, writeBatch, collection, query, where, getDocs, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore, deleteField, FieldValue } from 'firebase/firestore';
-import { AlertCircle, Trash2, RotateCw, RefreshCw, Wifi, X, CheckCircle, Eye, Loader2, ArrowLeftRight, Crown, UserCheck, Trophy, WifiOff } from 'lucide-react';
-import { LiveIndicator } from './components/LiveIndicator.tsx';
+import { doc, setDoc, serverTimestamp, collection, query, where, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore, deleteField, FieldValue } from 'firebase/firestore';
+import { AlertCircle, RotateCw, Wifi, X, CheckCircle, Loader2, ArrowLeftRight, Trophy, WifiOff } from 'lucide-react';
 import { useAppLogger } from './hooks/useAppLogger.ts';
 import { useInstallPwa } from './hooks/useInstallPwa.ts';
 import { useOnlineSync } from './hooks/useOnlineSync.ts';
@@ -123,43 +125,19 @@ const LogViewer: React.FC<{logs: {type: string, msg: string, time: string}[], on
   );
 };
 
-// ─── Helpers para persistência do ownerPin da live ────────────────────────────
-// O ownerPin é a chave do documento no Firestore (live_matches/<ownerPin>).
-// Persisti-lo no localStorage garante que qualquer resolução de targetPin
-// tenha uma fonte confiável mesmo antes de activeLives ser populado.
-const LIVE_OWNER_PIN_KEY = 'myPlacar_LiveOwnerPin';
+import {
+  persistLiveOwnerPin,
+  getPersistedLiveOwnerPin,
+  clearLiveOwnerPin,
+  assertOwnerPin,
+} from './modules/live/liveHelpers.ts';
 
-const persistLiveOwnerPin = (pin: string) => {
-  try { localStorage.setItem(LIVE_OWNER_PIN_KEY, pin.toUpperCase()); } catch {}
-};
-
-const clearLiveOwnerPin = () => {
-  try { localStorage.removeItem(LIVE_OWNER_PIN_KEY); } catch {}
-};
-
-const getPersistedLiveOwnerPin = (): string | null => {
-  try { return localStorage.getItem(LIVE_OWNER_PIN_KEY); } catch { return null; }
-};
-
-// Guard: valida que o targetPin é o PIN real do owner antes de qualquer
-// escrita em live_matches. Evita criar documentos com ID errado.
-// Retorna false e loga erro se a escrita for inválida.
-const assertOwnerPin = (targetPin: string | undefined, ownerPin: string | undefined, context: string): boolean => {
-  if (!targetPin) {
-    console.error(`[LiveGuard:${context}] targetPin indefinido — escrita abortada.`);
-    return false;
-  }
-  const persisted = getPersistedLiveOwnerPin();
-  // targetPin deve bater com ownerPin do gameState OU com o persisted do localStorage.
-  // Se nenhum referencial estiver disponível ainda, permite (primeira ativação).
-  if (ownerPin && targetPin !== ownerPin.toUpperCase() && persisted && targetPin !== persisted) {
-    console.error(`[LiveGuard:${context}] targetPin "${targetPin}" diverge do ownerPin "${ownerPin}" e do persisted "${persisted}" — escrita abortada.`);
-    return false;
-  }
-  return true;
-};
-
-const App: React.FC = () => {
+// ─── AppInner ────────────────────────────────────────────────────────────────
+// Contém todo o estado, lógica e JSX do app.
+// É filho do <LiveProvider> (montado no App abaixo), então o useLive() chamado
+// pelo LiveBridge (também filho do provider) pode injetar os valores de volta
+// via callback sem violar as regras de contexto do React.
+const AppInner: React.FC = () => {
   const urlParams = getUrlParams();
   const deviceId = getDeviceId();
   
@@ -251,8 +229,11 @@ const App: React.FC = () => {
   const [isSettingsRegrasSaved, setIsSettingsRegrasSaved] = useState(true);
   const [isProfileSaved, setIsProfileSaved] = useState(true);
   const [activeCloudMatch, setActiveCloudMatch] = useState<{id: string, sport: string} | null>(null);
-  const [cloudLiveExists, setCloudLiveExists] = useState<boolean>(false);
-  const [activeLives, setActiveLives] = useState<GameState[]>([]);
+  // [Passo 5.5] activeLives e cloudLiveExists: estados espelho sincronizados pelo LiveBridge.
+  // O LiveBridge chama onStateUpdate sempre que o contexto muda, mantendo estes
+  // estados locais em sincronia para que useMemo/useEffect reativos continuem funcionando.
+  const [activeLives, setActiveLivesLocal] = useState<GameState[]>([]);
+  const [cloudLiveExists, setCloudLiveExistsLocal] = useState<boolean>(false);
 
   useEffect(() => {
     // Detecta se é um link de reset de senha e força a tela de auth
@@ -283,7 +264,8 @@ const App: React.FC = () => {
   const [_versionTapCount, setVersionTapCount] = useState(0);
 
   // ─── Live Logs: persistem ao trocar de tela ────────────────────────────────
-  const [liveLogs, setLiveLogs] = useState<LiveLogEntry[]>([]);
+  // [Passo 5.5] liveLogs: estado espelho sincronizado pelo LiveBridge.
+  const [liveLogs, setLiveLogsLocal] = useState<LiveLogEntry[]>([]);
   const [voiceLogs, setVoiceLogs] = useState<{id: string, startTime: string, before: string, after: string, text: string, latency: number, timestamp: number, isError?: boolean, winner?: 1 | 2, isRemote?: boolean, liveSequence?: number, liveId?: number, source: string}[]>([]);
 
   // Captura de logs via useAppLogger
@@ -359,132 +341,37 @@ const App: React.FC = () => {
   // incluindo o performExit (que não pode ter gameState/activeLives no dep array).
   const gameStateRef = useRef(gameState);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
-  const activeLivesRef = useRef<GameState[]>([]);
-  useEffect(() => { activeLivesRef.current = activeLives; }, [activeLives]);
+  // [Passo 5.5] activeLivesRef local removido — substituído pelo proxy do LiveContext acima.
 
-  const isOriginalOwner = useMemo(() => {
-    // Fonte primária: ownerDeviceId no gameState local — fixo, gravado na criação da live.
-    if (gameState?.ownerDeviceId) return gameState.ownerDeviceId === deviceId;
-    // Fallback: activeLives (Firebase) — cobre o caso de gameState ainda não carregado.
-    if (activeLives.some(l => l.ownerDeviceId === deviceId)) return true;
-    // Último fallback por PIN: compatibilidade com sessões sem ownerDeviceId
-    // (não deve ocorrer em novas lives, mas protege contra estado corrompido).
-    if (!userProfile.pin) return false;
-    const myPin = userProfile.pin.toUpperCase();
-    if (activeLives.some(l => l.ownerPin?.toUpperCase() === myPin)) {
-      // Só considera owner por PIN se não há outro device como ownerDeviceId
-      return !activeLives.some(l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin);
-    }
-    return false;
-  }, [gameState?.ownerDeviceId, activeLives, deviceId, userProfile.pin]);
+  // ── [Passo 5.6] useMemos de permissão removidos — vivem no LiveContext. ──────
+  // Estados espelho sincronizados pelo LiveBridge via handleLiveUpdate a cada
+  // mudança no contexto. Valores iniciais conservadores até o primeiro onUpdate.
+  const [isOriginalOwner, setIsOriginalOwner] = useState(false);
+  const [isActiveController, setIsActiveController] = useState(false);
+  const [isCurrentController, setIsCurrentController] = useState(false);
+  const [isCommandOwner, setIsCommandOwner] = useState(true);
+  const [livePapel, setLivePapel] = useState<LivePapel>('spectator');
+  const [liveStatus, setLiveStatus] = useState<LiveType>('watcher');
+  const [indicatorRole, setIndicatorRole] = useState<'owner' | 'judge' | 'observer'>('observer');
+  const [isJudgeOnline, setIsJudgeOnline] = useState(false);
+  const [isOwnerOnline, setIsOwnerOnline] = useState(false);
 
+  // resolveTargetPin: ref que aponta para a função do contexto após onReady.
+  // Wrapper estável para que handlers com useCallback não precisem ser recriados.
+  const resolveTargetPinRef = useRef<(context: string) => string | null>(() => null);
+  const resolveTargetPin = useCallback(
+    (context: string) => resolveTargetPinRef.current(context), []
+  );
+
+  // _activeMatchPin: derivado de isOriginalOwner (agora estado espelho)
   const _activeMatchPin = useMemo(() => {
     return isOriginalOwner ? userProfile.pin?.toUpperCase() : gameState?.ownerPin?.toUpperCase();
   }, [isOriginalOwner, userProfile.pin, gameState?.ownerPin]);
 
-  // ─── resolveTargetPin: fonte única de verdade para o PIN do owner ────────────
-  // Ordem de prioridade (decrescente de confiabilidade):
-  //   1. judgeMatch.ownerPin  — judge sempre sabe para qual owner escrever
-  //   2. gameState.ownerPin   — gravado na criação da live, imutável
-  //   3. localStorage         — persiste entre recarregamentos, gravado em initGameStateInternal
-  //   4. isOriginalOwner + myPin — apenas se confirmado por ownerDeviceId (não só pelo PIN)
-  // Nunca retorna undefined silenciosamente — loga e retorna null para que o
-  // chamador possa abortar a escrita com segurança.
-  const resolveTargetPin = useCallback((context: string): string | null => {
-    const myPin = userProfile.pin?.toUpperCase();
-    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-    if (judgeMatch?.ownerPin) return judgeMatch.ownerPin.toUpperCase();
-    if (gameState?.ownerPin) return gameState.ownerPin.toUpperCase();
-    const persisted = getPersistedLiveOwnerPin();
-    if (persisted) return persisted;
-    // Último recurso: só usa myPin se ownerDeviceId confirma que este device é o owner
-    if (isOriginalOwner && myPin) return myPin;
-    console.error(`[resolveTargetPin:${context}] Não foi possível determinar o ownerPin — escrita abortada.`);
-    return null;
-  }, [userProfile.pin, activeLives, gameState?.ownerPin, isOriginalOwner]);
-
-  const isCurrentController = useMemo(() => gameState?.commandOwnerId === deviceId, [gameState?.commandOwnerId, deviceId]);
-  // A3: usa role='judge' em vez de comparação por nickname — robusto a nomes duplicados
-  // e correto com o sub-objeto judge adicionado no T4.3.
-  const isJudgeOnline = useMemo(() => {
-    const judgePin = gameState?.judge?.pin || gameState?.judgePin;
-    if (!judgePin || !gameState?.controllers) return false;
-    const now = Date.now();
-    return Object.values(gameState.controllers).some(
-      (c: ControllerRecord) => c.role === 'judge' && (now - (c.lastSeen || 0)) < 30000
-    );
-  }, [gameState?.judge, gameState?.judgePin, gameState?.controllers]);
-
-  const isOwnerOnline = useMemo(() => {
-    if (!gameState?.ownerPin || !gameState?.controllers) return false;
-    const now = Date.now();
-    return Object.values(gameState.controllers).some((c: ControllerRecord) => 
-      c.isOwner && (now - c.lastSeen) < 60000
-    );
-  }, [gameState?.ownerPin, gameState?.controllers]);
-
-  const isCommandOwner = useMemo(() => {
-    if (!gameState || !gameState.isMirroringActive) return true;
-    return isCurrentController;
-  }, [gameState?.isMirroringActive, isCurrentController]);
-
-  // Helper centralizado: "este dispositivo específico é o controller ativo?"
-  // Usa deviceId em vez de pin para suportar múltiplos dispositivos do mesmo usuário.
-  // Fallback para gameState local: cobre a janela de latência logo após criar a live,
-  // quando activeLives ainda não foi atualizado pelo onSnapshot da collection.
-  const isActiveController = useMemo(() => {
-    if (activeLives.some(l => l.commandOwnerId === deviceId)) return true;
-    // Fallback local: live foi criada agora (activeLives ainda vazio ou desatualizado).
-    // Exige que ownerDeviceId também seja este device para não confundir com o celular
-    // secundário que herdou o gameState da cloud (com ownerDeviceId do Note).
-    if (
-      gameState?.isMirroringActive &&
-      gameState?.commandOwnerId === deviceId &&
-      (gameState?.ownerDeviceId === deviceId || !gameState?.ownerDeviceId)
-    ) return true;
-    return false;
-  }, [activeLives, deviceId, gameState?.isMirroringActive, gameState?.commandOwnerId, gameState?.ownerDeviceId]);
-
-  // B1: papel permanente do usuário na live (não muda durante a live)
-  // 'owner' = este deviceId é o ownerDeviceId da live
-  // 'judge' = o PIN deste usuário é o judgePin da live
-  // 'observer' = qualquer outro
-  const livePapel = useMemo((): LivePapel => {
-    // Fallback local: cobre a janela de latência logo após criar/entrar na live,
-    // quando activeLives ainda não foi atualizado pelo onSnapshot da collection.
-    // Sem isso, cloudLiveExists=false → 'spectator' → UI mostra "Observador".
-    const liveIsActiveLocally = gameState?.isMirroringActive && !gameState?.isLiveClosed;
-    const effectivelyHasLive = cloudLiveExists || liveIsActiveLocally;
-    if (!effectivelyHasLive) return 'spectator';
-    // Owner: baseado em deviceId — nunca por PIN, para não confundir multi-dispositivo
-    if (activeLives.some(l => l.ownerDeviceId === deviceId)) return 'owner';
-    // Fallback local para owner: live criada agora, activeLives ainda não propagou.
-    // Exige que commandOwnerId também seja este device — confirma que foi quem criou a live.
-    // Sem essa restrição, o celular (mesmo PIN) poderia ser tratado como owner pelo fallback.
-    if (liveIsActiveLocally && gameState?.ownerDeviceId === deviceId && gameState?.commandOwnerId === deviceId) return 'owner';
-    // Fallback para lives sem ownerDeviceId (não deve ocorrer em novas lives)
-    const myPin = userProfile.pin?.toUpperCase();
-    if (myPin && activeLives.some(l => l.ownerPin?.toUpperCase() === myPin && !l.ownerDeviceId)) return 'owner';
-    // Judge: sempre por PIN (é como o owner designa o juiz)
-    if (myPin && activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
-    return 'observer';
-  }, [cloudLiveExists, userProfile.pin, activeLives, deviceId, gameState?.isMirroringActive, gameState?.isLiveClosed, gameState?.ownerDeviceId]);
-
-  // B1: status funcional atual — o que este dispositivo está fazendo agora ('controller' | 'watcher')
-  const liveStatus = useMemo((): LiveType => {
-    return isActiveController ? 'controller' : 'watcher';
-  }, [isActiveController]);
-
-  // liveRole removido: era alias de livePapel. Cada tela recebe livePapel e/ou isActiveController diretamente.
-
-  const indicatorRole = useMemo(() => {
-    if (!isActiveController) return 'observer';
-    return livePapel === 'owner' ? 'owner' : 'judge';
-  }, [isActiveController, livePapel]);
-
   const [showLiveControlOverlay, setShowLiveControlOverlay] = useState(false);
-  const [confirmDeleteLive, setConfirmDeleteLive] = useState(false);
-  const [confirmDeleteJudge, setConfirmDeleteJudge] = useState(false);
+  // [Fase 6] confirmDeleteLive e confirmDeleteJudge migrados para LiveControlOverlay (estado interno).
+  // initialConfirmDeleteJudge: sinaliza que o overlay deve abrir já na tela de confirmação de remoção de juiz.
+  const [initialConfirmDeleteJudge, setInitialConfirmDeleteJudge] = useState(false);
   const [judgePinInput, setJudgePinInput] = useState('');
   const [judgeNicknameLookup, setJudgeNicknameLookup] = useState('');
   const [isSearchingJudgePin, setIsSearchingJudgePin] = useState(false);
@@ -495,11 +382,152 @@ const App: React.FC = () => {
   const [isServiceInterrupted, setIsServiceInterrupted] = useState(false);
 
   // ── Indicador de sincronismo FB ────────────────────────────────────────────
-  // Aparece no card do time que marcou: verde (controller confirmado) / azul (observer recebeu)
-  const [fbSyncStatus, setFbSyncStatus] = useState<{ team: 1 | 2; seq: number; isObserver: boolean } | null>(null);
+  // [Passo 5.5] fbSyncStatus: estado espelho sincronizado pelo LiveBridge.
+  const [fbSyncStatus, setFbSyncStatusLocal] = useState<{ team: 1 | 2; seq: number; isObserver: boolean } | null>(null);
   const fbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFbScoreKeyRef = useRef<string>(''); // "p1score_p1games_p2score_p2games"
   const hasAutoEnabledScoreboardRef = useRef(false); // evita loop: ativa modo placar 1x por sessão de observer
+  // ── Passo 5.4.1-A: injeção dos setters/refs do LiveContext via LiveBridge ──
+  // useLive() não pode ser chamado aqui (AppInner renderiza o <LiveProvider>,
+  // então ainda não é descendente dele). Em vez disso, o <LiveBridge> — filho
+  // direto do provider — chama useLive() e injeta os valores nestes refs via
+  // callback onReady. As variáveis ctx* ficam disponíveis assim que o bridge
+  // monta (síncrono com o primeiro render do provider).
+  //
+  // Os useState/useRef duplicados abaixo serão removidos no Passo 5.5.
+  // Por ora os ctx* são inicializados com stubs e substituídos no primeiro render.
+
+  // Refs que receberão os setters reais do contexto via LiveBridge.onReady:
+  const ctxSetActiveLivesRef = useRef<React.Dispatch<React.SetStateAction<GameState[]>>>(() => {});
+  const ctxSetCloudLiveExistsRef = useRef<React.Dispatch<React.SetStateAction<boolean>>>(() => {});
+  const ctxSetLiveLogsRef = useRef<React.Dispatch<React.SetStateAction<LiveLogEntry[]>>>(() => {});
+  const ctxSetFbSyncStatusRef = useRef<React.Dispatch<React.SetStateAction<{ team: 1 | 2; seq: number; isObserver: boolean } | null>>>(() => {});
+
+  // Refs dos setters locais espelho — declarados antes dos useCallback wrappers que os usam.
+  // O .current é atualizado a cada render para evitar closure stale.
+  const setActiveLivesLocalRef = useRef(setActiveLivesLocal);
+  setActiveLivesLocalRef.current = setActiveLivesLocal;
+  const setCloudLiveExistsLocalRef = useRef(setCloudLiveExistsLocal);
+  setCloudLiveExistsLocalRef.current = setCloudLiveExistsLocal;
+  const setLiveLogsLocalRef = useRef(setLiveLogsLocal);
+  setLiveLogsLocalRef.current = setLiveLogsLocal;
+  const setFbSyncStatusLocalRef = useRef(setFbSyncStatusLocal);
+  setFbSyncStatusLocalRef.current = setFbSyncStatusLocal;
+
+  // Wrappers estáveis que delegam para o ref do contexto E atualizam o estado espelho local.
+  // O estado espelho mantém a reatividade dos useMemo/useEffect do AppInner.
+  const ctxSetActiveLives = useCallback<React.Dispatch<React.SetStateAction<GameState[]>>>(
+    (v) => { ctxSetActiveLivesRef.current(v); setActiveLivesLocalRef.current(v); }, []
+  );
+  const ctxSetCloudLiveExists = useCallback<React.Dispatch<React.SetStateAction<boolean>>>(
+    (v) => { ctxSetCloudLiveExistsRef.current(v); setCloudLiveExistsLocalRef.current(v); }, []
+  );
+  const ctxSetLiveLogs = useCallback<React.Dispatch<React.SetStateAction<LiveLogEntry[]>>>(
+    (v) => { ctxSetLiveLogsRef.current(v); setLiveLogsLocalRef.current(v); }, []
+  );
+  const ctxSetFbSyncStatus = useCallback<React.Dispatch<React.SetStateAction<{ team: 1 | 2; seq: number; isObserver: boolean } | null>>>(
+    (v) => { ctxSetFbSyncStatusRef.current(v); setFbSyncStatusLocalRef.current(v); }, []
+  );
+
+  // Refs de ciclo de vida: usamos objetos proxy que delegam leituras e escritas
+  // ao objeto ref real do contexto após onReady. Antes disso, operam sobre
+  // um ref local temporário — comportamento idêntico ao Passo 5.4.
+  // Assim todos os usos existentes (ctxTookControlAtRef.current = x) continuam
+  // funcionando sem nenhuma mudança.
+  //
+  // activeLivesRef: proxy para o ref do contexto (usado no performExit).
+  const _ctxActiveLivesRefInner = useRef<GameState[]>([]);
+  const _ctxActiveLivesRefTarget = useRef<React.MutableRefObject<GameState[]>>(_ctxActiveLivesRefInner);
+  const activeLivesRef: React.MutableRefObject<GameState[]> = {
+    get current() { return _ctxActiveLivesRefTarget.current.current; },
+    set current(v) { _ctxActiveLivesRefTarget.current.current = v; },
+  };
+
+  const _ctxTookControlAtInner = useRef<number>(0);
+  const _ctxLostControlAtInner = useRef<number>(0);
+  const _ctxIsClosingLiveInner = useRef<boolean>(false);
+  const _ctxLastFbScoreKeyInner = useRef<string>('');
+  const _ctxFbSyncTimerInner = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const _ctxHasAutoEnabledScoreboardInner = useRef<boolean>(false);
+
+  // Refs que apontam para o objeto ref ativo (local ou do contexto).
+  const _ctxTookControlAtTarget = useRef<React.MutableRefObject<number>>(_ctxTookControlAtInner);
+  const _ctxLostControlAtTarget = useRef<React.MutableRefObject<number>>(_ctxLostControlAtInner);
+  const _ctxIsClosingLiveTarget = useRef<React.MutableRefObject<boolean>>(_ctxIsClosingLiveInner);
+  const _ctxLastFbScoreKeyTarget = useRef<React.MutableRefObject<string>>(_ctxLastFbScoreKeyInner);
+  const _ctxFbSyncTimerTarget = useRef<React.MutableRefObject<ReturnType<typeof setTimeout> | null>>(_ctxFbSyncTimerInner);
+  const _ctxHasAutoEnabledScoreboardTarget = useRef<React.MutableRefObject<boolean>>(_ctxHasAutoEnabledScoreboardInner);
+
+  // Proxies com interface MutableRefObject<T> — transparentes para os handlers.
+  const ctxTookControlAtRef: React.MutableRefObject<number> = {
+    get current() { return _ctxTookControlAtTarget.current.current; },
+    set current(v) { _ctxTookControlAtTarget.current.current = v; },
+  };
+  const ctxLostControlAtRef: React.MutableRefObject<number> = {
+    get current() { return _ctxLostControlAtTarget.current.current; },
+    set current(v) { _ctxLostControlAtTarget.current.current = v; },
+  };
+  const ctxIsClosingLiveRef: React.MutableRefObject<boolean> = {
+    get current() { return _ctxIsClosingLiveTarget.current.current; },
+    set current(v) { _ctxIsClosingLiveTarget.current.current = v; },
+  };
+  const ctxLastFbScoreKeyRef: React.MutableRefObject<string> = {
+    get current() { return _ctxLastFbScoreKeyTarget.current.current; },
+    set current(v) { _ctxLastFbScoreKeyTarget.current.current = v; },
+  };
+  const ctxFbSyncTimerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null> = {
+    get current() { return _ctxFbSyncTimerTarget.current.current; },
+    set current(v) { _ctxFbSyncTimerTarget.current.current = v; },
+  };
+  const ctxHasAutoEnabledScoreboardRef: React.MutableRefObject<boolean> = {
+    get current() { return _ctxHasAutoEnabledScoreboardTarget.current.current; },
+    set current(v) { _ctxHasAutoEnabledScoreboardTarget.current.current = v; },
+  };
+
+  // Callback passado ao LiveBridge: chamado assim que o contexto estiver disponível.
+  const handleLiveReady = useCallback((ctx: ReturnType<typeof useLive>) => {
+    ctxSetActiveLivesRef.current = ctx.setActiveLives;
+    ctxSetCloudLiveExistsRef.current = ctx.setCloudLiveExists;
+    ctxSetLiveLogsRef.current = ctx.setLiveLogs;
+    ctxSetFbSyncStatusRef.current = ctx.setFbSyncStatus;
+    // Redireciona os proxies para os objetos ref reais do contexto
+    _ctxTookControlAtTarget.current = ctx.tookControlAtRef as React.MutableRefObject<number>;
+    _ctxLostControlAtTarget.current = ctx.lostControlAtRef as React.MutableRefObject<number>;
+    _ctxIsClosingLiveTarget.current = ctx.isClosingLiveRef as React.MutableRefObject<boolean>;
+    _ctxLastFbScoreKeyTarget.current = ctx.lastFbScoreKeyRef as React.MutableRefObject<string>;
+    _ctxFbSyncTimerTarget.current = ctx.fbSyncTimerRef as React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    _ctxHasAutoEnabledScoreboardTarget.current = ctx.hasAutoEnabledScoreboardRef as React.MutableRefObject<boolean>;
+    // activeLivesRef do contexto — usado em closures estáveis (performExit)
+    _ctxActiveLivesRefTarget.current = ctx.activeLivesRef as React.MutableRefObject<GameState[]>;
+    // Sincroniza os estados espelho com os valores iniciais do contexto
+    setActiveLivesLocalRef.current(ctx.activeLives);
+    setCloudLiveExistsLocalRef.current(ctx.cloudLiveExists);
+    setLiveLogsLocalRef.current(ctx.liveLogs);
+    setFbSyncStatusLocalRef.current(ctx.fbSyncStatus);
+    // resolveTargetPin: aponta para a função do contexto (estável entre renders)
+    resolveTargetPinRef.current = ctx.resolveTargetPin;
+  }, []);
+
+  // handleLiveUpdate: chamado pelo LiveBridge a cada mudança nos valores computados.
+  // Sincroniza os estados espelho de permissão com o contexto.
+  const handleLiveUpdate = useCallback((ctx: ReturnType<typeof useLive>) => {
+    setIsOriginalOwner(ctx.isOriginalOwner);
+    setIsActiveController(ctx.isActiveController);
+    setIsCurrentController(ctx.isCurrentController);
+    setIsCommandOwner(ctx.isCommandOwner);
+    setLivePapel(ctx.livePapel);
+    setLiveStatus(ctx.liveStatus);
+    setIndicatorRole(ctx.indicatorRole);
+    setIsJudgeOnline(ctx.isJudgeOnline);
+    setIsOwnerOnline(ctx.isOwnerOnline);
+    resolveTargetPinRef.current = ctx.resolveTargetPin;
+    // Estados de dados também sincronizados aqui para cobrir mudanças externas
+    setActiveLivesLocalRef.current(ctx.activeLives);
+    setCloudLiveExistsLocalRef.current(ctx.cloudLiveExists);
+    setLiveLogsLocalRef.current(ctx.liveLogs);
+    setFbSyncStatusLocalRef.current(ctx.fbSyncStatus);
+  }, []);
+
   const [newAppUrl, setNewAppUrl] = useState("");
 
   const [activeEvent, setActiveEvent] = useState<TournamentEvent | null>(() => safeJsonParse('myPlacarActiveEvent', null));
@@ -512,16 +540,8 @@ const App: React.FC = () => {
   const finalizationTimerRef = useRef<any>(null);
   
   const lastSentStateRef = useRef<string>("");
-  // T3.2: registra quando este device assumiu o controle pela última vez.
-  // Usado para o grace period do guard duplo no sync de gameState.
-  const tookControlAtRef = useRef<number>(0);
-  // Registra quando este device PERDEU o controle (via onSnapshot).
-  // Usado para evitar que visibilitychange feche a live logo após uma troca de controlador.
-  const lostControlAtRef = useRef<number>(0);
-  // Sinaliza que o encerramento foi iniciado INTENCIONALMENTE por este device.
-  // O onSnapshot usa este ref para distinguir "sinal de encerramento real" de
-  // "artefato de reload" — sem ele, o owner ignora o próprio isLiveClosed: true.
-  const isClosingLiveRef = useRef<boolean>(false);
+  // [Passo 5.7] tookControlAtRef, lostControlAtRef e isClosingLiveRef removidos.
+  // Esses refs vivem agora no LiveContext e são acessados via proxies ctx* declarados acima.
 
   const sanitizeForFirestore = (obj: unknown) => {
     // campos undefined são convertidos para null pelo JSON.stringify abaixo.
@@ -633,9 +653,9 @@ const App: React.FC = () => {
       const isActiveController = gs.commandOwnerId === deviceId;
 
       // Grace period de 30s após perder o controle.
-      const justLostControl = (Date.now() - lostControlAtRef.current) < 30000;
+      const justLostControl = (Date.now() - ctxLostControlAtRef.current) < 30000;
       // Grace period de 15s após assumir o controle.
-      const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
+      const justTookControl = (Date.now() - ctxTookControlAtRef.current) < 15000;
 
       // Regra: o owner só fecha a live via performExit se ELE é o controller ativo.
       // Se outro device (relógio, juiz) está controlando, o owner saindo da tela
@@ -1056,7 +1076,7 @@ const App: React.FC = () => {
       if (snap.exists()) {
         const cloudData = snap.data() as GameState;
         if (!isValidGameState(cloudData)) return;
-        setCloudLiveExists(!cloudData.isLiveClosed);
+        ctxSetCloudLiveExists(!cloudData.isLiveClosed);
         setGameState(prev => ({
           ...(prev || {}),
           ...cloudData,
@@ -1070,7 +1090,7 @@ const App: React.FC = () => {
         } as GameState));
         setIsWaitingSync(false);
       } else {
-        setCloudLiveExists(false);
+        ctxSetCloudLiveExists(false);
         setIsWaitingSync(false);
       }
     });
@@ -1107,17 +1127,17 @@ const App: React.FC = () => {
                 currentGs?.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase()));
 
           // Só ignora o isLiveClosed se NÃO foi este device que iniciou o encerramento.
-          // isClosingLiveRef é marcado true em handleCloseCloudLive antes do updateDoc,
+          // ctxIsClosingLiveRef é marcado true em handleCloseCloudLive antes do updateDoc,
           // garantindo que o owner não ignore o próprio sinal de encerramento.
-          if (thisDeviceIsActiveOwner && !isClosingLiveRef.current) {
+          if (thisDeviceIsActiveOwner && !ctxIsClosingLiveRef.current) {
             console.log("[Sync] isLiveClosed: true ignorado — owner ativo local, provável artefato de reload.");
             return;
           }
           // Encerramento intencional confirmado — reset do ref.
-          isClosingLiveRef.current = false;
+          ctxIsClosingLiveRef.current = false;
 
           console.log("[Sync] Live fechada detected!");
-          setCloudLiveExists(false);
+          ctxSetCloudLiveExists(false);
           setGameState(prev => {
             if (!prev) return null;
             return { ...prev, isMirroringActive: false, isLiveClosed: true, isConfirmedFinished: cloudData.isConfirmedFinished || prev.isConfirmedFinished };
@@ -1142,13 +1162,13 @@ const App: React.FC = () => {
           return;
         }
 
-        setCloudLiveExists(true);
+        ctxSetCloudLiveExists(true);
         if (cloudData.commandOwnerId !== deviceId) {
           // Grace period: se este device acabou de assumir o controle (últimos 15s),
           // ignora snapshots que ainda não refletem o novo commandOwnerId — são writes
           // intermediários chegando fora de ordem (Write 1 chegou, Write 3 ainda não).
           // Sobrescrever o gameState aqui reverteria o handleControlLive.
-          const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
+          const justTookControl = (Date.now() - ctxTookControlAtRef.current) < 15000;
           if (justTookControl) {
             console.log("[Sync] Snapshot com commandOwnerId antigo ignorado — grace period pós-takeControl.");
             return;
@@ -1168,7 +1188,7 @@ const App: React.FC = () => {
           const liveAlreadyActive = currentGs?.isMirroringActive === true;
           if (controllerLeft && thisDeviceIsOwner && liveAlreadyActive) {
             console.log("[Sync] commandOwnerId liberado pelo controller — ownerDevice reassumindo controle.");
-            tookControlAtRef.current = Date.now();
+            ctxTookControlAtRef.current = Date.now();
             const db2 = getDb();
             if (db2) {
               updateDoc(doc(db2, "live_matches", listenPin), {
@@ -1195,7 +1215,7 @@ const App: React.FC = () => {
           // Se este device era o controlador antes e agora não é mais:
           // marca o momento e notifica com um toast simples (sem modal bloqueante).
           if (currentGs?.commandOwnerId === deviceId) {
-            lostControlAtRef.current = Date.now();
+            ctxLostControlAtRef.current = Date.now();
             const newControllerLabel = cloudData.commandOwner || 'outro dispositivo';
             // Notificação leve auto-dismiss (2s) — sem botão de confirmação
             setModalConfig({ title: "Controle transferido", message: `${newControllerLabel} assumiu o controle da partida.`, variant: 'info', onConfirm: () => setModalConfig(null) });
@@ -1211,8 +1231,8 @@ const App: React.FC = () => {
             const p2Scored = cloudData.p2.games > prevGs.p2.games || (cloudData.p2.games === prevGs.p2.games && cloudData.p2.score !== prevGs.p2.score);
             // seq = índice do último ponto no pointHistory (igual ao número visível no Firestore)
             const pointSeq = cloudData.pointHistory?.length ?? 0;
-            if (p1Scored && !p2Scored) setFbSyncStatus({ team: 1, seq: pointSeq, isObserver: true });
-            else if (p2Scored && !p1Scored) setFbSyncStatus({ team: 2, seq: pointSeq, isObserver: true });
+            if (p1Scored && !p2Scored) ctxSetFbSyncStatus({ team: 1, seq: pointSeq, isObserver: true });
+            else if (p2Scored && !p1Scored) ctxSetFbSyncStatus({ team: 2, seq: pointSeq, isObserver: true });
           }
 
           setGameState(prev => {
@@ -1304,9 +1324,9 @@ const App: React.FC = () => {
           });
         }
         // Sempre limpa — independente de wasActiveLocally
-        isClosingLiveRef.current = false;
-        setCloudLiveExists(false);
-        setActiveLives([]);
+        ctxIsClosingLiveRef.current = false;
+        ctxSetCloudLiveExists(false);
+        ctxSetActiveLives([]);
         setGameState(prev => {
           if (!prev) return null;
           return { ...prev, isMirroringActive: false, isLiveClosed: true };
@@ -1399,14 +1419,14 @@ const App: React.FC = () => {
     
     const subscribeToLives = () => {
       if (!navigator.onLine) {
-        setActiveLives([]);
+        ctxSetActiveLives([]);
         return () => {};
       }
       const q = query(collection(db, "live_matches"), where("isLiveClosed", "==", false));
       return onSnapshot(q, (snap) => {
         const lives: GameState[] = [];
         snap.forEach(d => lives.push(d.data() as GameState));
-        setActiveLives(lives);
+        ctxSetActiveLives(lives);
       }, (error) => {
         console.error("Live listener error:", error);
       });
@@ -1436,7 +1456,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const hasAnyLive = activeLives.length > 0;
-    setCloudLiveExists(hasAnyLive);
+    ctxSetCloudLiveExists(hasAnyLive);
 
     // Proteção contra latência do Firebase: quando activeLives fica vazio
     // momentaneamente (ex: reload do app, reconexão), aguardamos 3s antes
@@ -1444,11 +1464,11 @@ const App: React.FC = () => {
     // Se activeLives voltar a ter entradas dentro desse tempo, o timer é cancelado.
     // Guard extra: se este device acabou de assumir o controle (grace period de 15s),
     // não desativa — o Firebase ainda pode estar propagando o novo commandOwnerId.
-    const justTookControlRecently = (Date.now() - tookControlAtRef.current) < 15000;
+    const justTookControlRecently = (Date.now() - ctxTookControlAtRef.current) < 15000;
     if (!hasAnyLive && gameState?.isMirroringActive && !justTookControlRecently) {
       const debounceTimer = setTimeout(() => {
         // Re-verifica o grace period dentro do timeout — pode ter assumido controle nesse intervalo
-        if ((Date.now() - tookControlAtRef.current) < 15000) return;
+        if ((Date.now() - ctxTookControlAtRef.current) < 15000) return;
         setGameState(prev => {
           if (!prev || !prev.isMirroringActive) return prev;
           return { ...prev, isMirroringActive: false };
@@ -1530,7 +1550,7 @@ const App: React.FC = () => {
     if (thisDeviceIsController) return;
 
     // Grace period pós-takeControl
-    const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
+    const justTookControl = (Date.now() - ctxTookControlAtRef.current) < 15000;
     if (justTookControl) return;
 
     if (activeLives.length > 0) {
@@ -1724,7 +1744,7 @@ const App: React.FC = () => {
             // device como controller, ou se acabou de assumir (grace period).
             const isConfirmedControllerInCloud = activeLives.some(l => l.commandOwnerId === deviceId);
             const isConfirmedControllerLocal = isThisDeviceController;
-            const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
+            const justTookControl = (Date.now() - ctxTookControlAtRef.current) < 15000;
             const controllerGuardOk = isConfirmedControllerInCloud || isConfirmedControllerLocal || justTookControl;
 
             // Owner sempre pode escrever mudanças de configuração/regras,
@@ -1817,18 +1837,18 @@ const App: React.FC = () => {
 
                     // FB badge — detecta qual time marcou para exibir indicador verde no controller
                     const curScoreKey = `${gameState.p1.score}_${gameState.p1.games}_${gameState.p2.score}_${gameState.p2.games}`;
-                    if (isMatchStateChange && lastFbScoreKeyRef.current && lastFbScoreKeyRef.current !== curScoreKey) {
-                      const parts = lastFbScoreKeyRef.current.split('_');
+                    if (isMatchStateChange && ctxLastFbScoreKeyRef.current && ctxLastFbScoreKeyRef.current !== curScoreKey) {
+                      const parts = ctxLastFbScoreKeyRef.current.split('_');
                       const prevP1Games = parseInt(parts[1]);
                       const prevP2Games = parseInt(parts[3]);
                       const p1Scored = gameState.p1.games > prevP1Games || (gameState.p1.games === prevP1Games && gameState.p1.score !== parts[0]);
                       const p2Scored = gameState.p2.games > prevP2Games || (gameState.p2.games === prevP2Games && gameState.p2.score !== parts[2]);
                       // seq = índice do último ponto no pointHistory (igual ao número visível no Firestore)
                       const pointSeq = gameState.pointHistory?.length ?? 0;
-                      if (p1Scored && !p2Scored) setFbSyncStatus({ team: 1, seq: pointSeq, isObserver: false });
-                      else if (p2Scored && !p1Scored) setFbSyncStatus({ team: 2, seq: pointSeq, isObserver: false });
+                      if (p1Scored && !p2Scored) ctxSetFbSyncStatus({ team: 1, seq: pointSeq, isObserver: false });
+                      else if (p2Scored && !p1Scored) ctxSetFbSyncStatus({ team: 2, seq: pointSeq, isObserver: false });
                     }
-                    lastFbScoreKeyRef.current = curScoreKey;
+                    ctxLastFbScoreKeyRef.current = curScoreKey;
 
                     // T4.1 — Write 2 (presença): atualiza só o registro deste device via field-path.
                     // Não sobrescreve os registros de outros devices — elimina race condition.
@@ -1858,9 +1878,9 @@ const App: React.FC = () => {
   // ── Auto-clear do fbSyncStatus após 2.5s ──────────────────────────────────
   useEffect(() => {
     if (!fbSyncStatus) return;
-    if (fbSyncTimerRef.current) clearTimeout(fbSyncTimerRef.current);
-    fbSyncTimerRef.current = setTimeout(() => setFbSyncStatus(null), 2500);
-    return () => { if (fbSyncTimerRef.current) clearTimeout(fbSyncTimerRef.current); };
+    if (ctxFbSyncTimerRef.current) clearTimeout(ctxFbSyncTimerRef.current);
+    ctxFbSyncTimerRef.current = setTimeout(() => ctxSetFbSyncStatus(null), 2500);
+    return () => { if (ctxFbSyncTimerRef.current) clearTimeout(ctxFbSyncTimerRef.current); };
   }, [fbSyncStatus]);
 
   // ── Observer: ativa modo placar automaticamente ao entrar na live ────────────
@@ -1868,7 +1888,7 @@ const App: React.FC = () => {
   //   1. cloudLiveExists confirmado — evita ativar durante latência do onSnapshot
   //   2. Não é ownerDeviceId de nenhuma live — evita ativar no owner durante flutuação de livePapel
   //   3. Não é controller ativo — evita sobrescrever isScoreboardMode:false de quem controla
-  //   4. hasAutoEnabledScoreboardRef — evita dupla ativação na mesma sessão
+  //   4. ctxHasAutoEnabledScoreboardRef — evita dupla ativação na mesma sessão
   useEffect(() => {
     const thisDeviceIsOwnerOfAnyLive = activeLives.some(l => l.ownerDeviceId === deviceId);
     const thisDeviceIsActiveController = activeLives.some(l => l.commandOwnerId === deviceId);
@@ -1876,9 +1896,9 @@ const App: React.FC = () => {
       !thisDeviceIsOwnerOfAnyLive &&
       !thisDeviceIsActiveController &&
       cloudLiveExists &&
-      !hasAutoEnabledScoreboardRef.current
+      !ctxHasAutoEnabledScoreboardRef.current
     ) {
-      hasAutoEnabledScoreboardRef.current = true;
+      ctxHasAutoEnabledScoreboardRef.current = true;
       setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
       setGameState(prev => {
         if (!prev) return prev;
@@ -1886,7 +1906,7 @@ const App: React.FC = () => {
       });
     }
     // Reset do ref: so quando device passa a ser owner ou controller ativo
-    if (thisDeviceIsOwnerOfAnyLive || thisDeviceIsActiveController) hasAutoEnabledScoreboardRef.current = false;
+    if (thisDeviceIsOwnerOfAnyLive || thisDeviceIsActiveController) ctxHasAutoEnabledScoreboardRef.current = false;
   }, [cloudLiveExists, activeLives, deviceId]);
 
   const [historyStack, setHistoryStack] = useState<GameState[]>([]);
@@ -1901,7 +1921,7 @@ const App: React.FC = () => {
     setGameState(state);
     setHistoryStack([state]);
     historyStackRef.current = [state];
-    setLiveLogs([]); // Zera logs ao iniciar nova partida
+    ctxSetLiveLogs([]); // Zera logs ao iniciar nova partida
     setVoiceLogs([]); // Zera voice logs ao iniciar nova partida
     try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(state)); } catch {}
   }, []);
@@ -2382,7 +2402,7 @@ const App: React.FC = () => {
     // Correção 1: sinaliza encerramento intencional ANTES do updateDoc.
     // O guard do onSnapshot usa este ref para não ignorar o isLiveClosed: true
     // que o próprio owner vai receber de volta como eco do Firestore.
-    isClosingLiveRef.current = true;
+    ctxIsClosingLiveRef.current = true;
 
     // Correção 2: desliga isMirroringActive localmente de forma SÍNCRONA,
     // antes de qualquer await. Isso impede que o loop de sync periódico
@@ -2393,11 +2413,11 @@ const App: React.FC = () => {
     // Correção 3 (timeout de segurança): se após 6s o cloudLiveExists ainda for true
     // (ex: snapshot não chegou por falha de rede parcial), força o encerramento local.
     const safetyTimer = setTimeout(() => {
-      isClosingLiveRef.current = false;
-      setCloudLiveExists(false);
-      setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
+      ctxIsClosingLiveRef.current = false;
+      ctxSetCloudLiveExists(false);
+      ctxSetActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
       try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
-      setShowLiveControlOverlay(false); setConfirmDeleteLive(false);
+      setShowLiveControlOverlay(false);
     }, 6000);
 
     try {
@@ -2414,15 +2434,15 @@ const App: React.FC = () => {
       setTimeout(() => deleteDoc(liveRef).catch(() => {}), 4000);
 
       clearTimeout(safetyTimer);
-      isClosingLiveRef.current = false;
-      setCloudLiveExists(false); setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
+      ctxIsClosingLiveRef.current = false;
+      ctxSetCloudLiveExists(false); ctxSetActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
       try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
-      setShowLiveControlOverlay(false); setConfirmDeleteLive(false); setCurrentScreen('settings');
+      setShowLiveControlOverlay(false); setCurrentScreen('settings');
       setModalConfig({ title: "Transmissão encerrada", message: "Todos os participantes foram desconectados.", variant: 'success', icon: <CheckCircle className="text-green-500 w-16 h-16" />, onConfirm: () => setModalConfig(null) });
       setTimeout(() => setModalConfig(null), 3000);
     } catch (_e) { 
       clearTimeout(safetyTimer);
-      isClosingLiveRef.current = false;
+      ctxIsClosingLiveRef.current = false;
       // Reverte o estado local se o Firestore rejeitou o encerramento
       setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: true, isLiveClosed: false }; });
       console.error("Erro ao encerrar live:", _e);
@@ -2558,7 +2578,7 @@ const App: React.FC = () => {
             // Registra este device como novo controller (igual ao Write 3)
             localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() };
 
-            tookControlAtRef.current = Date.now();
+            ctxTookControlAtRef.current = Date.now();
             // Controller sempre usa ScoreboardScreen (isScoreboardMode: false).
             // Relógio (isWatchMode) é preservado — tem prioridade na renderização e não interfere.
             const settingsAsController = { ...syncedSettings, isScoreboardMode: false };
@@ -2576,7 +2596,7 @@ const App: React.FC = () => {
             // O device que perdeu o controle será notificado via onSnapshot.
           }
         } else {
-          setCloudLiveExists(false);
+          ctxSetCloudLiveExists(false);
           setShowLiveControlOverlay(false);
           setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
           setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
@@ -2670,7 +2690,7 @@ const App: React.FC = () => {
           overlayAcceptedRef.current = pinUpper; // impede que o modal reabra após setCurrentScreen
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
-          if (!targetPin) setCloudLiveExists(false);
+          if (!targetPin) ctxSetCloudLiveExists(false);
           setShowLiveControlOverlay(false);
           setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
           setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
@@ -2767,7 +2787,7 @@ const App: React.FC = () => {
         judgeNickname: null,
         judge: null
       });
-      setConfirmDeleteJudge(false);
+      setShowLiveControlOverlay(false);
       setModalConfig({ title: "Sucesso", message: "Juiz removido.", onConfirm: () => setModalConfig(null) });
     } catch (_e) {
       setModalConfig({ title: "Erro", message: "Erro ao remover juiz.", onConfirm: () => setModalConfig(null) });
@@ -2831,7 +2851,7 @@ const App: React.FC = () => {
         }
       }
     }
-    setGameState(null); setUserProfile({ name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false }); setMatchSettings({ ...DEFAULT_TENNIS_SETTINGS, isHistoryEnabled: true }); setMatchHistory([]); setPartners([]); setCloudLiveExists(false); setIsWaitingSync(false); setActiveEvent(null); setRegisteredEvents([]);
+    setGameState(null); setUserProfile({ name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false }); setMatchSettings({ ...DEFAULT_TENNIS_SETTINGS, isHistoryEnabled: true }); setMatchHistory([]); setPartners([]); ctxSetCloudLiveExists(false); setIsWaitingSync(false); setActiveEvent(null); setRegisteredEvents([]);
     try {
       localStorage.removeItem('myPlacarUserProfile'); localStorage.removeItem('myPlacarActiveGameState'); localStorage.removeItem('myPlacarHistory'); localStorage.removeItem('myPlacarPartners'); localStorage.removeItem('myPlacarAssets'); localStorage.removeItem('myPlacarSettings'); localStorage.removeItem('myPlacar_DataVersion'); localStorage.removeItem('myPlacarPendingReferral'); localStorage.removeItem('myPlacarPendingReferralPin'); localStorage.removeItem('myPlacarPlayerQueue'); localStorage.removeItem('myPlacarActiveEvent'); localStorage.removeItem('myPlacarRegisteredEvents');
       Object.keys(localStorage).forEach(key => { if (key.startsWith('myPlacar_SavedSettings_')) localStorage.removeItem(key); });
@@ -3188,13 +3208,13 @@ const App: React.FC = () => {
         }
 
         startGame(resetState);
-        setLiveLogs([]);
+        ctxSetLiveLogs([]);
         setVoiceLogs([]);
         setModalConfig(null);
       },
       onCancel: () => setModalConfig(null)
     });
-  }, [gameState, startGame, setLiveLogs, setVoiceLogs]);
+  }, [gameState, startGame, ctxSetLiveLogs, setVoiceLogs]);
 
   // ── Sincronizar Placar ────────────────────────────────────────────────────
   // Controller (owner/judge): faz push do gameState atual para o Firestore.
@@ -3236,7 +3256,7 @@ const App: React.FC = () => {
       }
 
       // Registra na cronologia da partida
-      setLiveLogs(prev => {
+      ctxSetLiveLogs(prev => {
         const entry: LiveLogEntry = {
           id: Math.random().toString(36).substr(2, 9),
           time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
@@ -3252,10 +3272,35 @@ const App: React.FC = () => {
     } catch (_e) {
       setModalConfig({ title: "Erro ao sincronizar", message: "Não foi possível sincronizar o placar. Tente novamente.", onConfirm: () => setModalConfig(null) });
     }
-  }, [gameState, userProfile.pin, activeLives, isOriginalOwner, deviceId, setLiveLogs]);
+  }, [gameState, userProfile.pin, activeLives, isOriginalOwner, deviceId, ctxSetLiveLogs]);
 
   return (
-    <ErrorBoundary>
+      <LiveProvider
+        deviceId={deviceId}
+        userProfile={userProfile}
+        gameState={gameState}
+        gameStateRef={gameStateRef}
+      >
+        {/* LiveBridge: chama useLive() dentro do provider e injeta os valores */}
+        <LiveBridge onReady={handleLiveReady} onUpdate={handleLiveUpdate} />
+      {/* ─── GameProvider (Fase 2) ──────────────────────────────────────────────
+          Estados declarados no AppInner são repassados como props.
+          Nenhum consumidor usa o contexto ainda — isso ocorre a partir da Fase 3.
+          Fase 4: os useState/useRef serão movidos para dentro do provider
+          e estas props serão removidas. */}
+      <GameProvider
+        gameState={gameState}
+        setGameState={setGameState}
+        gameStateRef={gameStateRef}
+        matchSettings={matchSettings}
+        setMatchSettings={setMatchSettings}
+        userProfile={userProfile}
+        setUserProfile={setUserProfile}
+        matchHistory={matchHistory}
+        matchHistoryRef={matchHistoryRef}
+        partners={partners}
+        setPartners={setPartners}
+      >
       <div className="min-h-screen w-full bg-gray-50 flex flex-col">
         
       <NavigationDrawer 
@@ -3306,96 +3351,15 @@ const App: React.FC = () => {
         </div>
       )}
       {showLiveControlOverlay && (
-        <div className="fixed inset-0 z-[100005] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
-           <div className="bg-white/90 backdrop-blur-2xl rounded-[3rem] p-8 w-full max-sm shadow-2xl border border-white/50 flex flex-col items-center gap-6 animate-in zoom-in duration-300 relative">
-              <button onClick={() => { setShowLiveControlOverlay(false); setConfirmDeleteLive(false); setConfirmDeleteJudge(false); }} className="absolute top-6 right-6 p-2 text-black hover:bg-gray-100 rounded-full transition-colors active:scale-90"><X size={28} strokeWidth={3} /></button>
-              <LiveIndicator variant="card" className="scale-125 mb-2" role={indicatorRole} />
-              
-              {!confirmDeleteLive && !confirmDeleteJudge ? (
-                <>
-                  <div className="text-center space-y-2">
-                    <h3 className="text-xl font-black text-black tracking-tight leading-tight">
-                      {isCurrentController ? 'Você está no controle' : 'Live em andamento'}
-                    </h3>
-                    <p className="text-xs font-bold text-slate-500">
-                      {livePapel === 'owner' ? 'Proprietário da live' : livePapel === 'judge' ? 'Juiz convidado' : 'Observador'}
-                      {liveStatus === 'controller' ? ' · Controlando' : ' · Assistindo'}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col w-full gap-3">
-
-                    {/* ── Sua participação ───────────────────────────────── */}
-                    {/* A2: R2 — qualquer participante pode assumir o controle */}
-                    {!isCurrentController && (
-                      <button onClick={handleControlLive} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-base shadow-xl shadow-blue-100 active:scale-95 transition-all flex items-center justify-center gap-3">
-                        {livePapel === 'owner' ? <Crown size={24} /> : livePapel === 'judge' ? <UserCheck size={24} /> : <Eye size={24} />} Controlar
-                      </button>
-                    )}
-
-                    {/* ── Sincronizar Placar — disponível para todos os participantes ── */}
-                    <button
-                      onClick={handleSyncScoreboard}
-                      className="w-full py-4 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl font-black text-sm active:scale-95 flex items-center justify-center gap-2 transition-all hover:bg-emerald-100"
-                    >
-                      <RefreshCw size={18} /> Sincronizar Placar
-                    </button>
-
-                    {/* ── Gestão (só proprietário) ───────────────────────── */}
-                    {livePapel === 'owner' && (
-                      <div className="w-full mt-2 pt-4 border-t border-gray-100 space-y-3">
-                        <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase px-1">Proprietário</p>
-
-                        {/* Juiz */}
-                        {!!(gameState?.judge?.pin || gameState?.judgePin) && (
-                          <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs font-black text-black">Juiz</span>
-                              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black ${isJudgeOnline ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
-                                <div className={`w-1 h-1 rounded-full ${isJudgeOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
-                                {isJudgeOnline ? 'Online' : 'Offline'}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                      </div>
-                    )}
-
-                    {/* ── Encerrar (owner controlando OU controller ativo) — R11 ──────────── */}
-                    {(livePapel === 'owner' && isCurrentController) || (!isOriginalOwner && isCurrentController) ? (
-                      <button onClick={() => setConfirmDeleteLive(true)} className="w-full py-4 text-red-500 font-black text-xs active:scale-95 flex items-center justify-center gap-2 mt-1">
-                        <Trash2 size={16} /> Encerrar transmissão
-                      </button>
-                    ) : null}
-
-                  </div>
-                </>
-              ) : confirmDeleteLive ? (
-                <>
-                  <div className="text-center space-y-2">
-                    <h3 className="text-xl font-black text-red-500 tracking-tight leading-tight">Encerrar a live?</h3>
-                    <p className="text-xs font-bold text-slate-500">Todos os participantes perderão a conexão.</p>
-                  </div>
-                  <div className="flex flex-col w-full gap-3">
-                    <button onClick={handleCloseCloudLive} className="w-full py-5 bg-red-600 text-white rounded-3xl font-black text-base shadow-xl shadow-red-200 active:scale-95 transition-all">Confirmar encerramento</button>
-                    <button onClick={() => setConfirmDeleteLive(false)} className="w-full py-4 text-slate-400 font-bold text-xs tracking-widest">Cancelar</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="text-center space-y-2">
-                    <h3 className="text-xl font-black text-red-500 tracking-tight leading-tight">Remover juiz?</h3>
-                    <p className="text-xs font-bold text-slate-500">O juiz perderá o acesso de controle à partida.</p>
-                  </div>
-                  <div className="flex flex-col w-full gap-3">
-                    <button onClick={handleDeleteJudge} className="w-full py-5 bg-red-600 text-white rounded-3xl font-black text-base shadow-xl shadow-red-200 active:scale-95 transition-all">Confirmar remoção</button>
-                    <button onClick={() => setConfirmDeleteJudge(false)} className="w-full py-4 text-slate-400 font-bold text-xs tracking-widest">Cancelar</button>
-                  </div>
-                </>
-              )}
-           </div>
-        </div>
+        <LiveControlOverlay
+          gameState={gameState}
+          onClose={() => { setShowLiveControlOverlay(false); setInitialConfirmDeleteJudge(false); }}
+          onControlLive={handleControlLive}
+          onSyncScoreboard={handleSyncScoreboard}
+          onCloseCloudLive={handleCloseCloudLive}
+          onDeleteJudge={handleDeleteJudge}
+          initialConfirmDeleteJudge={initialConfirmDeleteJudge}
+        />
       )}
       {activeCloudMatch && (
         <div className="fixed top-20 left-4 right-4 z-[999] bg-blue-600 text-white rounded-[2rem] p-5 shadow-2xl animate-in slide-in-from-top-10 flex flex-col gap-3">
@@ -3452,11 +3416,7 @@ const App: React.FC = () => {
           isSettingsInicialSaved={false}
           isSettingsRegrasSaved={false}
           isAdmin={false}
-          isOriginalOwner={false}
-          livePapel="observer"
-          cloudLiveExists={cloudLiveExists}
           userProfile={userProfile}
-          fbSyncStatus={fbSyncStatus}
         />
       )}
       {currentScreen === 'auth' && <AuthScreen appUrl={appUrl} onAuthSuccess={(p, s) => { 
@@ -3575,18 +3535,16 @@ const App: React.FC = () => {
         />
       )}
       {currentScreen === 'scoreboard' && new URLSearchParams(window.location.search).get('viewMode') !== 'scoreboard' && (gameState || isWaitingSync) && <ScoreboardScreen 
-        fbSyncStatus={fbSyncStatus}
         appUrl={appUrl} 
         gameState={gameState!} 
         onScoreUpdate={handleScoreUpdate}
-        isOriginalOwner={isOriginalOwner}
         judgePinInput={judgePinInput}
         setJudgePinInput={setJudgePinInput}
         isSearchingJudgePin={isSearchingJudgePin}
         judgeNicknameLookup={judgeNicknameLookup}
         isSavingJudge={isSavingJudge}
         onAddJudge={handleAddJudge}
-        onDeleteJudge={() => { setConfirmDeleteJudge(true); setShowLiveControlOverlay(true); }}
+        onDeleteJudge={() => { setInitialConfirmDeleteJudge(true); setShowLiveControlOverlay(true); }}
         isJudgeOnline={isJudgeOnline}
         onSelectJudgeFromPartners={() => { setIsSelectingJudge(true); setCurrentScreen('partners'); }} onUndo={() => {         if (!gameState || !isCommandOwner) return;
         const stack = historyStackRef.current;
@@ -3724,8 +3682,8 @@ const App: React.FC = () => {
           } catch {}
         }
         setGameState(p => p ? {...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false, isLiveClosed: true} : null);
-        setCloudLiveExists(false);
-        setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
+        ctxSetCloudLiveExists(false);
+        ctxSetActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
         try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {};
       }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onDeleteLive={() => {
               setModalConfig({
@@ -3736,14 +3694,59 @@ const App: React.FC = () => {
                 onConfirm: async () => { setModalConfig(null); await handleCloseCloudLive(); },
                 onCancel: () => setModalConfig(null)
               });
-            }} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} cloudLiveExists={cloudLiveExists} livePapel={livePapel} isController={isActiveController} indicatorRole={indicatorRole} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} onToggleScoreboardMode={() => { setMatchSettings(prev => ({ ...prev, isScoreboardMode: !prev.isScoreboardMode })); setGameState(p => p ? { ...p, matchConfig: { ...p.matchConfig, isScoreboardMode: !p.matchConfig.isScoreboardMode } } : null); }} liveLogs={liveLogs} setLiveLogs={setLiveLogs} voiceLogs={voiceLogs} setVoiceLogs={setVoiceLogs} />}
+            }} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} onToggleScoreboardMode={() => { setMatchSettings(prev => ({ ...prev, isScoreboardMode: !prev.isScoreboardMode })); setGameState(p => p ? { ...p, matchConfig: { ...p.matchConfig, isScoreboardMode: !p.matchConfig.isScoreboardMode } } : null); }} voiceLogs={voiceLogs} setVoiceLogs={setVoiceLogs} />}
       {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as unknown as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={handleAddTournamentPartner} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
       {currentScreen === 'communications' && <CommunicationsScreen userProfile={userProfile} onBack={() => setCurrentScreen('settings')} />}
     </div>
-    </ErrorBoundary>
+      </GameProvider>
+      </LiveProvider>
   );
 };
+
+// ─── LiveBridge ───────────────────────────────────────────────────────────────
+// Componente filho do <LiveProvider>. Chama useLive() e repassa os valores ao
+// AppInner via dois callbacks:
+//   onReady  — chamado 1x na montagem: injeta setters, refs e valores iniciais.
+//   onUpdate — chamado a cada render: sincroniza valores computados reativos
+//              (livePapel, isActiveController, etc.) com os estados espelho locais.
+interface LiveBridgeProps {
+  onReady: (ctx: ReturnType<typeof useLive>) => void;
+  onUpdate: (ctx: ReturnType<typeof useLive>) => void;
+}
+const LiveBridge: React.FC<LiveBridgeProps> = ({ onReady, onUpdate }) => {
+  const ctx = useLive();
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  // onReady: apenas na montagem — injeta setters/refs estáveis
+  useEffect(() => {
+    onReadyRef.current(ctx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // onUpdate: a cada render do bridge (= a cada mudança no contexto)
+  // Chamado via useEffect com ctx nas deps para evitar updates síncronos durante render
+  useEffect(() => {
+    onUpdateRef.current(ctx);
+  // Os valores computados (livePapel, isActiveController, etc.) mudam junto com ctx
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.livePapel, ctx.liveStatus, ctx.isOriginalOwner, ctx.isActiveController,
+      ctx.isCurrentController, ctx.isCommandOwner, ctx.indicatorRole,
+      ctx.isJudgeOnline, ctx.isOwnerOnline, ctx.resolveTargetPin,
+      ctx.activeLives, ctx.cloudLiveExists, ctx.liveLogs, ctx.fbSyncStatus]);
+  return null;
+};
+
+// ─── App (root mínimo) ────────────────────────────────────────────────────────
+// Só monta o ErrorBoundary e o AppInner. O <LiveProvider> está dentro do
+// AppInner para que os estados (gameState, userProfile, etc.) já existam
+// quando o provider for montado.
+const App: React.FC = () => (
+  <ErrorBoundary>
+    <AppInner />
+  </ErrorBoundary>
+);
 
 export default App;
