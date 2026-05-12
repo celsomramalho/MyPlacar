@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, orderBy, query, QueryConstraint, where, writeBatch, type Firestore } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getCountFromServer, getDocs, orderBy, query, QueryConstraint, where, writeBatch, type Firestore } from 'firebase/firestore';
 import type { MatchHistoryItem } from '@modules/history';
 
 const matchesCollection = (db: Firestore) => collection(db, 'matches');
@@ -11,6 +11,15 @@ export const countCloudMatches = async (
   localIds: Set<string>,
   excludeIds: Set<string> = new Set(),
 ): Promise<number> => {
+  // Caso simples: não há nada local para subtrair — usa getCountFromServer
+  // que retorna apenas um número, sem baixar documentos. Muito mais rápido
+  // em rede móvel e não é bloqueado por auth ainda pendente no celular.
+  if (localIds.size === 0 && excludeIds.size === 0) {
+    const snap = await getCountFromServer(query(matchesCollection(db), ownerEmailQuery(ownerEmail)));
+    return snap.data().count;
+  }
+
+  // Caso com locais: precisa dos IDs para subtrair — faz o getDocs normal.
   const snap = await getDocs(query(matchesCollection(db), ownerEmailQuery(ownerEmail)));
   let count = 0;
   snap.forEach((docSnap) => {

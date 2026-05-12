@@ -1997,10 +1997,26 @@ const AppInner: React.FC = () => {
         history: matchHistoryRef.current,
         excludeIds,
       }));
-    } catch {}
+    } catch (e) {
+      console.warn('[sync] fetchCloudHistoryCount falhou:', e);
+    }
   }, [userProfile.email]);
 
-  useEffect(() => { if (authReady && userProfile.email) fetchCloudMatchesCount(true); }, [authReady, userProfile.email, matchHistory.length, fetchCloudMatchesCount]);
+  // Dispara apenas após o Firebase Auth ter restaurado a sessão (authReady),
+  // evitando que o getDocs seja bloqueado por request.auth == null no celular.
+  useEffect(() => {
+    if (authReady && userProfile.email) fetchCloudMatchesCount(true);
+  }, [authReady, userProfile.email, matchHistory.length, fetchCloudMatchesCount]);
+
+  // Retry: quando authReady vira true e o count ainda está em 0, tenta novamente.
+  // Cobre o caso em que o fetch disparou antes do Auth estar pronto e foi bloqueado.
+  useEffect(() => {
+    if (!authReady || !userProfile.email || !navigator.onLine) return;
+    if (cloudMatchesCount === 0) {
+      const timer = setTimeout(() => fetchCloudMatchesCount(true), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [authReady, userProfile.email, cloudMatchesCount, fetchCloudMatchesCount]);
 
   const syncHistoryToFirebase = useCallback(async (forcedHistory?: MatchHistoryItem[], forceAll = false) => {
     if (!navigator.onLine) return;
@@ -2028,7 +2044,9 @@ const AppInner: React.FC = () => {
       if (syncedCount === 0) { fetchCloudMatchesCount(true); return; }
       persistHistory(updatedHistory);
       await fetchCloudMatchesCount(true);
-    } catch {} finally { 
+    } catch (e) {
+      console.warn('[sync] syncHistoryToFirebase falhou:', e);
+    } finally { 
       clearTimeout(safetyTimeout);
       setIsSyncing(false); 
     }
@@ -2060,11 +2078,15 @@ const AppInner: React.FC = () => {
         history: matchHistoryRef.current,
       });
       if (downloadedCount > 0) {
-        setCloudMatchesCount(0);
         persistHistory(updatedHistory);
       }
-    } catch {} finally { setIsDownloading(false); }
-  }, [userProfile.email, persistHistory]);
+      // Sempre recalcula o count após tentativa de download —
+      // evita count zerado manualmente quando o download é parcial ou vazio.
+      await fetchCloudMatchesCount(true);
+    } catch (e) {
+      console.warn('[sync] downloadHistoryFromFirebase falhou:', e);
+    } finally { setIsDownloading(false); }
+  }, [userProfile.email, persistHistory, fetchCloudMatchesCount]);
 
   const canStartMatch = useMemo(() => {
     const s = matchSettings;

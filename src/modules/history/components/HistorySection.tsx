@@ -65,6 +65,8 @@ export const HistorySection: React.FC<Props> = ({
   const filtered = useMemo(() => filterHistory(history, searchQuery), [history, searchQuery]);
   const realUnsyncedCount = useMemo(() => history.filter((item) => !item.isSynced).length, [history]);
   const syncedLocalCount = useMemo(() => history.filter((item) => item.isSynced).length, [history]);
+  // totalCloudCount: itens locais sincronizados + itens na nuvem que ainda faltam baixar.
+  // cloudMatchesCount representa exatamente o delta (na nuvem mas não local).
   const totalCloudCount = syncedLocalCount + cloudMatchesCount;
   const grouped = useMemo(() => groupHistoryByDate(filtered), [filtered]);
 
