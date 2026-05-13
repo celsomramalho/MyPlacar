@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, Loader2 } from 'lucide-react';
-import { Communication, UserProfile, Reply } from '../types.ts';
+import { Communication, Reply } from '../types.ts';
+import { useGame } from '@modules/game';
 import { getDb } from '@infra/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Button } from '../components/Button.tsx';
 
 interface Props {
-  userProfile: UserProfile;
   onBack: () => void;
 }
 
-export const CommunicationsScreen: React.FC<Props> = ({ userProfile, onBack }) => {
+export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
+  const { userProfile } = useGame();
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [replyText, setReplyText] = useState<Record<string, string>>({});

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
-import { MatchSettings, SportType, GameState, TournamentEvent, UserProfile, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../types';
+import { MatchSettings, SportType, GameState, TournamentEvent, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../types';
+import { useGame } from '@modules/game';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants';
 import { applyGoldenRule } from '../utils/formatters';
@@ -34,7 +35,6 @@ interface Props {
   onJoinTournament?: () => void;
   onExitTournament?: () => void;
   onOpenMenu?: () => void;
-  userProfile: UserProfile;
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
   onVersionTap?: () => void;
@@ -56,7 +56,8 @@ type DbSport = {
   isActive: boolean;
 };
 
-export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, isController, onOpenMenu, userProfile, isOfflineMode, onExitOffline, onHome }) => {
+export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, isController, onOpenMenu, isOfflineMode, onExitOffline, onHome }) => {
+  const { userProfile } = useGame();
   const [activeGroupId, setActiveGroupId] = useState<string>(() => (SPORT_LIST.find(s => s.id === settings.sportType)?.group as string) || 'raquetes');
   const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
   const [dbSports, setDbSports] = useState<DbSport[]>([]);

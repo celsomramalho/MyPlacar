@@ -3,7 +3,8 @@ import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, L
 import { addPartnerToState, createQueuePartner, createReferralPartner, createSelfPartner, guessPartnerGender, hasPartnerWithPin, mergePartnersByPin, normalizePartnerPin, sanitizePartnersForCloud } from '@modules/partners';
 import type { Partner, QueuePlayer } from '../types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
-import { UserProfile, GameState, MatchSettings, TournamentEvent } from '../../../types'; 
+import { GameState, MatchSettings, TournamentEvent } from '../../../types'; 
+import { useGame } from '@modules/game';
 import { Input } from '../../../components/Input'; 
 import { findUserByPin, findUsersByPins, findUsersReferredByPin, getDb } from '@infra/firebase'; 
 import { getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
@@ -14,15 +15,12 @@ import { Toggle } from '../../../components/Toggle';
 import { ScoreboardIcon } from '../../../components/ScoreboardIcon'; 
 
 interface Props {
-  partners: Partner[];
-  setPartners: React.Dispatch<React.SetStateAction<Partner[]>>;
   playerQueue: QueuePlayer[];
   setPlayerQueue: React.Dispatch<React.SetStateAction<QueuePlayer[]>>;
   onBack: () => void;
   onConfirmSelection: (team1: Partner[], team2: Partner[]) => void;
   isDoubles: boolean;
   onUpdateSettings?: (settings: Partial<MatchSettings>) => void;
-  userProfile: UserProfile;
   p1Color: string;
   p2Color: string;
   onWatchLive: (pin: string) => void;
@@ -56,7 +54,8 @@ const LIGHT_BG_COLORS: Record<string, string> = {
   lilas: 'bg-violet-50', verde: 'bg-green-50', vermelho: 'bg-red-50', roxo: 'bg-purple-50',
 };
 
-export const PartnersScreen: React.FC<Props> = ({ partners, setPartners, playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, userProfile, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, matchSettings, activeEvent, appUrl, isAuthReady = false }) => {
+export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, matchSettings, activeEvent, appUrl, isAuthReady = false }) => {
+  const { partners, setPartners, userProfile } = useGame();
   const [activeTab, setActiveTab] = useState<'list' | 'queue'>('list');
   const [isShuffling, setIsShuffling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

@@ -3,12 +3,12 @@ import React from 'react';
 import { 
   X, Home, Trophy, Users, Bell, History, User, Settings, ShieldAlert, LogOut, Play, Menu, HelpCircle, User as UserIcon, Clock, Settings as SettingsIcon, MapPin, Ticket, Send, LayoutGrid
 } from 'lucide-react';
-import { UserProfile, Screen } from '../types.ts';
+import { Screen } from '../types.ts';
+import { useGame } from '@modules/game';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  userProfile: UserProfile;
   currentScreen: Screen;
   currentTab?: string;
   onNavigate: (screen: Screen, tab?: string) => void;
@@ -20,7 +20,6 @@ interface Props {
 export const NavigationDrawer: React.FC<Props> = ({ 
   isOpen, 
   onClose, 
-  userProfile, 
   currentScreen, 
   currentTab,
   onNavigate, 
@@ -28,6 +27,7 @@ export const NavigationDrawer: React.FC<Props> = ({
   isAdmin,
   canStartMatch
 }) => {
+  const { userProfile } = useGame();
   if (!isOpen) return null;
 
   const menuGroups = [

@@ -4,14 +4,15 @@ import L from 'leaflet';
 import { getDb } from '@infra/firebase';
 import { fetchAllCloudMatches } from '@infra/firebase';
 import type { MatchHistoryItem } from '../types';
+import { useGame } from '@modules/game';
 
 interface Props {
-  history: MatchHistoryItem[];
   focusMatchId: string | null;
   onBack: () => void;
 }
 
-export const LocationScreen: React.FC<Props> = ({ history, focusMatchId, onBack }) => {
+export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
+  const { matchHistory: history } = useGame();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersRef = useRef<Record<string, L.CircleMarker>>({});

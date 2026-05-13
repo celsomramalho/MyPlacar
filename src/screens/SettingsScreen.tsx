@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Partner, QueuePlayer } from '@modules/partners';
+import type { QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
 import { HistorySection } from '@modules/history';
-import { GameState, MatchSettings, UserProfile, TournamentEvent } from '../types.ts';
+import { GameState, MatchSettings, TournamentEvent } from '../types.ts';
+import { useGame } from '@modules/game';
 import { ProfileScreen } from './ProfileScreen.tsx';
 import { HelpScreen } from './HelpScreen.tsx';
 import { SettingsHeader } from './settings/SettingsHeader.tsx';
@@ -27,8 +28,6 @@ interface Props {
   activeTab: 'config' | 'history' | 'help' | 'profile';
   setActiveTab: (tab: 'config' | 'history' | 'help' | 'profile') => void;
   onViewMap: (matchId: string | null) => void;
-  userProfile: UserProfile;
-  setUserProfile: (profile: UserProfile) => void;
   onSaveProfile: () => Promise<void>;
   onLogout: () => void;
   onGoAtAdmin?: () => void;
@@ -44,7 +43,6 @@ interface Props {
   isDownloading?: boolean;
   isSyncingAll?: boolean;
   onOpenPartners?: () => void;
-  partners: Partner[];
   playerQueue: QueuePlayer[];
   onAutoRegisterPartner: (pin: string, field: string) => Promise<string | null>;
   onDeletePartners?: (ids: Set<string>) => void;
@@ -68,7 +66,8 @@ interface Props {
 }
 
 // ─── Aprovação de login do relógio ────────────────────────────────────────────
-const WatchLoginApproval: React.FC<{ userProfile: UserProfile }> = ({ userProfile }) => {
+const WatchLoginApproval: React.FC = () => {
+  const { userProfile } = useGame();
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -148,6 +147,7 @@ const WatchLoginApproval: React.FC<{ userProfile: UserProfile }> = ({ userProfil
 };
 
 export const SettingsScreen: React.FC<Props> = (props) => {
+  const { userProfile, setUserProfile } = useGame();
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
   const teamSectionRef = useRef<{ triggerStart: () => void }>(null);
   const prevTabRef = useRef(props.activeTab);
@@ -166,8 +166,8 @@ export const SettingsScreen: React.FC<Props> = (props) => {
         return (
           <>
             <ProfileScreen 
-              profile={props.userProfile} 
-              setProfile={props.setUserProfile} 
+              profile={userProfile} 
+              setProfile={setUserProfile} 
               onSave={props.onSaveProfile}
               onLogout={props.onLogout} 
               onGoAdmin={props.onGoAdmin} 
@@ -177,7 +177,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
               setSettings={props.setSettings}
               onVersionTap={props.onVersionTap}
             />
-            <WatchLoginApproval userProfile={props.userProfile} />
+            <WatchLoginApproval />
           </>
         );
       case 'history':
@@ -199,7 +199,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           />
         );
       case 'help':
-        return <HelpScreen profile={props.userProfile} onNavigateToTab={props.setActiveTab} onOpenRules={props.onOpenRules} onPlay={props.onPlayShortcut} canStartMatch={props.canStartMatch} />;
+        return <HelpScreen profile={userProfile} onNavigateToTab={props.setActiveTab} onOpenRules={props.onOpenRules} onPlay={props.onPlayShortcut} canStartMatch={props.canStartMatch} />;
       case 'config':
       default:
         return <TeamSection 
@@ -209,7 +209,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           onStartMatch={props.onStart} 
           onOpenPartners={props.onOpenPartners} 
           onAutoRegisterPartner={props.onAutoRegisterPartner}
-          userProfile={props.userProfile}
+          userProfile={userProfile}
           onJoinTournament={props.onJoinTournament}
         />;
     }

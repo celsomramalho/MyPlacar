@@ -4,7 +4,7 @@ import { ScoreboardScreen } from './screens/ScoreboardScreen.tsx';
 import { NewGameScreen } from './screens/NewGameScreen.tsx';
 import { AdminScreen } from './screens/AdminScreen.tsx';
 import { SpectatorScreen } from './screens/SpectatorScreen.tsx';
-import { LocationScreen, clearCloudHistory, createHistoryItem, downloadHistoryBatch, fetchCloudHistoryCount, getUnsyncedHistory, persistLocalHistory, removeHistoryMatches, syncHistoryBatch } from '@modules/history';
+import { LocationScreen, clearCloudHistory, createHistoryItem, downloadHistoryBatch, fetchCloudHistoryCount, getUnsyncedHistory, removeHistoryMatches, syncHistoryBatch } from '@modules/history';
 import { AuthScreen } from '@modules/auth';
 import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterPartnerByPin, createManualPartner, hasPartnerWithPin } from '@modules/partners';
 import { EventDetailScreen, TournamentsScreen, fetchRegisteredEvents, getActiveEventEntryDate, joinTournamentEvent, markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events';
@@ -31,8 +31,6 @@ import { applyGoldenRule } from './utils/formatters.ts';
 import { isWatchDevice, getDeviceType } from './utils/device.ts';
 import { findUserByPin, getDb, clearFirestoreCache, deleteCloudMatch, deleteCloudMatches } from '@infra/firebase';
 
-/** Detecta o tipo físico do dispositivo atual para gravar no ControllerRecord */
-// getDeviceType movido para src/utils/device.ts
 import { getAuthInstance } from '@infra/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, collection, query, where, deleteDoc, getDoc, updateDoc, onSnapshot, Firestore, deleteField, FieldValue } from 'firebase/firestore';
@@ -51,8 +49,6 @@ const CURRENT_DATA_VERSION = '3.1.0'; // bumped: limpa SavedSettings_* para for�
 // desligado em qualquer ponto do fluxo (entrar como observer, assumir controle, etc).
 const resolveWatchMode = (currentValue: boolean): boolean =>
   isWatchDevice() ? true : currentValue;
-
-// safeJsonParse extraída para src/utils/safeJsonParse.ts (Fase 4 — Passo 4.0)
 
 const getUrlParams = () => new URLSearchParams(globalThis.location.search);
 const getDeviceId = () => {
@@ -209,9 +205,7 @@ const AppInner: React.FC = () => {
   const [isSettingsRegrasSaved, setIsSettingsRegrasSaved] = useState(true);
   const [isProfileSaved, setIsProfileSaved] = useState(true);
   const [activeCloudMatch, setActiveCloudMatch] = useState<{id: string, sport: string} | null>(null);
-  // [Passo 5.5] activeLives e cloudLiveExists: estados espelho sincronizados pelo LiveBridge.
-  // O LiveBridge chama onStateUpdate sempre que o contexto muda, mantendo estes
-  // estados locais em sincronia para que useMemo/useEffect reativos continuem funcionando.
+  // (ver bloco "espelhos do LiveContext" abaixo, junto a fbSyncStatus)
   const [activeLives, setActiveLivesLocal] = useState<GameState[]>([]);
   const [cloudLiveExists, setCloudLiveExistsLocal] = useState<boolean>(false);
 
@@ -234,10 +228,10 @@ const AppInner: React.FC = () => {
     return "https://myplacar.app.br/"; // Valor padrão de produção
   });
 
-  // ── Passo 4.1: userProfile migrado para o GameContext ────────────────────
-  // O estado vive agora no <GameProvider>. O AppInner mantém um estado espelho
-  // local para que todos os useMemo/useEffect/callbacks reativos continuem
-  // funcionando sem alteração. O GameBridge (abaixo) sincroniza o espelho.
+  // ── userProfile — espelho do GameContext ─────────────────────────────────
+  // Estado vive no <GameProvider>. Espelho local mantido para que useMemo/useEffect
+  // e props das telas filhas (AuthScreen, CommunicationsScreen, etc.) permaneçam
+  // reativos sem modificação. GameBridge sincroniza via onUpdate.
   const [userProfile, setUserProfileLocal] = useState<UserProfile>({ name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' });
   const setUserProfileLocalRef = useRef(setUserProfileLocal);
   setUserProfileLocalRef.current = setUserProfileLocal;
@@ -253,7 +247,6 @@ const AppInner: React.FC = () => {
   const [_versionTapCount, setVersionTapCount] = useState(0);
 
   // ─── Live Logs: persistem ao trocar de tela ────────────────────────────────
-  // [Passo 5.5] liveLogs: estado espelho sincronizado pelo LiveBridge.
   const [liveLogs, setLiveLogsLocal] = useState<LiveLogEntry[]>([]);
   const [voiceLogs, setVoiceLogs] = useState<{id: string, startTime: string, before: string, after: string, text: string, latency: number, timestamp: number, isError?: boolean, winner?: 1 | 2, isRemote?: boolean, liveSequence?: number, liveId?: number, source: string}[]>([]);
 
@@ -273,9 +266,9 @@ const AppInner: React.FC = () => {
     versionTapTimerRef.current = setTimeout(() => setVersionTapCount(0), 2000);
   };
 
-  // ── Passo 4.3: matchSettings migrado para o GameContext ─────────────────
-  // Inicializado vazio aqui — GameBridge.onReady sincroniza o valor real logo
-  // após o <GameProvider> montar (antes do primeiro render dos filhos).
+  // ── matchSettings — espelho do GameContext ───────────────────────────────
+  // Inicializado com o default; GameBridge.onReady sincroniza o valor real
+  // (com lazy load do localStorage) antes do primeiro render das telas filhas.
   const [matchSettings, setMatchSettingsLocal] = useState<MatchSettings>(() => ({ ...DEFAULT_TENNIS_SETTINGS, winnersStay: false }));
   const setMatchSettingsLocalRef = useRef(setMatchSettingsLocal);
   setMatchSettingsLocalRef.current = setMatchSettingsLocal;
@@ -284,10 +277,10 @@ const AppInner: React.FC = () => {
     (v) => { ctxSetMatchSettingsRef.current(v); setMatchSettingsLocalRef.current(v); }, []
   );
 
-  // ── Passo 4.4: gameState migrado para o GameContext ─────────────────
-  // O estado vive agora no <GameProvider>. O AppInner mantém um estado espelho
-  // local para que todos os useMemo/useEffect/callbacks reativos continuem
-  // funcionando sem alteração. O GameBridge (abaixo) sincroniza o espelho.
+  // ── gameState — espelho do GameContext ──────────────────────────────────
+  // Estado vive no <GameProvider>. Espelho necessário: alimenta <LiveProvider>,
+  // 8+ dep arrays reativos e closures de onSnapshot (via gameStateRef abaixo).
+  // GameBridge sincroniza via onUpdate.
   const [gameState, setGameStateLocal] = useState<GameState | null>(null);
   const setGameStateLocalRef = useRef(setGameStateLocal);
   setGameStateLocalRef.current = setGameStateLocal;
@@ -296,15 +289,14 @@ const AppInner: React.FC = () => {
     (v) => { ctxSetGameStateRef.current(v); setGameStateLocalRef.current(v); }, []
   );
 
-  // gameStateRef: ref espelho local mantido no AppInner — usado em closures
-  // estáveis (performExit, listeners do Firestore) para evitar closure stale.
+  // gameStateRef: ref local para closures estáveis (performExit, onSnapshot) — evita stale closure.
+  // activeLivesRef: proxy para o ref do LiveContext (ver abaixo).
   const gameStateRef = useRef<GameState | null>(null);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
-  // [Passo 5.5] activeLivesRef local removido — substituído pelo proxy do LiveContext acima.
 
-  // ── [Passo 5.6] useMemos de permissão removidos — vivem no LiveContext. ──────
-  // Estados espelho sincronizados pelo LiveBridge via handleLiveUpdate a cada
-  // mudança no contexto. Valores iniciais conservadores até o primeiro onUpdate.
+  // ── Estados de permissão Live — espelhos do LiveContext ──────────────────
+  // Valores computados no LiveContext; sincronizados pelo LiveBridge via onUpdate.
+  // Valores iniciais conservadores (false/'spectator') até o primeiro onUpdate.
   const [isOriginalOwner, setIsOriginalOwner] = useState(false);
   const [isActiveController, setIsActiveController] = useState(false);
   const [isCurrentController, setIsCurrentController] = useState(false);
@@ -340,21 +332,18 @@ const AppInner: React.FC = () => {
   const [isWaitingSync, setIsWaitingSync] = useState(false);
   const [isServiceInterrupted, setIsServiceInterrupted] = useState(false);
 
-  // ── Indicador de sincronismo FB ────────────────────────────────────────────
-  // [Passo 5.5] fbSyncStatus: estado espelho sincronizado pelo LiveBridge.
+  // ── fbSyncStatus / liveLogs / activeLives — espelhos do LiveContext ──────
+  // Estados sincronizados pelo LiveBridge. Mantidos locais para reatividade
+  // de useMemo/useEffect sem modificar os consumidores existentes.
   const [fbSyncStatus, setFbSyncStatusLocal] = useState<{ team: 1 | 2; seq: number; isObserver: boolean } | null>(null);
   const fbSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFbScoreKeyRef = useRef<string>(''); // "p1score_p1games_p2score_p2games"
   const hasAutoEnabledScoreboardRef = useRef(false); // evita loop: ativa modo placar 1x por sessão de observer
-  // ── Passo 5.4.1-A: injeção dos setters/refs do LiveContext via LiveBridge ──
-  // useLive() não pode ser chamado aqui (AppInner renderiza o <LiveProvider>,
-  // então ainda não é descendente dele). Em vez disso, o <LiveBridge> — filho
-  // direto do provider — chama useLive() e injeta os valores nestes refs via
-  // callback onReady. As variáveis ctx* ficam disponíveis assim que o bridge
-  // monta (síncrono com o primeiro render do provider).
-  //
-  // Os useState/useRef duplicados abaixo serão removidos no Passo 5.5.
-  // Por ora os ctx* são inicializados com stubs e substituídos no primeiro render.
+  // ── Injeção dos setters/refs do LiveContext via LiveBridge ───────────────
+  // useLive() não pode ser chamado aqui — AppInner renderiza o <LiveProvider>,
+  // portanto ainda não é descendente dele. O <LiveBridge> (filho direto do provider)
+  // chama useLive() e injeta valores nestes refs via onReady/onUpdate.
+  // Os refs ctx* são inicializados com stubs e substituídos no primeiro render.
 
   // Refs que receberão os setters reais do contexto via LiveBridge.onReady:
   const ctxSetActiveLivesRef = useRef<React.Dispatch<React.SetStateAction<GameState[]>>>(() => {});
@@ -493,9 +482,10 @@ const AppInner: React.FC = () => {
   const [userEntryDate, setUserEntryDate] = useState<number | null>(null);
   const [registeredEvents, setRegisteredEvents] = useState<EventRegistration[]>(() => safeJsonParse('myPlacarRegisteredEvents', []) as EventRegistration[]);
 
-  // ── Passo 4.5: matchHistoryRef proxy — delega ao ref do GameContext após onReady.
-  // Mantido no AppInner pois é lido em closures de handlers (finalizeMatchInternal,
-  // downloadHistoryFromFirebase, onDeleteMatch, useOnlineSync) sem adicionar deps.
+  // ── matchHistoryRef — proxy para o ref do GameContext ────────────────────
+  // Lido em closures de handlers (finalizeMatchInternal, downloadHistoryFromFirebase,
+  // onDeleteMatch, useOnlineSync) sem adicionar deps. Delega ao ref do contexto
+  // após GameBridge.onReady; opera sobre ref local temporário antes disso.
   const _ctxMatchHistoryRefInner = useRef<MatchHistoryItem[]>([]);
   const _ctxMatchHistoryRefTarget = useRef<React.MutableRefObject<MatchHistoryItem[]>>(_ctxMatchHistoryRefInner);
   const matchHistoryRef: React.MutableRefObject<MatchHistoryItem[]> = {
@@ -507,8 +497,8 @@ const AppInner: React.FC = () => {
   const finalizationTimerRef = useRef<any>(null);
   
   const lastSentStateRef = useRef<string>("");
-  // [Passo 5.7] tookControlAtRef, lostControlAtRef e isClosingLiveRef removidos.
-  // Esses refs vivem agora no LiveContext e são acessados via proxies ctx* declarados acima.
+  // tookControlAtRef, lostControlAtRef, isClosingLiveRef vivem no LiveContext;
+  // acessados via proxies ctxTookControlAtRef/ctxLostControlAtRef/ctxIsClosingLiveRef abaixo.
 
   const sanitizeForFirestore = (obj: unknown) => {
     // campos undefined são convertidos para null pelo JSON.stringify abaixo.
@@ -529,7 +519,10 @@ const AppInner: React.FC = () => {
     return clean;
   };
 
-  // ── Passo 4.2: partners migrado para o GameContext ──────────────────────
+  // ── partners — espelho do GameContext ────────────────────────────────────
+  // Estado vive no <GameProvider>. Espelho necessário: sync localStorage,
+  // exportação de dados e finalizeMatchInternal.
+  // PartnersScreen e SettingsScreen migradas para useGame().
   const [partners, setPartnersLocal] = useState<Partner[]>([]);
   const setPartnersLocalRef = useRef(setPartnersLocal);
   setPartnersLocalRef.current = setPartnersLocal;
@@ -1901,7 +1894,10 @@ const AppInner: React.FC = () => {
   }, []);
   const startGameRef = useRef(startGame);
   useEffect(() => { startGameRef.current = startGame; }, [startGame]);
-  // ── Passo 4.5: matchHistory migrado para o GameContext ─────────────────
+  // ── matchHistory — espelho do GameContext ────────────────────────────────
+  // Estado vive no <GameProvider>. Espelho necessário: consumido em
+  // useOnlineSync (dep array), exportação de dados e reset geral (setMatchHistory([])).
+  // LocationScreen migrada para useGame() — removida daqui.
   const [matchHistory, setMatchHistoryLocal] = useState<MatchHistoryItem[]>([]);
   const setMatchHistoryLocalRef = useRef(setMatchHistoryLocal);
   setMatchHistoryLocalRef.current = setMatchHistoryLocal;
@@ -3319,7 +3315,6 @@ const AppInner: React.FC = () => {
       <NavigationDrawer 
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
-        userProfile={userProfile}
         currentScreen={currentScreen}
         currentTab={currentScreen === 'admin' ? adminTab : activeTab}
         onNavigate={(screen, tab) => {
@@ -3462,7 +3457,7 @@ const AppInner: React.FC = () => {
             deleteSupabaseMatches([...ids]);
           }
         }, onCancel: () => setModalConfig(null) })}
-        onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }} onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} gameState={gameState} settings={matchSettings} setSettings={setMatchSettings} onStart={() => { persistMatchSettings(); initGameState(true); }} onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }} onOpenRules={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} activeTab={activeTab} setActiveTab={(t) => { persistMatchSettings(); setActiveTab(t); }} onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }} userProfile={userProfile} setUserProfile={setUserProfile} onSaveProfile={handleSaveProfile} onLogout={handleLogout} onGoAdmin={() => setCurrentScreen('admin')} onGoToScoreboard={() => { persistMatchSettings(); initGameState(false); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} isProfileSaved={isProfileSaved} canStartMatch={canStartMatch} onSyncAll={(force) => syncHistoryToFirebase(undefined, force)} onDownloadHistory={downloadHistoryFromFirebase} cloudMatchesCount={cloudMatchesCount} isSyncingAll={isSyncing} isDownloading={isDownloading} onOpenPartners={() => setCurrentScreen('partners')} partners={partners} playerQueue={playerQueue} onAutoRegisterPartner={handleAutoRegisterPartner} 
+        onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }} onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} gameState={gameState} settings={matchSettings} setSettings={setMatchSettings} onStart={() => { persistMatchSettings(); initGameState(true); }} onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }} onOpenRules={() => { persistMatchSettings(); setCurrentScreen('new-game'); }} activeTab={activeTab} setActiveTab={(t) => { persistMatchSettings(); setActiveTab(t); }} onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }} onSaveProfile={handleSaveProfile} onLogout={handleLogout} onGoAdmin={() => setCurrentScreen('admin')} onGoToScoreboard={() => { persistMatchSettings(); initGameState(false); }} isSettingsInicialSaved={isSettingsInicialSaved} isSettingsRegrasSaved={isSettingsRegrasSaved} isProfileSaved={isProfileSaved} canStartMatch={canStartMatch} onSyncAll={(force) => syncHistoryToFirebase(undefined, force)} onDownloadHistory={downloadHistoryFromFirebase} cloudMatchesCount={cloudMatchesCount} isSyncingAll={isSyncing} isDownloading={isDownloading} onOpenPartners={() => setCurrentScreen('partners')} playerQueue={playerQueue} onAutoRegisterPartner={handleAutoRegisterPartner} 
         onDeletePartners={ids => setModalConfig({ title: "Excluir parceiros?", message: "Apagar registro permanentemente?", confirmLabel: "Excluir", variant: 'danger', onConfirm: () => {
           setPartners(prev => {
             const next = prev.filter(p => !ids.has(p.id));
@@ -3474,7 +3469,7 @@ const AppInner: React.FC = () => {
         onOpenCommunications={() => setCurrentScreen('communications')} unreadCount={unreadCommsCount}
         onOpenMenu={() => setIsMenuOpen(true)}
       />}
-      {currentScreen === 'partners' && <PartnersScreen appUrl={appUrl} isAuthReady={authReady} partners={partners} setPartners={setPartners} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => { if (isSelectingJudge) { setIsSelectingJudge(false); setCurrentScreen('scoreboard'); } else setCurrentScreen('settings'); }} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} userProfile={userProfile} onConfirmSelection={handleConfirmPartners} onSelectPartner={isSelectingJudge ? handleSelectJudgeFromPartners : undefined} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} activeLives={activeLives} onWatchLive={(pin) => { 
+      {currentScreen === 'partners' && <PartnersScreen appUrl={appUrl} isAuthReady={authReady} playerQueue={playerQueue} setPlayerQueue={setPlayerQueue} onBack={() => { if (isSelectingJudge) { setIsSelectingJudge(false); setCurrentScreen('scoreboard'); } else setCurrentScreen('settings'); }} isDoubles={matchSettings.isDoubles} onUpdateSettings={(updates) => setMatchSettings(prev => ({ ...prev, ...updates }))} onConfirmSelection={handleConfirmPartners} onSelectPartner={isSelectingJudge ? handleSelectJudgeFromPartners : undefined} p1Color={matchSettings.p1Color} p2Color={matchSettings.p2Color} activeLives={activeLives} onWatchLive={(pin) => { 
         const isJudge = activeLives.find(l => l.ownerPin?.toUpperCase() === pin.toUpperCase())?.judgePin?.toUpperCase() === userProfile.pin.toUpperCase();
         if (isJudge) {
           handleObserveLive(pin);
@@ -3527,7 +3522,6 @@ const AppInner: React.FC = () => {
         onJoinTournament={() => setCurrentScreen('tournaments')} 
         onExitTournament={handleExitTournament} 
         onOpenMenu={() => { persistMatchSettings(); setIsMenuOpen(true); }} 
-        userProfile={userProfile} 
         isOfflineMode={isOfflineMode} 
         onExitOffline={handleExitOffline} 
         onVersionTap={handleVersionTap}
@@ -3705,10 +3699,10 @@ const AppInner: React.FC = () => {
                 onCancel: () => setModalConfig(null)
               });
             }} onResetMatch={handleResetMatch} onOpenMenu={() => setIsMenuOpen(true)} isOfflineMode={isOfflineMode} onExitOffline={handleExitOffline} onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))} onToggleScoreboardMode={() => { setMatchSettings(prev => ({ ...prev, isScoreboardMode: !prev.isScoreboardMode })); setGameState(p => p ? { ...p, matchConfig: { ...p.matchConfig, isScoreboardMode: !p.matchConfig.isScoreboardMode } } : null); }} voiceLogs={voiceLogs} setVoiceLogs={setVoiceLogs} />}
-      {currentScreen === 'location' && <LocationScreen history={matchHistory} focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
+      {currentScreen === 'location' && <LocationScreen focusMatchId={focusMatchId} onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }} />}
       {currentScreen === 'tournaments' && <TournamentsScreen registrations={registeredEvents} onBack={() => setCurrentScreen('settings')} onJoin={handleJoinTournament} onSelectEvent={(ev) => { setActiveEvent(ev as unknown as TournamentEvent); setCurrentScreen('event-detail'); }} />}
       {currentScreen === 'event-detail' && activeEvent && <EventDetailScreen appUrl={appUrl} event={activeEvent} onBack={() => setCurrentScreen('tournaments')} userProfile={userProfile} onExitTournament={handleExitTournament} onAddPartner={handleAddTournamentPartner} partners={partners} onStartTournamentMatch={(match, pair1, pair2, ev) => initGameState(true, { match, pair1, pair2, event: ev })} setModalConfig={setModalConfig} />}
-      {currentScreen === 'communications' && <CommunicationsScreen userProfile={userProfile} onBack={() => setCurrentScreen('settings')} />}
+      {currentScreen === 'communications' && <CommunicationsScreen onBack={() => setCurrentScreen('settings')} />}
     </div>
       </GameProvider>
       </LiveProvider>
