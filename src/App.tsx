@@ -10,7 +10,7 @@ import { PartnersScreen, addPartnerToState, applyPartnerSelection, autoRegisterP
 import { EventDetailScreen, TournamentsScreen, fetchRegisteredEvents, getActiveEventEntryDate, joinTournamentEvent, markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events';
 import { CommunicationsScreen } from './screens/CommunicationsScreen.tsx';
 import { LiveProvider, useLive } from '@modules/live';
-import { GameProvider } from '@modules/game';
+import { GameProvider, useGame } from '@modules/game';
 import { LiveControlOverlay } from '@modules/live/components/LiveControlOverlay.tsx';
 import { InstallPwaModal } from './components/InstallPwaModal.tsx';
 import { NavigationDrawer } from './components/NavigationDrawer.tsx';
@@ -22,6 +22,7 @@ import type { EventRegistration, TournamentEvent, TournamentMatch, TournamentPai
 import { GameState, MatchSettings, Screen, PointType, AdminTab, ControllerRecord, Tab, LivePapel, LiveType, LiveLogEntry } from './types.ts';
 // NOTA: adicionar 'public-scoreboard' ao tipo Screen em types.ts
 import { isValidGameState, isValidMatchSettings } from './utils/validation.ts';
+import { safeJsonParse } from './utils/safeJsonParse.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
 import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
@@ -51,28 +52,7 @@ const CURRENT_DATA_VERSION = '3.1.0'; // bumped: limpa SavedSettings_* para for�
 const resolveWatchMode = (currentValue: boolean): boolean =>
   isWatchDevice() ? true : currentValue;
 
-function safeJsonParse(key: string, fallback: unknown) {
-  try {
-    if (typeof window === 'undefined' || !globalThis.localStorage) return fallback;
-    const saved = localStorage.getItem(key);
-    if (saved && saved !== "undefined" && saved !== "null" && saved.trim() !== "") {
-      const parsed = JSON.parse(saved);
-      if (key === 'myPlacarActiveGameState' && parsed !== null) {
-        if (!isValidGameState(parsed)) {
-          localStorage.removeItem(key);
-          return fallback;
-        }
-      }
-      if (key === 'myPlacarSettings' && parsed !== null) {
-        if (!isValidMatchSettings(parsed)) {
-          return fallback;
-        }
-      }
-      return parsed;
-    }
-  } catch {}
-  return fallback;
-}
+// safeJsonParse extraída para src/utils/safeJsonParse.ts (Fase 4 — Passo 4.0)
 
 const getUrlParams = () => new URLSearchParams(globalThis.location.search);
 const getDeviceId = () => {
@@ -254,10 +234,19 @@ const AppInner: React.FC = () => {
     return "https://myplacar.app.br/"; // Valor padrão de produção
   });
 
-  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    const profile = safeJsonParse('myPlacarUserProfile', { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' });
-    return (profile && profile.email) ? profile : { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' };
-  });
+  // ── Passo 4.1: userProfile migrado para o GameContext ────────────────────
+  // O estado vive agora no <GameProvider>. O AppInner mantém um estado espelho
+  // local para que todos os useMemo/useEffect/callbacks reativos continuem
+  // funcionando sem alteração. O GameBridge (abaixo) sincroniza o espelho.
+  const [userProfile, setUserProfileLocal] = useState<UserProfile>({ name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' });
+  const setUserProfileLocalRef = useRef(setUserProfileLocal);
+  setUserProfileLocalRef.current = setUserProfileLocal;
+  // Ref que receberá o setter real do GameContext via GameBridge.onReady:
+  const ctxSetUserProfileRef = useRef<React.Dispatch<React.SetStateAction<UserProfile>>>(() => {});
+  // Wrapper estável: atualiza o GameContext E o estado espelho local.
+  const setUserProfile = useCallback<React.Dispatch<React.SetStateAction<UserProfile>>>(
+    (v) => { ctxSetUserProfileRef.current(v); setUserProfileLocalRef.current(v); }, []
+  );
 
   const { logs, clearLogs } = useAppLogger();
   const [showLogViewer, setShowLogViewer] = useState(false);
@@ -284,62 +273,32 @@ const AppInner: React.FC = () => {
     versionTapTimerRef.current = setTimeout(() => setVersionTapCount(0), 2000);
   };
 
-  const [matchSettings, setMatchSettings] = useState<MatchSettings>(() => {
-    const s = safeJsonParse('myPlacarSettings', { ...DEFAULT_TENNIS_SETTINGS, winnersStay: false });
-    try {
-      s.deviceLabel = localStorage.getItem('myPlacar_LocalDeviceLabel') || '';
-      s.brightness = parseInt(localStorage.getItem('myPlacar_LocalBrightness') || '100');
-      s.volume = parseInt(localStorage.getItem('myPlacar_LocalVolume') || '100');
-      // Se é um relógio, sempre ativa o modo relógio independente do valor salvo.
-      // Caso contrário, respeita a preferência salva ou detecta automaticamente.
-      if (isWatchDevice()) {
-        s.isWatchMode = true;
-        localStorage.setItem('myPlacar_LocalWatchMode', 'true');
-      } else {
-        const savedWatchMode = localStorage.getItem('myPlacar_LocalWatchMode');
-        if (savedWatchMode !== null) {
-          s.isWatchMode = savedWatchMode === 'true';
-        } else {
-          s.isWatchMode = false;
-          localStorage.setItem('myPlacar_LocalWatchMode', 'false');
-        }
-      }
+  // ── Passo 4.3: matchSettings migrado para o GameContext ─────────────────
+  // Inicializado vazio aqui — GameBridge.onReady sincroniza o valor real logo
+  // após o <GameProvider> montar (antes do primeiro render dos filhos).
+  const [matchSettings, setMatchSettingsLocal] = useState<MatchSettings>(() => ({ ...DEFAULT_TENNIS_SETTINGS, winnersStay: false }));
+  const setMatchSettingsLocalRef = useRef(setMatchSettingsLocal);
+  setMatchSettingsLocalRef.current = setMatchSettingsLocal;
+  const ctxSetMatchSettingsRef = useRef<React.Dispatch<React.SetStateAction<MatchSettings>>>(() => {});
+  const setMatchSettings = useCallback<React.Dispatch<React.SetStateAction<MatchSettings>>>(
+    (v) => { ctxSetMatchSettingsRef.current(v); setMatchSettingsLocalRef.current(v); }, []
+  );
 
-      s.selectedVoiceURI = localStorage.getItem('myPlacar_LocalVoiceURI') || s.selectedVoiceURI;
-      s.voiceEnabled = localStorage.getItem('myPlacar_LocalVoiceEnabled') !== 'false';
-      s.voiceScoring = localStorage.getItem('myPlacar_LocalVoiceScoring') !== 'false';
-      s.actionCooldown = parseInt(localStorage.getItem('myPlacar_LocalActionCooldown') || '5');
-      s.stateLockout = parseInt(localStorage.getItem('myPlacar_LocalStateLockout') || '10');
-      s.screenDimTimeout = (parseInt(localStorage.getItem('myPlacar_LocalScreenDimTimeout') || '10') as 10 | 15 | 20);
+  // ── Passo 4.4: gameState migrado para o GameContext ─────────────────
+  // O estado vive agora no <GameProvider>. O AppInner mantém um estado espelho
+  // local para que todos os useMemo/useEffect/callbacks reativos continuem
+  // funcionando sem alteração. O GameBridge (abaixo) sincroniza o espelho.
+  const [gameState, setGameStateLocal] = useState<GameState | null>(null);
+  const setGameStateLocalRef = useRef(setGameStateLocal);
+  setGameStateLocalRef.current = setGameStateLocal;
+  const ctxSetGameStateRef = useRef<React.Dispatch<React.SetStateAction<GameState | null>>>(() => {});
+  const setGameState = useCallback<React.Dispatch<React.SetStateAction<GameState | null>>>(
+    (v) => { ctxSetGameStateRef.current(v); setGameStateLocalRef.current(v); }, []
+  );
 
-      if (!s.deviceLabel) {
-        // Usa isWatchDevice para label mais preciso que apenas verificar UA
-        if (isWatchDevice()) {
-          s.deviceLabel = 'Relógio';
-        } else {
-          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-          s.deviceLabel = isMobile ? 'Celular' : 'Note';
-        }
-        localStorage.setItem('myPlacar_LocalDeviceLabel', s.deviceLabel);
-      }
-    } catch {}
-    return s;
-  });
-
-  const [gameState, setGameState] = useState<GameState | null>(() => {
-    const saved = safeJsonParse('myPlacarActiveGameState', null) as GameState | null;
-    // Se o estado restaurado é pickleball mas não tem o sub-objeto pickleball
-    // (salvo por versão anterior), reinicializa para evitar bugs de serverNumber.
-    if (saved && saved.matchConfig?.sportType === 'pickleball' && !saved.pickleball) {
-      saved.pickleball = initPickleballState(saved);
-    }
-    return saved;
-  });
-
-  // Refs espelho de gameState e activeLives — declarados logo após os estados para
-  // garantir que estejam disponíveis em qualquer useEffect ou closure abaixo,
-  // incluindo o performExit (que não pode ter gameState/activeLives no dep array).
-  const gameStateRef = useRef(gameState);
+  // gameStateRef: ref espelho local mantido no AppInner — usado em closures
+  // estáveis (performExit, listeners do Firestore) para evitar closure stale.
+  const gameStateRef = useRef<GameState | null>(null);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   // [Passo 5.5] activeLivesRef local removido — substituído pelo proxy do LiveContext acima.
 
@@ -534,7 +493,15 @@ const AppInner: React.FC = () => {
   const [userEntryDate, setUserEntryDate] = useState<number | null>(null);
   const [registeredEvents, setRegisteredEvents] = useState<EventRegistration[]>(() => safeJsonParse('myPlacarRegisteredEvents', []) as EventRegistration[]);
 
-  const matchHistoryRef = useRef<MatchHistoryItem[]>([]);
+  // ── Passo 4.5: matchHistoryRef proxy — delega ao ref do GameContext após onReady.
+  // Mantido no AppInner pois é lido em closures de handlers (finalizeMatchInternal,
+  // downloadHistoryFromFirebase, onDeleteMatch, useOnlineSync) sem adicionar deps.
+  const _ctxMatchHistoryRefInner = useRef<MatchHistoryItem[]>([]);
+  const _ctxMatchHistoryRefTarget = useRef<React.MutableRefObject<MatchHistoryItem[]>>(_ctxMatchHistoryRefInner);
+  const matchHistoryRef: React.MutableRefObject<MatchHistoryItem[]> = {
+    get current() { return _ctxMatchHistoryRefTarget.current.current; },
+    set current(v) { _ctxMatchHistoryRefTarget.current.current = v; },
+  };
   const prevSettingsRef = useRef<MatchSettings | null>(null);
   const prevProfileRef = useRef<UserProfile | null>(null);
   const finalizationTimerRef = useRef<any>(null);
@@ -562,7 +529,14 @@ const AppInner: React.FC = () => {
     return clean;
   };
 
-  const [partners, setPartners] = useState<Partner[]>(() => safeJsonParse('myPlacarPartners', []));
+  // ── Passo 4.2: partners migrado para o GameContext ──────────────────────
+  const [partners, setPartnersLocal] = useState<Partner[]>([]);
+  const setPartnersLocalRef = useRef(setPartnersLocal);
+  setPartnersLocalRef.current = setPartnersLocal;
+  const ctxSetPartnersRef = useRef<React.Dispatch<React.SetStateAction<Partner[]>>>(() => {});
+  const setPartners = useCallback<React.Dispatch<React.SetStateAction<Partner[]>>>(
+    (v) => { ctxSetPartnersRef.current(v); setPartnersLocalRef.current(v); }, []
+  );
   const [playerQueue, setPlayerQueue] = useState<QueuePlayer[]>(() => {
     const saved = safeJsonParse('myPlacarPlayerQueue', []);
     return saved.length > 0 ? saved : Array.from({ length: 10 }, (_, i) => ({ id: `q_${Date.now()}_${i}`, name: '', gender: 'M' as const }));
@@ -1927,20 +1901,22 @@ const AppInner: React.FC = () => {
   }, []);
   const startGameRef = useRef(startGame);
   useEffect(() => { startGameRef.current = startGame; }, [startGame]);
-  const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>(() => {
-    const list = safeJsonParse('myPlacarHistory', []);
-    matchHistoryRef.current = list;
-    return list;
-  });
-  
+  // ── Passo 4.5: matchHistory migrado para o GameContext ─────────────────
+  const [matchHistory, setMatchHistoryLocal] = useState<MatchHistoryItem[]>([]);
+  const setMatchHistoryLocalRef = useRef(setMatchHistoryLocal);
+  setMatchHistoryLocalRef.current = setMatchHistoryLocal;
+  const ctxSetMatchHistoryRef = useRef<React.Dispatch<React.SetStateAction<MatchHistoryItem[]>>>(() => {});
+  const setMatchHistory = useCallback<React.Dispatch<React.SetStateAction<MatchHistoryItem[]>>>(
+    (v) => { ctxSetMatchHistoryRef.current(v); setMatchHistoryLocalRef.current(v); }, []
+  );
+
   const [activeTab, setActiveTab] = useState<Tab>('config');
   const [adminTab, setAdminTab] = useState<AdminTab>('configs');
   const [focusMatchId, setFocusMatchId] = useState<string | null>(null);
 
+  const ctxPersistHistoryRef = useRef<(newList: MatchHistoryItem[]) => void>(() => {});
   const persistHistory = useCallback((newList: MatchHistoryItem[]) => {
-    const limitedList = persistLocalHistory(newList);
-    matchHistoryRef.current = limitedList; // sincroniza ref com o que está realmente persistido
-    setMatchHistory(limitedList);
+    ctxPersistHistoryRef.current(newList);
   }, []);
 
   const handleClearAllHistory = async () => {
@@ -3310,19 +3286,34 @@ const AppInner: React.FC = () => {
           Nenhum consumidor usa o contexto ainda — isso ocorre a partir da Fase 3.
           Fase 4: os useState/useRef serão movidos para dentro do provider
           e estas props serão removidas. */}
-      <GameProvider
-        gameState={gameState}
-        setGameState={setGameState}
-        gameStateRef={gameStateRef}
-        matchSettings={matchSettings}
-        setMatchSettings={setMatchSettings}
-        userProfile={userProfile}
-        setUserProfile={setUserProfile}
-        matchHistory={matchHistory}
-        matchHistoryRef={matchHistoryRef}
-        partners={partners}
-        setPartners={setPartners}
-      >
+      {/* ─── GameBridge: chama useGame() dentro do provider e injeta userProfile ──
+           Necessário porque o <GameProvider> está dentro do AppInner — não é possível
+           chamar useGame() no topo do componente pai. Padrão idêntico ao LiveBridge.
+           Passo 4.1: userProfile/setUserProfile. Passo 4.2: partners/setPartners. */}
+      <GameProvider>
+        <GameBridge
+          onReady={(ctx) => {
+            ctxSetUserProfileRef.current = ctx.setUserProfile;
+            setUserProfileLocalRef.current(ctx.userProfile);
+            ctxSetPartnersRef.current = ctx.setPartners;
+            setPartnersLocalRef.current(ctx.partners);
+            ctxSetMatchSettingsRef.current = ctx.setMatchSettings;
+            setMatchSettingsLocalRef.current(ctx.matchSettings);
+            ctxSetGameStateRef.current = ctx.setGameState;
+            setGameStateLocalRef.current(ctx.gameState);
+            ctxSetMatchHistoryRef.current = ctx.setMatchHistory;
+            setMatchHistoryLocalRef.current(ctx.matchHistory);
+            ctxPersistHistoryRef.current = ctx.persistHistory;
+            _ctxMatchHistoryRefTarget.current = ctx.matchHistoryRef;
+          }}
+          onUpdate={(ctx) => {
+            setUserProfileLocalRef.current(ctx.userProfile);
+            setPartnersLocalRef.current(ctx.partners);
+            setMatchSettingsLocalRef.current(ctx.matchSettings);
+            setGameStateLocalRef.current(ctx.gameState);
+            setMatchHistoryLocalRef.current(ctx.matchHistory);
+          }}
+        />
       <div className="min-h-screen w-full bg-gray-50 flex flex-col">
         
       <NavigationDrawer 
@@ -3426,7 +3417,6 @@ const AppInner: React.FC = () => {
       {currentScreen === 'public-scoreboard' && initialSpectatorPin && gameState && (
         <ScoreboardScreen
           appUrl={appUrl}
-          gameState={gameState}
           onScoreUpdate={() => {}}
           onUndo={() => {}}
           onSwitchServer={() => {}}
@@ -3438,7 +3428,6 @@ const AppInner: React.FC = () => {
           isSettingsInicialSaved={false}
           isSettingsRegrasSaved={false}
           isAdmin={false}
-          userProfile={userProfile}
         />
       )}
       {currentScreen === 'auth' && <AuthScreen appUrl={appUrl} onAuthSuccess={(p, s) => { 
@@ -3558,7 +3547,6 @@ const AppInner: React.FC = () => {
       )}
       {currentScreen === 'scoreboard' && new URLSearchParams(window.location.search).get('viewMode') !== 'scoreboard' && (gameState || isWaitingSync) && <ScoreboardScreen 
         appUrl={appUrl} 
-        gameState={gameState!} 
         onScoreUpdate={handleScoreUpdate}
         judgePinInput={judgePinInput}
         setJudgePinInput={setJudgePinInput}
@@ -3707,7 +3695,7 @@ const AppInner: React.FC = () => {
         ctxSetCloudLiveExists(false);
         ctxSetActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
         try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {};
-      }} userProfile={userProfile} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onDeleteLive={() => {
+      }} isRecoveryFromMatchOver={isRecoveryFromMatchOver} currentDeviceId={deviceId} currentDeviceFullLabel={currentFullDeviceName} onOpenLiveControl={() => setShowLiveControlOverlay(true)} onDeleteLive={() => {
               setModalConfig({
                 title: "Encerrar a live?",
                 message: "Todos os participantes perderão a conexão.",
@@ -3725,6 +3713,32 @@ const AppInner: React.FC = () => {
       </GameProvider>
       </LiveProvider>
   );
+};
+
+// ─── GameBridge ──────────────────────────────────────────────────────────────
+// Componente filho do <GameProvider>. Chama useGame() e repassa os valores ao
+// AppInner via dois callbacks — padrão idêntico ao LiveBridge.
+//   onReady  — chamado 1x na montagem: injeta setters reais do contexto nos refs.
+//   onUpdate — chamado a cada mudança: sincroniza estados espelho locais.
+interface GameBridgeProps {
+  onReady: (ctx: ReturnType<typeof useGame>) => void;
+  onUpdate: (ctx: ReturnType<typeof useGame>) => void;
+}
+const GameBridge: React.FC<GameBridgeProps> = ({ onReady, onUpdate }) => {
+  const ctx = useGame();
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  useEffect(() => {
+    onReadyRef.current(ctx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    onUpdateRef.current(ctx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.userProfile, ctx.partners, ctx.matchSettings, ctx.gameState, ctx.matchHistory]);
+  return null;
 };
 
 // ─── LiveBridge ───────────────────────────────────────────────────────────────

@@ -46,11 +46,17 @@ export interface GameContextValue {
   // ── Histórico de partidas ─────────────────────────────────────────────────
   /** Lista persistida de partidas encerradas. */
   matchHistory: MatchHistoryItem[];
+  setMatchHistory: Dispatch<SetStateAction<MatchHistoryItem[]>>;
   /**
    * Ref espelho de matchHistory.
    * Usado em handlers que precisam ler o histórico sem disparar re-renders.
    */
   matchHistoryRef: MutableRefObject<MatchHistoryItem[]>;
+  /**
+   * Persiste uma nova lista de histórico no localStorage e atualiza estado + ref.
+   * Usar sempre no lugar de `setMatchHistory` direto para manter ref sincronizada.
+   */
+  persistHistory: (newList: MatchHistoryItem[]) => void;
 
   // ── Parceiros ─────────────────────────────────────────────────────────────
   /** Lista de parceiros cadastrados pelo usuário. */

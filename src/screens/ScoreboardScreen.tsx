@@ -4,7 +4,7 @@ import { getDeviceType } from '../utils/device.ts';
 import { Button } from '../components/Button';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { Input } from '../components/Input';
-import { GameState, PointType, PointEvent, UserProfile } from '../types';
+import { GameState, PointType, PointEvent } from '../types';
 import { useGeminiReferee } from '../hooks/useGeminiReferee';
 import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../hooks/useScoreAnnouncer';
 import { usePickleballAnnouncer } from '../hooks/usePickleballAnnouncer';
@@ -70,7 +70,6 @@ interface LiveLogEntry {
 }
 
 interface Props {
-  gameState: GameState;
   onScoreUpdate: (player: 1 | 2, type?: PointType, source?: string) => void;
   onUndo: () => void;
   onSwitchServer: (team: 1 | 2, isPartner: boolean) => void;
@@ -86,7 +85,6 @@ interface Props {
   onCorrectScore?: (type: 'game' | 'gameSet' | 'matchSet', value: string) => void;
   isAdmin?: boolean;
   onConfirmMatch?: () => void;
-  userProfile?: UserProfile;
   isRecoveryFromMatchOver?: boolean;
   currentDeviceId?: string;
   currentDeviceFullLabel?: string;
@@ -299,13 +297,13 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { gameState, onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, userProfile, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode } = props;
+  const { onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode } = props;
 
-  // ── Contexto Game (Passo 3.1) ─────────────────────────────────────────────
-  // Lê gameState do GameContext com fallback para a prop.
-  // Fase 3.2: a prop gameState será removida da interface Props e das chamadas.
+  // ── Contexto Game (Passo 3.2 ✅) ──────────────────────────────────────────
+  // gameState lido exclusivamente do GameContext.
+  // Props gameState e userProfile removidas da interface e das chamadas no App.tsx.
   const gameCtx = useGame();
-  const effectiveGameState = gameCtx.gameState ?? gameState;
+  const effectiveGameState = gameCtx.gameState!;
 
   // Detecta modo público diretamente pela URL — independente de props/minificação
   const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
