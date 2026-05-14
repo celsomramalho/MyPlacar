@@ -739,7 +739,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop' };
         const isOnline = (now - d.lastSeen) < 120000;
         const isActiveController = effectiveGameState.commandOwnerId === id;
-        return { id, label: d.label, isOnline, isOwner: !!d.isOwner, role: d.role || 'observer', deviceType: d.deviceType || 'phone', isActiveController };
+        // isOwner: fonte de verdade é ownerDeviceId no nível raiz — nunca muda durante a live
+        const isOwner = !!effectiveGameState.ownerDeviceId && id === effectiveGameState.ownerDeviceId;
+        // role: proprietário nunca pode ser juiz — corrige dado inconsistente do Firebase
+        const role = isOwner ? 'owner' : (d.role || 'observer');
+        return { id, label: d.label, nickname: d.nickname || '', isOnline, isOwner, role, deviceType: d.deviceType || 'phone', isActiveController };
       })
       .filter(d => d.isOnline) // exibe apenas dispositivos que ainda estão ativos
       .sort((a, b) => {
@@ -750,7 +754,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         if (!a.isOwner && b.isOwner) return 1;
         return a.label.localeCompare(b.label);
       });
-  }, [effectiveGameState.controllers, effectiveGameState.commandOwnerId]);
+  }, [effectiveGameState.controllers, effectiveGameState.commandOwnerId, effectiveGameState.ownerDeviceId]);
 
   const createCommandLog = (commandText: string, source: string = 'cb', isError = false, winner?: 1 | 2, isRemote = false) => {
     const now = Date.now();
@@ -1601,23 +1605,35 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   <button onClick={() => setIsLiveExpanded(!isLiveExpanded)} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center active:scale-90 transition-all border border-gray-100">{isLiveExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
                </div>
                {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
-                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ id, label, isOnline, isOwner, role, deviceType, isActiveController }) => {
-                    // Ícone 1: tipo físico do dispositivo
+                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ id, label, nickname, isOnline, isOwner, role, deviceType, isActiveController }) => {
+                    // Ícone do tipo físico do dispositivo
                     const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'laptop' ? Laptop : deviceType === 'tablet' ? Monitor : Smartphone;
-                    // Ícone 2: papel na live
-                     const isCtrlActive = isActiveController && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
-                     const RoleIcon = isCtrlActive ? Gamepad2 : role === 'owner' ? Crown : role === 'judge' ? Gavel : Eye;
-                     const roleColor = isCtrlActive ? 'text-orange-500' : role === 'owner' ? 'text-blue-600' : role === 'judge' ? 'text-emerald-500' : 'text-gray-400';
-                     const roleLabel = isCtrlActive ? 'Ctrl' : role === 'owner' ? 'Dono' : role === 'judge' ? 'Juiz' : 'Part.';
-                    // Nome curto: só a parte antes do " - "
-                    const shortLabel = label.includes(' - ') ? label.split(' - ').slice(1).join(' - ') : label;
+                    // Nome: nickname do Firebase quando disponível, senão extrai do label
+                    const shortLabel = nickname || (label.includes(' - ') ? label.split(' - ').slice(1).join(' - ') : label);
+                    // Badge 1 — papel hierárquico (Dono / Juiz): só aparece se aplicável
+                    const isCtrlActive = isActiveController && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
+                    // proteção dupla: role já foi corrigido acima, mas garantimos aqui também
+                    const showHierarchyBadge = isOwner || (role === 'judge' && !isOwner);
+                    const HierarchyIcon = isOwner ? Crown : Gavel;
+                    const hierarchyColor = isOwner ? 'text-blue-600' : 'text-emerald-500';
+                    const hierarchyLabel = isOwner ? 'Dono' : 'Juiz';
+                    // Badge 2 — papel operacional (Ctrl / observador): sempre aparece
+                    const OperIcon = isCtrlActive ? Gamepad2 : Eye;
+                    const operColor = isCtrlActive ? 'text-orange-500' : 'text-blue-400';
+                    const operLabel = isCtrlActive ? 'Ctrl' : null;
                     return (
-                      <div key={id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isActiveController && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'}`}>
-                        <DeviceIcon size={12} className={isActiveController ? 'text-blue-500' : 'text-gray-400'} />
+                      <div key={id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isCtrlActive ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'}`}>
+                        <DeviceIcon size={12} className={isCtrlActive ? 'text-blue-500' : 'text-gray-400'} />
                         <span className="text-[10px] font-black">{shortLabel}</span>
-                        <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${roleColor}`}>
-                          <RoleIcon size={11} />
-                          <span className="text-[9px] font-bold">{roleLabel}</span>
+                        {showHierarchyBadge && (
+                          <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${hierarchyColor}`}>
+                            <HierarchyIcon size={11} />
+                            <span className="text-[9px] font-bold">{hierarchyLabel}</span>
+                          </div>
+                        )}
+                        <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${operColor}`}>
+                          <OperIcon size={11} />
+                          {operLabel && <span className="text-[9px] font-bold">{operLabel}</span>}
                         </div>
                       </div>
                     );
