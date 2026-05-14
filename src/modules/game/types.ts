@@ -62,4 +62,9 @@ export interface GameContextValue {
   /** Lista de parceiros cadastrados pelo usuário. */
   partners: Partner[];
   setPartners: Dispatch<SetStateAction<Partner[]>>;
+  
+  finalizeMatchInternal: (state: GameState) => Promise<void>;
+  handleLeaveLive: () => Promise<void>;
+  handleCloseCloudLive: () => Promise<void>;
+  handleDeleteJudge: () => Promise<void>;
 }

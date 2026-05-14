@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { QueuePlayer } from '@modules/partners';
-import type { MatchHistoryItem } from '@modules/history';
 import { HistorySection } from '@modules/history';
 import { GameState, TournamentEvent } from '../types.ts';
 import { useGame } from '@modules/game';
@@ -13,8 +12,6 @@ import { getDb } from '@infra/firebase';
 import { doc, getDocFromServer, setDoc } from 'firebase/firestore';
 
 interface Props {
-  history: MatchHistoryItem[];
-  setHistory: React.Dispatch<React.SetStateAction<MatchHistoryItem[]>>;
   onDeleteMatch: (id: string) => void;
   onDeleteManyMatches: (ids: Set<string>) => void;
   onBack: () => void;
@@ -145,7 +142,7 @@ const WatchLoginApproval: React.FC = () => {
 };
 
 export const SettingsScreen: React.FC<Props> = (props) => {
-  const { userProfile, setUserProfile, matchSettings, setMatchSettings } = useGame();
+  const { userProfile, setUserProfile, matchSettings, setMatchSettings, matchHistory, setMatchHistory } = useGame();
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
   const teamSectionRef = useRef<{ triggerStart: () => void }>(null);
   const prevTabRef = useRef(props.activeTab);
@@ -182,7 +179,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
         return (
           <HistorySection 
             appUrl={props.appUrl}
-            history={props.history} 
+            history={matchHistory} 
             searchQuery="" 
             setSearchQuery={() => {}} 
             isSyncingAll={props.isSyncingAll || false} 

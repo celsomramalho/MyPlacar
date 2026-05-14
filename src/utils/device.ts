@@ -26,3 +26,19 @@ export const getDeviceType = (): 'watch' | 'phone' | 'tablet' | 'laptop' => {
   const isLaptop = label.includes('note') || label.includes('laptop') || label.includes('pc') || label.includes('computador');
   return isLaptop ? 'laptop' : 'tablet';
 };
+
+/**
+ * Obtém ou gera um ID único persistente para este dispositivo.
+ */
+export const getDeviceId = (): string => {
+  try {
+    let id = localStorage.getItem('myPlacar_DeviceId');
+    if (!id) {
+      id = Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('myPlacar_DeviceId', id);
+    }
+    return id;
+  } catch (_e) {
+    return "session_" + Math.random().toString(36).substring(2, 11);
+  }
+};

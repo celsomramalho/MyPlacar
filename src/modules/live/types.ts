@@ -24,13 +24,13 @@ export interface LiveContextValue {
   setFbSyncStatus: React.Dispatch<React.SetStateAction<{ team: 1 | 2; seq: number; isObserver: boolean } | null>>;
 
   // ── Refs de ciclo de vida ───────────────────────────────────────────────────
-  activeLivesRef: React.RefObject<GameState[]>;
-  tookControlAtRef: React.RefObject<number>;
-  lostControlAtRef: React.RefObject<number>;
-  isClosingLiveRef: React.RefObject<boolean>;
-  lastFbScoreKeyRef: React.RefObject<string>;
-  fbSyncTimerRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
-  hasAutoEnabledScoreboardRef: React.RefObject<boolean>;
+  activeLivesRef: React.MutableRefObject<GameState[]>;
+  tookControlAtRef: React.MutableRefObject<number>;
+  lostControlAtRef: React.MutableRefObject<number>;
+  isClosingLiveRef: React.MutableRefObject<boolean>;
+  lastFbScoreKeyRef: React.MutableRefObject<string>;
+  fbSyncTimerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  hasAutoEnabledScoreboardRef: React.MutableRefObject<boolean>;
 
   // ── Papéis e permissões (calculados) ───────────────────────────────────────
   /** Papel permanente do dispositivo na live: 'owner' | 'judge' | 'observer' | 'spectator' */

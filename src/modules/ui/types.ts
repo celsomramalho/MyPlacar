@@ -1,0 +1,36 @@
+import { ReactNode, Dispatch, SetStateAction } from 'react';
+import { Screen } from '../../types';
+import type { QueuePlayer } from '../partners';
+
+export interface ModalConfig {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: 'info' | 'danger' | 'success';
+  icon?: ReactNode;
+}
+
+export interface UIContextValue {
+  currentScreen: Screen;
+  setCurrentScreen: (screen: Screen) => void;
+  
+  modalConfig: ModalConfig | null;
+  setModalConfig: Dispatch<SetStateAction<ModalConfig | null>>;
+  
+  showLiveControlOverlay: boolean;
+  setShowLiveControlOverlay: Dispatch<SetStateAction<boolean>>;
+  
+  playerQueue: QueuePlayer[];
+  setPlayerQueue: Dispatch<SetStateAction<QueuePlayer[]>>;
+
+  isSettingsInicialSaved: boolean;
+  setIsSettingsInicialSaved: Dispatch<SetStateAction<boolean>>;
+
+  isSettingsRegrasSaved: boolean;
+  setIsSettingsRegrasSaved: Dispatch<SetStateAction<boolean>>;
+
+  overlayAcceptedRef: React.MutableRefObject<string | null>;
+}

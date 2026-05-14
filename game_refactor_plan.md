@@ -9,7 +9,7 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 
 ---
 
-## 🚦 Status Atual: Fase 6 em progresso. Passo 6.1 — `matchSettings` ✅ telas concluídas, props removidas do `App.tsx`. Espelho no `AppInner` permanece (consumidores internos: persistência, closures de jogo, exportação). Próximo: avançar para o próximo espelho (`matchHistory` ou iniciar Passo 5.1 — `UIContext`).
+## 🚦 Status Atual: Fase 5 retomada. Passo 5.3 — Migração de `handleCloseCloudLive` e `handleDeleteJudge` ✅ concluída. Próximo: Passo 5.4 — Migrar `handleControlLive` e `handleObserveLive`.
 
 ---
 
@@ -145,18 +145,20 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 
 **Decisão:** Não injetar dependências externas via props no `GameContext`. A Fase 5 será retomada após a criação de um `UIContext`.
 
-#### Passo 5.1 — Criar `UIContext` (pré-requisito) 🔜
-- [ ] Criar `src/modules/ui/UIContext.tsx` com `modalConfig`/`setModalConfig`, `currentScreen`/`setCurrentScreen`, `showLiveControlOverlay`/`setShowLiveControlOverlay`.
-- [ ] Montar `<UIProvider>` acima do `<GameProvider>` na árvore.
-- [ ] Expor `useUI()` hook.
+#### Passo 5.1 — Criar `UIContext` (pré-requisito) ✅
+- [x] Criar `src/modules/ui/UIContext.tsx` com `modalConfig`/`setModalConfig`, `currentScreen`/`setCurrentScreen`, `showLiveControlOverlay`/`setShowLiveControlOverlay`.
+- [x] Montar `<UIProvider>` acima do `<GameProvider>` na árvore.
+- [x] Expor `useUI()` hook.
 
-#### Passo 5.2 — Migrar `handleLeaveLive` e `finalizeMatchInternal`
-- [ ] Mover para o `GameContext.tsx` após `UIContext` disponível.
-- [ ] `deviceId` recalculado dentro do `GameContext` com a lógica do `getDeviceId()`.
-- [ ] Expor via `GameContextValue`.
+#### Passo 5.2 — Migrar `handleLeaveLive` e `finalizeMatchInternal` ✅
+- [x] Mover para o `GameContext.tsx` após `UIContext` disponível.
+- [x] `deviceId` recalculado dentro do `GameContext` com a lógica do `getDeviceId()`.
+- [x] Expor via `GameContextValue`.
 
-#### Passo 5.3 — Migrar `handleCloseCloudLive` e `handleDeleteJudge`
-- [ ] Consumir `useUI()` para deps de UI.
+#### Passo 5.3 — Migrar `handleCloseCloudLive` e `handleDeleteJudge` ✅
+- [x] Consumir `useUI()` para deps de UI.
+- [x] Consumir `useLive()` para obter refs (como `isClosingLiveRef`) sem precisar repassá-los pelo `AppInner`.
+- [x] Mover do `App.tsx` para o `GameContext.tsx` e expor via `GameBridge`.
 
 #### Passo 5.4 — Migrar `handleControlLive` e `handleObserveLive`
 
@@ -173,7 +175,7 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 
 | Espelho | Status | Telas migradas | Consumidores restantes no AppInner |
 |---|---|---|---|
-| `matchHistory` | 🔄 Parcial | `LocationScreen` ✅ | exportação de dados, `useOnlineSync`, reset geral, outra tela (linha 3440) |
+| `matchHistory` | 🔄 Parcial (Opção A) | `LocationScreen` ✅, `SettingsScreen` ✅ | **Espelho permanece** — escopo mínimo: reatividade para os dois `useEffect` de sync automático (via `matchHistory.length`), `handleLogout`. Remoção completa requer migração (Opção B) no futuro. |
 | `partners` | 🔄 Parcial | `PartnersScreen` ✅, `SettingsScreen` (prop morta) ✅ | sync localStorage, exportação de dados, `finalizeMatchInternal` |
 | `userProfile` | ✅ Telas concluídas | `NavigationDrawer` ✅, `NewGameScreen` ✅, `PartnersScreen` ✅, `CommunicationsScreen` ✅, `SettingsScreen` ✅ | hooks internos, closures Firestore, `finalizeMatchInternal`, `LiveProvider`, `EventDetailScreen` (aguarda fonte de `@modules/events`) |
 | `matchSettings` | ✅ Telas concluídas | `PartnersScreen` ✅, `NewGameScreen` ✅, `SettingsScreen` ✅ (incl. `ProfileScreen` e `TeamSection`) | **Espelho permanece** — 3 grupos de consumidores internos impedem remoção: (1) `useEffect` de persistência/dirty-check (linhas ~1335–1369), (2) closures `initGameState`/`startGame`/`handleControlLive` (~2257–3143), (3) exportação de dados (linha 1937). Remoção do espelho aguarda Fase 5 (`UIContext`) e migração dessas closures para o `GameContext`. |
