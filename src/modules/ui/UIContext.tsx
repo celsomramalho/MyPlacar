@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { UIContextValue, ModalConfig } from './types';
+import { UIContextValue, ModalConfig, VoiceLog } from './types';
 import { Screen } from '../../types';
 import type { QueuePlayer } from '../partners';
 import { safeJsonParse } from '../../utils/safeJsonParse.ts';
@@ -26,6 +26,7 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children, initialScreen 
 
   const [isSettingsInicialSaved, setIsSettingsInicialSaved] = useState<boolean>(true);
   const [isSettingsRegrasSaved, setIsSettingsRegrasSaved] = useState<boolean>(true);
+  const [isProfileSaved, setIsProfileSaved] = useState<boolean>(true);
   const overlayAcceptedRef = useRef<string | null>(null);
 
   const [judgePinInput, setJudgePinInput] = useState<string>('');
@@ -33,6 +34,11 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children, initialScreen 
   const [isSearchingJudgePin, setIsSearchingJudgePin] = useState<boolean>(false);
   const [isSavingJudge, setIsSavingJudge] = useState<boolean>(false);
   const [isSelectingJudge, setIsSelectingJudge] = useState<boolean>(false);
+
+  const [isRecoveryFromMatchOver, setIsRecoveryFromMatchOver] = useState<boolean>(false);
+  const [isWaitingSync, setIsWaitingSync] = useState<boolean>(false);
+
+  const [voiceLogs, setVoiceLogs] = useState<VoiceLog[]>([]);
 
   // Salvar playerQueue no localStorage quando mudar
   useEffect(() => {
@@ -64,12 +70,17 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children, initialScreen 
         setIsSettingsInicialSaved,
         isSettingsRegrasSaved,
         setIsSettingsRegrasSaved,
+        isProfileSaved,
+        setIsProfileSaved,
         overlayAcceptedRef,
         judgePinInput, setJudgePinInput,
         judgeNicknameLookup, setJudgeNicknameLookup,
         isSearchingJudgePin, setIsSearchingJudgePin,
         isSavingJudge, setIsSavingJudge,
         isSelectingJudge, setIsSelectingJudge,
+        isRecoveryFromMatchOver, setIsRecoveryFromMatchOver,
+        isWaitingSync, setIsWaitingSync,
+        voiceLogs, setVoiceLogs,
       }}
     >
       {children}

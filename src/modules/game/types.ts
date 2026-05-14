@@ -12,10 +12,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import type { GameState, MatchSettings } from '../../types.ts';
+import type { GameState, MatchSettings, PointType } from '../../types.ts';
 import type { UserProfile } from '@modules/auth';
 import type { MatchHistoryItem } from '@modules/history';
 import type { Partner } from '@modules/partners';
+import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events';
 
 // ─── GameContextValue ─────────────────────────────────────────────────────────
 // Todos os campos são obrigatórios. O contexto não é criado com um valor padrão
@@ -71,4 +72,15 @@ export interface GameContextValue {
   handleObserveLive: (targetPin?: string) => Promise<void>;
   handleSyncScoreboard: () => Promise<void>;
   handleAddJudge: (pin: string, nickname?: string) => Promise<void>;
+  handleSaveProfile: () => Promise<void>;
+
+  historyStack: GameState[];
+  setHistoryStack: Dispatch<SetStateAction<GameState[]>>;
+  handleScoreUpdate: (player: 1 | 2, type?: PointType, source?: string) => void;
+  handleCorrectScore: (type: 'game' | 'gameSet' | 'matchSet', value: string) => void;
+  handleUndo: () => void;
+  startGame: (state: GameState) => void;
+  handleResetMatch: () => void;
+  initGameState: (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => Promise<void>;
+  canStartMatch: boolean;
 }

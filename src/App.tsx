@@ -144,7 +144,11 @@ const AppInner: React.FC = () => {
     judgeNicknameLookup, setJudgeNicknameLookup,
     isSearchingJudgePin, setIsSearchingJudgePin,
     isSavingJudge, setIsSavingJudge,
-    isSelectingJudge, setIsSelectingJudge
+    isSelectingJudge, setIsSelectingJudge,
+    isRecoveryFromMatchOver, setIsRecoveryFromMatchOver,
+    isWaitingSync, setIsWaitingSync,
+    isProfileSaved,
+    voiceLogs, setVoiceLogs
   } = useUI();
 
   // Mantém a tela acesa enquanto o placar estiver visível — independente de remounts do ScoreboardScreen.
@@ -196,8 +200,6 @@ const AppInner: React.FC = () => {
   const [showInstallPwa, setShowInstallPwa] = useState(false);
   const [installPromptShownSession, setInstallPromptShownSession] = useState(true);
   const { deferredPrompt } = useInstallPwa();
-  
-  const [isProfileSaved, setIsProfileSaved] = useState(true);
   const [activeCloudMatch, setActiveCloudMatch] = useState<{id: string, sport: string} | null>(null);
   // (ver bloco "espelhos do LiveContext" abaixo, junto a fbSyncStatus)
   const [activeLives, setActiveLivesLocal] = useState<GameState[]>([]);
@@ -242,7 +244,6 @@ const AppInner: React.FC = () => {
 
   // ─── Live Logs: persistem ao trocar de tela ────────────────────────────────
   const [liveLogs, setLiveLogsLocal] = useState<LiveLogEntry[]>([]);
-  const [voiceLogs, setVoiceLogs] = useState<{id: string, startTime: string, before: string, after: string, text: string, latency: number, timestamp: number, isError?: boolean, winner?: 1 | 2, isRemote?: boolean, liveSequence?: number, liveId?: number, source: string}[]>([]);
 
   // Captura de logs via useAppLogger
 
@@ -317,8 +318,7 @@ const AppInner: React.FC = () => {
   // initialConfirmDeleteJudge: sinaliza que o overlay deve abrir já na tela de confirmação de remoção de juiz.
   const [initialConfirmDeleteJudge, setInitialConfirmDeleteJudge] = useState(false);
 
-  const [isRecoveryFromMatchOver, setIsRecoveryFromMatchOver] = useState(false);
-  const [isWaitingSync, setIsWaitingSync] = useState(false);
+
   const [isServiceInterrupted, setIsServiceInterrupted] = useState(false);
 
   // ── fbSyncStatus / liveLogs / activeLives — espelhos do LiveContext ──────
@@ -483,7 +483,7 @@ const AppInner: React.FC = () => {
   };
   const prevSettingsRef = useRef<MatchSettings | null>(null);
   const prevProfileRef = useRef<UserProfile | null>(null);
-  const finalizationTimerRef = useRef<any>(null);
+
   
   const lastSentStateRef = useRef<string>("");
   // tookControlAtRef, lostControlAtRef, isClosingLiveRef vivem no LiveContext;
@@ -526,6 +526,31 @@ const AppInner: React.FC = () => {
 
   const handleAddJudgeLocalRef = useRef<((pin: string, nickname?: string) => Promise<void>)>(async () => {});
   const handleAddJudge = useCallback(async (pin: string, nickname?: string) => handleAddJudgeLocalRef.current(pin, nickname), []);
+
+  const handleSaveProfileLocalRef = useRef<() => Promise<void>>(async () => {});
+  const handleSaveProfile = useCallback(async () => handleSaveProfileLocalRef.current(), []);
+
+  const setHistoryStackLocalRef = useRef<React.Dispatch<React.SetStateAction<GameState[]>>>(() => {});
+  const setHistoryStack = useCallback<React.Dispatch<React.SetStateAction<GameState[]>>>((v) => setHistoryStackLocalRef.current(v), []);
+
+  const handleScoreUpdateLocalRef = useRef<((player: 1 | 2, type?: PointType, source?: string) => void)>(() => {});
+  const handleScoreUpdate = useCallback((player: 1 | 2, type?: PointType, source?: string) => handleScoreUpdateLocalRef.current(player, type, source), []);
+
+  const handleCorrectScoreLocalRef = useRef<((type: 'game' | 'gameSet' | 'matchSet', value: string) => void)>(() => {});
+  const handleCorrectScore = useCallback((type: 'game' | 'gameSet' | 'matchSet', value: string) => handleCorrectScoreLocalRef.current(type, value), []);
+
+  const handleUndoLocalRef = useRef<(() => void)>(() => {});
+  const handleUndo = useCallback(() => handleUndoLocalRef.current(), []);
+
+  const startGameLocalRef = useRef<((state: GameState) => void)>(() => {});
+  const startGame = useCallback((state: GameState) => startGameLocalRef.current(state), []);
+
+  const handleResetMatchLocalRef = useRef<(() => void)>(() => {});
+  const handleResetMatch = useCallback(() => handleResetMatchLocalRef.current(), []);
+
+  const initGameStateLocalRef = useRef<((forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => Promise<void>)>(async () => {});
+  const initGameState = useCallback(async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => initGameStateLocalRef.current(forceNew, tournamentOverride), []);
+
   const currentFullDeviceName = useMemo(() => {
     const label = matchSettings.deviceLabel || 'Aparelho';
     const nick = userProfile.nickname || 'Usuário';
@@ -1322,54 +1347,6 @@ const AppInner: React.FC = () => {
     prevCommandOwnerIdWasSelf.current = hasControl;
   }, [isCommandOwner, gameState?.commandOwnerId, gameState?.isMirroringActive, gameState?.isLiveClosed]);
 
-  useEffect(() => {
-    if (!prevSettingsRef.current) { prevSettingsRef.current = { ...matchSettings }; return; }
-    const prev = prevSettingsRef.current;
-    const inicialChanged = prev.p1Name !== matchSettings.p1Name || prev.p1Partner !== matchSettings.p1Partner || prev.p2Name !== matchSettings.p2Name || prev.p2Partner !== matchSettings.p2Partner || prev.isDoubles !== matchSettings.isDoubles || prev.p1Color !== matchSettings.p1Color || prev.p2Color !== matchSettings.p2Color;
-    const technicalFieldsChanged = prev.sportType !== matchSettings.sportType || prev.sets !== matchSettings.sets || prev.gamesPerSet !== matchSettings.gamesPerSet || prev.noAd !== matchSettings.noAd || prev.tieBreak !== matchSettings.tieBreak || prev.tieBreakAt !== matchSettings.tieBreakAt || prev.tieBreakPoints !== matchSettings.tieBreakPoints || prev.tieBreakWinByTwo !== matchSettings.tieBreakWinByTwo || prev.switchSidesOdd !== matchSettings.switchSidesOdd || prev.tieBreakSideSwitchMode !== matchSettings.tieBreakSideSwitchMode || prev.pickleballScoringMode !== matchSettings.pickleballScoringMode || prev.pickleballServiceMode !== matchSettings.pickleballServiceMode || prev.useGeminiVoice !== matchSettings.useGeminiVoice || prev.isWatchMode !== matchSettings.isWatchMode || prev.brightness !== matchSettings.brightness || prev.volume !== matchSettings.volume || prev.actionCooldown !== matchSettings.actionCooldown || prev.stateLockout !== matchSettings.stateLockout || prev.deviceLabel !== matchSettings.deviceLabel || prev.selectedVoiceURI !== matchSettings.selectedVoiceURI || prev.voiceEnabled !== matchSettings.voiceEnabled || prev.voiceScoring !== matchSettings.voiceScoring || prev.winnersStay !== matchSettings.winnersStay;
-    if (inicialChanged) setIsSettingsInicialSaved(false);
-    if (prev.sportType !== matchSettings.sportType) { setIsSettingsRegrasSaved(true); } else if (technicalFieldsChanged) { setIsSettingsRegrasSaved(false); }
-
-    try {
-      localStorage.setItem('myPlacarSettings', JSON.stringify(matchSettings));
-      localStorage.setItem('myPlacar_LocalDeviceLabel', matchSettings.deviceLabel || '');
-      localStorage.setItem('myPlacar_LocalBrightness', matchSettings.brightness.toString());
-      localStorage.setItem('myPlacar_LocalVolume', matchSettings.volume.toString());
-      localStorage.setItem('myPlacar_LocalWatchMode', matchSettings.isWatchMode ? 'true' : 'false');
-      localStorage.setItem('myPlacar_LocalVoiceURI', matchSettings.selectedVoiceURI || '');
-      localStorage.setItem('myPlacar_LocalVoiceEnabled', matchSettings.voiceEnabled ? 'true' : 'false');
-      localStorage.setItem('myPlacar_LocalVoiceScoring', matchSettings.voiceScoring ? 'true' : 'false');
-      localStorage.setItem('myPlacar_LocalActionCooldown', matchSettings.actionCooldown.toString());
-      localStorage.setItem('myPlacar_LocalStateLockout', matchSettings.stateLockout.toString());
-      localStorage.setItem('myPlacar_LocalScreenDimTimeout', (matchSettings.screenDimTimeout || 10).toString());
-    } catch {}
-
-    if (gameState && !gameState.isConfirmedFinished) {
-        setGameState(prevG => {
-            if (!prevG) return prevG;
-            return {
-                ...prevG,
-                p1: { ...prevG.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, color: matchSettings.p1Color },
-                p2: { ...prevG.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, color: matchSettings.p2Color },
-                matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: !!matchSettings.isScoreboardMode }
-            };
-        });
-    }
-    prevSettingsRef.current = { ...matchSettings };
-    try { localStorage.setItem('myPlacarSettings', JSON.stringify(matchSettings)); } catch {}
-  }, [matchSettings, gameState?.matchId]);
-
-  useEffect(() => {
-    if (!prevProfileRef.current) { prevProfileRef.current = { ...userProfile }; return; }
-    const prev = prevProfileRef.current;
-    if (prev.name !== userProfile.name || prev.nickname !== userProfile.nickname || prev.gender !== userProfile.gender || prev.authMethod !== userProfile.authMethod) {
-      setIsProfileSaved(false);
-    }
-    if (prev.authMethod === 'pin' && userProfile.authMethod === 'password') {
-      handleSaveProfile();
-    }
-    prevProfileRef.current = { ...userProfile };
-  }, [userProfile]);
 
   useEffect(() => {
     const db = getDb();
@@ -1867,24 +1844,6 @@ const AppInner: React.FC = () => {
     if (thisDeviceIsOwnerOfAnyLive || thisDeviceIsActiveController) ctxHasAutoEnabledScoreboardRef.current = false;
   }, [cloudLiveExists, activeLives, deviceId]);
 
-  const [historyStack, setHistoryStack] = useState<GameState[]>([]);
-  // Ref espelho do historyStack — garante que callbacks com closure stale
-  // (como onUndo passado como prop) sempre leiam o valor mais recente.
-  const historyStackRef = useRef<GameState[]>([]);
-  useEffect(() => { historyStackRef.current = historyStack; }, [historyStack]);
-
-  // Sempre inicializa gameState e historyStack juntos para garantir que
-  // o undo consiga voltar até o estado zero a zero.
-  const startGame = useCallback((state: GameState) => {
-    setGameState(state);
-    setHistoryStack([state]);
-    historyStackRef.current = [state];
-    ctxSetLiveLogs([]); // Zera logs ao iniciar nova partida
-    setVoiceLogs([]); // Zera voice logs ao iniciar nova partida
-    try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(state)); } catch {}
-  }, []);
-  const startGameRef = useRef(startGame);
-  useEffect(() => { startGameRef.current = startGame; }, [startGame]);
   // ── matchHistory — espelho do GameContext ────────────────────────────────
   // Estado vive no <GameProvider>. Espelho necessário: consumido como trigger
   // reativo nos useEffect de sync (matchHistory.length nas deps — linhas ~1981 e ~2027).
@@ -2058,220 +2017,8 @@ const AppInner: React.FC = () => {
     return s.p1Name.trim().length > 0 && (s.p1Partner || '').trim().length > 0 && s.p2Name.trim().length > 0 && (s.p2Partner || '').trim().length > 0;
   }, [matchSettings]);
 
-  const initGameState = async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
-    if (finalizationTimerRef.current) { clearTimeout(finalizationTimerRef.current); finalizationTimerRef.current = null; }
-    if (forceNew && !tournamentOverride && gameState && (gameState.p1.games > 0 || gameState.p2.games > 0 || gameState.p1.sets.length > 0 || gameState.p1.score !== '0' || gameState.p2.score !== '0')) {
-       setModalConfig({
-         title: "Deseja iniciar uma nova partida?",
-         message: "O placar atual está em andamento. Deseja realmente iniciar uma nova partida?",
-         confirmLabel: "Sim, iniciar",
-         cancelLabel: "Não, continuar a partida",
-         onConfirm: () => { setModalConfig(null); initGameStateInternal(forceNew, tournamentOverride); },
-         onCancel: () => { setModalConfig(null); setCurrentScreen('scoreboard'); }
-       });
-       return;
-    }
-    initGameStateInternal(forceNew, tournamentOverride);
-  };
 
-  const initGameStateInternal = async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
-    const savedSettings = safeJsonParse('myPlacarSettings', matchSettings);
-    let configToUse = { ...savedSettings };
-    let tournamentMeta: Partial<GameState> = {};
 
-    if (tournamentOverride) {
-       const { match, pair1, pair2, event } = tournamentOverride;
-       configToUse = {
-          ...matchSettings,
-          p1Name: pair1.p1.nickname,
-          p1Partner: pair1.p2.nickname,
-          p2Name: pair2.p1.nickname,
-          p2Partner: pair2.p2.nickname,
-          isDoubles: true,
-          p1Verified: true, p1PartnerVerified: true, p2Verified: true, p2PartnerVerified: true,
-          ...(event.config || {})
-       };
-       tournamentMeta = {
-          tournamentMatchId: match.id,
-          tournamentPin: event.pin
-       };
-       forceNew = true;
-        if (navigator.onLine) {
-           const db = getDb();
-           if (db) {
-              markTournamentMatchLive(db as Firestore, event.pin, event.matches || [], match.id, userProfile.pin).catch(() => {});
-           }
-        }
-    }
-
-    if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
-       const db = getDb();
-       if (db) {
-          const updatedMatchConfig = { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode };
-          const stateToSync = sanitizeForFirestore({
-             ...gameState,
-             controllers: undefined,  // gerenciado via field-path, nunca sobrescrever
-             p1: { ...gameState.p1, name: configToUse.p1Name, partnerName: configToUse.p1Partner, color: configToUse.p1Color },
-             p2: { ...gameState.p2, name: configToUse.p2Name, partnerName: configToUse.p2Partner, color: configToUse.p2Color },
-             matchConfig: updatedMatchConfig,
-             isLiveClosed: false
-          });
-          const targetPin = resolveTargetPin('initSync');
-          if (stateToSync && targetPin) await setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
-       }
-    }
-
-    if (forceNew && navigator.onLine) {
-        const db = getDb();
-        if (db && userProfile.pin) {
-           const pinUpper = userProfile.pin.toUpperCase();
-           try {
-             const snap = await getDoc(doc(db, "live_matches", pinUpper));
-             if (snap.exists()) {
-               // Sempre deletar live existente ao iniciar nova live
-               await deleteDoc(doc(db, "live_matches", pinUpper)).catch(() => {});
-             }
-           } catch {}
-        }
-    }
-    if (gameState && gameState.isMatchOver && !gameState.isConfirmedFinished) finalizeMatchInternal({ ...gameState, isConfirmedFinished: true });
-    
-    setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true); setIsRecoveryFromMatchOver(false);
-    if (!forceNew && navigator.onLine) {
-        const db = getDb();
-        if (db && userProfile.pin) {
-           try {
-             const snap = await getDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()));
-             if (snap.exists() && snap.data().isLiveClosed !== true) { 
-                if (gameState && gameState.ownerPin?.toUpperCase() === userProfile.pin.toUpperCase()) {
-                   setCurrentScreen('scoreboard'); 
-                   return; 
-                }
-                setIsWaitingSync(true); 
-                setCurrentScreen('scoreboard'); 
-                return; 
-             }
-           } catch {}
-        }
-    }
-    if (!forceNew && gameState) {
-      const updatedState: GameState = { 
-        ...gameState, 
-        isLiveClosed: false,
-        matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: !!matchSettings.isScoreboardMode }, 
-        p1: { ...gameState.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, color: matchSettings.p1Color }, 
-        p2: { ...gameState.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, color: matchSettings.p2Color }, 
-        isPaused: false 
-      };
-      setGameState(updatedState);
-      try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
-      setCurrentScreen('scoreboard'); return;
-    }
-    
-    if (!tournamentOverride && !canStartMatch) return;
-    const globalLiveCount = parseInt(localStorage.getItem('myPlacarLiveGlobalCount') || '0') + 1;
-    try { localStorage.setItem('myPlacarLiveGlobalCount', globalLiveCount.toString()); } catch {}
-    const db = getDb();
-    if (db && userProfile.pin && navigator.onLine) { 
-      try { 
-        // Sempre deletar live existente ao iniciar nova live
-        await deleteDoc(doc(db, "live_matches", userProfile.pin.toUpperCase())).catch(() => {}); 
-      } catch {} 
-    }
-    
-    const newGameState: GameState = {
-      matchId: `match_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      startTime: Date.now(),
-      p1: { name: configToUse.p1Name, partnerName: configToUse.p1Partner, score: '0', games: 0, sets: [], color: configToUse.p1Color },
-      p2: { name: configToUse.p2Name, partnerName: configToUse.p2Partner, score: '0', games: 0, sets: [], color: configToUse.p2Color },
-      server: configToUse.initialServer, servingOrderOffset: configToUse.initialServer === 1 ? 0 : 1,
-      pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode }, history: [], currentSet: 0, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
-      isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin, ownerDeviceId: deviceId,
-      liveSessionCounter: globalLiveCount, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, 
-      controllers: { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: true, role: 'owner' } },
-      ...tournamentMeta
-    };
-    
-    // Inicializa sub-estado do pickleball antes de iniciar o jogo,
-    // garantindo que state.pickleball exista desde o primeiro render
-    // (o announcer precisa dele para o anúncio de início da partida).
-    if (configToUse.sportType === 'pickleball') {
-      newGameState.pickleball = initPickleballState(newGameState);
-      // Sincroniza servingOrderOffset com pkl.server para o marcador visual
-      // (o GameState base inicia sempre com offset 0 ou 1, ignorando serverNumber=2)
-      newGameState.servingOrderOffset =
-        (newGameState.pickleball.server.team === 1 ? 0 : 1) +
-        (newGameState.pickleball.server.serverNumber === 2 ? 2 : 0);
-    }
-    
-    setMatchSettings(configToUse);
-    // PERSISTE ownerPin no localStorage imediatamente ao criar a live.
-    // Isso garante que resolveTargetPin tenha uma fonte confiável mesmo antes
-    // de activeLives ser populado pelo onSnapshot da collection.
-    if (userProfile.pin) persistLiveOwnerPin(userProfile.pin);
-    startGame(newGameState);
-    setCurrentScreen('scoreboard');
-  };
-
-  const handleScoreUpdate = (player: 1 | 2, type: PointType = 'rally', source: string = 'cb') => {
-    const current = gameState;
-    if (!current || current.isConfirmedFinished || current.isMatchOver || (current.isMirroringActive && (current.isMirroringActive && current.isLiveClosed))) return;
-    // Bloqueia se outro device é o controller ativo (live em andamento)
-    if (current.isMirroringActive && current.commandOwnerId !== deviceId) return;
-    // Bloqueia se há juiz designado e este device não é o controller
-    // (mesmo antes de ativar o mirroring, o juiz deve ser o único a pontuar)
-    if (!current.isMirroringActive && current.judgePin && current.commandOwnerId !== deviceId) return;
-    setIsRecoveryFromMatchOver(false);
-    // Usa setState funcional para garantir que incrementScore opera
-    // sempre sobre o estado mais recente, evitando closure stale
-    setGameState(prev => {
-      if (!prev || prev.isConfirmedFinished || prev.isMatchOver || (prev.isMirroringActive && (prev.isMirroringActive && prev.isLiveClosed))) return prev;
-      const next = incrementScore(prev, player, type, source);
-      next.isPaused = false;
-      // Empilha na history dentro do mesmo ciclo de render
-      setHistoryStack(stack => {
-        const updated = [...stack, JSON.parse(JSON.stringify(next))];
-        historyStackRef.current = updated;
-        return updated;
-      });
-      return { ...next };
-    });
-  };
-
-  const handleCorrectScore = (type: 'game' | 'gameSet' | 'matchSet', value: string) => {
-    if (!gameState || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
-    if (gameState.isMirroringActive && gameState.commandOwnerId !== deviceId) return;
-    setIsRecoveryFromMatchOver(false);
-    const match = value.toLowerCase().match(/(\d+|ad)\s*[a-]\s*(\d+|ad)/);
-    if (!match) return;
-    const v1 = match[1]; const v2 = match[2];
-    const nextState = JSON.parse(JSON.stringify(gameState)) as GameState;
-    if (type === 'game') {
-      const tennisMap: Record<string, number> = { '0': 0, '15': 1, '30': 2, '40': 3, 'ad': 4 };
-      const p1Target = tennisMap[v1] ?? parseInt(v1); const p2Target = tennisMap[v2] ?? parseInt(v2);
-      const lastFinalizedIdx = [...(nextState.pointHistory ?? [])].reverse().findIndex(p => !!p.resultingScore);
-      const startIndex = lastFinalizedIdx === -1 ? 0 : (nextState.pointHistory ?? []).length - lastFinalizedIdx;
-      nextState.pointHistory = (nextState.pointHistory ?? []).slice(0, startIndex);
-      for (let i = 0; i < p1Target; i++) nextState.pointHistory.push({ winner: 1, type: 'rally', server: nextState.server, scoreBefore: '...', source: 'cb' });
-      for (let i = 0; i < p2Target; i++) nextState.pointHistory.push({ winner: 2, type: 'rally', server: nextState.server, scoreBefore: '...', source: 'cb' });
-      nextState.p1.score = v1.charAt(0).toUpperCase() + v1.slice(1); nextState.p2.score = v2.charAt(0).toUpperCase() + v2.slice(1);
-    } else if (type === 'gameSet') {
-      const g1 = parseInt(v1); const g2 = parseInt(v2);
-      nextState.pointHistory = []; nextState.p1.games = g1; nextState.p2.games = g2; nextState.p1.score = '0'; nextState.p2.score = '0';
-      for (let g = 0; g < g1; g++) { for (let b = 0; b < 4; b++) nextState.pointHistory.push({ winner: 1, type: 'rally', server: nextState.server, scoreBefore: '...', source: 'cb', resultingScore: b === 3 ? `${g+1}-${nextState.p2.games}` : undefined }); }
-      for (let g = 0; g < g2; g++) { for (let b = 0; b < 4; b++) nextState.pointHistory.push({ winner: 2, type: 'rally', server: nextState.server, scoreBefore: '...', source: 'cb', resultingScore: b === 3 ? `${nextState.p1.games}-${g+1}` : undefined }); }
-    } else if (type === 'matchSet') {
-      const s1 = parseInt(v1); const s2 = parseInt(v2);
-      const maxGames = nextState.matchConfig.gamesPerSet || 6;
-      nextState.p1.sets = []; nextState.p2.sets = [];
-      for (let i = 0; i < s1; i++) { nextState.p1.sets.push(maxGames); nextState.p2.sets.push(0); }
-      for (let i = 0; i < s2; i++) { nextState.p1.sets.push(0); nextState.p2.sets.push(maxGames); }
-      nextState.p1.games = 0; nextState.p2.games = 0;
-      nextState.p1.score = '0'; nextState.p2.score = '0';
-      nextState.currentSet = s1 + s2;
-    }
-    setGameState(nextState); setHistoryStack([JSON.parse(JSON.stringify(nextState))]);
-  };
 
   const handleConnectRemote = async () => {
     if (!activeCloudMatch || !navigator.onLine) return;
@@ -2403,35 +2150,7 @@ const AppInner: React.FC = () => {
     setTimeout(() => setModalConfig(null), 2500);
   };
 
-  const handleSaveProfile = async () => {
-    try {
-      localStorage.setItem('myPlacarUserProfile', JSON.stringify(userProfile));
-      prevProfileRef.current = { ...userProfile };
-      setIsProfileSaved(true);
-      if (navigator.onLine && userProfile.email) {
-        const db = getDb();
-        if (db) {
-          await setDoc(doc(db as Firestore, "users", userProfile.email.toLowerCase().trim()), {
-            name: userProfile.name,
-            nickname: userProfile.nickname,
-            phone: userProfile.phone || '',
-            gender: userProfile.gender || 'M',
-            pin: userProfile.pin,
-            authMethod: userProfile.authMethod || 'pin',
-            isProfileComplete: userProfile.isProfileComplete,
-            passkeyCredentialId: userProfile.passkeyCredentialId || null,
-            passkeyPublicKey: userProfile.passkeyPublicKey || null,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-          // ── espelho Supabase ────────────────────────────────────────────
-          mirrorUser(userProfile);
-          // ───────────────────────────────────────────────────────────────
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao salvar perfil:", e);
-    }
-  };
+
 
   const handleJoinTournament = async (pin: string, silent = false, profileOverride?: UserProfile) => {
     const db = getDb();
@@ -2496,6 +2215,27 @@ const AppInner: React.FC = () => {
     setActiveEvent(null);
     setUserEntryDate(null);
   };
+
+  const handleTogglePause = useCallback(() => {
+    const isCommandOwner = !gameState?.isMirroringActive || gameState?.commandOwnerId === deviceId;
+    if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner) return; 
+    setGameState(p => {
+      if (!p) return null;
+      const isNowPaused = !p.isPaused;
+      const now = Date.now();
+      if (isNowPaused) {
+        return { ...p, isPaused: true, lastPauseTime: now };
+      } else {
+        const pausedDuration = p.lastPauseTime ? now - p.lastPauseTime : 0;
+        return { 
+          ...p, 
+          isPaused: false, 
+          accumulatedPausedTime: (p.accumulatedPausedTime || 0) + pausedDuration,
+          lastPauseTime: undefined
+        };
+      }
+    }); 
+  }, [gameState, deviceId, setGameState]);
 
   const handleSmartSwitchServer = useCallback((team: 1 | 2, isPartner: boolean) => {
     if (!gameState || !isCommandOwner || gameState.isMatchOver) return;
@@ -2695,67 +2435,7 @@ const AppInner: React.FC = () => {
     setCurrentScreen('auth');
   }, []);
 
-  const handleResetMatch = useCallback(() => {
-    if (!gameState) return;
-    setModalConfig({
-      title: "Zerar partida",
-      message: "Deseja zerar a partida? Esta ação não pode ser desfeita.",
-      confirmLabel: "Sim, zerar",
-      onConfirm: () => {
-        const current = gameState;
-        const initialServer = current.matchConfig.initialServer ?? 1;
 
-        const resetState: GameState = {
-          ...current,
-          matchId: `match_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          startTime: Date.now(),
-          p1: {
-            ...current.p1,
-            name: current.matchConfig.p1Name,
-            partnerName: current.matchConfig.p1Partner,
-            color: current.matchConfig.p1Color,
-            score: '0',
-            games: 0,
-            sets: []
-          },
-          p2: {
-            ...current.p2,
-            name: current.matchConfig.p2Name,
-            partnerName: current.matchConfig.p2Partner,
-            color: current.matchConfig.p2Color,
-            score: '0',
-            games: 0,
-            sets: []
-          },
-          server: initialServer,
-          servingOrderOffset: initialServer === 1 ? 0 : 1,
-          pointHistory: [],
-          history: [],
-          currentSet: 0,
-          isMatchOver: false,
-          isConfirmedFinished: false,
-          matchDuration: 0,
-          isPaused: false,
-          isLiveClosed: false,
-          pickleball: undefined,
-        };
-
-        if (resetState.matchConfig.sportType === 'pickleball') {
-          resetState.pickleball = initPickleballState(resetState);
-          resetState.server = resetState.pickleball.server.team;
-          resetState.servingOrderOffset =
-            (resetState.pickleball.server.team === 1 ? 0 : 1) +
-            (resetState.pickleball.server.serverNumber === 2 ? 2 : 0);
-        }
-
-        startGame(resetState);
-        ctxSetLiveLogs([]);
-        setVoiceLogs([]);
-        setModalConfig(null);
-      },
-      onCancel: () => setModalConfig(null)
-    });
-  }, [gameState, startGame, ctxSetLiveLogs, setVoiceLogs]);
 
 
 
@@ -2800,6 +2480,14 @@ const AppInner: React.FC = () => {
             handleObserveLiveLocalRef.current = ctx.handleObserveLive;
             handleSyncScoreboardLocalRef.current = ctx.handleSyncScoreboard;
             handleAddJudgeLocalRef.current = ctx.handleAddJudge;
+            handleSaveProfileLocalRef.current = ctx.handleSaveProfile;
+            setHistoryStackLocalRef.current = ctx.setHistoryStack;
+            handleScoreUpdateLocalRef.current = ctx.handleScoreUpdate;
+            handleCorrectScoreLocalRef.current = ctx.handleCorrectScore;
+            handleUndoLocalRef.current = ctx.handleUndo;
+            startGameLocalRef.current = ctx.startGame;
+            handleResetMatchLocalRef.current = ctx.handleResetMatch;
+            initGameStateLocalRef.current = ctx.initGameState;
           }}
           onUpdate={(ctx) => {
             setUserProfileLocalRef.current(ctx.userProfile);
@@ -3045,34 +2733,10 @@ const AppInner: React.FC = () => {
         onAddJudge={() => handleAddJudge(judgePinInput, judgeNicknameLookup).then(() => { setJudgePinInput(''); setJudgeNicknameLookup(''); })}
         onDeleteJudge={() => { setInitialConfirmDeleteJudge(true); setShowLiveControlOverlay(true); }}
         isJudgeOnline={isJudgeOnline}
-        onSelectJudgeFromPartners={() => { setIsSelectingJudge(true); setCurrentScreen('partners'); }} onUndo={() => {         if (!gameState || !isCommandOwner) return;
-        const stack = historyStackRef.current;
-        const p = undoPoint(stack); 
-        if (p) { 
-          const s = gameState!; const isFinishedPending = (s.isMatchOver && !s.isConfirmedFinished);
-          if (isFinishedPending) { setHistoryStack(stack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false}); setIsRecoveryFromMatchOver(true); return; }
-          if (isRecoveryFromMatchOver) { const isCrossingGameOrSet = (p.p1.games !== s.p1.games) || (p.p2.games !== s.p2.games) || (p.p1.sets.length !== s.p1.sets.length); if (isCrossingGameOrSet) return; }
-          setHistoryStack(stack.slice(0,-1)); setGameState({...p, isPaused: false, isMatchOver: false});
-        } 
-      }} onSwitchServer={handleSmartSwitchServer} onTogglePause={() => { 
-        if(!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner) return; 
-        setGameState(p => {
-          if (!p) return null;
-          const isNowPaused = !p.isPaused;
-          const now = Date.now();
-          if (isNowPaused) {
-            return { ...p, isPaused: true, lastPauseTime: now };
-          } else {
-            const pausedDuration = p.lastPauseTime ? now - p.lastPauseTime : 0;
-            return { 
-              ...p, 
-              isPaused: false, 
-              accumulatedPausedTime: (p.accumulatedPausedTime || 0) + pausedDuration,
-              lastPauseTime: undefined
-            };
-          }
-        }); 
-      }} onBack={() => {
+        onSelectJudgeFromPartners={() => { setIsSelectingJudge(true); setCurrentScreen('partners'); }} 
+        onUndo={handleUndo} 
+        onSwitchServer={handleSmartSwitchServer} 
+        onTogglePause={handleTogglePause} onBack={() => {
         // C2: diálogos de saída por papel
         const liveAtiva = gameState?.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed) && !gameState.isConfirmedFinished;
         if (liveAtiva) {

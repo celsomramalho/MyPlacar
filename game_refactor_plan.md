@@ -182,8 +182,29 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 | `matchHistory` | 🔄 Parcial (Opção A) | `LocationScreen` ✅, `SettingsScreen` ✅ | **Espelho permanece** — escopo mínimo: reatividade para os dois `useEffect` de sync automático (via `matchHistory.length`), `handleLogout`. Remoção completa requer migração (Opção B) no futuro. |
 | `partners` | 🔄 Parcial | `PartnersScreen` ✅, `SettingsScreen` (prop morta) ✅ | sync localStorage, exportação de dados, `finalizeMatchInternal` |
 | `userProfile` | ✅ Telas concluídas | `NavigationDrawer` ✅, `NewGameScreen` ✅, `PartnersScreen` ✅, `CommunicationsScreen` ✅, `SettingsScreen` ✅ | hooks internos, closures Firestore, `finalizeMatchInternal`, `LiveProvider`, `EventDetailScreen` (aguarda fonte de `@modules/events`) |
-| `matchSettings` | ✅ Telas concluídas | `PartnersScreen` ✅, `NewGameScreen` ✅, `SettingsScreen` ✅ (incl. `ProfileScreen` e `TeamSection`) | **Espelho permanece** — 3 grupos de consumidores internos impedem remoção: (1) `useEffect` de persistência/dirty-check (linhas ~1335–1369), (2) closures `initGameState`/`startGame`/`handleControlLive` (~2257–3143), (3) exportação de dados (linha 1937). Remoção do espelho aguarda Fase 5 (`UIContext`) e migração dessas closures para o `GameContext`. |
-| `gameState` | ⏳ Pendente | — | depende também de refatorar o `LiveProvider` |
+| `matchSettings` | ⏳ Progresso (Passo 6.1) | `PartnersScreen` ✅, `NewGameScreen` ✅, `SettingsScreen` ✅ | **Grupo 1 removido!** (Hooks de persistência movidos p/ `GameContext`). Grupos restantes: (2) closures `initGameState`/`startGame`, (3) exportação de dados (`AppInner.tsx`). |
+| `gameState` | ⏳ Pendente | — | dependente das closures `initGameState`/`startGame`/`handleScoreUpdate` (Passo 6.1) |
+
+Para garantir a máxima segurança, o restante do Passo 6.1 será dividido em **Micro-passos** lógicos:
+
+#### Passo 6.1.1 — Motor de Pontuação (`handleScoreUpdate`, `handleCorrectScore`, `handleUndo`) ✅ CONCLUÍDO
+- Migrar `historyStack` e suas refs de histórico de jogadas para o `GameContext`.
+- Mover as 3 funções de alteração de pontos para o `GameContext` e expor via `GameBridge`.
+- **Risco:** Baixo. É pura manipulação de árvore `GameState` local.
+
+#### Passo 6.1.2 — Controle de Partida (`startGame`, `handleResetMatch`) ✅ CONCLUÍDO
+- O `AppInner` possui `voiceLogs` e `setVoiceLogs` que são zerados aqui. Precisaremos mover `voiceLogs` para o `UIContext` ou `GameContext` antes.
+- Mover `startGame` e `handleResetMatch` para o `GameContext` e conectá-los via ponte.
+- **Risco:** Médio. Lida com cronologia de logs e reset de engine.
+
+#### Passo 6.1.3 — Inicialização de Partida (`initGameState` e `initGameStateInternal`)
+- Essas funções geram o estado do Zero, inicializam o motor Pickleball e sincronizam `isLiveClosed` via Firestore.
+- Moveremos a lógica completa para o `GameContext.tsx`.
+- **Risco:** Alto. É o coração de inicio de partida e acoplamento com torneios.
+
+#### Passo 6.1.4 — Finalização e Exportação (`finalizeMatchInternal` e `exportData`)
+- Mover as lógicas de arquivamento no Firestore e exportação do DB local.
+- **Resultado:** Os espelhos do `AppInner` ficarão sem **NENHUM** set de modificação interna, podendo ser reduzidos ou sumariamente extintos (se o LiveProvider permitir).
 
 > ⚠️ **Nota `userProfile`:** O espelho local no `AppInner` **não foi removido** — ainda alimenta `<LiveProvider userProfile={userProfile}>`, ~25 dep arrays/closures internas e `finalizeMatchInternal`. Só cai na Fase 5. A `EventDetailScreen` ainda recebe `userProfile={userProfile}` no App.tsx pois sua fonte está em `@modules/events` (arquivo não disponível).
 

@@ -2,6 +2,22 @@ import { ReactNode, Dispatch, SetStateAction } from 'react';
 import { Screen } from '../../types';
 import type { QueuePlayer } from '../partners';
 
+export interface VoiceLog {
+  id: string;
+  startTime: string;
+  before: string;
+  after: string;
+  text: string;
+  latency: number;
+  timestamp: number;
+  isError?: boolean;
+  winner?: 1 | 2;
+  isRemote?: boolean;
+  liveSequence?: number;
+  liveId?: number;
+  source: string;
+}
+
 export interface ModalConfig {
   title: string;
   message: string;
@@ -32,6 +48,9 @@ export interface UIContextValue {
   isSettingsRegrasSaved: boolean;
   setIsSettingsRegrasSaved: Dispatch<SetStateAction<boolean>>;
 
+  isProfileSaved: boolean;
+  setIsProfileSaved: Dispatch<SetStateAction<boolean>>;
+
   overlayAcceptedRef: React.MutableRefObject<string | null>;
 
   judgePinInput: string;
@@ -44,4 +63,13 @@ export interface UIContextValue {
   setIsSavingJudge: Dispatch<SetStateAction<boolean>>;
   isSelectingJudge: boolean;
   setIsSelectingJudge: Dispatch<SetStateAction<boolean>>;
+
+  isRecoveryFromMatchOver: boolean;
+  setIsRecoveryFromMatchOver: Dispatch<SetStateAction<boolean>>;
+
+  isWaitingSync: boolean;
+  setIsWaitingSync: Dispatch<SetStateAction<boolean>>;
+
+  voiceLogs: VoiceLog[];
+  setVoiceLogs: Dispatch<SetStateAction<VoiceLog[]>>;
 }
