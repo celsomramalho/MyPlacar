@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { QueuePlayer } from '@modules/partners';
 import type { MatchHistoryItem } from '@modules/history';
 import { HistorySection } from '@modules/history';
-import { GameState, MatchSettings, TournamentEvent } from '../types.ts';
+import { GameState, TournamentEvent } from '../types.ts';
 import { useGame } from '@modules/game';
 import { ProfileScreen } from './ProfileScreen.tsx';
 import { HelpScreen } from './HelpScreen.tsx';
@@ -20,8 +20,6 @@ interface Props {
   onBack: () => void;
   onNewGame: () => void;
   gameState: GameState | null;
-  settings: MatchSettings;
-  setSettings: React.Dispatch<React.SetStateAction<MatchSettings>>;
   onStart: () => void; 
   onPlayShortcut: () => void;
   onOpenRules: () => void;
@@ -147,7 +145,7 @@ const WatchLoginApproval: React.FC = () => {
 };
 
 export const SettingsScreen: React.FC<Props> = (props) => {
-  const { userProfile, setUserProfile } = useGame();
+  const { userProfile, setUserProfile, matchSettings, setMatchSettings } = useGame();
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
   const teamSectionRef = useRef<{ triggerStart: () => void }>(null);
   const prevTabRef = useRef(props.activeTab);
@@ -173,8 +171,8 @@ export const SettingsScreen: React.FC<Props> = (props) => {
               onGoAdmin={props.onGoAdmin} 
               onCheckUpdate={props.onCheckUpdate}
               setIsUpdatingVersion={props.setIsUpdatingVersion}
-              settings={props.settings}
-              setSettings={props.setSettings}
+              settings={matchSettings}
+              setSettings={setMatchSettings}
               onVersionTap={props.onVersionTap}
             />
             <WatchLoginApproval />
@@ -204,8 +202,8 @@ export const SettingsScreen: React.FC<Props> = (props) => {
       default:
         return <TeamSection 
           ref={teamSectionRef}
-          settings={props.settings} 
-          setSettings={props.setSettings} 
+          settings={matchSettings} 
+          setSettings={setMatchSettings} 
           onStartMatch={props.onStart} 
           onOpenPartners={props.onOpenPartners} 
           onAutoRegisterPartner={props.onAutoRegisterPartner}

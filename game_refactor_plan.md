@@ -9,7 +9,7 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 
 ---
 
-## 🚦 Status Atual: Fase 6 em progresso. Passo 6.1 — `userProfile` ✅ concluído (5 telas migradas). Próximo: `matchSettings`.
+## 🚦 Status Atual: Fase 6 em progresso. Passo 6.1 — `matchSettings` ✅ telas concluídas, props removidas do `App.tsx`. Espelho no `AppInner` permanece (consumidores internos: persistência, closures de jogo, exportação). Próximo: avançar para o próximo espelho (`matchHistory` ou iniciar Passo 5.1 — `UIContext`).
 
 ---
 
@@ -176,7 +176,7 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 | `matchHistory` | 🔄 Parcial | `LocationScreen` ✅ | exportação de dados, `useOnlineSync`, reset geral, outra tela (linha 3440) |
 | `partners` | 🔄 Parcial | `PartnersScreen` ✅, `SettingsScreen` (prop morta) ✅ | sync localStorage, exportação de dados, `finalizeMatchInternal` |
 | `userProfile` | ✅ Telas concluídas | `NavigationDrawer` ✅, `NewGameScreen` ✅, `PartnersScreen` ✅, `CommunicationsScreen` ✅, `SettingsScreen` ✅ | hooks internos, closures Firestore, `finalizeMatchInternal`, `LiveProvider`, `EventDetailScreen` (aguarda fonte de `@modules/events`) |
-| `matchSettings` | ⏳ Pendente | — | — |
+| `matchSettings` | ✅ Telas concluídas | `PartnersScreen` ✅, `NewGameScreen` ✅, `SettingsScreen` ✅ (incl. `ProfileScreen` e `TeamSection`) | **Espelho permanece** — 3 grupos de consumidores internos impedem remoção: (1) `useEffect` de persistência/dirty-check (linhas ~1335–1369), (2) closures `initGameState`/`startGame`/`handleControlLive` (~2257–3143), (3) exportação de dados (linha 1937). Remoção do espelho aguarda Fase 5 (`UIContext`) e migração dessas closures para o `GameContext`. |
 | `gameState` | ⏳ Pendente | — | depende também de refatorar o `LiveProvider` |
 
 > ⚠️ **Nota `userProfile`:** O espelho local no `AppInner` **não foi removido** — ainda alimenta `<LiveProvider userProfile={userProfile}>`, ~25 dep arrays/closures internas e `finalizeMatchInternal`. Só cai na Fase 5. A `EventDetailScreen` ainda recebe `userProfile={userProfile}` no App.tsx pois sua fonte está em `@modules/events` (arquivo não disponível).

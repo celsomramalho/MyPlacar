@@ -27,7 +27,6 @@ interface Props {
   onDeletePartners?: (ids: Set<string>) => void;
   onSelectPartner?: (partner: Partner) => void;
   activeLives: GameState[];
-  matchSettings: MatchSettings;
   activeEvent: TournamentEvent | null;
   appUrl: string;
   isAuthReady?: boolean;
@@ -54,8 +53,8 @@ const LIGHT_BG_COLORS: Record<string, string> = {
   lilas: 'bg-violet-50', verde: 'bg-green-50', vermelho: 'bg-red-50', roxo: 'bg-purple-50',
 };
 
-export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, matchSettings, activeEvent, appUrl, isAuthReady = false }) => {
-  const { partners, setPartners, userProfile } = useGame();
+export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, activeEvent, appUrl, isAuthReady = false }) => {
+  const { partners, setPartners, userProfile, matchSettings } = useGame();
   const [activeTab, setActiveTab] = useState<'list' | 'queue'>('list');
   const [isShuffling, setIsShuffling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

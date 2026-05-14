@@ -15,8 +15,6 @@ import { SettingsTabs } from './settings/SettingsTabs';
 
 interface Props {
   baseSettings: MatchSettings; 
-  settings: MatchSettings;
-  setSettings: React.Dispatch<React.SetStateAction<MatchSettings>>;
   onSportChange?: (sport: SportType) => void;
   onBack: () => void;
   onHome: () => void;
@@ -56,8 +54,8 @@ type DbSport = {
   isActive: boolean;
 };
 
-export const NewGameScreen: React.FC<Props> = ({ settings, setSettings, onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, isController, onOpenMenu, isOfflineMode, onExitOffline, onHome }) => {
-  const { userProfile } = useGame();
+export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, isController, onOpenMenu, isOfflineMode, onExitOffline, onHome }) => {
+  const { userProfile, matchSettings: settings, setMatchSettings: setSettings } = useGame();
   const [activeGroupId, setActiveGroupId] = useState<string>(() => (SPORT_LIST.find(s => s.id === settings.sportType)?.group as string) || 'raquetes');
   const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
   const [dbSports, setDbSports] = useState<DbSport[]>([]);
