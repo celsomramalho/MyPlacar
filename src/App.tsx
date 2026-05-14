@@ -29,7 +29,8 @@ import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './co
 import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
 import { initPickleballState } from './utils/pickleballEngine.ts';
 import { applyGoldenRule } from './utils/formatters.ts';
-import { isWatchDevice, getDeviceType, getDeviceId } from './utils/device.ts';
+import { isWatchDevice, getDeviceType, getDeviceId, resolveWatchMode } from './utils/device.ts';
+import { sanitizeForFirestore } from './utils/sanitize.ts';
 import { findUserByPin, getDb, clearFirestoreCache, deleteCloudMatch, deleteCloudMatches } from '@infra/firebase';
 
 import { getAuthInstance } from '@infra/firebase';
@@ -45,11 +46,6 @@ import { deleteSupabaseMatch, deleteSupabaseMatches } from '@infra/supabase';
 
 const CURRENT_DATA_VERSION = '3.1.0'; // bumped: limpa SavedSettings_* para forçar novos defaults por esporte
 
-// ─── Helper: relógio sempre preserva watchMode = true ────────────────────────
-// Centraliza a decisão para evitar que o isWatchMode seja acidentalmente
-// desligado em qualquer ponto do fluxo (entrar como observer, assumir controle, etc).
-const resolveWatchMode = (currentValue: boolean): boolean =>
-  isWatchDevice() ? true : currentValue;
 
 const getUrlParams = () => new URLSearchParams(globalThis.location.search);
 
@@ -140,7 +136,15 @@ const AppInner: React.FC = () => {
     currentScreen, setCurrentScreen, 
     modalConfig, setModalConfig, 
     showLiveControlOverlay, setShowLiveControlOverlay,
-    playerQueue, setPlayerQueue
+    playerQueue, setPlayerQueue,
+    isSettingsInicialSaved, setIsSettingsInicialSaved,
+    isSettingsRegrasSaved, setIsSettingsRegrasSaved,
+    overlayAcceptedRef,
+    judgePinInput, setJudgePinInput,
+    judgeNicknameLookup, setJudgeNicknameLookup,
+    isSearchingJudgePin, setIsSearchingJudgePin,
+    isSavingJudge, setIsSavingJudge,
+    isSelectingJudge, setIsSelectingJudge
   } = useUI();
 
   // Mantém a tela acesa enquanto o placar estiver visível — independente de remounts do ScoreboardScreen.
@@ -193,8 +197,6 @@ const AppInner: React.FC = () => {
   const [installPromptShownSession, setInstallPromptShownSession] = useState(true);
   const { deferredPrompt } = useInstallPwa();
   
-  const [isSettingsInicialSaved, setIsSettingsInicialSaved] = useState(true);
-  const [isSettingsRegrasSaved, setIsSettingsRegrasSaved] = useState(true);
   const [isProfileSaved, setIsProfileSaved] = useState(true);
   const [activeCloudMatch, setActiveCloudMatch] = useState<{id: string, sport: string} | null>(null);
   // (ver bloco "espelhos do LiveContext" abaixo, junto a fbSyncStatus)
@@ -314,11 +316,7 @@ const AppInner: React.FC = () => {
   // [Fase 6] confirmDeleteLive e confirmDeleteJudge migrados para LiveControlOverlay (estado interno).
   // initialConfirmDeleteJudge: sinaliza que o overlay deve abrir já na tela de confirmação de remoção de juiz.
   const [initialConfirmDeleteJudge, setInitialConfirmDeleteJudge] = useState(false);
-  const [judgePinInput, setJudgePinInput] = useState('');
-  const [judgeNicknameLookup, setJudgeNicknameLookup] = useState('');
-  const [isSearchingJudgePin, setIsSearchingJudgePin] = useState(false);
-  const [isSelectingJudge, setIsSelectingJudge] = useState(false);
-  const [isSavingJudge, setIsSavingJudge] = useState(false);
+
   const [isRecoveryFromMatchOver, setIsRecoveryFromMatchOver] = useState(false);
   const [isWaitingSync, setIsWaitingSync] = useState(false);
   const [isServiceInterrupted, setIsServiceInterrupted] = useState(false);
@@ -491,24 +489,7 @@ const AppInner: React.FC = () => {
   // tookControlAtRef, lostControlAtRef, isClosingLiveRef vivem no LiveContext;
   // acessados via proxies ctxTookControlAtRef/ctxLostControlAtRef/ctxIsClosingLiveRef abaixo.
 
-  const sanitizeForFirestore = (obj: unknown) => {
-    // campos undefined são convertidos para null pelo JSON.stringify abaixo.
-    // O deepClean depois remove campos null que NÃO devem sobrescrever dados
-    // existentes no Firestore via merge (ex: controllers: undefined -> null
-    // apagaria todos os controllers registrados por outros devices).
-    const clean = JSON.parse(JSON.stringify(obj, (key, value) => value === undefined ? null : value));
-    const fieldsToRemove = ['isWatchMode', 'isScoreboardMode', 'brightness', 'volume', 'deviceLabel', 'selectedVoiceURI', 'voiceEnabled', 'voiceScoring', 'actionCooldown', 'stateLockout', 'screenDimTimeout', 'customSportIcon', 'customSportIcons', 'customCategoryIcons', 'cloudSportIcons', 'cloudCategoryIcons'];
-    // nullFieldsToRemove: quando null, remover do payload para nao sobrescrever no Firestore
-    const nullFieldsToRemove = ['controllers'];
-    const deepClean = (target: Record<string, unknown>) => {
-      if (!target || typeof target !== 'object') return;
-      fieldsToRemove.forEach(f => { if (target[f] !== undefined) delete target[f]; });
-      nullFieldsToRemove.forEach(f => { if (target[f] === null) delete target[f]; });
-      Object.keys(target).forEach(key => { if (target[key] && typeof target[key] === 'object') deepClean(target[key] as Record<string, unknown>); });
-    };
-    deepClean(clean);
-    return clean;
-  };
+
 
   // ── partners — espelho do GameContext ────────────────────────────────────
   // Estado vive no <GameProvider>. Espelho necessário: sync localStorage,
@@ -534,7 +515,17 @@ const AppInner: React.FC = () => {
   const handleDeleteJudgeLocalRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const handleDeleteJudge = useCallback(async () => handleDeleteJudgeLocalRef.current(), []);
 
+  const handleControlLiveLocalRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const handleControlLive = useCallback(async () => handleControlLiveLocalRef.current(), []);
 
+  const handleObserveLiveLocalRef = useRef<((pin?: string) => Promise<void>)>(async () => {});
+  const handleObserveLive = useCallback(async (pin?: string) => handleObserveLiveLocalRef.current(pin), []);
+
+  const handleSyncScoreboardLocalRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const handleSyncScoreboard = useCallback(async () => handleSyncScoreboardLocalRef.current(), []);
+
+  const handleAddJudgeLocalRef = useRef<((pin: string, nickname?: string) => Promise<void>)>(async () => {});
+  const handleAddJudge = useCallback(async (pin: string, nickname?: string) => handleAddJudgeLocalRef.current(pin, nickname), []);
   const currentFullDeviceName = useMemo(() => {
     const label = matchSettings.deviceLabel || 'Aparelho';
     const nick = userProfile.nickname || 'Usuário';
@@ -1501,7 +1492,7 @@ const AppInner: React.FC = () => {
   // Ref separado: marca liveId que o usuário já aceitou (observer ou controller).
   // Não é resetado ao trocar de tela — só quando a live realmente encerra.
   // Isso impede que o modal reabra após setCurrentScreen('scoreboard') no aceite.
-  const overlayAcceptedRef = useRef<string | null>(null);
+
   // Ref para handleObserveLive — permite chamá-lo dentro de useEffect
   // que é declarado antes da função (evita "used before declaration").
   const autoJoinObserverRef = useRef<((pin: string) => void) | null>(null);
@@ -2299,118 +2290,7 @@ const AppInner: React.FC = () => {
 
 
 
-  const handleControlLive = async () => {
-    if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
-    const db = getDb();
-    if (db && userProfile.pin) {
-      const targetPin = resolveTargetPin('write');
-            if (!targetPin) return;
-      
-      if (!targetPin) return;
-      try {
-        const snap = await getDoc(doc(db, "live_matches", targetPin));
-        if (snap.exists() && snap.data().isLiveClosed !== true) {
-          const cloudState = snap.data() as GameState;
 
-          // Identifica controller atual e se é um device diferente ativo
-          const currentControllerId = cloudState.commandOwnerId;
-
-          const myCommandName = currentFullDeviceName;
-          // Role do novo controller: owner se ownerPin bate, senão judge
-          const newControllerRole: 'owner' | 'judge' = isOriginalOwner ? 'owner' : 'judge';
-          const syncedSettings: MatchSettings = { 
-            ...matchSettings, 
-            p1Name: cloudState.p1.name, 
-            p1Partner: cloudState.p1.partnerName || '', 
-            p2Name: cloudState.p2.name, 
-            p2Partner: cloudState.p2.partnerName || '', 
-            p1Color: cloudState.p1.color || 'azul', 
-            p2Color: cloudState.p2.color || 'vermelho', 
-            isDoubles: cloudState.matchConfig.isDoubles, 
-            sets: cloudState.matchConfig.sets, 
-            gamesPerSet: cloudState.matchConfig.gamesPerSet, 
-            noAd: cloudState.matchConfig.noAd, 
-            tieBreak: cloudState.matchConfig.tieBreak, 
-            tieBreakAt: cloudState.matchConfig.tieBreakAt, 
-            tieBreakPoints: cloudState.matchConfig.tieBreakPoints, 
-            tieBreakWinByTwo: cloudState.matchConfig.tieBreakWinByTwo, 
-            switchSidesOdd: cloudState.matchConfig.switchSidesOdd,
-            tieBreakSideSwitchMode: cloudState.matchConfig.tieBreakSideSwitchMode,
-            pickleballScoringMode: cloudState.matchConfig.pickleballScoringMode,
-            pickleballServiceMode: cloudState.matchConfig.pickleballServiceMode,
-            winnersStay: cloudState.matchConfig.winnersStay,
-            isHistoryEnabled: cloudState.matchConfig.isHistoryEnabled,
-            sportType: cloudState.matchConfig.sportType, 
-            isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: !!matchSettings.isScoreboardMode 
-          };
-          // D4: separa write de estado (setDoc com merge) de write de presença (field-path).
-          // Eliminando o último ponto que reescrevia o objeto controllers inteiro.
-
-          // Rebaixa o controller anterior para observer via field-path (sem rewrite geral).
-          const prevDemoteUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {};
-          if (currentControllerId && currentControllerId !== deviceId) {
-            const prevEntry = (cloudState.controllers || {})[currentControllerId];
-            if (prevEntry) {
-              const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : 'observer';
-              prevDemoteUpdate[`controllers.${currentControllerId}`] = { ...prevEntry, role: demotedRole };
-            }
-          }
-
-          const updatedStateRaw = { ...cloudState, commandOwner: myCommandName, commandOwnerId: deviceId, isLiveClosed: false, matchConfig: { ...syncedSettings, setsToWin: syncedSettings.sets, isWatchMode: !!syncedSettings.isWatchMode } };
-          // Remove controllers do payload principal — serão escritos via field-path abaixo.
-          const { controllers: _controllers, ...stateWithoutControllers } = updatedStateRaw as typeof updatedStateRaw & { controllers?: unknown };
-          const updatedState = sanitizeForFirestore(stateWithoutControllers);
-          if (updatedState) {
-            // Write 1: estado da partida sem controllers (merge preserva campos não enviados).
-            await setDoc(doc(db, "live_matches", targetPin), updatedState, { merge: true }).catch(() => {});
-            // Write 2: rebaixa controller anterior via field-path (se houver)
-            if (Object.keys(prevDemoteUpdate).length > 0) {
-              await updateDoc(doc(db, "live_matches", targetPin), prevDemoteUpdate).catch(() => {});
-            }
-            // Write 3: registra presença do novo controller via field-path
-            await updateDoc(doc(db, "live_matches", targetPin), {
-              [`controllers.${deviceId}`]: { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() }
-            }).catch(() => {});
-            // Fix D4: monta o objeto controllers local que corresponde ao estado final do Firestore.
-            // Sem isso, setGameState ficaria com controllers:undefined causando log "todos saíram".
-            const localControllers: Record<string, unknown> = { ...(cloudState.controllers || {}) };
-            // Aplica demoção do controller anterior (igual ao Write 2)
-            if (currentControllerId && currentControllerId !== deviceId) {
-              const prevEntry = (cloudState.controllers || {})[currentControllerId];
-              if (prevEntry) {
-                const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : 'observer';
-                localControllers[currentControllerId] = { ...prevEntry, role: demotedRole };
-              }
-            }
-            // Registra este device como novo controller (igual ao Write 3)
-            localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() };
-
-            ctxTookControlAtRef.current = Date.now();
-            // Controller sempre usa ScoreboardScreen (isScoreboardMode: false).
-            // Relógio (isWatchMode) é preservado — tem prioridade na renderização e não interfere.
-            const settingsAsController = { ...syncedSettings, isScoreboardMode: false };
-            prevSettingsRef.current = JSON.parse(JSON.stringify(settingsAsController)); setMatchSettings(settingsAsController); 
-            try { localStorage.setItem('myPlacarSettings', JSON.stringify(settingsAsController)); } catch {}
-            setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
-            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: resolveWatchMode(matchSettings.isWatchMode ?? false), isScoreboardMode: false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
-            try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
-
-            overlayAcceptedRef.current = targetPin;
-            setShowLiveControlOverlay(false);
-            setModalConfig(null); // limpa qualquer modal anterior
-            if (currentScreen !== 'scoreboard' && currentScreen !== 'public-scoreboard') setCurrentScreen('scoreboard');
-            // Sem modal de sucesso — a troca é silenciosa para quem assume.
-            // O device que perdeu o controle será notificado via onSnapshot.
-          }
-        } else {
-          ctxSetCloudLiveExists(false);
-          setShowLiveControlOverlay(false);
-          setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
-          setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
-        }
-      } catch {}
-    }
-  };
 
   const handleSelectJudgeFromPartners = (partner: Partner) => {
     setJudgePinInput(partner.pin || '');
@@ -2423,88 +2303,7 @@ const AppInner: React.FC = () => {
   // para auto-join como observer sem modal.
   autoJoinObserverRef.current = (pin: string) => handleObserveLive(pin);
 
-  const handleObserveLive = async (targetPin?: string) => {
-    if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para observar.", onConfirm: () => setModalConfig(null) }); return; }
-    const db = getDb();
-    let pinToObserve = targetPin || userProfile.pin?.toUpperCase();
 
-    if (!targetPin && userProfile.pin) {
-      const myPin = userProfile.pin.toUpperCase();
-      // 1. Judge: usa ownerPin da live onde este device é judge
-      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
-      if (judgeMatch && judgeMatch.ownerPin) {
-        pinToObserve = judgeMatch.ownerPin;
-      } else {
-        // 2. Mesmo usuário em outro device: busca a live cujo ownerPin === myPin
-        //    mas ownerDeviceId é diferente (ex: note abriu a live, celular quer observar)
-        const ownerLive = activeLives.find(l =>
-          l.ownerPin?.toUpperCase() === myPin && l.ownerDeviceId && l.ownerDeviceId !== deviceId
-        );
-        if (ownerLive && ownerLive.ownerPin) {
-          pinToObserve = ownerLive.ownerPin.toUpperCase();
-        } else {
-          // 3. Fallback: qualquer live ativa mais recente
-          const latestLive = activeLives.reduce((latest, l) =>
-            (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
-            , activeLives[0]);
-          if (latestLive?.ownerPin) pinToObserve = latestLive.ownerPin.toUpperCase();
-        }
-      }
-    }
-
-    if (db && pinToObserve) {
-      const pinUpper = pinToObserve.toUpperCase();
-      try {
-        const snap = await getDoc(doc(db, "live_matches", pinUpper));
-        if (snap.exists() && snap.data().isLiveClosed !== true) {
-          const cloudData = snap.data() as GameState;
-          const myCommandName = currentFullDeviceName;
-          const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
-          // D2: field-path atômico — sem getDoc+rewrite inteiro do objeto controllers.
-          // Preserva role existente se o device já está registrado (ex: owner voltando como observer).
-          const existingEntry = (cloudData.controllers || {})[deviceId];
-          const joinRole = existingEntry?.role === 'owner' || existingEntry?.role === 'judge' ? existingEntry.role : 'observer';
-
-          // Guard: device secundário do mesmo usuário (mesmo PIN, ownerDeviceId diferente)
-          // nunca deve tocar em commandOwnerId — o Note (owner real) é quem controla.
-          // Só grava presença nos controllers, sem interferir no controle da live.
-          const myPin = userProfile.pin?.toUpperCase();
-          const isSecondaryDevice = cloudData.ownerPin?.toUpperCase() === myPin && cloudData.ownerDeviceId && cloudData.ownerDeviceId !== deviceId;
-
-          await updateDoc(doc(db, "live_matches", pinUpper), {
-            [`controllers.${deviceId}`]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType(), isOwner: false }
-          }).catch(() => {});
-          // lastActivityAt atualizado via D1 no mesmo updateDoc
-          
-          if (cloudData.matchConfig) {
-            setMatchSettings(prev => ({ ...prev, ...cloudData.matchConfig }));
-          }
-
-          const nextControllers = {
-            ...(cloudData.controllers || {}),
-            [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType(), isOwner: false }
-          };
-          // Device secundário do mesmo usuário: preserva commandOwnerId da cloud (o Note).
-          // Se o celular sobrescrevesse commandOwnerId com o próprio deviceId, o Note viraria observer.
-          const resolvedCommandOwnerId = isSecondaryDevice ? cloudData.commandOwnerId : deviceId;
-          // Observers entram sempre em modo placar (ScoreboardDisplay), nunca em ScoreboardScreen.
-          // Relógio: resolveWatchMode garante isWatchMode=true independente do joinRole.
-          // Controllers (judge assumindo controle via handleObserveLive) ficam com isScoreboardMode: false.
-          const enterAsObserver = joinRole === 'observer';
-          const watchModeForEntry = resolveWatchMode(matchSettings.isWatchMode ?? false);
-          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: watchModeForEntry ? false : (enterAsObserver ? true : false), brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
-          if (enterAsObserver) setMatchSettings(prev => ({ ...prev, isScoreboardMode: watchModeForEntry ? false : true, isWatchMode: watchModeForEntry }));
-          overlayAcceptedRef.current = pinUpper; // impede que o modal reabra após setCurrentScreen
-          setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
-        } else {
-          if (!targetPin) ctxSetCloudLiveExists(false);
-          setShowLiveControlOverlay(false);
-          setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
-          setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
-        }
-      } catch {}
-    }
-  };
 
   useEffect(() => {
     const lookup = async () => {
@@ -2532,56 +2331,7 @@ const AppInner: React.FC = () => {
     lookup();
   }, [judgePinInput]);
 
-  const handleAddJudge = async () => {
-    if (!judgePinInput || judgePinInput.length < 5 || !gameState || !userProfile.pin) return;
-    setIsSavingJudge(true);
-    const db = getDb();
-    if (!db) return;
-    try {
-      const pinUpper = judgePinInput.toUpperCase().trim();
-      const judgeResult = await autoRegisterPartnerByPin(db as Firestore, pinUpper, { origin: 'manual', fallbackNickname: 'Juiz' });
-      const nickname = judgeResult?.nickname || judgeNicknameLookup || 'Juiz';
 
-      if (pinUpper && !hasPartnerWithPin(partners, pinUpper)) {
-        const newPartner: Partner = judgeResult?.partner || {
-          id: `p_${Date.now()}`,
-          pin: pinUpper,
-          nickname,
-          addedAt: Date.now(),
-          origin: 'manual'
-        };
-        setPartners(prev => addPartnerToState(prev, newPartner));
-
-        if (db && userProfile.pin) {
-          await setDoc(doc(db as Firestore, 'users', userProfile.pin.toUpperCase(), 'partners', pinUpper), {
-            pin: pinUpper,
-            nickname,
-            addedAt: newPartner.addedAt,
-            origin: 'manual'
-          }).catch(err => console.error("Erro ao salvar parceiro no Firestore:", err));
-        }
-      }
-
-      // T4.3: escreve sub-objeto judge (novo) + campos legados (backward-compat)
-      await updateDoc(doc(db as Firestore, "live_matches", userProfile.pin.toUpperCase()), { 
-        judgePin: pinUpper,
-        judgeNickname: nickname,
-        judge: {
-          pin: pinUpper,
-          nickname,
-          addedAt: Date.now(),
-          isActive: false  // será atualizado para true quando o juiz assumir o controle
-        }
-      });
-      setJudgePinInput('');
-      setJudgeNicknameLookup('');
-      setModalConfig({ title: "Sucesso", message: "Juiz adicionado com sucesso!", onConfirm: () => setModalConfig(null) });
-    } catch (_e) {
-      setModalConfig({ title: "Erro", message: "Erro ao adicionar juiz.", onConfirm: () => setModalConfig(null) });
-    } finally {
-      setIsSavingJudge(false);
-    }
-  };
 
 
 
@@ -3007,63 +2757,7 @@ const AppInner: React.FC = () => {
     });
   }, [gameState, startGame, ctxSetLiveLogs, setVoiceLogs]);
 
-  // ── Sincronizar Placar ────────────────────────────────────────────────────
-  // Controller (owner/judge): faz push do gameState atual para o Firestore.
-  // Observer: faz pull do estado mais recente do Firestore e aplica localmente.
-  // Ambos registram a ação na cronologia da partida (liveLogs).
-  const handleSyncScoreboard = useCallback(async () => {
-    if (!gameState || !gameState.isMirroringActive || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
-    if (!navigator.onLine) {
-      setModalConfig({ title: "Sem conexão", message: "Verifique sua conexão com a internet e tente novamente.", onConfirm: () => setModalConfig(null) });
-      return;
-    }
-    const db = getDb();
-    if (!db) return;
-    const targetPin = resolveTargetPin('liveControl');
-    if (!targetPin) return;
 
-    const isController = gameState.commandOwnerId === deviceId;
-
-    try {
-      if (isController) {
-        // ── Controller: push estado atual → Firestore ──────────────────────
-        const stateToSync = sanitizeForFirestore({ ...gameState, controllers: undefined });
-        if (stateToSync) {
-          await setDoc(doc(db, "live_matches", targetPin), { ...stateToSync, lastActivityAt: Date.now() }, { merge: true });
-        }
-      } else {
-        // ── Observer/non-controller: pull estado mais recente ← Firestore ──
-        const snap = await getDoc(doc(db, "live_matches", targetPin));
-        if (snap.exists()) {
-          const cloudData = snap.data() as GameState;
-          // Aplica o estado da nuvem preservando campos locais de controle
-          setGameState(prev => prev ? {
-            ...prev,
-            ...cloudData,
-            // Preserva campos de presença local — não sobrescreve com dados da nuvem
-            commandOwnerId: cloudData.commandOwnerId ?? prev.commandOwnerId,
-          } : cloudData);
-        }
-      }
-
-      // Registra na cronologia da partida
-      ctxSetLiveLogs(prev => {
-        const entry: LiveLogEntry = {
-          id: Math.random().toString(36).substr(2, 9),
-          time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
-          timestamp: Date.now(),
-          type: 'score',
-          text: `↺ Placar sincronizado (${isController ? 'enviado' : 'recebido'}) — ${gameState.p1.name} ${gameState.p1.score} × ${gameState.p2.score} ${gameState.p2.name}`,
-          ok: true,
-          isController,
-        };
-        return [entry, ...(prev || [])].slice(0, 60);
-      });
-      setShowLiveControlOverlay(false);
-    } catch (_e) {
-      setModalConfig({ title: "Erro ao sincronizar", message: "Não foi possível sincronizar o placar. Tente novamente.", onConfirm: () => setModalConfig(null) });
-    }
-  }, [gameState, userProfile.pin, activeLives, isOriginalOwner, deviceId, ctxSetLiveLogs]);
 
   return (
       <LiveProvider
@@ -3102,6 +2796,10 @@ const AppInner: React.FC = () => {
             finalizeMatchInternalLocalRef.current = ctx.finalizeMatchInternal;
             handleCloseCloudLiveLocalRef.current = ctx.handleCloseCloudLive;
             handleDeleteJudgeLocalRef.current = ctx.handleDeleteJudge;
+            handleControlLiveLocalRef.current = ctx.handleControlLive;
+            handleObserveLiveLocalRef.current = ctx.handleObserveLive;
+            handleSyncScoreboardLocalRef.current = ctx.handleSyncScoreboard;
+            handleAddJudgeLocalRef.current = ctx.handleAddJudge;
           }}
           onUpdate={(ctx) => {
             setUserProfileLocalRef.current(ctx.userProfile);
@@ -3344,7 +3042,7 @@ const AppInner: React.FC = () => {
         isSearchingJudgePin={isSearchingJudgePin}
         judgeNicknameLookup={judgeNicknameLookup}
         isSavingJudge={isSavingJudge}
-        onAddJudge={handleAddJudge}
+        onAddJudge={() => handleAddJudge(judgePinInput, judgeNicknameLookup).then(() => { setJudgePinInput(''); setJudgeNicknameLookup(''); })}
         onDeleteJudge={() => { setInitialConfirmDeleteJudge(true); setShowLiveControlOverlay(true); }}
         isJudgeOnline={isJudgeOnline}
         onSelectJudgeFromPartners={() => { setIsSelectingJudge(true); setCurrentScreen('partners'); }} onUndo={() => {         if (!gameState || !isCommandOwner) return;

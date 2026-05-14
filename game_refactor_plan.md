@@ -7,9 +7,7 @@
 **Estratégia de Continuidade:**
 Este documento serve como a "fonte da verdade". A cada passo concluído, este arquivo será atualizado. Caso o chat atual seja encerrado, basta enviar este documento (ou o texto dele) no novo chat e pedir: *"Retome a refatoração a partir do próximo passo pendente."*
 
----
-
-## 🚦 Status Atual: Fase 5 retomada. Passo 5.3 — Migração de `handleCloseCloudLive` e `handleDeleteJudge` ✅ concluída. Próximo: Passo 5.4 — Migrar `handleControlLive` e `handleObserveLive`.
+## 🚦 Status Atual: Fase 5 concluída. Próximo: Fase 6 — Limpeza do `App.tsx` (Remover estados espelho).
 
 ---
 
@@ -160,9 +158,15 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 - [x] Consumir `useLive()` para obter refs (como `isClosingLiveRef`) sem precisar repassá-los pelo `AppInner`.
 - [x] Mover do `App.tsx` para o `GameContext.tsx` e expor via `GameBridge`.
 
-#### Passo 5.4 — Migrar `handleControlLive` e `handleObserveLive`
+#### Passo 5.4 — Migrar `handleControlLive` e `handleObserveLive` ✅
+- [x] Extrair UI states locais (`isSettingsInicialSaved`, `overlayAcceptedRef`) para o `UIContext`.
+- [x] Extrair utilitários como `sanitizeForFirestore` para evitar poluição local e `resolveWatchMode` no `device.ts`.
+- [x] Mover as funções de controle e observação para o `GameContext.tsx` e exportá-las via ponte `AppInner`.
 
-#### Passo 5.5 — Migrar `handleSyncScoreboard` e `handleAddJudge`
+#### Passo 5.5 — Migrar `handleSyncScoreboard` e `handleAddJudge` ✅
+- [x] Extrair UI states locais vinculados ao "Add Judge" (`judgePinInput`, `isSavingJudge`, etc.) para o `UIContext`.
+- [x] Mover as funções para o `GameContext.tsx` e exportá-las.
+- [x] Ligar as funções via ponte no `AppInner`.
 
 ---
 

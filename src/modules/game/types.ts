@@ -67,4 +67,8 @@ export interface GameContextValue {
   handleLeaveLive: () => Promise<void>;
   handleCloseCloudLive: () => Promise<void>;
   handleDeleteJudge: () => Promise<void>;
+  handleControlLive: () => Promise<void>;
+  handleObserveLive: (targetPin?: string) => Promise<void>;
+  handleSyncScoreboard: () => Promise<void>;
+  handleAddJudge: (pin: string, nickname?: string) => Promise<void>;
 }

@@ -33,4 +33,15 @@ export interface UIContextValue {
   setIsSettingsRegrasSaved: Dispatch<SetStateAction<boolean>>;
 
   overlayAcceptedRef: React.MutableRefObject<string | null>;
+
+  judgePinInput: string;
+  setJudgePinInput: Dispatch<SetStateAction<string>>;
+  judgeNicknameLookup: string;
+  setJudgeNicknameLookup: Dispatch<SetStateAction<string>>;
+  isSearchingJudgePin: boolean;
+  setIsSearchingJudgePin: Dispatch<SetStateAction<boolean>>;
+  isSavingJudge: boolean;
+  setIsSavingJudge: Dispatch<SetStateAction<boolean>>;
+  isSelectingJudge: boolean;
+  setIsSelectingJudge: Dispatch<SetStateAction<boolean>>;
 }

@@ -13,6 +13,9 @@ export const isWatchDevice = (): boolean => {
   
   return isWatchUA || isSmallScreen;
 };
+
+export const resolveWatchMode = (currentValue: boolean): boolean =>
+  isWatchDevice() ? true : currentValue;
 /**
  * Detecta o tipo do dispositivo atual.
  * Usado para ícones e registro nos controllers da live.

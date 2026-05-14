@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { UIContextValue, ModalConfig } from './types';
 import { Screen } from '../../types';
 import type { QueuePlayer } from '../partners';
@@ -27,6 +27,12 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children, initialScreen 
   const [isSettingsInicialSaved, setIsSettingsInicialSaved] = useState<boolean>(true);
   const [isSettingsRegrasSaved, setIsSettingsRegrasSaved] = useState<boolean>(true);
   const overlayAcceptedRef = useRef<string | null>(null);
+
+  const [judgePinInput, setJudgePinInput] = useState<string>('');
+  const [judgeNicknameLookup, setJudgeNicknameLookup] = useState<string>('');
+  const [isSearchingJudgePin, setIsSearchingJudgePin] = useState<boolean>(false);
+  const [isSavingJudge, setIsSavingJudge] = useState<boolean>(false);
+  const [isSelectingJudge, setIsSelectingJudge] = useState<boolean>(false);
 
   // Salvar playerQueue no localStorage quando mudar
   useEffect(() => {
@@ -59,6 +65,11 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children, initialScreen 
         isSettingsRegrasSaved,
         setIsSettingsRegrasSaved,
         overlayAcceptedRef,
+        judgePinInput, setJudgePinInput,
+        judgeNicknameLookup, setJudgeNicknameLookup,
+        isSearchingJudgePin, setIsSearchingJudgePin,
+        isSavingJudge, setIsSavingJudge,
+        isSelectingJudge, setIsSelectingJudge,
       }}
     >
       {children}
