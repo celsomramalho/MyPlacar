@@ -195,6 +195,7 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
   //   2. gameState.ownerPin   — gravado na criação da live, imutável
   //   3. localStorage         — persiste entre recarregamentos
   //   4. isOriginalOwner + myPin — apenas se confirmado por ownerDeviceId
+  //   5. qualquer activeLive com ownerPin — cobre observadores que entraram via link
   const resolveTargetPin = useCallback((context: string): string | null => {
     const myPin = userProfile.pin?.toUpperCase();
     const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
@@ -203,6 +204,9 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
     const persisted = getPersistedLiveOwnerPin();
     if (persisted) return persisted;
     if (isOriginalOwner && myPin) return myPin;
+    // Fallback para observadores: busca ownerPin em qualquer live ativa conhecida
+    const anyLive = activeLives.find(l => l.ownerPin);
+    if (anyLive?.ownerPin) return anyLive.ownerPin.toUpperCase();
     console.error(`[resolveTargetPin:${context}] Não foi possível determinar o ownerPin — escrita abortada.`);
     return null;
   }, [userProfile.pin, activeLives, gameState?.ownerPin, isOriginalOwner]);

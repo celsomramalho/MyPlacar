@@ -411,7 +411,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           const currentControllerId = cloudState.commandOwnerId;
 
           const myCommandName = currentFullDeviceName;
-          const newControllerRole: 'owner' | 'judge' = isOriginalOwner ? 'owner' : 'judge';
+          const newControllerRole: 'owner' | 'judge' | 'observer' = isOriginalOwner ? 'owner' : livePapel === 'judge' ? 'judge' : 'observer';
           const syncedSettings: MatchSettings = { 
             ...matchSettings, 
             p1Name: cloudState.p1.name, 
@@ -490,7 +490,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         }
       } catch {}
     }
-  }, [userProfile.pin, resolveTargetPin, setModalConfig, currentFullDeviceName, isOriginalOwner, matchSettings, deviceId, setMatchSettings, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState, overlayAcceptedRef, setShowLiveControlOverlay, setCurrentScreen, setCloudLiveExists, tookControlAtRef]);
+  }, [userProfile.pin, resolveTargetPin, setModalConfig, currentFullDeviceName, isOriginalOwner, livePapel, matchSettings, deviceId, setMatchSettings, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState, overlayAcceptedRef, setShowLiveControlOverlay, setCurrentScreen, setCloudLiveExists, tookControlAtRef]);
 
   const handleObserveLive = useCallback(async (targetPin?: string) => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para observar.", onConfirm: () => setModalConfig(null) }); return; }
