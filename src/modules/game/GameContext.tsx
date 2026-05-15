@@ -329,7 +329,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Sem conexão com a internet.", onConfirm: () => setModalConfig(null) }); return; }
     if (!userProfile.pin) { setModalConfig({ title: "Erro", message: "PIN não cadastrado.", onConfirm: () => setModalConfig(null) }); return; }
     
-    const targetPin = resolveTargetPin('write');
+    // gameState.ownerPin é gravado na criação da live e nunca muda — fonte mais confiável.
+    // resolveTargetPin como fallback cobre edge cases (ex: reload sem gameState local).
+    const localOwnerPin = gameState?.ownerPin?.toUpperCase();
+    const targetPin = localOwnerPin || resolveTargetPin('close');
     if (!targetPin) { setModalConfig({ title: "Erro", message: "PIN da transmissão não encontrado.", onConfirm: () => setModalConfig(null) }); return; }
 
     isClosingLiveRef.current = true;
@@ -372,7 +375,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       console.error("Erro ao encerrar live:", _e);
       setModalConfig({ title: "Erro", message: `Erro ao encerrar: ${_e instanceof Error ? _e.message : 'Tente novamente'}`, onConfirm: () => setModalConfig(null) }); 
     }
-  }, [userProfile.pin, resolveTargetPin, isClosingLiveRef, setCloudLiveExists, setActiveLives, setShowLiveControlOverlay, setCurrentScreen, setModalConfig, deviceId, livePapel]);
+  }, [userProfile.pin, gameState?.ownerPin, resolveTargetPin, isClosingLiveRef, setCloudLiveExists, setActiveLives, setShowLiveControlOverlay, setCurrentScreen, setModalConfig, deviceId, livePapel]);
 
   const handleDeleteJudge = useCallback(async () => {
     if (!userProfile.pin) return;

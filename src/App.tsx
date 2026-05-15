@@ -2622,6 +2622,7 @@ const AppInner: React.FC = () => {
           } catch {} 
         } 
         setUserProfile(p); 
+        setCurrentScreen('settings');
       }} onCheckUpdate={handleCheckUpdate} setIsUpdatingVersion={setIsUpdatingVersion} initialReferralPin={initialReferralPin} onOfflineMode={handleOfflineMode} />}
       {currentScreen === 'settings' && <SettingsScreen 
         appUrl={appUrl}

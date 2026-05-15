@@ -405,15 +405,18 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           const cleanPassword = password.trim();
           await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
           const userData = await fetchUserProfileFromServer(db, cleanEmail);
-          if (userData) {
-            const enriched = { ...userData, isAdmin: userData.isAdmin === true };
-            if (rememberMe) {
-              rememberEmail(cleanEmail);
-            } else {
-              forgetEmail();
-            }
-            onAuthSuccess(enriched, rememberMe);
+          if (!userData) {
+            setError("Login autenticado, mas o perfil não foi encontrado. Recarregue e tente novamente.");
+            return;
           }
+
+          const enriched = { ...userData, isAdmin: userData.isAdmin === true };
+          if (rememberMe) {
+            rememberEmail(cleanEmail);
+          } else {
+            forgetEmail();
+          }
+          onAuthSuccess(enriched, rememberMe);
         } catch (e: any) {
           console.error("Login error:", e);
           if (e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
@@ -831,6 +834,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       }
       await confirmPasswordReset(auth, oobCode, password);
       setMode('login');
+      setAuthMethod('password');
       setError(null);
       setPassword('');
       setPin('');
