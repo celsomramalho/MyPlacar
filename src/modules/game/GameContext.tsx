@@ -848,7 +848,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
 
 
-  const initGameStateInternal = async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
+  const initGameStateInternal = useCallback(async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
     const savedSettings = safeJsonParse('myPlacarSettings', matchSettings);
     let configToUse = { ...savedSettings };
     let tournamentMeta: Partial<GameState> = {};
@@ -975,9 +975,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (userProfile.pin) persistLiveOwnerPin(userProfile.pin);
     startGame(newGameState);
     setCurrentScreen('scoreboard');
-  };
+  }, [
+    canStartMatch, matchSettings, gameState, userProfile.pin, userProfile.email,
+    deviceId, currentFullDeviceName, resolveTargetPin, finalizeMatchInternal, startGame,
+    setMatchSettings, setGameState, setCurrentScreen, setIsSettingsInicialSaved,
+    setIsSettingsRegrasSaved, setIsRecoveryFromMatchOver, setIsWaitingSync,
+  ]);
 
-  const initGameState = async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
+  const initGameState = useCallback(async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
     if (finalizationTimerRef.current) { clearTimeout(finalizationTimerRef.current); finalizationTimerRef.current = null; }
     if (forceNew && !tournamentOverride && gameState && (gameState.p1.games > 0 || gameState.p2.games > 0 || gameState.p1.sets.length > 0 || gameState.p1.score !== '0' || gameState.p2.score !== '0')) {
        setModalConfig({
@@ -991,7 +996,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
        return;
     }
     initGameStateInternal(forceNew, tournamentOverride);
-  };
+  }, [gameState, setModalConfig, setCurrentScreen, initGameStateInternal]);
 
   const value: GameContextValue = {
     gameState,

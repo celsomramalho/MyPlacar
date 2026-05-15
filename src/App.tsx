@@ -1945,7 +1945,12 @@ const AppInner: React.FC = () => {
     const db = getDb();
     const cleanEmail = userProfile.email?.toLowerCase().trim();
     if (!db || !cleanEmail) return;
-    const currentList = forcedHistory || [...matchHistoryRef.current];
+    const baseList = forcedHistory || [...matchHistoryRef.current];
+    // forceAll: reseta isSynced para garantir reenvio mesmo de itens marcados como
+    // sincronizados mas ausentes na nuvem (ex: falha de rede após marcação local).
+    const currentList = forceAll
+      ? baseList.map(item => ({ ...item, isSynced: false }))
+      : baseList;
     if ((forceAll ? currentList : getUnsyncedHistory(currentList)).length === 0) { fetchCloudMatchesCount(true); return; }
     setIsSyncing(true);
     const safetyTimeout = setTimeout(() => setIsSyncing(false), 15000);
