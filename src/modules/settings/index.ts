@@ -1,2 +1,3 @@
-// Public API do modulo settings. Preenchimento sera definido na fase 2.
-export {};
+export { SettingsScreen } from './screens/SettingsScreen';
+export { SettingsHeader } from './components/SettingsHeader';
+export { SettingsTabs } from './components/SettingsTabs';

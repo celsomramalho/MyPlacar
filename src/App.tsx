@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { SettingsScreen } from './screens/SettingsScreen.tsx';
+import { SettingsScreen } from '@modules/settings';
 import { ScoreboardScreen } from './screens/ScoreboardScreen.tsx';
 import { NewGameScreen } from './screens/NewGameScreen.tsx';
 import { AdminScreen } from './screens/AdminScreen.tsx';

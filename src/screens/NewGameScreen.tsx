@@ -11,7 +11,7 @@ import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '../components/LazySportIcon';
 import { Button } from '../components/Button';
-import { SettingsTabs } from './settings/SettingsTabs';
+import { SettingsTabs } from '@modules/settings';
 
 interface Props {
   baseSettings: MatchSettings; 
