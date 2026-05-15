@@ -411,7 +411,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           const currentControllerId = cloudState.commandOwnerId;
 
           const myCommandName = currentFullDeviceName;
-          const newControllerRole: 'owner' | 'judge' | 'observer' = isOriginalOwner ? 'owner' : livePapel === 'judge' ? 'judge' : 'observer';
+          const newControllerRole: 'owner' | 'judge' = isOriginalOwner ? 'owner' : 'judge';
           const syncedSettings: MatchSettings = { 
             ...matchSettings, 
             p1Name: cloudState.p1.name, 
@@ -490,7 +490,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         }
       } catch {}
     }
-  }, [userProfile.pin, resolveTargetPin, setModalConfig, currentFullDeviceName, isOriginalOwner, livePapel, matchSettings, deviceId, setMatchSettings, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState, overlayAcceptedRef, setShowLiveControlOverlay, setCurrentScreen, setCloudLiveExists, tookControlAtRef]);
+  }, [userProfile.pin, resolveTargetPin, setModalConfig, currentFullDeviceName, isOriginalOwner, matchSettings, deviceId, setMatchSettings, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState, overlayAcceptedRef, setShowLiveControlOverlay, setCurrentScreen, setCloudLiveExists, tookControlAtRef]);
 
   const handleObserveLive = useCallback(async (targetPin?: string) => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para observar.", onConfirm: () => setModalConfig(null) }); return; }
@@ -525,11 +525,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           const cloudData = snap.data() as GameState;
           const myCommandName = currentFullDeviceName;
           const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
-          const existingEntry = (cloudData.controllers || {})[deviceId];
-          const joinRole = existingEntry?.role === 'owner' || existingEntry?.role === 'judge' ? existingEntry.role : 'observer';
-
           const myPin = userProfile.pin?.toUpperCase();
           const isSecondaryDevice = cloudData.ownerPin?.toUpperCase() === myPin && cloudData.ownerDeviceId && cloudData.ownerDeviceId !== deviceId;
+          // joinRole: proprietário é determinado por ownerDeviceId (imutável), nunca pelo campo gravado.
+          // Juiz só é reconhecido se foi formalmente convidado via judgePin — não por role gravado anteriormente.
+          // Qualquer outro caso é sempre 'observer'.
+          const isFormalJudge = !!(myPin && (cloudData.judge?.pin?.toUpperCase() === myPin || cloudData.judgePin?.toUpperCase() === myPin));
+          const joinRole: 'owner' | 'judge' | 'observer' =
+            (cloudData.ownerDeviceId && cloudData.ownerDeviceId === deviceId) ? 'owner'
+            : isFormalJudge ? 'judge'
+            : 'observer';
 
           await updateDoc(doc(db, "live_matches", pinUpper), {
             [`controllers.${deviceId}`]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType(), isOwner: false }
@@ -543,8 +548,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             ...(cloudData.controllers || {}),
             [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType(), isOwner: false }
           };
-          const resolvedCommandOwnerId = isSecondaryDevice ? cloudData.commandOwnerId : deviceId;
           const enterAsObserver = joinRole === 'observer';
+          // Observadores preservam o commandOwnerId da cloud — não assumem controle ao entrar.
+          // Apenas o proprietário (ou juiz em dispositivo primário) se torna controller imediatamente.
+          const resolvedCommandOwnerId = (isSecondaryDevice || enterAsObserver) ? cloudData.commandOwnerId : deviceId;
           const watchModeForEntry = resolveWatchMode(matchSettings.isWatchMode ?? false);
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: watchModeForEntry ? false : (enterAsObserver ? true : false), brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           if (enterAsObserver) setMatchSettings(prev => ({ ...prev, isScoreboardMode: watchModeForEntry ? false : true, isWatchMode: watchModeForEntry }));
