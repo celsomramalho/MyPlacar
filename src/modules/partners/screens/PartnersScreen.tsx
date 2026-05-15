@@ -8,7 +8,7 @@ import { useGame } from '@modules/game';
 import { Input } from '../../../components/Input'; 
 import { findUserByPin, findUsersByPins, findUsersReferredByPin, getDb } from '@infra/firebase'; 
 import { getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
-import { mirrorUser, mirrorPartners } from '../../../services/supabaseMirror';
+import { mirrorUser, mirrorPartners } from '@infra/supabase';
 import { LiveIndicator } from '../../../components/LiveIndicator'; 
 import { formatPortugueseName, maskPin } from '../../../utils/formatters'; 
 import { Toggle } from '../../../components/Toggle'; 

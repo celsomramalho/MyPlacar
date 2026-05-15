@@ -26,12 +26,11 @@ src/
 ├── screens/
 │   └── AuthScreen.tsx          ← Tela principal: todos os fluxos de auth
 ├── firebase.ts                 ← Inicialização do Firebase App, Auth e Firestore
-├── services/
-│   └── emailService.ts         ← Wrapper do EmailJS (fetch direto para API)
-├── services/
-│   └── supabaseMirror.ts       ← Espelho passivo para Supabase
-├── integrations/supabase/
-│   └── client.ts               ← Instância do Supabase
+├── infrastructure/email/
+│   └── index.ts                ← Wrapper tecnico de e-mails transacionais
+├── infrastructure/supabase/
+│   ├── client.ts               ← Instância do Supabase
+│   └── mirror.ts               ← Espelho passivo para Supabase
 ├── components/
 │   └── SupabaseAuthProvider.tsx ← Context provider (sessão Supabase)
 ├── utils/

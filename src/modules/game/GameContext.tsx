@@ -30,7 +30,7 @@ import { useUI } from '@modules/ui';
 import { useLive } from '@modules/live';
 import { findUserByPin, getDb } from '@infra/firebase';
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, deleteField, Firestore, FieldValue, serverTimestamp } from 'firebase/firestore';
-import { mirrorUser } from '../../services/supabaseMirror.ts';
+import { mirrorUser } from '@infra/supabase';
 import { markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events';
 import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events';
 import { createHistoryItem } from '@modules/history';

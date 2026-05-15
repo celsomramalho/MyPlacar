@@ -5,7 +5,7 @@ import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { UserProfile } from '../types';
 import { createWatchLoginToken, deleteWatchLoginToken, fetchEventByPin, fetchUserProfile, fetchUserProfileFromServer, findUserByPin, findUserProfileByPasskeyCredentialId, getAuthInstance, getDb, saveNewUserProfile, subscribeWatchLoginToken } from '@infra/firebase';
-import { mirrorUser } from '../../../services/supabaseMirror.ts';
+import { mirrorUser } from '@infra/supabase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { emailService } from '@infra/email';

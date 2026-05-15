@@ -24,7 +24,7 @@ Esta leva nao teve como objetivo:
 - quebrar estruturalmente o `App.tsx`
 - migrar `ProfileScreen` ou `SettingsScreen`
 - mover toda a logica de logout/live para dentro de `auth`
-- migrar `emailService` ou `supabaseMirror` para `infrastructure`
+- migrar `supabaseMirror` para `infrastructure`
 - redesenhar o fluxo visual de login/cadastro
 
 ## 3. Estrutura consolidada do modulo
@@ -103,6 +103,7 @@ As operacoes tecnicas de Firebase foram consolidadas ou consumidas a partir de:
 - `src/infrastructure/firebase/events.ts`
 - `src/infrastructure/firebase/users.ts`
 - `src/infrastructure/email/index.ts`
+- `src/infrastructure/supabase/mirror.ts`
 
 Esses arquivos concentram acesso tecnico a:
 
@@ -113,6 +114,7 @@ Esses arquivos concentram acesso tecnico a:
 - leitura de evento por PIN para deep link `joinEvent`
 - criacao, assinatura e remocao de `watch_tokens`
 - envio tecnico de e-mails via API interna `/api/enviar-email`
+- espelho tecnico fire-and-forget de usuarios, parceiros e icones no Supabase
 
 Com isso, `AuthScreen` deixou de montar queries Firestore diretamente para `users`, `events` e `watch_tokens`.
 
@@ -138,6 +140,7 @@ Continuam como compat layers:
 - `src/components/Button.tsx`
 - `src/utils/device.ts`
 - `src/services/emailService.ts`
+- `src/services/supabaseMirror.ts`
 - reexport temporario de `UserProfile` e `PlanType` em `src/types.ts`
 
 Essas camadas so reexportam e existem para reduzir risco enquanto consumidores legados ainda sao esvaziados.
@@ -167,6 +170,7 @@ Nesta leva tambem foram feitas limpezas pequenas:
 - `Button` e `device` sairam do legado como fontes oficiais e foram para `shared`
 - `AuthScreen` passou a consumir apoios transversais por `@shared`
 - `AuthScreen` passou a consumir Firebase tecnico por `@infra/firebase`
+- `AuthScreen` passou a consumir o espelho Supabase por `@infra/supabase`
 
 ## 9. Estado atual dos consumidores legados
 Ainda existem consumidores legados do dominio `auth` ou de `UserProfile`, o que neste momento e aceitavel.
@@ -202,10 +206,16 @@ O caminho antigo permanece apenas como compat layer:
 
 - `src/services/emailService.ts`
 
-### 10.3 `supabaseMirror` continua em pasta legada
-`src/services/supabaseMirror.ts` continua fora de `infrastructure`.
+### 10.3 `supabaseMirror` migrado para infrastructure
+`supabaseMirror` foi migrado para:
 
-Esse arquivo tambem parece infraestrutura tecnica, mas sua migracao deve ser tratada em uma leva propria porque pode afetar mais de um dominio.
+- `src/infrastructure/supabase/mirror.ts`
+
+O caminho antigo permanece apenas como compat layer:
+
+- `src/services/supabaseMirror.ts`
+
+A migracao foi feita sem depender de tipos internos de `modules`, preservando a fronteira de `infrastructure`.
 
 ### 10.4 Logout completo continua no App
 O logout ainda mistura sessao, limpeza de estado raiz e encerramento/limpeza de live.
@@ -251,7 +261,7 @@ Esta leva da fase 2 para `auth` pode ser considerada encerrada quando:
 - build e tipagem estiverem validados no estado atual
 - nao houver regressao funcional nos fluxos principais de autenticacao
 - o time reconhecer `src/modules/auth` como fronteira oficial do dominio
-- pendencias de `supabaseMirror` e `ProfileScreen` estiverem registradas como conscientes
+- pendencias de `ProfileScreen` estiverem registradas como conscientes
 
 ## 14. Proximo passo recomendado
 O proximo passo recomendado nao e continuar expandindo `auth` indefinidamente.
@@ -260,4 +270,4 @@ A recomendacao e:
 
 1. validar manualmente os fluxos principais de autenticacao
 2. manter apenas correcoes pontuais se aparecerem
-3. tratar `emailService`/`supabaseMirror` como migracoes pequenas de infraestrutura, ou seguir para o proximo dominio da fase 2
+3. seguir para o proximo dominio da fase 2 ou para pequenas limpezas de compat layers restantes

@@ -41,8 +41,7 @@ import { useAppLogger } from './hooks/useAppLogger.ts';
 import { useInstallPwa } from './hooks/useInstallPwa.ts';
 import { useOnlineSync } from './hooks/useOnlineSync.ts';
 import { useWakeLock } from './hooks/useWakeLock.ts';
-import { mirrorUser } from './services/supabaseMirror.ts';
-import { deleteSupabaseMatch, deleteSupabaseMatches } from '@infra/supabase';
+import { deleteSupabaseMatch, deleteSupabaseMatches, mirrorUser } from '@infra/supabase';
 
 const CURRENT_DATA_VERSION = '3.1.0'; // bumped: limpa SavedSettings_* para forçar novos defaults por esporte
 

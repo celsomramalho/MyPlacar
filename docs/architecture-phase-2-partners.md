@@ -167,7 +167,7 @@ Principais consumidores atuais:
 - `src/screens/settings/TeamSection.tsx`
 - `src/screens/ScoreboardScreen.tsx`
 - `src/screens/EventDetailScreen.tsx`
-- `src/services/supabaseMirror.ts`
+- `src/infrastructure/supabase/mirror.ts`
 
 Porem, o consumo ja esta mais alinhado com a arquitetura porque:
 
@@ -194,11 +194,16 @@ Foi uma decisao consciente para manter a migracao segura e incremental.
 
 Isso tambem e aceitavel neste momento porque a prioridade desta leva foi consolidar o dominio, nao migrar telas adjacentes por completo.
 
-### 10.3 Supabase mirror ainda em pasta legada
-`src/services/supabaseMirror.ts` continua fora de `infrastructure`.
+### 10.3 Supabase mirror migrado para infrastructure
+`supabaseMirror` foi migrado para:
 
-Arquiteturalmente, esse arquivo e infraestrutura tecnica.
-Porem, a mudanca fisica dele nao foi tratada nesta leva para evitar abrir outra frente de migracao.
+- `src/infrastructure/supabase/mirror.ts`
+
+O caminho antigo permanece apenas como compat layer:
+
+- `src/services/supabaseMirror.ts`
+
+Arquiteturalmente, o espelho passivo agora fica na camada correta de `infrastructure`.
 
 ### 10.4 Compat layers ainda nao removidas
 As compat layers de tela e tipos continuam ativas.
