@@ -737,7 +737,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return list
       .map(([id, data]) => {
         const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop' };
-        const isOnline = (now - d.lastSeen) < 120000;
+        const isOnline = (now - d.lastSeen) < 300000; // 5 min — cobre dispositivos que atualizam lastSeen com menos frequência (ex: relógio)
         const isActiveController = effectiveGameState.commandOwnerId === id;
         // isOwner: fonte de verdade é ownerDeviceId no nível raiz — nunca muda durante a live
         const isOwner = !!effectiveGameState.ownerDeviceId && id === effectiveGameState.ownerDeviceId;
@@ -1609,7 +1609,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     // Ícone do tipo físico do dispositivo
                     const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'laptop' ? Laptop : deviceType === 'tablet' ? Monitor : Smartphone;
                     // Nome: nickname do Firebase quando disponível, senão extrai do label
-                    const shortLabel = nickname || (label.includes(' - ') ? label.split(' - ').slice(1).join(' - ') : label);
+                    // Extrai o nickname do label em 3 formatos:
+                    // 1. nickname explícito do Firebase (ex: "Celso")
+                    // 2. após " - " (ex: "Note - celso" → "celso")
+                    // 3. entre parênteses (ex: "Relógio (Celso)" → "Celso")
+                    // 4. label completo como fallback
+                    const shortLabel = nickname
+                      || (label.includes(' - ') ? label.split(' - ').slice(1).join(' - ') : null)
+                      || (label.includes('(') && label.includes(')') ? label.slice(label.indexOf('(') + 1, label.lastIndexOf(')')) : null)
+                      || label;
                     // Badge 1 — papel hierárquico (Dono / Juiz): só aparece se aplicável
                     const isCtrlActive = isActiveController && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
                     // proteção dupla: role já foi corrigido acima, mas garantimos aqui também
