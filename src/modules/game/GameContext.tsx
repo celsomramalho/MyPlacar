@@ -401,7 +401,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
     const db = getDb();
     if (db && userProfile.pin) {
-      const targetPin = resolveTargetPin('write');
+      // Observadores têm gameState.ownerPin disponível localmente após handleObserveLive,
+      // mas o LiveContext pode receber o espelho desatualizado do AppInner.
+      // Resolvemos aqui diretamente para garantir que o ownerPin canônico seja usado.
+      const localOwnerPin = gameState?.ownerPin?.toUpperCase();
+      const targetPin = localOwnerPin || resolveTargetPin('write');
       if (!targetPin) return;
       try {
         const snap = await getDoc(doc(db, "live_matches", targetPin));
@@ -411,7 +415,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           const currentControllerId = cloudState.commandOwnerId;
 
           const myCommandName = currentFullDeviceName;
-          const newControllerRole: 'owner' | 'judge' = isOriginalOwner ? 'owner' : 'judge';
+          // Proprietário → 'owner'; juiz formal → 'judge'; qualquer outro → 'observer'
+          const newControllerRole: 'owner' | 'judge' | 'observer' = isOriginalOwner ? 'owner' : livePapel === 'judge' ? 'judge' : 'observer';
           const syncedSettings: MatchSettings = { 
             ...matchSettings, 
             p1Name: cloudState.p1.name, 
@@ -490,7 +495,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         }
       } catch {}
     }
-  }, [userProfile.pin, resolveTargetPin, setModalConfig, currentFullDeviceName, isOriginalOwner, matchSettings, deviceId, setMatchSettings, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState, overlayAcceptedRef, setShowLiveControlOverlay, setCurrentScreen, setCloudLiveExists, tookControlAtRef]);
+  }, [userProfile.pin, gameState?.ownerPin, resolveTargetPin, setModalConfig, currentFullDeviceName, isOriginalOwner, livePapel, matchSettings, deviceId, setMatchSettings, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState, overlayAcceptedRef, setShowLiveControlOverlay, setCurrentScreen, setCloudLiveExists, tookControlAtRef]);
 
   const handleObserveLive = useCallback(async (targetPin?: string) => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para observar.", onConfirm: () => setModalConfig(null) }); return; }
