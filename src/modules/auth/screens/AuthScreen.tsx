@@ -8,7 +8,7 @@ import { createWatchLoginToken, deleteWatchLoginToken, fetchEventByPin, fetchUse
 import { mirrorUser } from '../../../services/supabaseMirror.ts';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
-import { emailService } from '../../../services/emailService.ts';
+import { emailService } from '@infra/email';
 import { formatPortugueseName, applyGoldenRule } from '@shared/utils/formatters';
 import { APP_VERSION } from '../../../constants.ts';
 import { isWatchDevice } from '@shared/utils/device';

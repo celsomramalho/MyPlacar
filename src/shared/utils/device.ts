@@ -19,3 +19,19 @@ export const getDeviceType = (): 'watch' | 'phone' | 'tablet' | 'laptop' => {
 
   return isLaptop ? 'laptop' : 'tablet';
 };
+
+export const resolveWatchMode = (currentValue: boolean): boolean =>
+  isWatchDevice() ? true : currentValue;
+
+export const getDeviceId = (): string => {
+  try {
+    let id = localStorage.getItem('myPlacar_DeviceId');
+    if (!id) {
+      id = Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('myPlacar_DeviceId', id);
+    }
+    return id;
+  } catch {
+    return `session_${Math.random().toString(36).substring(2, 11)}`;
+  }
+};

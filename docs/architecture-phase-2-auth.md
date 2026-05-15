@@ -102,6 +102,7 @@ As operacoes tecnicas de Firebase foram consolidadas ou consumidas a partir de:
 - `src/infrastructure/firebase/watchTokens.ts`
 - `src/infrastructure/firebase/events.ts`
 - `src/infrastructure/firebase/users.ts`
+- `src/infrastructure/email/index.ts`
 
 Esses arquivos concentram acesso tecnico a:
 
@@ -111,6 +112,7 @@ Esses arquivos concentram acesso tecnico a:
 - criacao de perfil novo com timestamp tecnico
 - leitura de evento por PIN para deep link `joinEvent`
 - criacao, assinatura e remocao de `watch_tokens`
+- envio tecnico de e-mails via API interna `/api/enviar-email`
 
 Com isso, `AuthScreen` deixou de montar queries Firestore diretamente para `users`, `events` e `watch_tokens`.
 
@@ -135,6 +137,7 @@ Continuam como compat layers:
 - `src/screens/AuthScreen.tsx`
 - `src/components/Button.tsx`
 - `src/utils/device.ts`
+- `src/services/emailService.ts`
 - reexport temporario de `UserProfile` e `PlanType` em `src/types.ts`
 
 Essas camadas so reexportam e existem para reduzir risco enquanto consumidores legados ainda sao esvaziados.
@@ -190,10 +193,14 @@ Porem, o consumo ja esta mais alinhado com a arquitetura porque:
 
 Esse arquivo ficou fora desta leva porque hoje pertence ao contorno operacional de `settings/profile`, e move-lo junto abriria uma frente maior que `auth`.
 
-### 10.2 `emailService` continua em pasta legada
-`src/services/emailService.ts` continua fora de `infrastructure`.
+### 10.2 `emailService` migrado para infrastructure
+`emailService` foi migrado para:
 
-Arquiteturalmente, esse arquivo parece integracao externa e deve ser migrado futuramente para `infrastructure`, mas isso foi mantido fora desta leva para reduzir risco.
+- `src/infrastructure/email/index.ts`
+
+O caminho antigo permanece apenas como compat layer:
+
+- `src/services/emailService.ts`
 
 ### 10.3 `supabaseMirror` continua em pasta legada
 `src/services/supabaseMirror.ts` continua fora de `infrastructure`.
@@ -244,7 +251,7 @@ Esta leva da fase 2 para `auth` pode ser considerada encerrada quando:
 - build e tipagem estiverem validados no estado atual
 - nao houver regressao funcional nos fluxos principais de autenticacao
 - o time reconhecer `src/modules/auth` como fronteira oficial do dominio
-- pendencias de `emailService`, `supabaseMirror` e `ProfileScreen` estiverem registradas como conscientes
+- pendencias de `supabaseMirror` e `ProfileScreen` estiverem registradas como conscientes
 
 ## 14. Proximo passo recomendado
 O proximo passo recomendado nao e continuar expandindo `auth` indefinidamente.
