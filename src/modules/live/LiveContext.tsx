@@ -158,7 +158,8 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
   // ── useMemo: indicatorRole ──────────────────────────────────────────────────
   const indicatorRole = useMemo((): 'owner' | 'judge' | 'observer' => {
     if (!isActiveController) return 'observer';
-    return livePapel === 'owner' ? 'owner' : 'judge';
+    // Observador que assumiu o controle não se torna juiz — preserva seu papel real.
+    return livePapel === 'owner' ? 'owner' : livePapel === 'judge' ? 'judge' : 'observer';
   }, [isActiveController, livePapel]);
 
   // ── useMemo: isJudgeOnline ──────────────────────────────────────────────────
