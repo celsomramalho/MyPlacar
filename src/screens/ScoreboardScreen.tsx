@@ -303,7 +303,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   // gameState lido exclusivamente do GameContext.
   // Props gameState e userProfile removidas da interface e das chamadas no App.tsx.
   const gameCtx = useGame();
-  const effectiveGameState = gameCtx.gameState!;
+  const effectiveGameState = gameCtx.gameState;
 
   // Detecta modo público diretamente pela URL — independente de props/minificação
   const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
@@ -325,7 +325,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const effectiveVoiceLogs = voiceLogs !== undefined ? voiceLogs : [];
   const effectiveSetVoiceLogs = setVoiceLogs || (() => {});
 
-  const displayTime = useMatchTimer(effectiveGameState);
+  const displayTime = useMatchTimer(effectiveGameState ?? null);
 
   // ─── Wake Lock gerenciado no App.tsx — estável independente de remounts ───
 
@@ -1034,26 +1034,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   
   const isVoiceActive = isListening && !voiceWasManuallyStopped && effectiveGameState.matchConfig.voiceEnabled && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner && !effectiveGameState.isMatchOver;
   
-  if (effectiveGameState.matchConfig.isWatchMode) {
-    return (
-      <WatchBoard 
-        gameState={effectiveGameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
-        onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
-        isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
-        handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
-        isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} onSyncScoreboard={onSyncScoreboard} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
-        isOfflineMode={isOfflineMode}
-        correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
-        pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
-        handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
-        cloudLiveExists={effectiveCloudLiveExists}
-        role={effectiveIndicatorRole}
-        fbSyncStatus={effectiveFbSyncStatus}
-        onVoiceToggle={handleVoiceToggle}
-        isVoiceActive={isVoiceActive}
-      />
-    );
-  }
+  // isWatchMode e isScoreboardMode: returns movidos para após todos os hooks (Rules of Hooks)
 
   const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
 
@@ -1102,14 +1083,35 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     );
   }
 
-  // Guard: colocado aqui (após todos os hooks) para não violar Rules of Hooks.
-  // O return condicional anterior foi removido da linha 332 por esse motivo.
+  // Guard: gameState inválido — colocado aqui, após todos os hooks
   if (!effectiveGameState || !effectiveGameState.p1 || !effectiveGameState.p2 || !effectiveGameState.matchConfig) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
         <p className="text-slate-500 font-bold">Sincronizando partida...</p>
       </div>
+    );
+  }
+
+  // isWatchMode — após todos os hooks (Rules of Hooks)
+  if (effectiveGameState.matchConfig.isWatchMode) {
+    return (
+      <WatchBoard 
+        gameState={effectiveGameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
+        onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
+        isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
+        handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
+        isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} onSyncScoreboard={onSyncScoreboard} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+        isOfflineMode={isOfflineMode}
+        correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
+        pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
+        handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
+        cloudLiveExists={effectiveCloudLiveExists}
+        role={effectiveIndicatorRole}
+        fbSyncStatus={effectiveFbSyncStatus}
+        onVoiceToggle={handleVoiceToggle}
+        isVoiceActive={isVoiceActive}
+      />
     );
   }
 
