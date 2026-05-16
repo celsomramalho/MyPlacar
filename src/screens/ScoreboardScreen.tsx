@@ -312,7 +312,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   // Passo 5.3: props Live removidas — lê exclusivamente do LiveContext.
   const liveCtx = useLive();
 
-  const effectiveCloudLiveExists = liveCtx.cloudLiveExists;
+  const effectiveCloudLiveExists = liveCtx.cloudLiveExists && !isOfflineMode;
   const effectiveLivePapel = liveCtx.livePapel;
   const effectiveIsController = liveCtx.isActiveController;
   const effectiveIndicatorRole = liveCtx.indicatorRole;
@@ -329,14 +329,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   // ─── Wake Lock gerenciado no App.tsx — estável independente de remounts ───
 
-  if (!effectiveGameState || !effectiveGameState.p1 || !effectiveGameState.p2 || !effectiveGameState.matchConfig) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">
-        <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
-        <p className="text-slate-500 font-bold">Sincronizando partida...</p>
-      </div>
-    );
-  }
+  // Guard: gameState inválido — renderizado no JSX abaixo para não violar Rules of Hooks
 
   const [resetPressProgress, setResetPressProgress] = useState(0);
   const resetPressTimerRef = useRef<number | null>(null);
@@ -366,8 +359,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const scoreProgressIntervalRef = useRef<number | null>(null);
   const hasDraggedRef = useRef(false);
 
-  const [isLogsOpen, setIsLogsOpen] = useState(effectiveGameState.matchConfig.isHistoryEnabled);
-  const [isTimelineOpen, setIsTimelineOpen] = useState(effectiveGameState.matchConfig.isHistoryEnabled);
+  const [isLogsOpen, setIsLogsOpen] = useState(effectiveGameState?.matchConfig?.isHistoryEnabled);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(effectiveGameState?.matchConfig?.isHistoryEnabled);
   const [isAudioLocked, setIsAudioLocked] = useState(false);
   const [remoteActionFeedback, setRemoteActionFeedback] = useState<string | null>(null);
   const [isWaitingAck, setIsWaitingAck] = useState(false);
@@ -378,7 +371,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const isLongPressActive = useRef(false);
   const touchStartPos = useRef({ x: 0, y: 0 });
   const lastRemoteCommandTimestamp = useRef(0);
-  const lastHistoryLengthOnWatch = useRef(effectiveGameState.pointHistory?.length ?? 0);
+  const lastHistoryLengthOnWatch = useRef(effectiveGameState?.pointHistory?.length ?? 0);
   const [isPinging, setIsPinging] = useState(false);
   const [isMirrorExpanded, setIsMirrorExpanded] = useState(false);
   const [isLiveExpanded, setIsLiveExpanded] = useState(false);
@@ -428,7 +421,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   // Reset log ao iniciar nova partida — APENAS quando a nova partida realmente começa
   // Em vez de depender de matchId (que pode não estar definido), usamos o estado anterior
-  const prevMatchIdRef = useRef<string | undefined>(effectiveGameState.matchId);
+  const prevMatchIdRef = useRef<string | undefined>(effectiveGameState?.matchId);
   useEffect(() => {
     if (effectiveGameState.matchId && prevMatchIdRef.current !== effectiveGameState.matchId) {
       // Partida realmente mudou
@@ -447,7 +440,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [effectiveGameState.matchId, effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
 
   // ── Live criada ────────────────────────────────────────────────────────────
-  const prevIsMirroringRef = useRef(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed));
+  const prevIsMirroringRef = useRef(effectiveGameState?.isMirroringActive && !(effectiveGameState?.isMirroringActive && effectiveGameState?.isLiveClosed));
   useEffect(() => {
     const isNowActive = effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
     if (!prevIsMirroringRef.current && isNowActive) {
@@ -462,7 +455,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
 
   // ── Partida iniciada (primeiro ponto) ─────────────────────────────────────
-  const prevHistLenRef = useRef(effectiveGameState.pointHistory?.length ?? 0);
+  const prevHistLenRef = useRef(effectiveGameState?.pointHistory?.length ?? 0);
   useEffect(() => {
     const cur = effectiveGameState.pointHistory?.length ?? 0;
     const prev = prevHistLenRef.current;
@@ -541,7 +534,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [effectiveGameState.p1.score, effectiveGameState.p2.score, effectiveGameState.p1.games, effectiveGameState.p2.games, addLiveLog]);
 
   // ── Assumiu o controle ────────────────────────────────────────────────────
-  const prevCommandOwnerIdRef = useRef(effectiveGameState.commandOwnerId);
+  const prevCommandOwnerIdRef = useRef(effectiveGameState?.commandOwnerId);
   useEffect(() => {
     if (!effectiveGameState.isMirroringActive || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) { prevCommandOwnerIdRef.current = effectiveGameState.commandOwnerId; return; }
     const prev = prevCommandOwnerIdRef.current;
@@ -568,8 +561,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const controllersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Refs sempre atualizadas — lidas DENTRO do setTimeout para evitar closure stale
   // (o useEffect captura o valor do render em que rodou, não o do momento do disparo)
-  const latestControllersRef = useRef<Record<string, any>>(effectiveGameState.controllers || {});
-  const latestCommandOwnerIdRef = useRef(effectiveGameState.commandOwnerId);
+  const latestControllersRef = useRef<Record<string, any>>(effectiveGameState?.controllers || {});
+  const latestCommandOwnerIdRef = useRef(effectiveGameState?.commandOwnerId);
   useEffect(() => { latestControllersRef.current = effectiveGameState.controllers || {}; }, [effectiveGameState.controllers]);
   useEffect(() => { latestCommandOwnerIdRef.current = effectiveGameState.commandOwnerId; }, [effectiveGameState.commandOwnerId]);
 
@@ -640,7 +633,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [effectiveGameState.controllers, effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)]); // addLiveLog excluído intencionalmente — lido via ref para não reiniciar o debounce a cada render
 
   // ── Partida encerrada ─────────────────────────────────────────────────────
-  const prevIsMatchOverRef = useRef(effectiveGameState.isMatchOver);
+  const prevIsMatchOverRef = useRef(effectiveGameState?.isMatchOver);
   useEffect(() => {
     if (!prevIsMatchOverRef.current && effectiveGameState.isMatchOver) {
       const p1SetsWon = (effectiveGameState.p1.sets || []).filter((s: number, i: number) => s > (effectiveGameState.p2.sets?.[i] ?? 0)).length;
@@ -652,7 +645,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   }, [effectiveGameState.isMatchOver, addLiveLog]);
 
   // ── Partida confirmada ────────────────────────────────────────────────────
-  const prevIsConfirmedRef = useRef(effectiveGameState.isConfirmedFinished);
+  const prevIsConfirmedRef = useRef(effectiveGameState?.isConfirmedFinished);
   useEffect(() => {
     if (!prevIsConfirmedRef.current && effectiveGameState.isConfirmedFinished) {
       const label = currentDeviceFullLabel || 'Dispositivo';
@@ -866,7 +859,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   // Reset voice logs ao iniciar nova partida — APENAS quando a nova partida realmente começa
   // NÃO zeramos mais aqui — os logs agora persistem entre telas
-  const prevVoiceMatchIdRef = useRef<string | undefined>(effectiveGameState.matchId);
+  const prevVoiceMatchIdRef = useRef<string | undefined>(effectiveGameState?.matchId);
   useEffect(() => {
     if (effectiveGameState.matchId && prevVoiceMatchIdRef.current !== effectiveGameState.matchId) {
       prevVoiceMatchIdRef.current = effectiveGameState.matchId;
@@ -1106,6 +1099,17 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         fbSyncStatus={effectiveFbSyncStatus}
         onToggleScoreboardMode={onToggleScoreboardMode}
       />
+    );
+  }
+
+  // Guard: colocado aqui (após todos os hooks) para não violar Rules of Hooks.
+  // O return condicional anterior foi removido da linha 332 por esse motivo.
+  if (!effectiveGameState || !effectiveGameState.p1 || !effectiveGameState.p2 || !effectiveGameState.matchConfig) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">
+        <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+        <p className="text-slate-500 font-bold">Sincronizando partida...</p>
+      </div>
     );
   }
 
