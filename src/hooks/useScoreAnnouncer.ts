@@ -129,10 +129,25 @@ export const TIE_BREAK_TTS = 'tái-breique';
  */
 export const ACE_TTS = 'eisse';
 
-/** "saque do Joao" ou "saque de Ana" — heuristica por terminacao do nome */
-const saquePrep = (name: string): string => {
-  const feminine = /[aáàãâéèêíìîóòõôúùû]$/i.test(name.trim());
-  return feminine ? `de ${name}` : `do ${name}`;
+/** "saque do João" ou "saque da Salete" — usa gênero explícito do GameState; heurística só como fallback */
+const saquePrep = (name: string, gender?: 'M' | 'F'): string => {
+  const feminine = gender === 'F' ||
+    (gender == null && /[aáàãâéèêíìîóòõôúùû]$/i.test(name.trim()));
+  return feminine ? `da ${name}` : `do ${name}`;
+};
+
+/** Retorna o gênero do sacador atual conforme servingOrderOffset */
+const getServerGender = (state: GameState): 'M' | 'F' | undefined => {
+  const { p1, p2, servingOrderOffset, matchConfig } = state;
+  if (matchConfig.isDoubles) {
+    switch (servingOrderOffset % 4) {
+      case 0: return p1.gender;
+      case 1: return p2.gender;
+      case 2: return p1.partnerGender;
+      case 3: return p2.partnerGender;
+    }
+  }
+  return servingOrderOffset % 2 === 0 ? p1.gender : p2.gender;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -346,13 +361,13 @@ export const buildAnnouncementTennis = (
 
   // A) Inicio da partida
   if (isMatchStart) {
-    return `Partida iniciada, placar do game zero a zero, saque ${saquePrep(serverName)}.`;
+    return `Partida iniciada, placar do game zero a zero, saque ${saquePrep(serverName, getServerGender(state))}.`;
   }
 
   // Correcao (undo)
   if (currentPointCount < prevPointCount) {
     const gameScore = getGameScoreText(state);
-    return `Placar corrigido, placar do game ${gameScore}, saque ${saquePrep(serverName)}.`;
+    return `Placar corrigido, placar do game ${gameScore}, saque ${saquePrep(serverName, getServerGender(state))}.`;
   }
 
   // E) Fim da partida
@@ -372,7 +387,7 @@ export const buildAnnouncementTennis = (
       `Fim do ${ordinalSet(finishedSetIdx)} set, ` +
       `placar ${numToWord(servLastSet)} a ${numToWord(recvLastSet)}, ` +
       `inicio do ${ordinalSet(state.currentSet)} set, ` +
-      `placar do game zero a zero, saque ${saquePrep(serverName)}.` +
+      `placar do game zero a zero, saque ${saquePrep(serverName, getServerGender(state))}.` +
       sideSwitch
     );
   }
@@ -382,7 +397,7 @@ export const buildAnnouncementTennis = (
     const [gamesServ, gamesRecv] = getGamesFromServer(state);
     return (
       `Placar do set ${numToWord(gamesServ)} a ${numToWord(gamesRecv)}, ` +
-      `inicio do ${TIE_BREAK_TTS}, zero a zero, saque ${saquePrep(serverName)}.`
+      `inicio do ${TIE_BREAK_TTS}, zero a zero, saque ${saquePrep(serverName, getServerGender(state))}.`
     );
   }
 
@@ -390,7 +405,7 @@ export const buildAnnouncementTennis = (
   if (currentIsTB) {
     const tbScore = getTieBreakScoreText(state);
     const sideSwitch = shouldSwitchSidesTieBreak(state) ? ', troca de lado' : '';
-    return `${tbScore}, saque ${saquePrep(serverName)}${sideSwitch}.`;
+    return `${tbScore}, saque ${saquePrep(serverName, getServerGender(state))}${sideSwitch}.`;
   }
 
   // B) Inicio de game (nao o primeiro da partida)
@@ -401,7 +416,7 @@ export const buildAnnouncementTennis = (
     const sideSwitch = shouldSwitchSidesNewGame(state, totalGames) ? ' Troca de lado.' : '';
     return (
       `Placar do set ${numToWord(gamesServ)} a ${numToWord(gamesRecv)}, ` +
-      `placar do game zero a zero, saque ${saquePrep(serverName)}.` +
+      `placar do game zero a zero, saque ${saquePrep(serverName, getServerGender(state))}.` +
       sideSwitch
     );
   }
@@ -446,6 +461,8 @@ export const useScoreAnnouncer = (gameState: GameState) => {
   const prevServer         = useRef(gameState.server);
   const prevOffset         = useRef(gameState.servingOrderOffset);
   const prevSet            = useRef(gameState.currentSet);
+  const prevP1Gender = useRef(gameState.p1?.gender);
+  const prevP2Gender = useRef(gameState.p2?.gender);
   const announcedStartFor  = useRef<string | null>(null);
   const announcedFinishFor = useRef<string | null>(null);
   const lastAnnouncedText  = useRef<string>('');
@@ -484,12 +501,12 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     let text: string;
     if (isTB) {
       const tbScore = getTieBreakScoreText(gameState);
-      text = `${TIE_BREAK_TTS}, ${tbScore}, saque ${saquePrep(serverName)}.`;
+      text = `${TIE_BREAK_TTS}, ${tbScore}, saque ${saquePrep(serverName, getServerGender(gameState))}.`;
     } else {
       const gameScore = getGameScoreText(gameState);
       text = (
         `Placar do set ${numToWord(gamesServ)} a ${numToWord(gamesRecv)}, ` +
-        `placar do game ${gameScore}, saque ${saquePrep(serverName)}.`
+        `placar do game ${gameScore}, saque ${saquePrep(serverName, getServerGender(gameState))}.`
       );
     }
     lastAnnouncedText.current = '';
@@ -503,6 +520,16 @@ export const useScoreAnnouncer = (gameState: GameState) => {
 
     const currentPointCount = gameState?.pointHistory?.length ?? 0;
     const currentIsTB = isTennisTieBreak(gameState);
+
+    // Se o gender mudou (usuário alterou na tela de nomes e clicou Play),
+    // reseta o guard para permitir re-anúncio do início com o gender correto.
+    const genderChanged = prevP1Gender.current !== gameState.p1?.gender || prevP2Gender.current !== gameState.p2?.gender;
+    if (genderChanged && currentPointCount === 0) {
+      announcedStartFor.current = null;
+      lastAnnouncedText.current = '';
+    }
+    prevP1Gender.current = gameState.p1?.gender;
+    prevP2Gender.current = gameState.p2?.gender;
 
     // Inicio da partida
     if (currentPointCount === 0 && announcedStartFor.current !== gameState.matchId) {
@@ -553,14 +580,18 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     prevSet.current         = gameState.currentSet;
 
   }, [
-    // IMPORTANTE: só pointHistory.length e matchId como gatilhos.
+    // IMPORTANTE: só pointHistory.length e matchId como gatilhos primários.
     // p1.score, p2.score, server e servingOrderOffset mudam no mesmo batch que
-    // pointHistory.length ao fim de um game — mante-los aqui dispara o effect
-    // duas vezes e gera anuncios duplicados. Toda informacao necessaria ja esta
+    // pointHistory.length ao fim de um game — mantê-los aqui dispara o effect
+    // duas vezes e gera anúncios duplicados. Toda informação necessária já está
     // no gameState completo capturado dentro do effect.
+    // gender: incluído para re-anunciar corretamente quando o usuário muda o
+    // gênero na tela de nomes e clica Play sem iniciar nova partida.
     gameState?.pointHistory?.length,
     gameState.isMatchOver,
     gameState.matchId,
+    gameState.p1?.gender,
+    gameState.p2?.gender,
     announce,
     sportType,
   ]);

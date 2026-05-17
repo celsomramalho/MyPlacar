@@ -65,7 +65,10 @@ interface Props {
 
 export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, onOpenPartners, onAutoRegisterPartner, userProfile, onJoinTournament }, ref) => {
   const [genders, setGenders] = useState<Record<string, Gender>>({
-    p1: 'M', p1Partner: 'M', p2: 'M', p2Partner: 'M'
+    p1: settings.p1Gender || 'M',
+    p1Partner: settings.p1PartnerGender || 'M',
+    p2: settings.p2Gender || 'M',
+    p2Partner: settings.p2PartnerGender || 'M',
   });
   const [isShuffling, setIsShuffling] = useState(false);
   const [dbSportsIcons, setDbSportsIcons] = useState<Record<string, string>>({});
@@ -119,7 +122,10 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   }));
 
   const toggleGender = (key: string) => {
-    setGenders(prev => ({ ...prev, [key]: prev[key] === 'M' ? 'F' : 'M' }));
+    const newGender: Gender = genders[key] === 'M' ? 'F' : 'M';
+    setGenders(prev => ({ ...prev, [key]: newGender }));
+    const settingsKey = `${key}Gender` as keyof MatchSettings;
+    setSettings(prev => ({ ...prev, [settingsKey]: newGender }));
   };
 
   const handleNameChange = (key: keyof MatchSettings, value: string) => {
@@ -136,9 +142,11 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     const guessed = guessPartnerGender(formatted);
     if (guessed) {
       setGenders(prev => ({ ...prev, [fieldPrefix]: guessed }));
+      const settingsKey = `${fieldPrefix}Gender` as keyof MatchSettings;
+      setSettings(prev => ({ ...prev, [key]: formatted, [verifiedKey]: isVerified, [settingsKey]: guessed }));
+    } else {
+      setSettings(prev => ({ ...prev, [key]: formatted, [verifiedKey]: isVerified }));
     }
-
-    setSettings(prev => ({ ...prev, [key]: formatted, [verifiedKey]: isVerified }));
   };
 
   const handleComplexVoice = async (targetField: keyof MatchSettings, name1: string, name2: string) => {
@@ -151,7 +159,8 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
             const finalName = dbNickname; 
             const guessed = guessPartnerGender(finalName);
             if (guessed) setGenders(prev => ({ ...prev, [fieldPrefix]: guessed }));
-            setSettings(prev => ({ ...prev, [targetField]: finalName, [verifiedKey]: true }));
+            const settingsGenderKey = `${fieldPrefix}Gender` as keyof MatchSettings;
+            setSettings(prev => ({ ...prev, [targetField]: finalName, [verifiedKey]: true, ...(guessed && { [settingsGenderKey]: guessed }) }));
             return;
         }
     }
@@ -169,30 +178,22 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
 
     const team = targetField.startsWith('p1') ? 1 : 2;
     if (team === 1) {
-      if (nf1) {
-        const g1 = guessPartnerGender(nf1);
-        if (g1) setGenders(p => ({ ...p, p1: g1 }));
-      }
-      if (nf2) {
-        const g2 = guessPartnerGender(nf2);
-        if (g2) setGenders(p => ({ ...p, p1Partner: g2 }));
-      }
+      const g1 = nf1 ? guessPartnerGender(nf1) : undefined;
+      const g2 = nf2 ? guessPartnerGender(nf2) : undefined;
+      if (g1) setGenders(p => ({ ...p, p1: g1 }));
+      if (g2) setGenders(p => ({ ...p, p1Partner: g2 }));
       setSettings(prev => {
-        if (nf1 && nf2) return { ...prev, p1Name: nf1, p1Partner: nf2, isDoubles: true, p1Verified: v1, p1PartnerVerified: v2 };
-        return { ...prev, p1Name: nf1, p1Verified: v1 };
+        if (nf1 && nf2) return { ...prev, p1Name: nf1, p1Partner: nf2, isDoubles: true, p1Verified: v1, p1PartnerVerified: v2, ...(g1 && { p1Gender: g1 }), ...(g2 && { p1PartnerGender: g2 }) };
+        return { ...prev, p1Name: nf1, p1Verified: v1, ...(g1 && { p1Gender: g1 }) };
       });
     } else {
-      if (nf1) {
-        const g1 = guessPartnerGender(nf1);
-        if (g1) setGenders(p => ({ ...p, p2: g1 }));
-      }
-      if (nf2) {
-        const g2 = guessPartnerGender(nf2);
-        if (g2) setGenders(p => ({ ...p, p2Partner: g2 }));
-      }
+      const g1 = nf1 ? guessPartnerGender(nf1) : undefined;
+      const g2 = nf2 ? guessPartnerGender(nf2) : undefined;
+      if (g1) setGenders(p => ({ ...p, p2: g1 }));
+      if (g2) setGenders(p => ({ ...p, p2Partner: g2 }));
       setSettings(prev => {
-        if (nf1 && nf2) return { ...prev, p2Name: nf1, p2Partner: nf2, isDoubles: true, p2Verified: v1, p2PartnerVerified: v2 };
-        return { ...prev, p2Name: nf1, p2Verified: v1 };
+        if (nf1 && nf2) return { ...prev, p2Name: nf1, p2Partner: nf2, isDoubles: true, p2Verified: v1, p2PartnerVerified: v2, ...(g1 && { p2Gender: g1 }), ...(g2 && { p2PartnerGender: g2 }) };
+        return { ...prev, p2Name: nf1, p2Verified: v1, ...(g1 && { p2Gender: g1 }) };
       });
     }
   };
@@ -205,9 +206,9 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   const swapPlayersInTeam = (team: 1 | 2) => {
     setSettings(prev => {
       if (team === 1) {
-        return { ...prev, p1Name: prev.p1Partner || '', p1Partner: prev.p1Name, p1Verified: prev.p1PartnerVerified, p1PartnerVerified: prev.p1Verified };
+        return { ...prev, p1Name: prev.p1Partner || '', p1Partner: prev.p1Name, p1Verified: prev.p1PartnerVerified, p1PartnerVerified: prev.p1Verified, p1Gender: prev.p1PartnerGender, p1PartnerGender: prev.p1Gender };
       } else {
-        return { ...prev, p2Name: prev.p2Partner || '', p2Partner: prev.p2Name, p2Verified: prev.p2PartnerVerified, p2PartnerVerified: prev.p2Verified };
+        return { ...prev, p2Name: prev.p2Partner || '', p2Partner: prev.p2Name, p2Verified: prev.p2PartnerVerified, p2PartnerVerified: prev.p2Verified, p2Gender: prev.p2PartnerGender, p2PartnerGender: prev.p2Gender };
       }
     });
     setGenders(prev => {
@@ -222,7 +223,9 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
       p1Name: prev.p2Name, p1Partner: prev.p2Partner,
       p2Name: prev.p1Name, p2Partner: prev.p1Partner,
       p1Verified: prev.p2Verified, p1PartnerVerified: prev.p2PartnerVerified,
-      p2Verified: prev.p1Verified, p2PartnerVerified: prev.p1PartnerVerified
+      p2Verified: prev.p1Verified, p2PartnerVerified: prev.p1PartnerVerified,
+      p1Gender: prev.p2Gender, p1PartnerGender: prev.p2PartnerGender,
+      p2Gender: prev.p1Gender, p2PartnerGender: prev.p1PartnerGender,
     }));
     setGenders(prev => ({
       p1: prev.p2, p1Partner: prev.p2Partner,
@@ -258,7 +261,9 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
           p1Name: all[0].n, p1Partner: all[1].n,
           p2Name: all[2].n, p2Partner: all[3].n,
           p1Verified: all[0].v, p1PartnerVerified: all[1].v,
-          p2Verified: all[2].v, p2PartnerVerified: all[3].v
+          p2Verified: all[2].v, p2PartnerVerified: all[3].v,
+          p1Gender: all[0].g, p1PartnerGender: all[1].g,
+          p2Gender: all[2].g, p2PartnerGender: all[3].g,
         }));
 
         setGenders({
@@ -295,7 +300,9 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
           p1Name: res[0].n, p1Partner: res[1].n,
           p2Name: res[2].n, p2Partner: res[3].n,
           p1Verified: res[0].v, p1PartnerVerified: res[1].v,
-          p2Verified: res[2].v, p2PartnerVerified: res[3].v
+          p2Verified: res[2].v, p2PartnerVerified: res[3].v,
+          p1Gender: res[0].g, p1PartnerGender: res[1].g,
+          p2Gender: res[2].g, p2PartnerGender: res[3].g,
         }));
 
         setGenders({

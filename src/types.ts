@@ -1,4 +1,7 @@
 
+import type { ScoringEngine } from './utils/sportEngine';
+export type { ScoringEngine };
+
 export type Screen = 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail' | 'communications' | 'public-scoreboard';
 export type Tab = 'config' | 'history' | 'help' | 'profile';
 export type AdminTab = 'configs' | 'users' | 'icons' | 'events' | 'comms';
@@ -133,7 +136,9 @@ export interface VoiceCommands {
 
 export interface Player {
   name: string;
-  partnerName?: string; 
+  partnerName?: string;
+  gender?: 'M' | 'F';
+  partnerGender?: 'M' | 'F';
   score: string; 
   games: number; 
   sets: number[]; 
@@ -245,6 +250,12 @@ export interface GameState {
   liveVersion?: number;
   /** Estado isolado do pickleball. Presente apenas quando sportType === 'pickleball'. */
   pickleball?: PickleballState;
+  /**
+   * Motor de pontuação com que esta partida foi iniciada. Imutável após criação.
+   * Usado para detectar trocas de motor durante partida em andamento (ex: tênis → pickleball).
+   * Optional para retrocompatibilidade com partidas salvas sem o campo.
+   */
+  scoringEngine?: ScoringEngine;
 }
 
 export type { MatchHistoryItem } from './modules/history/types';
@@ -264,6 +275,10 @@ export interface MatchSettings {
   p2Partner: string;
   p1Color: string;
   p2Color: string;
+  p1Gender?: 'M' | 'F';
+  p1PartnerGender?: 'M' | 'F';
+  p2Gender?: 'M' | 'F';
+  p2PartnerGender?: 'M' | 'F';
   p1Verified?: boolean;
   p1PartnerVerified?: boolean;
   p2Verified?: boolean;

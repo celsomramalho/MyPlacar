@@ -37,6 +37,7 @@ import { createHistoryItem } from '@modules/history';
 import { clearLiveOwnerPin, persistLiveOwnerPin } from '../live/liveHelpers.ts';
 import { getDeviceId, getDeviceType, resolveWatchMode } from '../../utils/device.ts';
 import { sanitizeForFirestore } from '../../utils/sanitize.ts';
+import { getEngineForSport } from '../../utils/sportEngine.ts';
 
 // ─── Contexto ─────────────────────────────────────────────────────────────────
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -170,6 +171,36 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (inicialChanged) setIsSettingsInicialSaved(false);
     if (prev.sportType !== matchSettings.sportType) { setIsSettingsRegrasSaved(true); } else if (technicalFieldsChanged) { setIsSettingsRegrasSaved(false); }
 
+    // ── Detecção de troca de motor de pontuação ───────────────────────────────
+    // Disparada no momento em que o usuário troca o esporte nas regras.
+    // Compara o motor da partida em andamento (scoringEngine, imutável) com o
+    // motor do esporte recém-selecionado. Se forem diferentes e houver pontos,
+    // exibe modal imediatamente. onCancel reverte o sportType para o anterior.
+    const sportChanged = prev.sportType !== matchSettings.sportType;
+    const matchHasStarted = gameState && !gameState.isConfirmedFinished && (
+      gameState.p1.games > 0 || gameState.p2.games > 0 ||
+      gameState.p1.sets.length > 0 ||
+      gameState.p1.score !== '0' || gameState.p2.score !== '0'
+    );
+    if (sportChanged && matchHasStarted) {
+      const previousEngine = gameState!.scoringEngine ?? getEngineForSport(prev.sportType);
+      const nextEngine = getEngineForSport(matchSettings.sportType);
+      if (previousEngine !== nextEngine) {
+        const revertedSportType = prev.sportType;
+        setModalConfig({
+          title: "Sistema de pontuação diferente",
+          message: "O esporte selecionado usa um sistema de pontuação diferente. A partida atual será zerada para iniciar com as novas regras. Deseja continuar?",
+          confirmLabel: "Sim, zerar e iniciar",
+          cancelLabel: "Não, manter esporte atual",
+          onConfirm: () => { setModalConfig(null); initGameStateInternal(true); },
+          onCancel: () => {
+            setModalConfig(null);
+            setMatchSettings(s => ({ ...s, sportType: revertedSportType }));
+          },
+        });
+      }
+    }
+
     try {
       localStorage.setItem('myPlacarSettings', JSON.stringify(matchSettings));
       localStorage.setItem('myPlacar_LocalDeviceLabel', matchSettings.deviceLabel || '');
@@ -189,8 +220,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             if (!prevG) return prevG;
             return {
                 ...prevG,
-                p1: { ...prevG.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, color: matchSettings.p1Color },
-                p2: { ...prevG.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, color: matchSettings.p2Color },
+                p1: { ...prevG.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, gender: matchSettings.p1Gender, partnerGender: matchSettings.p1PartnerGender, color: matchSettings.p1Color },
+                p2: { ...prevG.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, gender: matchSettings.p2Gender, partnerGender: matchSettings.p2PartnerGender, color: matchSettings.p2Color },
                 matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: !!matchSettings.isScoreboardMode }
             };
         });
@@ -821,6 +852,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           isPaused: false,
           isLiveClosed: false,
           pickleball: undefined,
+          // Preserva o motor original — reset não muda de esporte
+          scoringEngine: current.scoringEngine ?? getEngineForSport(current.matchConfig.sportType),
         };
 
         if (resetState.matchConfig.sportType === 'pickleball') {
@@ -885,8 +918,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           const stateToSync = sanitizeForFirestore({
              ...gameState,
              controllers: undefined,
-             p1: { ...gameState.p1, name: configToUse.p1Name, partnerName: configToUse.p1Partner, color: configToUse.p1Color },
-             p2: { ...gameState.p2, name: configToUse.p2Name, partnerName: configToUse.p2Partner, color: configToUse.p2Color },
+             p1: { ...gameState.p1, name: configToUse.p1Name, partnerName: configToUse.p1Partner, gender: configToUse.p1Gender, partnerGender: configToUse.p1PartnerGender, color: configToUse.p1Color },
+             p2: { ...gameState.p2, name: configToUse.p2Name, partnerName: configToUse.p2Partner, gender: configToUse.p2Gender, partnerGender: configToUse.p2PartnerGender, color: configToUse.p2Color },
              matchConfig: updatedMatchConfig,
              isLiveClosed: false
           });
@@ -932,10 +965,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         ...gameState, 
         isLiveClosed: false,
         matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: !!matchSettings.isScoreboardMode }, 
-        p1: { ...gameState.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, color: matchSettings.p1Color }, 
-        p2: { ...gameState.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, color: matchSettings.p2Color }, 
+        p1: { ...gameState.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, gender: matchSettings.p1Gender, partnerGender: matchSettings.p1PartnerGender, color: matchSettings.p1Color }, 
+        p2: { ...gameState.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, gender: matchSettings.p2Gender, partnerGender: matchSettings.p2PartnerGender, color: matchSettings.p2Color }, 
         isPaused: false 
       };
+      // flushSync removido: causava interferência com o modal de partida em andamento.
+      // O timing do anúncio é resolvido no useScoreAnnouncer via gameState.p1.gender dep.
       setGameState(updatedState);
       try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
       setCurrentScreen('scoreboard'); return;
@@ -954,8 +989,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const newGameState: GameState = {
       matchId: `match_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       startTime: Date.now(),
-      p1: { name: configToUse.p1Name, partnerName: configToUse.p1Partner, score: '0', games: 0, sets: [], color: configToUse.p1Color },
-      p2: { name: configToUse.p2Name, partnerName: configToUse.p2Partner, score: '0', games: 0, sets: [], color: configToUse.p2Color },
+      p1: { name: configToUse.p1Name, partnerName: configToUse.p1Partner, gender: configToUse.p1Gender, partnerGender: configToUse.p1PartnerGender, score: '0', games: 0, sets: [], color: configToUse.p1Color },
+      p2: { name: configToUse.p2Name, partnerName: configToUse.p2Partner, gender: configToUse.p2Gender, partnerGender: configToUse.p2PartnerGender, score: '0', games: 0, sets: [], color: configToUse.p2Color },
       server: configToUse.initialServer, servingOrderOffset: configToUse.initialServer === 1 ? 0 : 1,
       pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode }, history: [], currentSet: 0, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
       isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin, ownerDeviceId: deviceId,
@@ -970,6 +1005,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         (newGameState.pickleball.server.team === 1 ? 0 : 1) +
         (newGameState.pickleball.server.serverNumber === 2 ? 2 : 0);
     }
+
+    // Motor imutável: gravado uma única vez na criação. Nunca sobrescrito pelo useEffect
+    // de matchSettings (que só atualiza p1, p2 e matchConfig, não a raiz do GameState).
+    newGameState.scoringEngine = getEngineForSport(configToUse.sportType);
     
     setMatchSettings(configToUse);
     if (userProfile.pin) persistLiveOwnerPin(userProfile.pin);

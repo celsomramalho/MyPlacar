@@ -28,6 +28,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION as LOCAL_CODE_VERSION } from './constants.ts';
 import { incrementScore, undoPoint } from './utils/tennisEngine.ts';
 import { initPickleballState } from './utils/pickleballEngine.ts';
+import { getEngineForSport } from './utils/sportEngine.ts';
 import { applyGoldenRule } from './utils/formatters.ts';
 import { isWatchDevice, getDeviceType, getDeviceId, resolveWatchMode } from './utils/device.ts';
 import { sanitizeForFirestore } from './utils/sanitize.ts';
@@ -2415,6 +2416,8 @@ const AppInner: React.FC = () => {
       isMatchOver: false,
       matchDuration: 0,
       isPaused: false,
+      // Motor imutável — gravado na criação para detecção de troca de motor
+      scoringEngine: getEngineForSport(offlineSettings.sportType),
     };
     
     // Mesmo tratamento do fluxo online: garante state.pickleball desde o início.
@@ -2499,6 +2502,23 @@ const AppInner: React.FC = () => {
             setMatchSettingsLocalRef.current(ctx.matchSettings);
             setGameStateLocalRef.current(ctx.gameState);
             setMatchHistoryLocalRef.current(ctx.matchHistory);
+            // Handlers com deps reativas precisam ser atualizados aqui
+            // para não usar closures stale capturadas no onReady.
+            handleLeaveLiveLocalRef.current = ctx.handleLeaveLive;
+            finalizeMatchInternalLocalRef.current = ctx.finalizeMatchInternal;
+            handleCloseCloudLiveLocalRef.current = ctx.handleCloseCloudLive;
+            handleDeleteJudgeLocalRef.current = ctx.handleDeleteJudge;
+            handleControlLiveLocalRef.current = ctx.handleControlLive;
+            handleObserveLiveLocalRef.current = ctx.handleObserveLive;
+            handleSyncScoreboardLocalRef.current = ctx.handleSyncScoreboard;
+            handleAddJudgeLocalRef.current = ctx.handleAddJudge;
+            handleSaveProfileLocalRef.current = ctx.handleSaveProfile;
+            handleScoreUpdateLocalRef.current = ctx.handleScoreUpdate;
+            handleCorrectScoreLocalRef.current = ctx.handleCorrectScore;
+            handleUndoLocalRef.current = ctx.handleUndo;
+            startGameLocalRef.current = ctx.startGame;
+            handleResetMatchLocalRef.current = ctx.handleResetMatch;
+            initGameStateLocalRef.current = ctx.initGameState;
           }}
         />
       <div className="min-h-screen w-full bg-gray-50 flex flex-col">
@@ -2895,7 +2915,12 @@ const GameBridge: React.FC<GameBridgeProps> = ({ onReady, onUpdate }) => {
   useEffect(() => {
     onUpdateRef.current(ctx);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctx.userProfile, ctx.partners, ctx.matchSettings, ctx.gameState, ctx.matchHistory]);
+  }, [ctx.userProfile, ctx.partners, ctx.matchSettings, ctx.gameState, ctx.matchHistory,
+      ctx.handleLeaveLive, ctx.finalizeMatchInternal, ctx.handleCloseCloudLive,
+      ctx.handleDeleteJudge, ctx.handleControlLive, ctx.handleObserveLive,
+      ctx.handleSyncScoreboard, ctx.handleAddJudge, ctx.handleSaveProfile,
+      ctx.handleScoreUpdate, ctx.handleCorrectScore, ctx.handleUndo,
+      ctx.startGame, ctx.handleResetMatch, ctx.initGameState]);
   return null;
 };
 

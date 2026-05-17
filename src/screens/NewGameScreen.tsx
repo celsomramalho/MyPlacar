@@ -359,10 +359,10 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
                 <div className="grid grid-cols-2 gap-2">
                   <button 
                     disabled={isReadOnly}
-                    onClick={() => setSettings({...settings, pickleballScoringMode: 'side-out'})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballScoringMode === 'side-out' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Tradicional (Side-out)</button>
+                    onClick={() => setSettings({...settings, pickleballScoringMode: 'side-out', gamesPerSet: 11})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballScoringMode === 'side-out' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Tradicional (Side-out)</button>
                   <button 
                     disabled={isReadOnly}
-                    onClick={() => setSettings({...settings, pickleballScoringMode: 'rally'})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballScoringMode === 'rally' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Rally (Ponto é ponto)</button>
+                    onClick={() => setSettings({...settings, pickleballScoringMode: 'rally', gamesPerSet: 21})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballScoringMode === 'rally' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Rally (Ponto é ponto)</button>
                 </div>
               </div>
             )}
