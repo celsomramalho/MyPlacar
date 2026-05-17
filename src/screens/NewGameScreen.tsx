@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon } from 'lucide-react';
+import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, LogOut } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
 import { MatchSettings, SportType, GameState, TournamentEvent, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../types';
 import { useGame } from '@modules/game';
@@ -240,6 +240,15 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
               <WifiOff size={22} className="relative z-10" />
             </button>
           )}
+          {isOfflineMode && onExitOffline && (
+            <button
+              onClick={onExitOffline}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-500 shadow-md active:scale-95 transition-transform"
+              title="Sair do modo offline"
+            >
+              <LogOut size={18} />
+            </button>
+          )}
         </div>
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-colors duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
@@ -359,10 +368,10 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
                 <div className="grid grid-cols-2 gap-2">
                   <button 
                     disabled={isReadOnly}
-                    onClick={() => setSettings({...settings, pickleballScoringMode: 'side-out', gamesPerSet: 11})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballScoringMode === 'side-out' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Tradicional (Side-out)</button>
+                    onClick={() => setSettings({...settings, pickleballScoringMode: 'side-out'})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballScoringMode === 'side-out' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Tradicional (Side-out)</button>
                   <button 
                     disabled={isReadOnly}
-                    onClick={() => setSettings({...settings, pickleballScoringMode: 'rally', gamesPerSet: 21})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballScoringMode === 'rally' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Rally (Ponto é ponto)</button>
+                    onClick={() => setSettings({...settings, pickleballScoringMode: 'rally'})} className={`py-4 px-2 rounded-2xl text-[11px] font-black transition-all border ${settings.pickleballScoringMode === 'rally' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-black border-transparent'}`}>Rally (Ponto é ponto)</button>
                 </div>
               </div>
             )}
