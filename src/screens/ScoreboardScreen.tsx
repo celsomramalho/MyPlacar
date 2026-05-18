@@ -1177,18 +1177,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
               {isTieBreak && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ml-1">Tb</span>}
             </span>
           </button>
-          {isLiveActive && (
-            isPublicView
-              ? <LiveIndicator role="observer" />
-              : <LiveIndicator
-                  role={effectiveIndicatorRole || (effectiveLivePapel ?? 'observer')}
-                  onClick={onOpenLiveControl}
-                  onPointerDown={startResetPress}
-                  onPointerUp={stopResetPress}
-                  onPointerLeave={stopResetPress}
-                  progress={resetPressProgress}
-                />
-          )}
+
         </div>
         <div className="flex items-center gap-2">
           {!isLiveActive && isWatchConnected && <div className="p-2 bg-sky-100 text-sky-600 rounded-xl animate-pulse flex items-center gap-2 px-3 border border-sky-200" title="Relógio conectado"><Watch size={18} /><span className="text-[9px] font-black tracking-tight hidden md:inline">Relógio conectado</span></div>}

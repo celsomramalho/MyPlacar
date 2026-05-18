@@ -1,0 +1,641 @@
+strict digraph "dependency-cruiser output"{
+    rankdir="LR" splines="true" overlap="false" nodesep="0.16" ranksep="0.18" fontname="Helvetica-bold" fontsize="9" style="rounded,bold,filled" fillcolor="#ffffff" compound="true"
+    node [shape="box" style="rounded, filled" height="0.2" color="black" fillcolor="#ffffcc" fontcolor="black" fontname="Helvetica" fontsize="9"]
+    edge [arrowhead="normal" arrowsize="0.6" penwidth="2.0" color="#00000033" fontname="Helvetica" fontsize="9"]
+
+    subgraph "cluster_node_modules" {label="node_modules" subgraph "cluster_node_modules/@supabase" {label="@supabase" "node_modules/@supabase/supabase-js" [label=<supabase-js> tooltip="supabase-js" URL="https://www.npmjs.com/package/@supabase/supabase-js" shape="box3d" fillcolor="#c40b0a1a" fontcolor="#c40b0a"] } }
+    subgraph "cluster_node_modules" {label="node_modules" "node_modules/firebase" [label=<firebase> tooltip="firebase" URL="https://www.npmjs.com/package/firebase" shape="box3d" fillcolor="#c40b0a1a" fontcolor="#c40b0a"] }
+    subgraph "cluster_node_modules" {label="node_modules" "node_modules/leaflet" [label=<leaflet> tooltip="leaflet" URL="https://www.npmjs.com/package/leaflet" shape="box3d" fillcolor="#c40b0a1a" fontcolor="#c40b0a"] }
+    subgraph "cluster_node_modules" {label="node_modules" "node_modules/lucide-react" [label=<lucide-react> tooltip="lucide-react" URL="https://www.npmjs.com/package/lucide-react" shape="box3d" fillcolor="#c40b0a1a" fontcolor="#c40b0a"] }
+    subgraph "cluster_node_modules" {label="node_modules" "node_modules/react" [label=<react> tooltip="react" URL="https://www.npmjs.com/package/react" shape="box3d" fillcolor="#c40b0a1a" fontcolor="#c40b0a"] }
+    subgraph "cluster_node_modules" {label="node_modules" "node_modules/react-dom" [label=<react-dom> tooltip="react-dom" URL="https://www.npmjs.com/package/react-dom" shape="box3d" fillcolor="#c40b0a1a" fontcolor="#c40b0a"] }
+    subgraph "cluster_src" {label="src" "src/App.tsx" [label=<App.tsx> tooltip="App.tsx" URL="src/App.tsx" fillcolor="#bbfeff"] }
+    "src/App.tsx" -> "src/components/ErrorBoundary.tsx"
+    "src/App.tsx" -> "src/components/InstallPwaModal.tsx"
+    "src/App.tsx" -> "src/components/NavigationDrawer.tsx"
+    "src/App.tsx" -> "src/constants.ts"
+    "src/App.tsx" -> "src/hooks/useAppLogger.ts"
+    "src/App.tsx" -> "src/hooks/useInstallPwa.ts"
+    "src/App.tsx" -> "src/hooks/useOnlineSync.ts"
+    "src/App.tsx" -> "src/hooks/useWakeLock.ts"
+    "src/App.tsx" -> "src/modules/live/liveHelpers.ts"
+    "src/App.tsx" -> "src/screens/AdminScreen.tsx"
+    "src/App.tsx" -> "src/screens/CommunicationsScreen.tsx"
+    "src/App.tsx" -> "src/screens/NewGameScreen.tsx"
+    "src/App.tsx" -> "src/screens/ScoreboardScreen.tsx"
+    "src/App.tsx" -> "src/screens/SpectatorScreen.tsx"
+    "src/App.tsx" -> "src/types.ts"
+    "src/App.tsx" -> "src/utils/device.ts"
+    "src/App.tsx" -> "src/utils/formatters.ts"
+    "src/App.tsx" -> "src/utils/pickleballEngine.ts"
+    "src/App.tsx" -> "src/utils/safeJsonParse.ts"
+    "src/App.tsx" -> "src/utils/sanitize.ts"
+    "src/App.tsx" -> "src/utils/sportEngine.ts"
+    "src/App.tsx" -> "src/utils/tennisEngine.ts"
+    "src/App.tsx" -> "src/utils/validation.ts"
+    "src/App.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/App.tsx" -> "src/infrastructure/supabase/index.ts"
+    "src/App.tsx" -> "src/modules/auth/index.ts"
+    "src/App.tsx" -> "src/modules/events/index.ts"
+    "src/App.tsx" -> "src/modules/game/index.ts"
+    "src/App.tsx" -> "src/modules/history/index.ts"
+    "src/App.tsx" -> "src/modules/live/index.ts"
+    "src/App.tsx" -> "src/modules/live/components/LiveControlOverlay.tsx"
+    "src/App.tsx" -> "src/modules/partners/index.ts"
+    "src/App.tsx" -> "src/modules/settings/index.ts"
+    "src/App.tsx" -> "src/modules/ui/index.ts"
+    "src/App.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/App.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/App.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/Button.tsx" [label=<Button.tsx> tooltip="Button.tsx" URL="src/components/Button.tsx" fillcolor="#bbfeff"] } }
+    "src/components/Button.tsx" -> "src/shared/components/Button.tsx" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/CommunicationsPanel.tsx" [label=<CommunicationsPanel.tsx> tooltip="CommunicationsPanel.tsx" URL="src/components/CommunicationsPanel.tsx" fillcolor="#bbfeff"] } }
+    "src/components/CommunicationsPanel.tsx" -> "src/services/notificationService.ts"
+    "src/components/CommunicationsPanel.tsx" -> "src/types.ts"
+    "src/components/CommunicationsPanel.tsx" -> "src/components/Button.tsx"
+    "src/components/CommunicationsPanel.tsx" -> "src/components/Input.tsx"
+    "src/components/CommunicationsPanel.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/components/CommunicationsPanel.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/components/CommunicationsPanel.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/components/CommunicationsPanel.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/ErrorBoundary.tsx" [label=<ErrorBoundary.tsx> tooltip="ErrorBoundary.tsx" URL="src/components/ErrorBoundary.tsx" fillcolor="#bbfeff"] } }
+    "src/components/ErrorBoundary.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/components/ErrorBoundary.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/Input.tsx" [label=<Input.tsx> tooltip="Input.tsx" URL="src/components/Input.tsx" fillcolor="#bbfeff"] } }
+    "src/components/Input.tsx" -> "src/shared/components/Input.tsx" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/InstallPwaModal.tsx" [label=<InstallPwaModal.tsx> tooltip="InstallPwaModal.tsx" URL="src/components/InstallPwaModal.tsx" fillcolor="#bbfeff"] } }
+    "src/components/InstallPwaModal.tsx" -> "src/components/ScoreboardIcon.tsx"
+    "src/components/InstallPwaModal.tsx" -> "src/components/Toggle.tsx"
+    "src/components/InstallPwaModal.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/components/InstallPwaModal.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/LazySportIcon.tsx" [label=<LazySportIcon.tsx> tooltip="LazySportIcon.tsx" URL="src/components/LazySportIcon.tsx" fillcolor="#bbfeff"] } }
+    "src/components/LazySportIcon.tsx" -> "src/firebaseLite.ts"
+    "src/components/LazySportIcon.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/components/LazySportIcon.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/LiveIndicator.tsx" [label=<LiveIndicator.tsx> tooltip="LiveIndicator.tsx" URL="src/components/LiveIndicator.tsx" fillcolor="#bbfeff"] } }
+    "src/components/LiveIndicator.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/components/LiveIndicator.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/NavigationDrawer.tsx" [label=<NavigationDrawer.tsx> tooltip="NavigationDrawer.tsx" URL="src/components/NavigationDrawer.tsx" fillcolor="#bbfeff"] } }
+    "src/components/NavigationDrawer.tsx" -> "src/types.ts"
+    "src/components/NavigationDrawer.tsx" -> "src/modules/game/index.ts"
+    "src/components/NavigationDrawer.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/components/NavigationDrawer.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/ScoreboardDisplay.tsx" [label=<ScoreboardDisplay.tsx> tooltip="ScoreboardDisplay.tsx" URL="src/components/ScoreboardDisplay.tsx" fillcolor="#bbfeff"] } }
+    "src/components/ScoreboardDisplay.tsx" -> "src/components/LiveIndicator.tsx"
+    "src/components/ScoreboardDisplay.tsx" -> "src/hooks/useMatchTimer.ts"
+    "src/components/ScoreboardDisplay.tsx" -> "src/types.ts"
+    "src/components/ScoreboardDisplay.tsx" -> "src/utils/tennisEngine.ts"
+    "src/components/ScoreboardDisplay.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/components/ScoreboardDisplay.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/ScoreboardIcon.tsx" [label=<ScoreboardIcon.tsx> tooltip="ScoreboardIcon.tsx" URL="src/components/ScoreboardIcon.tsx" fillcolor="#bbfeff"] } }
+    "src/components/ScoreboardIcon.tsx" -> "src/shared/components/ScoreboardIcon.tsx" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/SupabaseAuthProvider.tsx" [label=<SupabaseAuthProvider.tsx> tooltip="SupabaseAuthProvider.tsx" URL="src/components/SupabaseAuthProvider.tsx" fillcolor="#bbfeff"] } }
+    "src/components/SupabaseAuthProvider.tsx" -> "src/infrastructure/supabase/index.ts"
+    "src/components/SupabaseAuthProvider.tsx" -> "node_modules/@supabase/supabase-js" [penwidth="1.0"]
+    "src/components/SupabaseAuthProvider.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/Toggle.tsx" [label=<Toggle.tsx> tooltip="Toggle.tsx" URL="src/components/Toggle.tsx" fillcolor="#bbfeff"] } }
+    "src/components/Toggle.tsx" -> "src/shared/components/Toggle.tsx" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/components" {label="components" "src/components/WatchBoard.tsx" [label=<WatchBoard.tsx> tooltip="WatchBoard.tsx" URL="src/components/WatchBoard.tsx" fillcolor="#bbfeff"] } }
+    "src/components/WatchBoard.tsx" -> "src/types.ts"
+    "src/components/WatchBoard.tsx" -> "src/utils/tennisEngine.ts"
+    "src/components/WatchBoard.tsx" -> "src/components/LiveIndicator.tsx"
+    "src/components/WatchBoard.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/components/WatchBoard.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" "src/constants.ts" [label=<constants.ts> tooltip="constants.ts" URL="src/constants.ts" fillcolor="#ddfeff"] }
+    "src/constants.ts" -> "src/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" "src/firebase.ts" [label=<firebase.ts> tooltip="firebase.ts" URL="src/firebase.ts" fillcolor="#ddfeff"] }
+    "src/firebase.ts" -> "src/infrastructure/firebase/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" "src/firebaseLite.ts" [label=<firebaseLite.ts> tooltip="firebaseLite.ts" URL="src/firebaseLite.ts" fillcolor="#ddfeff"] }
+    "src/firebaseLite.ts" -> "src/infrastructure/firebase/clientLite.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/hooks" {label="hooks" "src/hooks/useAppLogger.ts" [label=<useAppLogger.ts> tooltip="useAppLogger.ts" URL="src/hooks/useAppLogger.ts" fillcolor="#ddfeff"] } }
+    "src/hooks/useAppLogger.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/hooks" {label="hooks" "src/hooks/useGeminiReferee.ts" [label=<useGeminiReferee.ts> tooltip="useGeminiReferee.ts" URL="src/hooks/useGeminiReferee.ts" fillcolor="#ddfeff"] } }
+    "src/hooks/useGeminiReferee.ts" -> "src/types.ts"
+    "src/hooks/useGeminiReferee.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/hooks" {label="hooks" "src/hooks/useInstallPwa.ts" [label=<useInstallPwa.ts> tooltip="useInstallPwa.ts" URL="src/hooks/useInstallPwa.ts" fillcolor="#ddfeff"] } }
+    "src/hooks/useInstallPwa.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/hooks" {label="hooks" "src/hooks/useMatchTimer.ts" [label=<useMatchTimer.ts> tooltip="useMatchTimer.ts" URL="src/hooks/useMatchTimer.ts" fillcolor="#ddfeff"] } }
+    "src/hooks/useMatchTimer.ts" -> "src/types.ts"
+    "src/hooks/useMatchTimer.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/hooks" {label="hooks" "src/hooks/useOnlineSync.ts" [label=<useOnlineSync.ts> tooltip="useOnlineSync.ts" URL="src/hooks/useOnlineSync.ts" fillcolor="#ddfeff"] } }
+    "src/hooks/useOnlineSync.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/hooks" {label="hooks" "src/hooks/usePickleballAnnouncer.ts" [label=<usePickleballAnnouncer.ts> tooltip="usePickleballAnnouncer.ts" URL="src/hooks/usePickleballAnnouncer.ts" fillcolor="#ddfeff"] } }
+    "src/hooks/usePickleballAnnouncer.ts" -> "src/types.ts"
+    "src/hooks/usePickleballAnnouncer.ts" -> "src/utils/pickleballEngine.ts"
+    "src/hooks/usePickleballAnnouncer.ts" -> "src/hooks/useScoreAnnouncer.ts"
+    "src/hooks/usePickleballAnnouncer.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/hooks" {label="hooks" "src/hooks/useScoreAnnouncer.ts" [label=<useScoreAnnouncer.ts> tooltip="useScoreAnnouncer.ts" URL="src/hooks/useScoreAnnouncer.ts" fillcolor="#ddfeff"] } }
+    "src/hooks/useScoreAnnouncer.ts" -> "src/types.ts"
+    "src/hooks/useScoreAnnouncer.ts" -> "src/utils/tennisEngine.ts"
+    "src/hooks/useScoreAnnouncer.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/hooks" {label="hooks" "src/hooks/useWakeLock.ts" [label=<useWakeLock.ts> tooltip="useWakeLock.ts" URL="src/hooks/useWakeLock.ts" fillcolor="#ddfeff"] } }
+    "src/hooks/useWakeLock.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" "src/index.css" [label=<index.css> tooltip="index.css" URL="src/index.css" ] }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/email" {label="email" "src/infrastructure/email/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/infrastructure/email/index.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/client.ts" [label=<client.ts> tooltip="client.ts" URL="src/infrastructure/firebase/client.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/client.ts" -> "node_modules/firebase" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/clientLite.ts" [label=<clientLite.ts> tooltip="clientLite.ts" URL="src/infrastructure/firebase/clientLite.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/clientLite.ts" -> "node_modules/firebase" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/events.ts" [label=<events.ts> tooltip="events.ts" URL="src/infrastructure/firebase/events.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/events.ts" -> "node_modules/firebase" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/infrastructure/firebase/index.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/index.ts" -> "src/infrastructure/firebase/client.ts" [arrowhead="inv"]
+    "src/infrastructure/firebase/index.ts" -> "src/infrastructure/firebase/clientLite.ts" [arrowhead="inv"]
+    "src/infrastructure/firebase/index.ts" -> "src/infrastructure/firebase/events.ts" [arrowhead="inv"]
+    "src/infrastructure/firebase/index.ts" -> "src/infrastructure/firebase/liveMatches.ts" [arrowhead="inv"]
+    "src/infrastructure/firebase/index.ts" -> "src/infrastructure/firebase/matches.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/infrastructure/firebase/index.ts" -> "src/infrastructure/firebase/userProfiles.ts" [arrowhead="inv"]
+    "src/infrastructure/firebase/index.ts" -> "src/infrastructure/firebase/users.ts" [arrowhead="inv"]
+    "src/infrastructure/firebase/index.ts" -> "src/infrastructure/firebase/watchTokens.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/liveMatches.ts" [label=<liveMatches.ts> tooltip="liveMatches.ts" URL="src/infrastructure/firebase/liveMatches.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/liveMatches.ts" -> "node_modules/firebase" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/matches.ts" [label=<matches.ts> tooltip="matches.ts" URL="src/infrastructure/firebase/matches.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/matches.ts" -> "src/modules/history/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/infrastructure/firebase/matches.ts" -> "node_modules/firebase" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/userProfiles.ts" [label=<userProfiles.ts> tooltip="userProfiles.ts" URL="src/infrastructure/firebase/userProfiles.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/userProfiles.ts" -> "node_modules/firebase" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/users.ts" [label=<users.ts> tooltip="users.ts" URL="src/infrastructure/firebase/users.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/users.ts" -> "node_modules/firebase" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/firebase" {label="firebase" "src/infrastructure/firebase/watchTokens.ts" [label=<watchTokens.ts> tooltip="watchTokens.ts" URL="src/infrastructure/firebase/watchTokens.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/firebase/watchTokens.ts" -> "node_modules/firebase" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/supabase" {label="supabase" "src/infrastructure/supabase/client.ts" [label=<client.ts> tooltip="client.ts" URL="src/infrastructure/supabase/client.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/supabase/client.ts" -> "node_modules/@supabase/supabase-js" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/supabase" {label="supabase" "src/infrastructure/supabase/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/infrastructure/supabase/index.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/supabase/index.ts" -> "src/infrastructure/supabase/client.ts" [arrowhead="inv"]
+    "src/infrastructure/supabase/index.ts" -> "src/infrastructure/supabase/matches.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/infrastructure/supabase/index.ts" -> "src/infrastructure/supabase/mirror.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/supabase" {label="supabase" "src/infrastructure/supabase/matches.ts" [label=<matches.ts> tooltip="matches.ts" URL="src/infrastructure/supabase/matches.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/supabase/matches.ts" -> "src/infrastructure/supabase/client.ts"
+    "src/infrastructure/supabase/matches.ts" -> "src/modules/history/index.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/infrastructure" {label="infrastructure" subgraph "cluster_src/infrastructure/supabase" {label="supabase" "src/infrastructure/supabase/mirror.ts" [label=<mirror.ts> tooltip="mirror.ts" URL="src/infrastructure/supabase/mirror.ts" fillcolor="#ddfeff"] } } }
+    "src/infrastructure/supabase/mirror.ts" -> "src/infrastructure/supabase/client.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/integrations" {label="integrations" subgraph "cluster_src/integrations/supabase" {label="supabase" "src/integrations/supabase/client.ts" [label=<client.ts> tooltip="client.ts" URL="src/integrations/supabase/client.ts" fillcolor="#ddfeff"] } } }
+    "src/integrations/supabase/client.ts" -> "src/infrastructure/supabase/client.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" "src/main.tsx" [label=<main.tsx> tooltip="main.tsx" URL="src/main.tsx" fillcolor="#bbfeff"] }
+    "src/main.tsx" -> "src/App.tsx"
+    "src/main.tsx" -> "src/index.css"
+    "src/main.tsx" -> "node_modules/react" [penwidth="1.0"]
+    "src/main.tsx" -> "node_modules/react-dom" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/admin" {label="admin" "src/modules/admin/index.ts" [label=<index.ts> tooltip="no-orphans" URL="src/modules/admin/index.ts" fillcolor="#ccffcc" fontcolor="orange" color="orange"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/auth" {label="auth" "src/modules/auth/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/modules/auth/index.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/auth/index.ts" -> "src/modules/auth/screens/AuthScreen.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/auth/index.ts" -> "src/modules/auth/screens/Login.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/auth/index.ts" -> "src/modules/auth/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/auth" {label="auth" subgraph "cluster_src/modules/auth/screens" {label="screens" "src/modules/auth/screens/AuthScreen.tsx" [label=<AuthScreen.tsx> tooltip="AuthScreen.tsx" URL="src/modules/auth/screens/AuthScreen.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/constants.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/modules/auth/services/authCodes.ts"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/modules/auth/services/authSession.ts"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/modules/auth/services/authUrls.ts"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/modules/auth/services/passwordPolicy.ts"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/modules/auth/types.ts"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/infrastructure/email/index.ts"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/infrastructure/supabase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/shared/components/Button.tsx"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/shared/components/Input.tsx"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/shared/components/ScoreboardIcon.tsx"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/shared/components/Toggle.tsx"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/shared/utils/device.ts"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "src/shared/utils/formatters.ts"
+    "src/modules/auth/screens/AuthScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/modules/auth/screens/AuthScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/auth/screens/AuthScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/auth" {label="auth" subgraph "cluster_src/modules/auth/screens" {label="screens" "src/modules/auth/screens/Login.tsx" [label=<Login.tsx> tooltip="Login.tsx" URL="src/modules/auth/screens/Login.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/auth/screens/Login.tsx" -> "src/components/ScoreboardIcon.tsx"
+    "src/modules/auth/screens/Login.tsx" -> "src/infrastructure/supabase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/auth/screens/Login.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/auth" {label="auth" subgraph "cluster_src/modules/auth/services" {label="services" "src/modules/auth/services/authCodes.ts" [label=<authCodes.ts> tooltip="authCodes.ts" URL="src/modules/auth/services/authCodes.ts" fillcolor="#ddfeff"] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/auth" {label="auth" subgraph "cluster_src/modules/auth/services" {label="services" "src/modules/auth/services/authSession.ts" [label=<authSession.ts> tooltip="authSession.ts" URL="src/modules/auth/services/authSession.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/auth/services/authSession.ts" -> "src/modules/auth/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/auth" {label="auth" subgraph "cluster_src/modules/auth/services" {label="services" "src/modules/auth/services/authUrls.ts" [label=<authUrls.ts> tooltip="authUrls.ts" URL="src/modules/auth/services/authUrls.ts" fillcolor="#ddfeff"] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/auth" {label="auth" subgraph "cluster_src/modules/auth/services" {label="services" "src/modules/auth/services/passwordPolicy.ts" [label=<passwordPolicy.ts> tooltip="passwordPolicy.ts" URL="src/modules/auth/services/passwordPolicy.ts" fillcolor="#ddfeff"] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/auth" {label="auth" "src/modules/auth/types.ts" [label=<types.ts> tooltip="types.ts" URL="src/modules/auth/types.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/communications" {label="communications" "src/modules/communications/index.ts" [label=<index.ts> tooltip="no-orphans" URL="src/modules/communications/index.ts" fillcolor="#ccffcc" fontcolor="orange" color="orange"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/events" {label="events" "src/modules/events/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/modules/events/index.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/events/index.ts" -> "src/modules/events/screens/EventDetailScreen.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/index.ts" -> "src/modules/events/screens/TournamentsScreen.tsx" [arrowhead="inv"]
+    "src/modules/events/index.ts" -> "src/modules/events/services/fetchRegisteredEvents.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/index.ts" -> "src/modules/events/services/getActiveEventEntryDate.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/index.ts" -> "src/modules/events/services/joinTournamentEvent.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/index.ts" -> "src/modules/events/services/updateTournamentMatchProgress.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/index.ts" -> "src/modules/events/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/events" {label="events" subgraph "cluster_src/modules/events/screens" {label="screens" "src/modules/events/screens/EventDetailScreen.tsx" [label=<EventDetailScreen.tsx> tooltip="EventDetailScreen.tsx" URL="src/modules/events/screens/EventDetailScreen.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/constants.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/modules/events/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/modules/partners/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/shared/components/GenderIcons.tsx"
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/shared/components/Input.tsx"
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/shared/components/Toggle.tsx"
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "src/shared/utils/formatters.ts"
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/events/screens/EventDetailScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/events" {label="events" subgraph "cluster_src/modules/events/screens" {label="screens" "src/modules/events/screens/TournamentsScreen.tsx" [label=<TournamentsScreen.tsx> tooltip="TournamentsScreen.tsx" URL="src/modules/events/screens/TournamentsScreen.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/events/screens/TournamentsScreen.tsx" -> "src/modules/events/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/events/screens/TournamentsScreen.tsx" -> "src/shared/components/ScoreboardIcon.tsx"
+    "src/modules/events/screens/TournamentsScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/events/screens/TournamentsScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/events" {label="events" subgraph "cluster_src/modules/events/services" {label="services" "src/modules/events/services/fetchRegisteredEvents.ts" [label=<fetchRegisteredEvents.ts> tooltip="fetchRegisteredEvents.ts" URL="src/modules/events/services/fetchRegisteredEvents.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/events/services/fetchRegisteredEvents.ts" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/services/fetchRegisteredEvents.ts" -> "node_modules/firebase" [penwidth="1.0" arrowhead="onormal"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/events" {label="events" subgraph "cluster_src/modules/events/services" {label="services" "src/modules/events/services/getActiveEventEntryDate.ts" [label=<getActiveEventEntryDate.ts> tooltip="getActiveEventEntryDate.ts" URL="src/modules/events/services/getActiveEventEntryDate.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/events/services/getActiveEventEntryDate.ts" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/services/getActiveEventEntryDate.ts" -> "node_modules/firebase" [penwidth="1.0" arrowhead="onormal"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/events" {label="events" subgraph "cluster_src/modules/events/services" {label="services" "src/modules/events/services/joinTournamentEvent.ts" [label=<joinTournamentEvent.ts> tooltip="joinTournamentEvent.ts" URL="src/modules/events/services/joinTournamentEvent.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/events/services/joinTournamentEvent.ts" -> "src/modules/events/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/events/services/joinTournamentEvent.ts" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/services/joinTournamentEvent.ts" -> "node_modules/firebase" [penwidth="1.0" arrowhead="onormal"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/events" {label="events" subgraph "cluster_src/modules/events/services" {label="services" "src/modules/events/services/updateTournamentMatchProgress.ts" [label=<updateTournamentMatchProgress.ts> tooltip="updateTournamentMatchProgress.ts" URL="src/modules/events/services/updateTournamentMatchProgress.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/events/services/updateTournamentMatchProgress.ts" -> "src/modules/events/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/events/services/updateTournamentMatchProgress.ts" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/events/services/updateTournamentMatchProgress.ts" -> "node_modules/firebase" [penwidth="1.0" arrowhead="onormal"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/events" {label="events" "src/modules/events/types.ts" [label=<types.ts> tooltip="types.ts" URL="src/modules/events/types.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/game" {label="game" "src/modules/game/GameContext.tsx" [label=<GameContext.tsx> tooltip="GameContext.tsx" URL="src/modules/game/GameContext.tsx" fillcolor="#bbfeff"] } } }
+    "src/modules/game/GameContext.tsx" -> "src/constants.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/game/GameContext.tsx" -> "src/utils/device.ts"
+    "src/modules/game/GameContext.tsx" -> "src/utils/pickleballEngine.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/utils/safeJsonParse.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/utils/sanitize.ts"
+    "src/modules/game/GameContext.tsx" -> "src/utils/sportEngine.ts"
+    "src/modules/game/GameContext.tsx" -> "src/utils/tennisEngine.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/modules/live/liveHelpers.ts"
+    "src/modules/game/GameContext.tsx" -> "src/modules/game/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/infrastructure/supabase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/modules/auth/index.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/game/GameContext.tsx" -> "src/modules/events/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/modules/history/index.ts"
+    "src/modules/game/GameContext.tsx" -> "src/modules/live/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/modules/partners/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "src/modules/ui/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/GameContext.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/modules/game/GameContext.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/game" {label="game" "src/modules/game/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/modules/game/index.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/game/index.ts" -> "src/modules/game/GameContext.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/index.ts" -> "src/modules/game/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/game/index.ts" -> "src/modules/game/useGame.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/game" {label="game" "src/modules/game/types.ts" [label=<types.ts> tooltip="types.ts" URL="src/modules/game/types.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/game/types.ts" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/game/types.ts" -> "src/modules/auth/index.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/game/types.ts" -> "src/modules/events/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/game/types.ts" -> "src/modules/history/index.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/game/types.ts" -> "src/modules/partners/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/game/types.ts" -> "node_modules/react" [penwidth="1.0" arrowhead="onormal"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/game" {label="game" "src/modules/game/useGame.ts" [label=<useGame.ts> tooltip="useGame.ts" URL="src/modules/game/useGame.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/game/useGame.ts" -> "src/modules/game/GameContext.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/game/useGame.ts" -> "src/modules/game/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/game/useGame.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/components" {label="components" "src/modules/history/components/HistorySection.tsx" [label=<HistorySection.tsx> tooltip="HistorySection.tsx" URL="src/modules/history/components/HistorySection.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/history/components/HistorySection.tsx" -> "src/components/Input.tsx"
+    "src/modules/history/components/HistorySection.tsx" -> "src/components/LazySportIcon.tsx"
+    "src/modules/history/components/HistorySection.tsx" -> "src/modules/history/services/filterHistory.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/components/HistorySection.tsx" -> "src/modules/history/services/groupHistoryByDate.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/components/HistorySection.tsx" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/history/components/HistorySection.tsx" -> "src/shared/components/MatchTimeline.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/components/HistorySection.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/history/components/HistorySection.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" "src/modules/history/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/modules/history/index.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/history/index.ts" -> "src/modules/history/components/HistorySection.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/screens/LocationScreen.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/createHistoryItem.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/filterHistory.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/getUnsyncedHistory.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/groupHistoryByDate.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/historySync.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/markHistoryAsSynced.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/mergeDownloadedHistory.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/persistLocalHistory.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/services/removeHistoryMatches.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/index.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/screens" {label="screens" "src/modules/history/screens/LocationScreen.tsx" [label=<LocationScreen.tsx> tooltip="LocationScreen.tsx" URL="src/modules/history/screens/LocationScreen.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/history/screens/LocationScreen.tsx" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/history/screens/LocationScreen.tsx" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/screens/LocationScreen.tsx" -> "src/modules/game/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/screens/LocationScreen.tsx" -> "node_modules/leaflet" [penwidth="1.0"]
+    "src/modules/history/screens/LocationScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/history/screens/LocationScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/createHistoryItem.ts" [label=<createHistoryItem.ts> tooltip="createHistoryItem.ts" URL="src/modules/history/services/createHistoryItem.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/createHistoryItem.ts" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/history/services/createHistoryItem.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/history/services/createHistoryItem.ts" -> "src/modules/partners/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/filterHistory.ts" [label=<filterHistory.ts> tooltip="filterHistory.ts" URL="src/modules/history/services/filterHistory.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/filterHistory.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/getUnsyncedHistory.ts" [label=<getUnsyncedHistory.ts> tooltip="getUnsyncedHistory.ts" URL="src/modules/history/services/getUnsyncedHistory.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/getUnsyncedHistory.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/groupHistoryByDate.ts" [label=<groupHistoryByDate.ts> tooltip="groupHistoryByDate.ts" URL="src/modules/history/services/groupHistoryByDate.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/groupHistoryByDate.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/historySync.ts" [label=<historySync.ts> tooltip="historySync.ts" URL="src/modules/history/services/historySync.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/historySync.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/history/services/historySync.ts" -> "src/modules/history/services/getUnsyncedHistory.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/services/historySync.ts" -> "src/modules/history/services/markHistoryAsSynced.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/services/historySync.ts" -> "src/modules/history/services/mergeDownloadedHistory.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/services/historySync.ts" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/services/historySync.ts" -> "src/infrastructure/supabase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/history/services/historySync.ts" -> "node_modules/firebase" [penwidth="1.0" arrowhead="onormal"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/markHistoryAsSynced.ts" [label=<markHistoryAsSynced.ts> tooltip="markHistoryAsSynced.ts" URL="src/modules/history/services/markHistoryAsSynced.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/markHistoryAsSynced.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/mergeDownloadedHistory.ts" [label=<mergeDownloadedHistory.ts> tooltip="mergeDownloadedHistory.ts" URL="src/modules/history/services/mergeDownloadedHistory.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/mergeDownloadedHistory.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/persistLocalHistory.ts" [label=<persistLocalHistory.ts> tooltip="persistLocalHistory.ts" URL="src/modules/history/services/persistLocalHistory.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/persistLocalHistory.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" subgraph "cluster_src/modules/history/services" {label="services" "src/modules/history/services/removeHistoryMatches.ts" [label=<removeHistoryMatches.ts> tooltip="removeHistoryMatches.ts" URL="src/modules/history/services/removeHistoryMatches.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/history/services/removeHistoryMatches.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/history" {label="history" "src/modules/history/types.ts" [label=<types.ts> tooltip="types.ts" URL="src/modules/history/types.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/history/types.ts" -> "src/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/live" {label="live" "src/modules/live/LiveContext.tsx" [label=<LiveContext.tsx> tooltip="LiveContext.tsx" URL="src/modules/live/LiveContext.tsx" fillcolor="#bbfeff"] } } }
+    "src/modules/live/LiveContext.tsx" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/live/LiveContext.tsx" -> "src/modules/live/liveHelpers.ts"
+    "src/modules/live/LiveContext.tsx" -> "src/modules/live/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/live/LiveContext.tsx" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/live/LiveContext.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/modules/live/LiveContext.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/live" {label="live" subgraph "cluster_src/modules/live/components" {label="components" "src/modules/live/components/LiveControlOverlay.tsx" [label=<LiveControlOverlay.tsx> tooltip="LiveControlOverlay.tsx" URL="src/modules/live/components/LiveControlOverlay.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/live/components/LiveControlOverlay.tsx" -> "src/components/LiveIndicator.tsx"
+    "src/modules/live/components/LiveControlOverlay.tsx" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/live/components/LiveControlOverlay.tsx" -> "src/modules/live/useLive.ts"
+    "src/modules/live/components/LiveControlOverlay.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/live/components/LiveControlOverlay.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/live" {label="live" "src/modules/live/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/modules/live/index.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/live/index.ts" -> "src/modules/live/LiveContext.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/live/index.ts" -> "src/modules/live/liveHelpers.ts" [arrowhead="inv"]
+    "src/modules/live/index.ts" -> "src/modules/live/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/live/index.ts" -> "src/modules/live/useLive.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/live" {label="live" "src/modules/live/liveHelpers.ts" [label=<liveHelpers.ts> tooltip="liveHelpers.ts" URL="src/modules/live/liveHelpers.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/live" {label="live" "src/modules/live/types.ts" [label=<types.ts> tooltip="types.ts" URL="src/modules/live/types.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/live/types.ts" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/live/types.ts" -> "src/modules/auth/index.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/live" {label="live" "src/modules/live/useLive.ts" [label=<useLive.ts> tooltip="useLive.ts" URL="src/modules/live/useLive.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/live/useLive.ts" -> "src/modules/live/LiveContext.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/live/useLive.ts" -> "src/modules/live/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/live/useLive.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" "src/modules/partners/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/modules/partners/index.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/partners/index.ts" -> "src/modules/partners/screens/PartnersScreen.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/addPartnerToState.ts" [arrowhead="inv"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/applyPartnerSelection.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/autoRegisterPartnerByPin.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/createManualPartner.ts" [arrowhead="inv"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/createQueuePartner.ts" [arrowhead="inv"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/createReferralPartner.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/createSelfPartner.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/guessPartnerGender.ts" [arrowhead="inv"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/mergePartnersByPin.ts" [arrowhead="inv"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/services/sanitizePartnersForCloud.ts" [arrowhead="inv"]
+    "src/modules/partners/index.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/screens" {label="screens" "src/modules/partners/screens/PartnersScreen.tsx" [label=<PartnersScreen.tsx> tooltip="PartnersScreen.tsx" URL="src/modules/partners/screens/PartnersScreen.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/components/Input.tsx"
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/components/LiveIndicator.tsx"
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/components/ScoreboardIcon.tsx"
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/components/Toggle.tsx"
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/types.ts"
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/utils/formatters.ts"
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/infrastructure/supabase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/modules/game/index.ts"
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/modules/partners/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "src/shared/components/GenderIcons.tsx"
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/partners/screens/PartnersScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/addPartnerToState.ts" [label=<addPartnerToState.ts> tooltip="addPartnerToState.ts" URL="src/modules/partners/services/addPartnerToState.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/addPartnerToState.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/applyPartnerSelection.ts" [label=<applyPartnerSelection.ts> tooltip="applyPartnerSelection.ts" URL="src/modules/partners/services/applyPartnerSelection.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/applyPartnerSelection.ts" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/partners/services/applyPartnerSelection.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/autoRegisterPartnerByPin.ts" [label=<autoRegisterPartnerByPin.ts> tooltip="autoRegisterPartnerByPin.ts" URL="src/modules/partners/services/autoRegisterPartnerByPin.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/autoRegisterPartnerByPin.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/partners/services/autoRegisterPartnerByPin.ts" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/partners/services/autoRegisterPartnerByPin.ts" -> "node_modules/firebase" [penwidth="1.0" arrowhead="onormal"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/createManualPartner.ts" [label=<createManualPartner.ts> tooltip="createManualPartner.ts" URL="src/modules/partners/services/createManualPartner.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/createManualPartner.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/createQueuePartner.ts" [label=<createQueuePartner.ts> tooltip="createQueuePartner.ts" URL="src/modules/partners/services/createQueuePartner.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/createQueuePartner.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/createReferralPartner.ts" [label=<createReferralPartner.ts> tooltip="createReferralPartner.ts" URL="src/modules/partners/services/createReferralPartner.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/createReferralPartner.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/partners/services/createReferralPartner.ts" -> "src/modules/partners/services/addPartnerToState.ts"
+    "src/modules/partners/services/createReferralPartner.ts" -> "src/infrastructure/firebase/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/createSelfPartner.ts" [label=<createSelfPartner.ts> tooltip="createSelfPartner.ts" URL="src/modules/partners/services/createSelfPartner.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/createSelfPartner.ts" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/partners/services/createSelfPartner.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/guessPartnerGender.ts" [label=<guessPartnerGender.ts> tooltip="guessPartnerGender.ts" URL="src/modules/partners/services/guessPartnerGender.ts" fillcolor="#ddfeff"] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/mergePartnersByPin.ts" [label=<mergePartnersByPin.ts> tooltip="mergePartnersByPin.ts" URL="src/modules/partners/services/mergePartnersByPin.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/mergePartnersByPin.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/partners/services/mergePartnersByPin.ts" -> "src/modules/partners/services/addPartnerToState.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" subgraph "cluster_src/modules/partners/services" {label="services" "src/modules/partners/services/sanitizePartnersForCloud.ts" [label=<sanitizePartnersForCloud.ts> tooltip="sanitizePartnersForCloud.ts" URL="src/modules/partners/services/sanitizePartnersForCloud.ts" fillcolor="#ddfeff"] } } } }
+    "src/modules/partners/services/sanitizePartnersForCloud.ts" -> "src/modules/partners/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/partners/services/sanitizePartnersForCloud.ts" -> "src/modules/partners/services/addPartnerToState.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/partners" {label="partners" "src/modules/partners/types.ts" [label=<types.ts> tooltip="types.ts" URL="src/modules/partners/types.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/scoreBoard" {label="scoreBoard" "src/modules/scoreBoard/index.ts" [label=<index.ts> tooltip="no-orphans" URL="src/modules/scoreBoard/index.ts" fillcolor="#ccffcc" fontcolor="orange" color="orange"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/settings" {label="settings" subgraph "cluster_src/modules/settings/components" {label="components" "src/modules/settings/components/SettingsHeader.tsx" [label=<SettingsHeader.tsx> tooltip="SettingsHeader.tsx" URL="src/modules/settings/components/SettingsHeader.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/settings/components/SettingsHeader.tsx" -> "src/components/LiveIndicator.tsx"
+    "src/modules/settings/components/SettingsHeader.tsx" -> "src/shared/components/ScoreboardIcon.tsx"
+    "src/modules/settings/components/SettingsHeader.tsx" -> "src/shared/utils/device.ts"
+    "src/modules/settings/components/SettingsHeader.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/settings/components/SettingsHeader.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/settings" {label="settings" subgraph "cluster_src/modules/settings/components" {label="components" "src/modules/settings/components/SettingsTabs.tsx" [label=<SettingsTabs.tsx> tooltip="SettingsTabs.tsx" URL="src/modules/settings/components/SettingsTabs.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/settings/components/SettingsTabs.tsx" -> "src/shared/components/ScoreboardIcon.tsx"
+    "src/modules/settings/components/SettingsTabs.tsx" -> "src/shared/utils/device.ts"
+    "src/modules/settings/components/SettingsTabs.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/modules/settings/components/SettingsTabs.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/settings" {label="settings" "src/modules/settings/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/modules/settings/index.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/settings/index.ts" -> "src/modules/settings/components/SettingsHeader.tsx" [arrowhead="inv"]
+    "src/modules/settings/index.ts" -> "src/modules/settings/components/SettingsTabs.tsx" [arrowhead="inv"]
+    "src/modules/settings/index.ts" -> "src/modules/settings/screens/SettingsScreen.tsx" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/settings" {label="settings" subgraph "cluster_src/modules/settings/screens" {label="screens" "src/modules/settings/screens/SettingsScreen.tsx" [label=<SettingsScreen.tsx> tooltip="SettingsScreen.tsx" URL="src/modules/settings/screens/SettingsScreen.tsx" fillcolor="#bbfeff"] } } } }
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/screens/HelpScreen.tsx"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/screens/ProfileScreen.tsx"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/screens/settings/TeamSection.tsx"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/types.ts"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/modules/settings/components/SettingsHeader.tsx"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/modules/settings/components/SettingsTabs.tsx"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/modules/game/index.ts"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/modules/history/index.ts"
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "src/modules/partners/index.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/modules/settings/screens/SettingsScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/spectator" {label="spectator" "src/modules/spectator/index.ts" [label=<index.ts> tooltip="no-orphans" URL="src/modules/spectator/index.ts" fillcolor="#ccffcc" fontcolor="orange" color="orange"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/teams" {label="teams" "src/modules/teams/index.ts" [label=<index.ts> tooltip="no-orphans" URL="src/modules/teams/index.ts" fillcolor="#ccffcc" fontcolor="orange" color="orange"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/ui" {label="ui" "src/modules/ui/UIContext.tsx" [label=<UIContext.tsx> tooltip="UIContext.tsx" URL="src/modules/ui/UIContext.tsx" fillcolor="#bbfeff"] } } }
+    "src/modules/ui/UIContext.tsx" -> "src/types.ts"
+    "src/modules/ui/UIContext.tsx" -> "src/utils/safeJsonParse.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/ui/UIContext.tsx" -> "src/modules/partners/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/ui/UIContext.tsx" -> "src/modules/ui/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/ui/UIContext.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/ui" {label="ui" "src/modules/ui/index.ts" [label=<index.ts> tooltip="index.ts" URL="src/modules/ui/index.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/ui/index.ts" -> "src/modules/ui/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    "src/modules/ui/index.ts" -> "src/modules/ui/UIContext.tsx" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/modules" {label="modules" subgraph "cluster_src/modules/ui" {label="ui" "src/modules/ui/types.ts" [label=<types.ts> tooltip="types.ts" URL="src/modules/ui/types.ts" fillcolor="#ddfeff"] } } }
+    "src/modules/ui/types.ts" -> "src/types.ts"
+    "src/modules/ui/types.ts" -> "src/modules/partners/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/modules/ui/types.ts" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/pages" {label="pages" "src/pages/Login.tsx" [label=<Login.tsx> tooltip="Login.tsx" URL="src/pages/Login.tsx" fillcolor="#bbfeff"] } }
+    "src/pages/Login.tsx" -> "src/modules/auth/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/routes" {label="routes" "src/routes/index.ts" [label=<index.ts> tooltip="no-orphans" URL="src/routes/index.ts" fillcolor="#ccffcc" fontcolor="orange" color="orange"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/AdminScreen.tsx" [label=<AdminScreen.tsx> tooltip="AdminScreen.tsx" URL="src/screens/AdminScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/AdminScreen.tsx" -> "src/components/Button.tsx"
+    "src/screens/AdminScreen.tsx" -> "src/components/CommunicationsPanel.tsx"
+    "src/screens/AdminScreen.tsx" -> "src/components/ScoreboardIcon.tsx"
+    "src/screens/AdminScreen.tsx" -> "src/components/Toggle.tsx"
+    "src/screens/AdminScreen.tsx" -> "src/constants.ts"
+    "src/screens/AdminScreen.tsx" -> "src/hooks/useScoreAnnouncer.ts"
+    "src/screens/AdminScreen.tsx" -> "src/types.ts"
+    "src/screens/AdminScreen.tsx" -> "src/utils/formatters.ts"
+    "src/screens/AdminScreen.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/screens/AdminScreen.tsx" -> "src/infrastructure/supabase/index.ts"
+    "src/screens/AdminScreen.tsx" -> "src/modules/events/index.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/screens/AdminScreen.tsx" -> "src/modules/history/index.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/screens/AdminScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/screens/AdminScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/screens/AdminScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/AuthScreen.tsx" [label=<AuthScreen.tsx> tooltip="AuthScreen.tsx" URL="src/screens/AuthScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/AuthScreen.tsx" -> "src/modules/auth/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/CommunicationsScreen.tsx" [label=<CommunicationsScreen.tsx> tooltip="CommunicationsScreen.tsx" URL="src/screens/CommunicationsScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/CommunicationsScreen.tsx" -> "src/components/Button.tsx"
+    "src/screens/CommunicationsScreen.tsx" -> "src/types.ts"
+    "src/screens/CommunicationsScreen.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/screens/CommunicationsScreen.tsx" -> "src/modules/game/index.ts"
+    "src/screens/CommunicationsScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/screens/CommunicationsScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/screens/CommunicationsScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/EventDetailScreen.tsx" [label=<EventDetailScreen.tsx> tooltip="EventDetailScreen.tsx" URL="src/screens/EventDetailScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/EventDetailScreen.tsx" -> "src/modules/events/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/HelpScreen.tsx" [label=<HelpScreen.tsx> tooltip="HelpScreen.tsx" URL="src/screens/HelpScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/HelpScreen.tsx" -> "src/types.ts"
+    "src/screens/HelpScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/screens/HelpScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/LocationScreen.tsx" [label=<LocationScreen.tsx> tooltip="LocationScreen.tsx" URL="src/screens/LocationScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/LocationScreen.tsx" -> "src/modules/history/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/NewGameScreen.tsx" [label=<NewGameScreen.tsx> tooltip="NewGameScreen.tsx" URL="src/screens/NewGameScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/NewGameScreen.tsx" -> "src/components/Button.tsx"
+    "src/screens/NewGameScreen.tsx" -> "src/components/LazySportIcon.tsx"
+    "src/screens/NewGameScreen.tsx" -> "src/components/ScoreboardIcon.tsx"
+    "src/screens/NewGameScreen.tsx" -> "src/components/Toggle.tsx"
+    "src/screens/NewGameScreen.tsx" -> "src/constants.ts"
+    "src/screens/NewGameScreen.tsx" -> "src/types.ts"
+    "src/screens/NewGameScreen.tsx" -> "src/utils/device.ts"
+    "src/screens/NewGameScreen.tsx" -> "src/utils/formatters.ts"
+    "src/screens/NewGameScreen.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/screens/NewGameScreen.tsx" -> "src/modules/game/index.ts"
+    "src/screens/NewGameScreen.tsx" -> "src/modules/settings/index.ts"
+    "src/screens/NewGameScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/screens/NewGameScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/screens/NewGameScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/PartnersScreen.tsx" [label=<PartnersScreen.tsx> tooltip="PartnersScreen.tsx" URL="src/screens/PartnersScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/PartnersScreen.tsx" -> "src/modules/partners/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/ProfileScreen.tsx" [label=<ProfileScreen.tsx> tooltip="ProfileScreen.tsx" URL="src/screens/ProfileScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/ProfileScreen.tsx" -> "src/components/Button.tsx"
+    "src/screens/ProfileScreen.tsx" -> "src/components/Input.tsx"
+    "src/screens/ProfileScreen.tsx" -> "src/constants.ts"
+    "src/screens/ProfileScreen.tsx" -> "src/types.ts"
+    "src/screens/ProfileScreen.tsx" -> "src/utils/formatters.ts"
+    "src/screens/ProfileScreen.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/screens/ProfileScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/screens/ProfileScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/screens/ProfileScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/ScoreboardScreen.tsx" [label=<ScoreboardScreen.tsx> tooltip="ScoreboardScreen.tsx" URL="src/screens/ScoreboardScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/ScoreboardScreen.tsx" -> "src/components/Button.tsx"
+    "src/screens/ScoreboardScreen.tsx" -> "src/components/Input.tsx"
+    "src/screens/ScoreboardScreen.tsx" -> "src/components/LazySportIcon.tsx"
+    "src/screens/ScoreboardScreen.tsx" -> "src/components/LiveIndicator.tsx"
+    "src/screens/ScoreboardScreen.tsx" -> "src/components/ScoreboardDisplay.tsx"
+    "src/screens/ScoreboardScreen.tsx" -> "src/components/ScoreboardIcon.tsx"
+    "src/screens/ScoreboardScreen.tsx" -> "src/components/WatchBoard.tsx"
+    "src/screens/ScoreboardScreen.tsx" -> "src/constants.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/hooks/useGeminiReferee.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/hooks/useMatchTimer.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/hooks/usePickleballAnnouncer.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/hooks/useScoreAnnouncer.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/types.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/utils/device.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/utils/formatters.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/utils/tennisEngine.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/modules/game/index.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "src/modules/live/index.ts"
+    "src/screens/ScoreboardScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/screens/ScoreboardScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/screens/ScoreboardScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/SettingsScreen.tsx" [label=<SettingsScreen.tsx> tooltip="SettingsScreen.tsx" URL="src/screens/SettingsScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/SettingsScreen.tsx" -> "src/modules/settings/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/SpectatorScreen.tsx" [label=<SpectatorScreen.tsx> tooltip="SpectatorScreen.tsx" URL="src/screens/SpectatorScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/SpectatorScreen.tsx" -> "src/constants.ts"
+    "src/screens/SpectatorScreen.tsx" -> "src/types.ts"
+    "src/screens/SpectatorScreen.tsx" -> "src/utils/tennisEngine.ts"
+    "src/screens/SpectatorScreen.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/screens/SpectatorScreen.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/screens/SpectatorScreen.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/screens/SpectatorScreen.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" "src/screens/TournamentsScreen.tsx" [label=<TournamentsScreen.tsx> tooltip="TournamentsScreen.tsx" URL="src/screens/TournamentsScreen.tsx" fillcolor="#bbfeff"] } }
+    "src/screens/TournamentsScreen.tsx" -> "src/modules/events/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" subgraph "cluster_src/screens/settings" {label="settings" "src/screens/settings/HistorySection.tsx" [label=<HistorySection.tsx> tooltip="HistorySection.tsx" URL="src/screens/settings/HistorySection.tsx" fillcolor="#bbfeff"] } } }
+    "src/screens/settings/HistorySection.tsx" -> "src/modules/history/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" subgraph "cluster_src/screens/settings" {label="settings" "src/screens/settings/SettingsHeader.tsx" [label=<SettingsHeader.tsx> tooltip="SettingsHeader.tsx" URL="src/screens/settings/SettingsHeader.tsx" fillcolor="#bbfeff"] } } }
+    "src/screens/settings/SettingsHeader.tsx" -> "src/modules/settings/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" subgraph "cluster_src/screens/settings" {label="settings" "src/screens/settings/SettingsTabs.tsx" [label=<SettingsTabs.tsx> tooltip="SettingsTabs.tsx" URL="src/screens/settings/SettingsTabs.tsx" fillcolor="#bbfeff"] } } }
+    "src/screens/settings/SettingsTabs.tsx" -> "src/modules/settings/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/screens" {label="screens" subgraph "cluster_src/screens/settings" {label="settings" "src/screens/settings/TeamSection.tsx" [label=<TeamSection.tsx> tooltip="TeamSection.tsx" URL="src/screens/settings/TeamSection.tsx" fillcolor="#bbfeff"] } } }
+    "src/screens/settings/TeamSection.tsx" -> "src/components/Button.tsx"
+    "src/screens/settings/TeamSection.tsx" -> "src/components/Input.tsx"
+    "src/screens/settings/TeamSection.tsx" -> "src/constants.ts"
+    "src/screens/settings/TeamSection.tsx" -> "src/types.ts"
+    "src/screens/settings/TeamSection.tsx" -> "src/utils/formatters.ts"
+    "src/screens/settings/TeamSection.tsx" -> "src/infrastructure/firebase/index.ts"
+    "src/screens/settings/TeamSection.tsx" -> "src/modules/partners/index.ts"
+    "src/screens/settings/TeamSection.tsx" -> "src/shared/components/GenderIcons.tsx"
+    "src/screens/settings/TeamSection.tsx" -> "node_modules/firebase" [penwidth="1.0"]
+    "src/screens/settings/TeamSection.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/screens/settings/TeamSection.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/services" {label="services" "src/services/emailService.ts" [label=<emailService.ts> tooltip="emailService.ts" URL="src/services/emailService.ts" fillcolor="#ddfeff"] } }
+    "src/services/emailService.ts" -> "src/infrastructure/email/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/services" {label="services" "src/services/notificationService.ts" [label=<notificationService.ts> tooltip="notificationService.ts" URL="src/services/notificationService.ts" fillcolor="#ddfeff"] } }
+    "src/services/notificationService.ts" -> "src/types.ts"
+    "src/services/notificationService.ts" -> "src/services/emailService.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/services" {label="services" "src/services/supabaseMirror.ts" [label=<supabaseMirror.ts> tooltip="supabaseMirror.ts" URL="src/services/supabaseMirror.ts" fillcolor="#ddfeff"] } }
+    "src/services/supabaseMirror.ts" -> "src/infrastructure/supabase/index.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/shared" {label="shared" subgraph "cluster_src/shared/components" {label="components" "src/shared/components/Button.tsx" [label=<Button.tsx> tooltip="Button.tsx" URL="src/shared/components/Button.tsx" fillcolor="#bbfeff"] } } }
+    "src/shared/components/Button.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/shared" {label="shared" subgraph "cluster_src/shared/components" {label="components" "src/shared/components/GenderIcons.tsx" [label=<GenderIcons.tsx> tooltip="GenderIcons.tsx" URL="src/shared/components/GenderIcons.tsx" fillcolor="#bbfeff"] } } }
+    "src/shared/components/GenderIcons.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/shared" {label="shared" subgraph "cluster_src/shared/components" {label="components" "src/shared/components/Input.tsx" [label=<Input.tsx> tooltip="Input.tsx" URL="src/shared/components/Input.tsx" fillcolor="#bbfeff"] } } }
+    "src/shared/components/Input.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/shared/components/Input.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/shared" {label="shared" subgraph "cluster_src/shared/components" {label="components" "src/shared/components/MatchTimeline.tsx" [label=<MatchTimeline.tsx> tooltip="MatchTimeline.tsx" URL="src/shared/components/MatchTimeline.tsx" fillcolor="#bbfeff"] } } }
+    "src/shared/components/MatchTimeline.tsx" -> "src/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/shared/components/MatchTimeline.tsx" -> "node_modules/lucide-react" [penwidth="1.0"]
+    "src/shared/components/MatchTimeline.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/shared" {label="shared" subgraph "cluster_src/shared/components" {label="components" "src/shared/components/ScoreboardIcon.tsx" [label=<ScoreboardIcon.tsx> tooltip="ScoreboardIcon.tsx" URL="src/shared/components/ScoreboardIcon.tsx" fillcolor="#bbfeff"] } } }
+    "src/shared/components/ScoreboardIcon.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/shared" {label="shared" subgraph "cluster_src/shared/components" {label="components" "src/shared/components/Toggle.tsx" [label=<Toggle.tsx> tooltip="Toggle.tsx" URL="src/shared/components/Toggle.tsx" fillcolor="#bbfeff"] } } }
+    "src/shared/components/Toggle.tsx" -> "node_modules/react" [penwidth="1.0"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/shared" {label="shared" subgraph "cluster_src/shared/utils" {label="utils" "src/shared/utils/device.ts" [label=<device.ts> tooltip="device.ts" URL="src/shared/utils/device.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/shared" {label="shared" subgraph "cluster_src/shared/utils" {label="utils" "src/shared/utils/formatters.ts" [label=<formatters.ts> tooltip="formatters.ts" URL="src/shared/utils/formatters.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" "src/types.ts" [label=<types.ts> tooltip="types.ts" URL="src/types.ts" fillcolor="#ddfeff"] }
+    "src/types.ts" -> "src/modules/events/types.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/types.ts" -> "src/modules/history/types.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    "src/types.ts" -> "src/utils/sportEngine.ts" [arrowhead="onormal" penwidth="1.0"]
+    "src/types.ts" -> "src/modules/auth/index.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" penwidth="1.0" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/device.ts" [label=<device.ts> tooltip="device.ts" URL="src/utils/device.ts" fillcolor="#ddfeff"] } }
+    "src/utils/device.ts" -> "src/shared/utils/device.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/formatters.ts" [label=<formatters.ts> tooltip="formatters.ts" URL="src/utils/formatters.ts" fillcolor="#ddfeff"] } }
+    "src/utils/formatters.ts" -> "src/shared/utils/formatters.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/pickleballEngine.ts" [label=<pickleballEngine.ts> tooltip="pickleballEngine.ts" URL="src/utils/pickleballEngine.ts" fillcolor="#ddfeff"] } }
+    "src/utils/pickleballEngine.ts" -> "src/types.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/safeJsonParse.ts" [label=<safeJsonParse.ts> tooltip="safeJsonParse.ts" URL="src/utils/safeJsonParse.ts" fillcolor="#ddfeff"] } }
+    "src/utils/safeJsonParse.ts" -> "src/utils/validation.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/sanitize.ts" [label=<sanitize.ts> tooltip="sanitize.ts" URL="src/utils/sanitize.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/scoreEngine.ts" [label=<scoreEngine.ts> tooltip="scoreEngine.ts" URL="src/utils/scoreEngine.ts" fillcolor="#ddfeff"] } }
+    "src/utils/scoreEngine.ts" -> "src/constants.ts"
+    "src/utils/scoreEngine.ts" -> "src/types.ts"
+    "src/utils/scoreEngine.ts" -> "src/utils/pickleballEngine.ts"
+    "src/utils/scoreEngine.ts" -> "src/utils/tennisEngine.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/sportEngine.ts" [label=<sportEngine.ts> tooltip="sportEngine.ts" URL="src/utils/sportEngine.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/tennisEngine.ts" [label=<tennisEngine.ts> tooltip="tennisEngine.ts" URL="src/utils/tennisEngine.ts" fillcolor="#ddfeff"] } }
+    "src/utils/tennisEngine.ts" -> "src/types.ts"
+    "src/utils/tennisEngine.ts" -> "src/utils/pickleballEngine.ts" [xlabel="no-circular" tooltip="no-circular" arrowhead="normalnoneodot" fontcolor="orange" color="orange"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/utils" {label="utils" "src/utils/validation.ts" [label=<validation.ts> tooltip="validation.ts" URL="src/utils/validation.ts" fillcolor="#ddfeff"] } }
+    "src/utils/validation.ts" -> "src/types.ts"
+}

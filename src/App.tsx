@@ -551,6 +551,9 @@ const AppInner: React.FC = () => {
   const initGameStateLocalRef = useRef<((forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => Promise<void>)>(async () => {});
   const initGameState = useCallback(async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => initGameStateLocalRef.current(forceNew, tournamentOverride), []);
 
+  const handleExportDataLocalRef = useRef<() => void>(() => {});
+  const handleExportData = useCallback(() => handleExportDataLocalRef.current(), []);
+
   const currentFullDeviceName = useMemo(() => {
     const label = matchSettings.deviceLabel || 'Aparelho';
     const nick = userProfile.nickname || 'Usuário';
@@ -596,136 +599,10 @@ const AppInner: React.FC = () => {
     return () => unsubscribe();
   }, [userProfile.pin]);
 
-  useEffect(() => {
-    const performExit = () => {
-      // Se a flag 'alive' existe, o app foi montado recentemente — é um reload,
-      // não uma saída definitiva. Consome a flag e aborta para não fechar a live.
-      try {
-        if (sessionStorage.getItem('myPlacar_alive')) {
-          sessionStorage.removeItem('myPlacar_alive');
-          return;
-        }
-      } catch {}
-      // Lê estado atual via refs — evita closure stale e mantém o dep array estável
-      // (o effect não é recriado a cada ponto marcado).
-      const gs = gameStateRef.current;
-      const lives = activeLivesRef.current;
-      if (!gs?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
-      const db = getDb();
-      if (!db) return;
-      const myPin = userProfile.pin?.toUpperCase();
-      const judgeMatch = lives.find(l => l.judgePin?.toUpperCase() === myPin);
-
-      // Calcula isOwner via refs (não via closure) — evita stale value em devices
-      // secundários do mesmo usuário que ainda não receberam o snapshot com ownerDeviceId.
-      const gsOwnerDeviceId = gs.ownerDeviceId;
-      const isOwnerByDeviceId = !!gsOwnerDeviceId && gsOwnerDeviceId === deviceId;
-      const isOwnerByPin = !gsOwnerDeviceId &&
-        gs.ownerPin?.toUpperCase() === myPin &&
-        !lives.some(l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin);
-      const isOwnerViaRef = isOwnerByDeviceId || isOwnerByPin;
-
-      // Usa isOwnerViaRef para determinar targetPin — deve vir após o cálculo acima.
-      // Fallback extra: localStorage persiste o ownerPin gravado na criação da live,
-      // cobrindo o caso em que gs.ownerPin está vazio por closure stale.
-      const targetPin = (judgeMatch && judgeMatch.ownerPin)
-        ? judgeMatch.ownerPin.toUpperCase()
-        : (gs.ownerPin?.toUpperCase() || getPersistedLiveOwnerPin() || (isOwnerViaRef ? myPin : null));
-      if (!targetPin) return;
-
-      const isActiveController = gs.commandOwnerId === deviceId;
-
-      // Grace period de 30s após perder o controle.
-      const justLostControl = (Date.now() - ctxLostControlAtRef.current) < 30000;
-      // Grace period de 15s após assumir o controle.
-      const justTookControl = (Date.now() - ctxTookControlAtRef.current) < 15000;
-
-      // Regra: o owner só fecha a live via performExit se ELE é o controller ativo.
-      // Se outro device (relógio, juiz) está controlando, o owner saindo da tela
-      // apenas remove sua presença — a live continua sob o controle do outro device.
-      if (isOwnerViaRef && isActiveController && !justLostControl && !justTookControl) {
-        // Owner saiu sendo o controller ativo: verifica se há judge ou outro owner ativo.
-        const hasActiveJudge = !!(gs.judgePin && Object.values(gs.controllers || {}).some(
-          (c: ControllerRecord) => c.role === 'judge' && (Date.now() - (c.lastSeen || 0)) < 60000
-        ));
-        const controllersEntries = Object.entries(gs.controllers || {});
-        const hasActiveOwnerDevice = controllersEntries.some(([id, c]) =>
-          id !== deviceId &&
-          (c as ControllerRecord).role === 'owner' &&
-          (Date.now() - ((c as ControllerRecord).lastSeen || 0)) < 60000
-        );
-
-        if (hasActiveJudge || hasActiveOwnerDevice) {
-          // Há outro device ativo — apenas remove a presença deste
-          const presenceUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
-            [`controllers.${deviceId}`]: deleteField(),
-            commandOwnerId: null,
-            commandOwner: null
-          };
-          updateDoc(doc(db, "live_matches", targetPin), presenceUpdate).catch(() => {});
-        } else {
-          // Owner era o único controlador ativo — fecha a live
-          setDoc(doc(db, "live_matches", targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
-        }
-      } else if (isOwnerViaRef && !isActiveController) {
-        // Owner saiu mas NÃO era o controller — apenas remove sua presença.
-        // A live continua ativa sob controle do outro device.
-        updateDoc(doc(db, "live_matches", targetPin), {
-          [`controllers.${deviceId}`]: deleteField()
-        }).catch(() => {});
-      } else {
-        // T4.1: Judge ou observer saiu — remove apenas o registro deste device via field-path.
-        // Se era o controller ativo, libera o controle (commandOwnerId = null).
-        const presenceUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
-          [`controllers.${deviceId}`]: deleteField()
-        };
-        if (isActiveController) {
-          presenceUpdate.commandOwnerId = null;
-          presenceUpdate.commandOwner = null;
-        }
-        updateDoc(doc(db, "live_matches", targetPin), presenceUpdate).catch(() => {});
-      }
-    };
-
-    // visibilitychange é o sinal mais confiável em mobile (iOS/Android).
-    // Usamos um grace period de 2500ms: se o app voltar para 'visible' dentro
-    // desse tempo (ex: reload/atualização de PWA), o performExit é cancelado e
-    // a live NÃO é fechada prematuramente no Firebase.
-    let exitTimer: ReturnType<typeof setTimeout> | null = null;
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        exitTimer = setTimeout(() => {
-          if (document.visibilityState === 'hidden') performExit();
-        }, 2500);
-      } else {
-        // Usuário voltou para o app dentro do grace period — cancela o fechamento
-        if (exitTimer !== null) {
-          clearTimeout(exitTimer);
-          exitTimer = null;
-        }
-      }
-    };
-
-    // beforeunload cobre desktop e serve como fallback.
-    // Se a flag myPlacar_pwa_updating estiver ativa, é um reload de atualização
-    // de PWA — não fechar a live (o app vai reabrir em segundos).
-    const handleBeforeUnload = () => {
-      try {
-        if (sessionStorage.getItem('myPlacar_pwa_updating')) return;
-      } catch {}
-      performExit();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    globalThis.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      if (exitTimer !== null) clearTimeout(exitTimer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      globalThis.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  // gameState e activeLives removidos do dep array — lidos via ref dentro de performExit,
-  // evitando que o handler seja recriado (e o exitTimer cancelado) a cada ponto marcado.
-  }, [userProfile.pin, userProfile.email, deviceId, isOriginalOwner]);
+  // performExit migrado para o LiveContext (Fase 7 — limpeza de lógica duplicada).
+  // A lógica de saída segura da live vive em LiveContext.tsx e usa os refs do
+  // contexto diretamente, sem precisar dos proxies ctxTookControlAtRef/ctxLostControlAtRef.
+  // Remover esta cópia elimina o duplo registro de visibilitychange + beforeunload.
 
   useEffect(() => {
     localStorage.setItem('myPlacar_AppVersion', LOCAL_CODE_VERSION);
@@ -1884,16 +1761,8 @@ const AppInner: React.FC = () => {
     }
   };
 
-  const handleExportData = () => {
-    const data = { profile: userProfile, history: matchHistoryRef.current, settings: matchSettings, partners, playerQueue, exportDate: new Date().toISOString(), appVersion: LOCAL_CODE_VERSION };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `myplacar_backup_${new Date().getTime()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  // handleExportData migrado para o GameContext (Passo 6.1.4).
+  // O proxy estável acima delega para ctx.handleExportData via GameBridge.
 
   const handleImportData = (jsonStr: string) => {
     try {
@@ -2495,6 +2364,7 @@ const AppInner: React.FC = () => {
             startGameLocalRef.current = ctx.startGame;
             handleResetMatchLocalRef.current = ctx.handleResetMatch;
             initGameStateLocalRef.current = ctx.initGameState;
+            handleExportDataLocalRef.current = ctx.handleExportData;
           }}
           onUpdate={(ctx) => {
             setUserProfileLocalRef.current(ctx.userProfile);
@@ -2519,6 +2389,7 @@ const AppInner: React.FC = () => {
             startGameLocalRef.current = ctx.startGame;
             handleResetMatchLocalRef.current = ctx.handleResetMatch;
             initGameStateLocalRef.current = ctx.initGameState;
+            handleExportDataLocalRef.current = ctx.handleExportData;
           }}
         />
       <div className="min-h-screen w-full bg-gray-50 flex flex-col">
@@ -2765,8 +2636,8 @@ const AppInner: React.FC = () => {
         // C2: diálogos de saída por papel
         const liveAtiva = gameState?.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed) && !gameState.isConfirmedFinished;
         if (liveAtiva) {
-          if (isOriginalOwner) {
-            // Owner: 2 opções — sair da tela (live continua) ou encerrar transmissão
+          if (isOriginalOwner && isCommandOwner) {
+            // Owner controlando: 2 opções — sair da tela (live continua) ou encerrar transmissão
             setModalConfig({
               title: "Você é o proprietário",
               message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",
@@ -2784,7 +2655,7 @@ const AppInner: React.FC = () => {
         // C2: mesma lógica de diálogos, destino = settings
         const liveAtiva = gameState?.isMirroringActive && !(gameState.isMirroringActive && gameState.isLiveClosed) && !gameState.isConfirmedFinished;
         if (liveAtiva) {
-          if (isOriginalOwner) {
+          if (isOriginalOwner && isCommandOwner) {
             setModalConfig({
               title: "Você é o proprietário",
               message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",

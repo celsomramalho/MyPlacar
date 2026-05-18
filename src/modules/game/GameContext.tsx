@@ -22,7 +22,7 @@ import type { MatchHistoryItem } from '@modules/history';
 import { persistLocalHistory } from '@modules/history';
 import { safeJsonParse } from '../../utils/safeJsonParse.ts';
 import { isWatchDevice } from '../../utils/device.ts';
-import { DEFAULT_TENNIS_SETTINGS } from '../../constants.ts';
+import { DEFAULT_TENNIS_SETTINGS, APP_VERSION } from '../../constants.ts';
 import type { GameState, MatchSettings, PointType } from '../../types.ts';
 import { incrementScore, undoPoint } from '../../utils/tennisEngine.ts';
 import { initPickleballState } from '../../utils/pickleballEngine.ts';
@@ -128,7 +128,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     return (profile && profile.email) ? profile : { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' };
   });
 
-  const { setPlayerQueue, setModalConfig, setShowLiveControlOverlay, setCurrentScreen, isSettingsInicialSaved, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, overlayAcceptedRef, setIsSavingJudge, isProfileSaved, setIsProfileSaved, setVoiceLogs, setIsRecoveryFromMatchOver, setIsWaitingSync } = useUI();
+  const { setPlayerQueue, playerQueue, setModalConfig, setShowLiveControlOverlay, setCurrentScreen, isSettingsInicialSaved, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, overlayAcceptedRef, setIsSavingJudge, isProfileSaved, setIsProfileSaved, setVoiceLogs, setIsRecoveryFromMatchOver, setIsWaitingSync } = useUI();
   const { isOriginalOwner, resolveTargetPin, activeLives, isClosingLiveRef, setCloudLiveExists, setActiveLives, livePapel, tookControlAtRef, setLiveLogs } = useLive();
   const deviceId = getDeviceId();
 
@@ -321,7 +321,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         matchEndedAt: Date.now()
       }).catch(() => {});
     }
-  }, [persistHistory, userProfile.email, userProfile.pin, partners, setPlayerQueue, resolveTargetPin]);
+  }, [persistHistory, userProfile.pin, partners, setPlayerQueue, resolveTargetPin]);
 
   const handleLeaveLive = useCallback(async () => {
     if (!gameState?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
@@ -352,7 +352,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       }
       await updateDoc(doc(db, "live_matches", targetPin), leaveUpdate);
     } catch {}
-  }, [gameState, userProfile.email, userProfile.pin, deviceId, isOriginalOwner, resolveTargetPin, activeLives]);
+  }, [gameState, userProfile.email, userProfile.pin, deviceId, isOriginalOwner, resolveTargetPin]);
 
   const handleCloseCloudLive = useCallback(async () => {
     const db = getDb();
@@ -1037,6 +1037,29 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     initGameStateInternal(forceNew, tournamentOverride);
   }, [gameState, setModalConfig, setCurrentScreen, initGameStateInternal]);
 
+  // ── Passo 6.1.4: handleExportData migrado do AppInner ───────────────────
+  // Gera e faz download de um arquivo JSON com backup completo dos dados.
+  // Usa matchHistoryRef (ref do provider) para ler o histórico sem dep reativa.
+  // playerQueue vive no UIContext e é consumido via useUI() neste provider.
+  const handleExportData = useCallback(() => {
+    const data = {
+      profile: userProfile,
+      history: matchHistoryRef.current,
+      settings: matchSettings,
+      partners,
+      playerQueue,
+      exportDate: new Date().toISOString(),
+      appVersion: APP_VERSION,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `myplacar_backup_${new Date().getTime()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [userProfile, matchSettings, partners, playerQueue]);
+
   const value: GameContextValue = {
     gameState,
     setGameState,
@@ -1069,6 +1092,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     handleResetMatch,
     initGameState,
     canStartMatch,
+    handleExportData,
   };
 
   return (

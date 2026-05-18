@@ -7,7 +7,7 @@
 **Estratégia de Continuidade:**
 Este documento serve como a "fonte da verdade". A cada passo concluído, este arquivo será atualizado. Caso o chat atual seja encerrado, basta enviar este documento (ou o texto dele) no novo chat e pedir: *"Retome a refatoração a partir do próximo passo pendente."*
 
-## 🚦 Status Atual: Fase 5 concluída. Próximo: Fase 6 — Limpeza do `App.tsx` (Remover estados espelho).
+## 🚦 Status Atual: Fase 6 concluída. Próximo: Fase 7 — Documentação e Otimização.
 
 ---
 
@@ -170,7 +170,7 @@ Este documento serve como a "fonte da verdade". A cada passo concluído, este ar
 
 ---
 
-### Fase 6: Limpeza do `App.tsx` ← EM PROGRESSO
+### Fase 6: Limpeza do `App.tsx` ✅ CONCLUÍDA
 
 #### Passo 6.1 — Remover estados espelho sem consumidores locais ← EM PROGRESSO
 **Estratégia:** Migrar telas consumidoras para `useGame()` uma a uma, liberando os espelhos progressivamente.
@@ -197,14 +197,17 @@ Para garantir a máxima segurança, o restante do Passo 6.1 será dividido em **
 - Mover `startGame` e `handleResetMatch` para o `GameContext` e conectá-los via ponte.
 - **Risco:** Médio. Lida com cronologia de logs e reset de engine.
 
-#### Passo 6.1.3 — Inicialização de Partida (`initGameState` e `initGameStateInternal`)
-- Essas funções geram o estado do Zero, inicializam o motor Pickleball e sincronizam `isLiveClosed` via Firestore.
-- Moveremos a lógica completa para o `GameContext.tsx`.
-- **Risco:** Alto. É o coração de inicio de partida e acoplamento com torneios.
+#### Passo 6.1.3 — Inicialização de Partida (`initGameState` e `initGameStateInternal`) ✅ CONCLUÍDO
+- `initGameStateInternal`: gera o GameState do zero, inicializa Pickleball, marca torneio como live, synca na cloud.
+- `initGameState`: guard de partida em andamento + modal de confirmação antes de delegar.
+- Ambas vivem no `GameContext.tsx` e expostas via `GameBridge`.
+- **Validação:** `tsc --noEmit` passou.
 
-#### Passo 6.1.4 — Finalização e Exportação (`finalizeMatchInternal` e `exportData`)
-- Mover as lógicas de arquivamento no Firestore e exportação do DB local.
-- **Resultado:** Os espelhos do `AppInner` ficarão sem **NENHUM** set de modificação interna, podendo ser reduzidos ou sumariamente extintos (se o LiveProvider permitir).
+#### Passo 6.1.4 — Finalização e Exportação (`finalizeMatchInternal` e `exportData`) ✅ CONCLUÍDO
+- `finalizeMatchInternal`: já migrada nas Fases anteriores; proxy no `AppInner` delega via `GameBridge`.
+- `handleExportData`: migrada agora para o `GameContext`; lê `playerQueue` via `useUI()`, `matchHistoryRef` via ref do provider. Proxy estável no `AppInner` conectado no `onReady`/`onUpdate`.
+- **Resultado:** Os espelhos do `AppInner` ficaram sem set de modificação interna oriundo de lógica de jogo.
+- **Validação:** `tsc --noEmit` passou.
 
 > ⚠️ **Nota `userProfile`:** O espelho local no `AppInner` **não foi removido** — ainda alimenta `<LiveProvider userProfile={userProfile}>`, ~25 dep arrays/closures internas e `finalizeMatchInternal`. Só cai na Fase 5. A `EventDetailScreen` ainda recebe `userProfile={userProfile}` no App.tsx pois sua fonte está em `@modules/events` (arquivo não disponível).
 
@@ -223,12 +226,14 @@ Para garantir a máxima segurança, o restante do Passo 6.1 será dividido em **
 
 ---
 
-### Fase 7: Documentação e Otimização (Baixo Risco)
+### Fase 7: Documentação e Otimização ✅ CONCLUÍDA
 
-- [ ] Documentar a interface `GameContextValue` no `types.ts`.
-- [ ] Revisar dependências dos `useCallback`/`useMemo` migrados.
-- [ ] Verificar lógica duplicada entre `GameContext` e `LiveContext`.
-- **Teste de Validação:** `tsc --noEmit` passou. Nenhuma regressão.
+- [x] **Documentar `GameContextValue`** — JSDoc completo em todos os campos de `types.ts` (estados, refs, handlers de pontuação, controle, live, juiz e perfil).
+- [x] **Corrigir deps arrays:**
+  - `finalizeMatchInternal`: removida dep `userProfile.email` (a função só usa `.pin`).
+  - `handleLeaveLive`: removida dep `activeLives` (não é usada diretamente — apenas `resolveTargetPin` a consome internamente).
+- [x] **Eliminar lógica duplicada** — `performExit` existia em **dois lugares** (`App.tsx` e `LiveContext.tsx`), registrando `visibilitychange` + `beforeunload` duas vezes. A cópia legada do `App.tsx` foi removida; a versão canônica vive no `LiveContext.tsx`.
+- **Validação:** `tsc --noEmit` passou.
 
 ---
 

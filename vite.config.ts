@@ -1,4 +1,5 @@
 import { defineConfig, Plugin } from 'vite';
+/// <reference types="vitest" />
 import react from '@vitejs/plugin-react';
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
@@ -94,6 +95,17 @@ export default defineConfig({
       'lucide-react',
       'leaflet',
     ],
+  },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
+    alias: {
+      '@modules': resolve(__dirname, 'src/modules'),
+      '@shared':  resolve(__dirname, 'src/shared'),
+      '@infra':   resolve(__dirname, 'src/infrastructure'),
+      '@routes':  resolve(__dirname, 'src/routes'),
+    },
   },
   build: {
     outDir: 'dist',
