@@ -12,7 +12,6 @@ anexos
 NovosArquivos
 dist
 dist-ssr
-tests
 *.local
 .tmp.driveupload
 
