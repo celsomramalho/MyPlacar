@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Partner } from '@modules/partners';
+import type { Partner } from '@modules/partners/types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle } from 'lucide-react';
 import type { TournamentEvent, TournamentEntry, TournamentPair, TournamentMatch, TournamentConfig } from '../types';
-import type { UserProfile } from '../../../types.ts';
+import type { UserProfile } from '@modules/auth';
 import { deleteEventEntry, deleteUserEventRegistration, fetchEventEntries, findUserByPin, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
 import type { FirebaseTournamentLiveScore } from '@infra/firebase';
 import { Firestore } from 'firebase/firestore';

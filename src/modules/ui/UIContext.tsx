@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { UIContextValue, ModalConfig, VoiceLog } from './types';
 import { Screen } from '../../types';
-import type { QueuePlayer } from '../partners';
+import type { QueuePlayer } from '@modules/partners/types';
 import { safeJsonParse } from '../../utils/safeJsonParse.ts';
 
 const UIContext = createContext<UIContextValue | undefined>(undefined);

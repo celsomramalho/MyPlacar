@@ -1,5 +1,6 @@
-import type { Partner } from '@modules/partners';
-import type { GameState, UserProfile } from '../../../types';
+import type { Partner } from '@modules/partners/types';
+import type { GameState } from '../../../types';
+import type { UserProfile } from '@modules/auth';
 import type { MatchHistoryItem } from '../types';
 
 const collectInvolvedPins = (state: GameState, partners: Partner[]): string[] => {

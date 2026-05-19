@@ -1,13 +1,9 @@
 
-import type { ScoringEngine } from './utils/sportEngine';
-export type { ScoringEngine };
-
 export type Screen = 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail' | 'communications' | 'public-scoreboard';
 export type Tab = 'config' | 'history' | 'help' | 'profile';
 export type AdminTab = 'configs' | 'users' | 'icons' | 'events' | 'comms';
 export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros';
 export type SportType = string;
-export type { PlanType, UserProfile } from '@modules/auth';
 
 /**
  * B1 — Papel permanente do usuário na live.
@@ -73,8 +69,6 @@ export interface JudgeInfo {
   /** true quando este juiz é o commandOwnerId atual */
   isActive: boolean;
 }
-
-export type { EventRegistration, TournamentConfig, TournamentEntry, TournamentEvent, TournamentMatch, TournamentPair } from './modules/events/types';
 
 export interface Partner {
   id: string;
@@ -255,10 +249,8 @@ export interface GameState {
    * Usado para detectar trocas de motor durante partida em andamento (ex: tênis → pickleball).
    * Optional para retrocompatibilidade com partidas salvas sem o campo.
    */
-  scoringEngine?: ScoringEngine;
+  scoringEngine?: 'tennis' | 'pickleball';
 }
-
-export type { MatchHistoryItem } from './modules/history/types';
 
 export interface MatchSettings {
   sportType: SportType;

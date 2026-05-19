@@ -9,9 +9,10 @@ import { Button } from '../components/Button.tsx';
 import { Toggle } from '../components/Toggle.tsx';
 import { applyGoldenRule, formatPortugueseName } from '../utils/formatters.ts';
 import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
-import type { MatchHistoryItem } from '@modules/history';
+import type { MatchHistoryItem } from '@modules/history/types';
 import type { TournamentEvent } from '@modules/events';
-import { VoiceCommands, ErrorSoundType, UserProfile } from '../types.ts';
+import { VoiceCommands, ErrorSoundType } from '../types.ts';
+import type { UserProfile } from '@modules/auth';
 import { playErrorBeep, unlockAudio } from '../hooks/useScoreAnnouncer.ts';
 
 import { CommunicationsPanel } from '../components/CommunicationsPanel.tsx';

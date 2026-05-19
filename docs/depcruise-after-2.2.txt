@@ -1,0 +1,95 @@
+
+  warn no-orphans: src/routes/index.ts
+  warn no-orphans: src/modules/teams/index.ts
+  warn no-orphans: src/modules/spectator/index.ts
+  warn no-orphans: src/modules/scoreBoard/index.ts
+  warn no-orphans: src/modules/communications/index.ts
+  warn no-orphans: src/modules/admin/index.ts
+  warn no-circular: src/modules/ui/UIContext.tsx ÔåÆ 
+      src/modules/ui/types.ts ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/ui/index.ts ÔåÆ
+      src/modules/ui/UIContext.tsx
+  warn no-circular: src/modules/ui/index.ts ÔåÆ 
+      src/modules/ui/UIContext.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/ui/index.ts
+  warn no-circular: src/modules/partners/index.ts ÔåÆ 
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/partners/index.ts
+  warn no-circular: src/modules/game/useGame.ts ÔåÆ 
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/useGame.ts
+  warn no-circular: src/modules/game/types.ts ÔåÆ 
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/types.ts
+  warn no-circular: src/modules/game/index.ts ÔåÆ 
+      src/modules/game/useGame.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts
+  warn no-circular: src/modules/game/index.ts ÔåÆ 
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/modules/ui/index.ts ÔåÆ
+      src/modules/ui/types.ts ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/modules/history/services/createHistoryItem.ts ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/events/index.ts ÔåÆ 
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/events/index.ts
+
+x 19 dependency violations (0 errors, 19 warnings). 146 modules, 395 dependencies cruised.
+

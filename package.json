@@ -11,7 +11,9 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "depcruise": "dependency-cruiser src --output-type err",
+    "depcruise:report": "dependency-cruiser src -o docs/report.html"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1038.0",

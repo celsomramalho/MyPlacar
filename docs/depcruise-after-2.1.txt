@@ -1,0 +1,462 @@
+
+  warn no-orphans: src/routes/index.ts
+  warn no-orphans: src/modules/teams/index.ts
+  warn no-orphans: src/modules/spectator/index.ts
+  warn no-orphans: src/modules/scoreBoard/index.ts
+  warn no-orphans: src/modules/communications/index.ts
+  warn no-orphans: src/modules/admin/index.ts
+  warn no-circular: src/modules/ui/UIContext.tsx ÔåÆ 
+      src/modules/ui/types.ts ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/ui/index.ts ÔåÆ
+      src/modules/ui/UIContext.tsx
+  warn no-circular: src/modules/ui/index.ts ÔåÆ 
+      src/modules/ui/UIContext.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/ui/index.ts
+  warn no-circular: src/modules/partners/services/createSelfPartner.ts ÔåÆ 
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/services/createSelfPartner.ts
+  warn no-circular: src/modules/partners/services/createReferralPartner.ts ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/services/createReferralPartner.ts
+  warn no-circular: src/modules/partners/services/autoRegisterPartnerByPin.ts ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/services/autoRegisterPartnerByPin.ts
+  warn no-circular: src/modules/partners/screens/PartnersScreen.tsx ÔåÆ 
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/services/createHistoryItem.ts ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx
+  warn no-circular: src/modules/partners/screens/PartnersScreen.tsx ÔåÆ 
+      src/infrastructure/supabase/index.ts ÔåÆ
+      src/infrastructure/supabase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx
+  warn no-circular: src/modules/partners/index.ts ÔåÆ 
+      src/modules/partners/services/createSelfPartner.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/partners/index.ts
+  warn no-circular: src/modules/partners/index.ts ÔåÆ 
+      src/modules/partners/services/createReferralPartner.ts ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/partners/index.ts
+  warn no-circular: src/modules/partners/index.ts ÔåÆ 
+      src/modules/partners/services/autoRegisterPartnerByPin.ts ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/partners/index.ts
+  warn no-circular: src/modules/partners/index.ts ÔåÆ 
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/modules/partners/index.ts
+  warn no-circular: src/modules/live/useLive.ts ÔåÆ 
+      src/modules/live/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/live/index.ts ÔåÆ
+      src/modules/live/useLive.ts
+  warn no-circular: src/modules/live/LiveContext.tsx ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/live/index.ts ÔåÆ
+      src/modules/live/LiveContext.tsx
+  warn no-circular: src/modules/live/index.ts ÔåÆ 
+      src/modules/live/useLive.ts ÔåÆ
+      src/modules/live/LiveContext.tsx ÔåÆ
+      src/modules/live/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/live/index.ts
+  warn no-circular: src/modules/live/index.ts ÔåÆ 
+      src/modules/live/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/live/index.ts
+  warn no-circular: src/modules/history/services/historySync.ts ÔåÆ 
+      src/infrastructure/supabase/index.ts ÔåÆ
+      src/infrastructure/supabase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/services/historySync.ts
+  warn no-circular: src/modules/history/services/createHistoryItem.ts ÔåÆ 
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/services/createHistoryItem.ts
+  warn no-circular: src/modules/history/index.ts ÔåÆ 
+      src/modules/history/services/historySync.ts ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts
+  warn no-circular: src/modules/history/index.ts ÔåÆ 
+      src/modules/history/services/createHistoryItem.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts
+  warn no-circular: src/modules/game/useGame.ts ÔåÆ 
+      src/modules/game/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/useGame.ts
+  warn no-circular: src/modules/game/types.ts ÔåÆ 
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/types.ts
+  warn no-circular: src/modules/game/types.ts ÔåÆ 
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/types.ts
+  warn no-circular: src/modules/game/index.ts ÔåÆ 
+      src/modules/game/useGame.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts
+  warn no-circular: src/modules/game/index.ts ÔåÆ 
+      src/modules/game/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/modules/ui/index.ts ÔåÆ
+      src/modules/ui/types.ts ÔåÆ
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/modules/live/index.ts ÔåÆ
+      src/modules/live/LiveContext.tsx ÔåÆ
+      src/modules/live/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/game/GameContext.tsx ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx
+  warn no-circular: src/modules/events/services/updateTournamentMatchProgress.ts ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/services/updateTournamentMatchProgress.ts
+  warn no-circular: src/modules/events/services/joinTournamentEvent.ts ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/services/joinTournamentEvent.ts
+  warn no-circular: src/modules/events/services/getActiveEventEntryDate.ts ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/services/getActiveEventEntryDate.ts
+  warn no-circular: src/modules/events/services/fetchRegisteredEvents.ts ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/services/fetchRegisteredEvents.ts
+  warn no-circular: src/modules/events/screens/EventDetailScreen.tsx ÔåÆ 
+      src/modules/partners/index.ts ÔåÆ
+      src/modules/partners/screens/PartnersScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx
+  warn no-circular: src/modules/events/screens/EventDetailScreen.tsx ÔåÆ 
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx
+  warn no-circular: src/modules/events/screens/EventDetailScreen.tsx ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/events/index.ts ÔåÆ
+      src/modules/events/screens/EventDetailScreen.tsx
+  warn no-circular: src/modules/events/index.ts ÔåÆ 
+      src/modules/events/services/updateTournamentMatchProgress.ts ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/events/index.ts
+  warn no-circular: src/modules/events/index.ts ÔåÆ 
+      src/modules/events/services/joinTournamentEvent.ts ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/events/index.ts
+  warn no-circular: src/modules/events/index.ts ÔåÆ 
+      src/modules/events/services/getActiveEventEntryDate.ts ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/events/index.ts
+  warn no-circular: src/modules/events/index.ts ÔåÆ 
+      src/modules/events/services/fetchRegisteredEvents.ts ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/events/index.ts
+  warn no-circular: src/modules/events/index.ts ÔåÆ 
+      src/modules/events/screens/EventDetailScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/events/index.ts
+  warn no-circular: src/modules/auth/screens/Login.tsx ÔåÆ 
+      src/infrastructure/supabase/index.ts ÔåÆ
+      src/infrastructure/supabase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/Login.tsx
+  warn no-circular: src/modules/auth/screens/AuthScreen.tsx ÔåÆ 
+      src/infrastructure/supabase/index.ts ÔåÆ
+      src/infrastructure/supabase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx
+  warn no-circular: src/modules/auth/screens/AuthScreen.tsx ÔåÆ 
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/game/types.ts ÔåÆ
+      src/modules/auth/index.ts ÔåÆ
+      src/modules/auth/screens/AuthScreen.tsx
+  warn no-circular: src/modules/auth/index.ts ÔåÆ 
+      src/modules/auth/screens/Login.tsx ÔåÆ
+      src/infrastructure/supabase/index.ts ÔåÆ
+      src/infrastructure/supabase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/auth/index.ts
+  warn no-circular: src/modules/auth/index.ts ÔåÆ 
+      src/modules/auth/screens/AuthScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts ÔåÆ
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/modules/auth/index.ts
+  warn no-circular: src/infrastructure/supabase/index.ts ÔåÆ 
+      src/infrastructure/supabase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/modules/game/index.ts ÔåÆ
+      src/modules/game/GameContext.tsx ÔåÆ
+      src/infrastructure/supabase/index.ts
+  warn no-circular: src/infrastructure/firebase/index.ts ÔåÆ 
+      src/infrastructure/firebase/matches.ts ÔåÆ
+      src/modules/history/index.ts ÔåÆ
+      src/modules/history/screens/LocationScreen.tsx ÔåÆ
+      src/infrastructure/firebase/index.ts
+
+x 53 dependency violations (0 errors, 53 warnings). 146 modules, 390 dependencies cruised.
+

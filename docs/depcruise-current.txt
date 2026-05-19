@@ -1,0 +1,7 @@
+
+> my-placar-pro@1.0.0 depcruise C:\Users\Celso Ramalho\Documents\GitHub\MyPlacar
+> dependency-cruiser src --include-only "^src" --output-type err
+
+
+Ô£ö no dependency violations found (140 modules, 403 dependencies cruised)
+

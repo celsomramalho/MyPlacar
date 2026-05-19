@@ -1,4 +1,4 @@
-import type { UserProfile } from '../../../types';
+import type { UserProfile } from '@modules/auth';
 import type { Partner } from '../types';
 
 export const createSelfPartner = (userProfile: UserProfile): Partner => ({

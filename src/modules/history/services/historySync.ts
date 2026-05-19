@@ -1,4 +1,4 @@
-import { countCloudMatches, deleteAllCloudMatches, downloadMatchesFromFirebase, syncMatchesToFirebase } from '@infra/firebase';
+import { countCloudMatches, deleteAllCloudMatches, downloadMatchesFromFirebase, syncMatchesToFirebase } from '@infra/firebase/matches';
 import { deleteAllSupabaseMatches, mirrorMatches } from '@infra/supabase';
 import type { Firestore, FieldValue } from 'firebase/firestore';
 import type { MatchHistoryItem } from '../types';
