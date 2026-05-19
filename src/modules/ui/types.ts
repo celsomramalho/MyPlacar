@@ -1,6 +1,6 @@
 import { ReactNode, Dispatch, SetStateAction } from 'react';
 import { Screen } from '../../types';
-import type { QueuePlayer } from '../partners';
+import type { QueuePlayer } from '@modules/partners/types';
 
 export interface VoiceLog {
   id: string;

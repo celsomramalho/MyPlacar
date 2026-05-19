@@ -6,9 +6,9 @@
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import type { GameState, MatchSettings, PointType } from '../../types.ts';
 import type { UserProfile } from '@modules/auth';
-import type { MatchHistoryItem } from '@modules/history';
-import type { Partner } from '@modules/partners';
-import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events';
+import type { MatchHistoryItem } from '@modules/history/types';
+import type { Partner } from '@modules/partners/types';
+import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 
 // ─── GameContextValue ─────────────────────────────────────────────────────────
 // Todos os campos são obrigatórios. O contexto não é criado com um valor padrão

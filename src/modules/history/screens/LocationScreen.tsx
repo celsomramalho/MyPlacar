@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Clock, MapPin, Loader2, Target, AlertTriangle } from 'lucide-react';
 import L from 'leaflet';
-import { getDb } from '@infra/firebase';
-import { fetchAllCloudMatches } from '@infra/firebase';
+import { getDb } from '@infra/firebase/client';
+import { fetchAllCloudMatches } from '@infra/firebase/matches';
 import type { MatchHistoryItem } from '../types';
 import { useGame } from '@modules/game';
 

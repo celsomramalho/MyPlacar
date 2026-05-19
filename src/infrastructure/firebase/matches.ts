@@ -1,5 +1,5 @@
 import { collection, deleteDoc, doc, getCountFromServer, getDocs, orderBy, query, QueryConstraint, where, writeBatch, type Firestore } from 'firebase/firestore';
-import type { MatchHistoryItem } from '@modules/history';
+import type { MatchHistoryItem } from '@modules/history/types';
 
 const matchesCollection = (db: Firestore) => collection(db, 'matches');
 

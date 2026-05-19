@@ -1,0 +1,9 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+ÔØî Oops! You're trying to run a package that should be provided by a local binary, but isn't. This is a misconfiguration.
+
+­ƒÜ½ This is a placeholder published to prevent dependency confusion.
+­ƒöÆ It does not contain any usable code.
+
+­ƒºá Double-check your dependencies or installation instructions.
+
+­ƒöÄ Learn more at https://intel.aikido.dev

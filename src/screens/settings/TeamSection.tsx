@@ -1,11 +1,13 @@
 import React, { useState, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react';
 import { ArrowUpDown, Play, User, Users, ChevronDown, Dices, Loader2, Eraser, History, Ticket, Check } from 'lucide-react';
-import { guessPartnerGender } from '@modules/partners';
+import { guessPartnerGender } from '@modules/partners/services/guessPartnerGender';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
-import type { Partner, QueuePlayer } from '@modules/partners';
-import { MatchSettings, GameState, UserProfile, TournamentEvent } from '../../types';
+import type { Partner, QueuePlayer } from '@modules/partners/types';
+import { MatchSettings, GameState } from '../../types';
+import type { UserProfile } from '@modules/auth';
+import type { TournamentEvent } from '@modules/events';
 import { formatPortugueseName } from '../../utils/formatters';
 import { SPORT_LIST } from '../../constants';
 import { getDb } from '@infra/firebase';

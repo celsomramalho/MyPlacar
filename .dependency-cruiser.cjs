@@ -3,7 +3,7 @@ module.exports = {
   forbidden: [
     {
       name: 'no-circular',
-      severity: 'warn',
+      severity: 'error',
       comment:
         "This dependency is part of a circular relationship. You might want to revise " +
         "your solution (i.e. use dependency inversion, make sure the modules have a single responsibility) ",
@@ -20,7 +20,7 @@ module.exports = {
         "add an exception for it in your dependency-cruiser configuration. By default " +
         "this rule does not scrutinize dot-files (e.g. .eslintrc.js), TypeScript declaration " +
         "files (.d.ts), tsconfig.json and some of the babel and webpack configs.",
-      severity: 'warn',
+      severity: 'error',
       from: {
         orphan: true,
         pathNot: [
@@ -206,7 +206,41 @@ module.exports = {
           'npm-peer'
         ]
       }
-    }
+    },
+    {
+      name: 'types-ts-no-domain-imports',
+      severity: 'error',
+      comment:
+        'src/types.ts só tipos globais — importar domínio de @modules/<nome>/types',
+      from: {
+        path: '^src/types\\.ts$',
+      },
+      to: {
+        path: '^(src/modules|src/infrastructure)/',
+      },
+    },
+    {
+      name: 'modules-not-to-app',
+      severity: 'error',
+      comment: 'Módulos de domínio não importam o shell App.tsx',
+      from: {
+        path: '^src/modules/',
+      },
+      to: {
+        path: '^src/App\\.tsx$',
+      },
+    },
+    {
+      name: 'infra-not-to-app',
+      severity: 'error',
+      comment: 'Infraestrutura não importa o shell App.tsx',
+      from: {
+        path: '^src/infrastructure/',
+      },
+      to: {
+        path: '^src/App\\.tsx$',
+      },
+    },
   ],
   options: {
     // Which modules not to follow further when encountered
@@ -223,7 +257,7 @@ module.exports = {
 
     // Which modules to exclusively include (array of regular expressions in strings)
     // dependency-cruiser will skip everything that doesn't match this pattern
-    // includeOnly : [''],
+    includeOnly: ['^src'],
 
     // List of module systems to cruise.
     // When left out dependency-cruiser will fall back to the list of _all_

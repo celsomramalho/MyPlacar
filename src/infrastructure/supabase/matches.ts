@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import type { MatchHistoryItem } from '@modules/history';
+import type { MatchHistoryItem } from '@modules/history/types';
 
 const isDev = import.meta.env.DEV;
 
