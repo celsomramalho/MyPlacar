@@ -2,7 +2,7 @@
 
 > **Branch:** `refactor/dependency-cruiser`  
 > **Última atualização:** 2026-05-19  
-> **Como usar:** siga os passos **na ordem numérica**. Passos 1–12 estão concluídos; passos 13–15 são opcionais.
+> **Como usar:** passos 1–12 concluídos (depcruise + CI + arquitetura). **Passo 13 em andamento** (Fases 1–5 ✅). Passos 14–15 opcionais.
 
 ---
 
@@ -17,7 +17,7 @@
 | `src/types.ts` importa módulos? | Sim (4 re-exports) | **Não** |
 
 **Objetivo desta refatoração:** eliminar dependências circulares sem quebrar o app.  
-**Status:** dependency-cruiser **limpo** + regras + CI + [ARCHITECTURE.md](./ARCHITECTURE.md). Próximos: **Passos 13–15** (opcionais).
+**Status:** depcruise **limpo** + CI + [ARCHITECTURE.md](./ARCHITECTURE.md). **Passo 13:** Fases 1–5 ✅ ([APP_LOGIC_INVENTORY.md](./APP_LOGIC_INVENTORY.md)). Passos 14–15 opcionais.
 
 ---
 
@@ -38,8 +38,10 @@ Passo 10  Regras no .dependency-cruiser.cjs
 Passo 11  CI (lint + test + depcruise no PR)
 Passo 12  Documentar arquitetura (ARCHITECTURE.md)
 
-── OPCIONAL (manutenção, não bloqueia depcruise) ─────────────
-Passo 13  Refatorar app.tsx (hooks)
+── EM ANDAMENTO ───────────────────────────────────────────────
+Passo 13  Refatorar app.tsx (hooks) — Fases 1–5 ✅
+
+── OPCIONAL (após Passo 13) ─────────────────────────────────
 Passo 14  Store central (Zustand)
 Passo 15  Reorganizar pastas DDD + barrels “públicos” seguros
 ```
@@ -309,15 +311,42 @@ pnpm depcruise
 
 ---
 
-## Passo 13 — (Opcional) Refatorar `app.tsx` em hooks
+## Passo 13 — Refatorar `app.tsx` em hooks (em andamento)
 
-**Objetivo:** manutenção; **não** é necessário para depcruise.
+**Objetivo:** manutenção; **não** é necessário para depcruise. Respeitar [ARCHITECTURE.md](./ARCHITECTURE.md) e `pnpm depcruise` após cada sub-PR.
 
-- [ ] Inventariar lógica repetida (`docs/APP_LOGIC_INVENTORY.md`)
-- [ ] Extrair `useScoreboardEngine`, `useGameRules`, `useVoiceControl`
-- [ ] Meta: `app.tsx` &lt; 150 linhas (orquestrador)
+**Diagnóstico (2026-05-19):** `src/App.tsx` ≈ **2.847 linhas**; `GameContext` já tem estado do jogo, mas `AppInner` mantém **espelhos** + `GameBridge` / `LiveBridge` (~112 refs `*LocalRef`).
 
-**Quando fazer:** após Passos 9–12 estáveis.
+| Métrica | Valor |
+|---------|--------|
+| `useEffect` em `App.tsx` | ~40 |
+| `useState` em `AppInner` | ~45 |
+| Ramificações `currentScreen ===` (telas) | ~14 |
+| Meta final | `App.tsx` &lt; **150** linhas (só providers + composição) |
+
+### Sub-passos (ordem obrigatória)
+
+| Fase | Conteúdo | Artefato / PR |
+|------|----------|----------------|
+| **1** | Inventário de lógica | [APP_LOGIC_INVENTORY.md](./APP_LOGIC_INVENTORY.md) |
+| **2** | Reordenar providers; remover `GameBridge` / `LiveBridge` e espelhos | `AppProviders`, `AppContent` |
+| **3** | Extrair UI auxiliar (`LogViewer`, modal, navegação inicial) | componentes / utils |
+| **4** | Hooks de domínio: `useGameRules`, `useScoreboardEngine`, `useVoiceControl` | `modules/game/hooks`, `hooks/` |
+| **5** | Hooks transversais: auth, config, history cloud, torneios, live sync | ver inventário |
+| **6** | `AppScreenRouter` — JSX das telas | `src/app/AppScreenRouter.tsx` |
+| **7** | `App.tsx` enxuto + validação CI | &lt; 150 linhas |
+
+### Checklist Passo 13
+
+- [x] **Fase 1** — Inventário (`docs/APP_LOGIC_INVENTORY.md`)
+- [x] **Fase 2** — Remover bridges e estados espelho (`GameLiveProviderStack`, `useGame`/`useLive` no `AppContent`)
+- [x] **Fase 3** — `LogViewer`, `AppModal`, `utils/appNavigation.ts` (`getUrlParams`, `getInitialScreen`)
+- [x] **Fase 4** — `useGameRules`, `useScoreboardEngine`, `useVoiceControl` (lint/test/depcruise 2026-05-19)
+- [x] **Fase 5** — Hooks transversais + `useLiveFirestoreSync`, `useDeepLinkScreen`, `useRemoteCloudMatch`, `useAppOfflineMode` (lint/test/depcruise 2026-05-19)
+- [ ] **Fase 6** — Router de telas
+- [ ] **Fase 7** — Meta &lt; 150 linhas + `pnpm test` / `lint` / `depcruise`
+
+**Verificação contínua:** após cada fase → `pnpm test` → `pnpm lint` → `pnpm depcruise`.
 
 ---
 
@@ -391,7 +420,7 @@ Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 [x] Passo 10 — .dependency-cruiser.cjs
 [x] Passo 11 — CI
 [x] Passo 12 — ARCHITECTURE.md
-[ ] Passo 13 — hooks app (opcional)
+[~] Passo 13 — hooks app (Fases 1–5 ✅; Fases 6–7 pendentes)
 [ ] Passo 14 — store (opcional)
 [ ] Passo 15 — DDD pastas (opcional)
 ```

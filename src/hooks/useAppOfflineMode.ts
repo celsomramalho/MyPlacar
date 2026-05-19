@@ -1,0 +1,80 @@
+import { useState, useCallback } from 'react';
+import { useGame } from '@modules/game';
+import { useUI } from '@modules/ui';
+import type { GameState, MatchSettings } from '../types.ts';
+import type { UserProfile } from '@modules/auth';
+import { getEngineForSport } from '../utils/sportEngine.ts';
+import { initPickleballState } from '../utils/pickleballEngine.ts';
+
+/** Modo offline local (sem histórico na nuvem). */
+export function useAppOfflineMode() {
+  const { matchSettings, setMatchSettings, setGameState, startGame } = useGame();
+  const { setCurrentScreen } = useUI();
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+
+  const handleOfflineMode = useCallback(() => {
+    setIsOfflineMode(true);
+
+    let p1Name = 'Jogador 1';
+    let p2Name = 'Jogador 2';
+    try {
+      const savedProfile = localStorage.getItem('myPlacarUserProfile');
+      if (savedProfile) {
+        const profile = JSON.parse(savedProfile) as UserProfile;
+        if (profile?.nickname || profile?.name) {
+          p1Name = profile.nickname || profile.name.split(' ')[0];
+        }
+      }
+    } catch {
+      /* best-effort */
+    }
+
+    const offlineSettings: MatchSettings = {
+      ...matchSettings,
+      p1Name,
+      p2Name,
+      isDoubles: false,
+      isHistoryEnabled: false,
+      cloudSync: false,
+      useGeminiVoice: false,
+      isWatchMode: true,
+    };
+    setMatchSettings(offlineSettings);
+
+    const matchId = `offline_${Date.now()}`;
+    const initialGameState: GameState = {
+      matchId,
+      startTime: Date.now(),
+      p1: { name: p1Name, score: '0', games: 0, sets: [], color: offlineSettings.p1Color },
+      p2: { name: p2Name, score: '0', games: 0, sets: [], color: offlineSettings.p2Color },
+      server: 1,
+      servingOrderOffset: 0,
+      pointHistory: [],
+      matchConfig: { ...offlineSettings, setsToWin: offlineSettings.sets },
+      history: [],
+      currentSet: 0,
+      isMatchOver: false,
+      matchDuration: 0,
+      isPaused: false,
+      scoringEngine: getEngineForSport(offlineSettings.sportType),
+    };
+
+    if (offlineSettings.sportType === 'pickleball') {
+      initialGameState.pickleball = initPickleballState(initialGameState);
+      initialGameState.servingOrderOffset =
+        (initialGameState.pickleball.server.team === 1 ? 0 : 1) +
+        (initialGameState.pickleball.server.serverNumber === 2 ? 2 : 0);
+    }
+    startGame(initialGameState);
+    setCurrentScreen('scoreboard');
+    setTimeout(() => startGame(initialGameState), 100);
+  }, [matchSettings, startGame, setMatchSettings, setCurrentScreen]);
+
+  const handleExitOffline = useCallback(() => {
+    setIsOfflineMode(false);
+    setGameState(null);
+    setCurrentScreen('auth');
+  }, [setGameState, setCurrentScreen]);
+
+  return { isOfflineMode, setIsOfflineMode, handleOfflineMode, handleExitOffline };
+}
