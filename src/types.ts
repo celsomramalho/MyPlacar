@@ -53,7 +53,8 @@ export interface ControllerRecord {
   lastSeen: number;
   isOwner?: boolean;
   nickname?: string;
-  role?: string;
+  role?: 'owner' | 'judge' | 'observer';
+  status?: 'controller' | 'watcher';
   deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop';
 }
 

@@ -232,6 +232,133 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     try { localStorage.setItem('myPlacarSettings', JSON.stringify(matchSettings)); } catch {}
   }, [matchSettings, gameState?.matchId, gameState?.isConfirmedFinished, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState]);
 
+  // ── BACK-SYNC OBSERVER SETTINGS FROM CLOUD GAME STATE ─────────────────────
+  // Se o dispositivo não for o controlador ativo (gameState.commandOwnerId !== deviceId)
+  // e a transmissão estiver ativa, sincroniza a configuração da nuvem (matchConfig e players)
+  // de volta para o estado local matchSettings do observer. Isso garante que:
+  // 1. O observer veja as alterações de regras e nomes em tempo real na tela.
+  // 2. Se o observer assumir o controle (take control), não sobrescreva a nuvem com dados obsoletos.
+  useEffect(() => {
+    if (!gameState || !gameState.isMirroringActive || gameState.commandOwnerId === deviceId) {
+      return;
+    }
+
+    const cloudConfig = gameState.matchConfig;
+    if (!cloudConfig) return;
+
+    setMatchSettings(prev => {
+      // 1. Resolve os nomes e propriedades dos times a partir de gameState.p1 e gameState.p2
+      const p1Name = gameState.p1?.name ?? prev.p1Name;
+      const p1Partner = gameState.p1?.partnerName ?? prev.p1Partner;
+      const p1Gender = gameState.p1?.gender ?? prev.p1Gender;
+      const p1PartnerGender = gameState.p1?.partnerGender ?? prev.p1PartnerGender;
+      const p1Color = gameState.p1?.color ?? prev.p1Color;
+
+      const p2Name = gameState.p2?.name ?? prev.p2Name;
+      const p2Partner = gameState.p2?.partnerName ?? prev.p2Partner;
+      const p2Gender = gameState.p2?.gender ?? prev.p2Gender;
+      const p2PartnerGender = gameState.p2?.partnerGender ?? prev.p2PartnerGender;
+      const p2Color = gameState.p2?.color ?? prev.p2Color;
+
+      // 2. Resolve as configurações de regras
+      const sportType = cloudConfig.sportType ?? prev.sportType;
+      const sets = (cloudConfig.sets ?? cloudConfig.setsToWin ?? prev.sets) as 1 | 3 | 5;
+      const gamesPerSet = cloudConfig.gamesPerSet ?? prev.gamesPerSet;
+      const isDoubles = cloudConfig.isDoubles ?? prev.isDoubles;
+      const noAd = cloudConfig.noAd ?? prev.noAd;
+      const tieBreak = cloudConfig.tieBreak ?? prev.tieBreak;
+      const tieBreakAt = cloudConfig.tieBreakAt ?? prev.tieBreakAt;
+      const tieBreakPoints = cloudConfig.tieBreakPoints ?? prev.tieBreakPoints;
+      const tieBreakWinByTwo = cloudConfig.tieBreakWinByTwo ?? prev.tieBreakWinByTwo;
+      const switchSidesOdd = cloudConfig.switchSidesOdd ?? prev.switchSidesOdd;
+      const tieBreakSideSwitchMode = cloudConfig.tieBreakSideSwitchMode ?? prev.tieBreakSideSwitchMode;
+      const pickleballScoringMode = cloudConfig.pickleballScoringMode ?? prev.pickleballScoringMode;
+      const pickleballServiceMode = cloudConfig.pickleballServiceMode ?? prev.pickleballServiceMode;
+      const useGeminiVoice = cloudConfig.useGeminiVoice ?? prev.useGeminiVoice;
+      const voiceEnabled = cloudConfig.voiceEnabled ?? prev.voiceEnabled;
+      const voiceScoring = cloudConfig.voiceScoring ?? prev.voiceScoring;
+      const winnersStay = cloudConfig.winnersStay ?? prev.winnersStay;
+
+      // 3. Compara com os valores atuais para evitar re-renders ou loops desnecessários
+      const hasChanged =
+        prev.p1Name !== p1Name ||
+        prev.p1Partner !== p1Partner ||
+        prev.p1Gender !== p1Gender ||
+        prev.p1PartnerGender !== p1PartnerGender ||
+        prev.p1Color !== p1Color ||
+        prev.p2Name !== p2Name ||
+        prev.p2Partner !== p2Partner ||
+        prev.p2Gender !== p2Gender ||
+        prev.p2PartnerGender !== p2PartnerGender ||
+        prev.p2Color !== p2Color ||
+        prev.sportType !== sportType ||
+        prev.sets !== sets ||
+        prev.gamesPerSet !== gamesPerSet ||
+        prev.isDoubles !== isDoubles ||
+        prev.noAd !== noAd ||
+        prev.tieBreak !== tieBreak ||
+        prev.tieBreakAt !== tieBreakAt ||
+        prev.tieBreakPoints !== tieBreakPoints ||
+        prev.tieBreakWinByTwo !== tieBreakWinByTwo ||
+        prev.switchSidesOdd !== switchSidesOdd ||
+        prev.tieBreakSideSwitchMode !== tieBreakSideSwitchMode ||
+        prev.pickleballScoringMode !== pickleballScoringMode ||
+        prev.pickleballServiceMode !== pickleballServiceMode ||
+        prev.useGeminiVoice !== useGeminiVoice ||
+        prev.voiceEnabled !== voiceEnabled ||
+        prev.voiceScoring !== voiceScoring ||
+        prev.winnersStay !== winnersStay;
+
+      if (!hasChanged) {
+        return prev;
+      }
+
+      // 4. Retorna as novas configurações mantendo os campos locais-only do observer intactos!
+      const updated = {
+        ...prev,
+        p1Name,
+        p1Partner,
+        p1Gender,
+        p1PartnerGender,
+        p1Color,
+        p2Name,
+        p2Partner,
+        p2Gender,
+        p2PartnerGender,
+        p2Color,
+        sportType,
+        sets,
+        gamesPerSet,
+        isDoubles,
+        noAd,
+        tieBreak,
+        tieBreakAt,
+        tieBreakPoints,
+        tieBreakWinByTwo,
+        switchSidesOdd,
+        tieBreakSideSwitchMode,
+        pickleballScoringMode,
+        pickleballServiceMode,
+        useGeminiVoice,
+        voiceEnabled,
+        voiceScoring,
+        winnersStay,
+      };
+
+      // Sincroniza também o prevSettingsRef para evitar loops no outro useEffect
+      prevSettingsRef.current = { ...updated };
+      return updated;
+    });
+  }, [
+    gameState?.isMirroringActive,
+    gameState?.commandOwnerId,
+    gameState?.matchConfig,
+    gameState?.p1,
+    gameState?.p2,
+    deviceId
+  ]);
+
+
   useEffect(() => {
     if (!prevProfileRef.current) { prevProfileRef.current = { ...userProfile }; return; }
     const prev = prevProfileRef.current;
@@ -483,8 +610,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           if (currentControllerId && currentControllerId !== deviceId) {
             const prevEntry = (cloudState.controllers || {})[currentControllerId];
             if (prevEntry) {
-              const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : 'observer';
-              prevDemoteUpdate[`controllers.${currentControllerId}`] = { ...prevEntry, role: demotedRole };
+              const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : (prevEntry.role === 'judge' ? 'judge' : 'observer');
+              prevDemoteUpdate[`controllers.${currentControllerId}`] = { ...prevEntry, role: demotedRole, status: 'watcher' };
             }
           }
 
@@ -497,17 +624,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({
               await updateDoc(doc(db, "live_matches", targetPin), prevDemoteUpdate).catch(() => {});
             }
             await updateDoc(doc(db, "live_matches", targetPin), {
-              [`controllers.${deviceId}`]: { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() }
+              [`controllers.${deviceId}`]: { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, status: 'controller', deviceType: getDeviceType() }
             }).catch(() => {});
             const localControllers: Record<string, unknown> = { ...(cloudState.controllers || {}) };
             if (currentControllerId && currentControllerId !== deviceId) {
               const prevEntry = (cloudState.controllers || {})[currentControllerId];
               if (prevEntry) {
-                const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : 'observer';
-                localControllers[currentControllerId] = { ...prevEntry, role: demotedRole };
+                const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : (prevEntry.role === 'judge' ? 'judge' : 'observer');
+                localControllers[currentControllerId] = { ...prevEntry, role: demotedRole, status: 'watcher' };
               }
             }
-            localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, deviceType: getDeviceType() };
+            localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, status: 'controller', deviceType: getDeviceType() };
 
             tookControlAtRef.current = Date.now();
             const settingsAsController = { ...syncedSettings, isScoreboardMode: false };
@@ -577,8 +704,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             : isFormalJudge ? 'judge'
             : 'observer';
 
+          const enterAsObserver = joinRole === 'observer';
+          // Observadores preservam o commandOwnerId da cloud — não assumem controle ao entrar.
+          // Apenas o proprietário (ou juiz em dispositivo primário) se torna controller imediatamente.
+          const resolvedCommandOwnerId = (isSecondaryDevice || enterAsObserver) ? cloudData.commandOwnerId : deviceId;
+          const isEnteringAsController = resolvedCommandOwnerId === deviceId;
+          const initialStatus: 'controller' | 'watcher' = isEnteringAsController ? 'controller' : 'watcher';
+
           await updateDoc(doc(db, "live_matches", pinUpper), {
-            [`controllers.${deviceId}`]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType(), isOwner: false }
+            [`controllers.${deviceId}`]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, status: initialStatus, deviceType: getDeviceType(), isOwner: joinRole === 'owner' }
           }).catch(() => {});
           
           if (cloudData.matchConfig) {
@@ -587,12 +721,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
           const nextControllers = {
             ...(cloudData.controllers || {}),
-            [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, deviceType: getDeviceType(), isOwner: false }
+            [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, status: initialStatus, deviceType: getDeviceType(), isOwner: joinRole === 'owner' }
           };
-          const enterAsObserver = joinRole === 'observer';
-          // Observadores preservam o commandOwnerId da cloud — não assumem controle ao entrar.
-          // Apenas o proprietário (ou juiz em dispositivo primário) se torna controller imediatamente.
-          const resolvedCommandOwnerId = (isSecondaryDevice || enterAsObserver) ? cloudData.commandOwnerId : deviceId;
           const watchModeForEntry = resolveWatchMode(matchSettings.isWatchMode ?? false);
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: watchModeForEntry ? false : (enterAsObserver ? true : false), brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           if (enterAsObserver) setMatchSettings(prev => ({ ...prev, isScoreboardMode: watchModeForEntry ? false : true, isWatchMode: watchModeForEntry }));

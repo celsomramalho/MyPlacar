@@ -43,6 +43,7 @@ export function useLiveFirestoreSync(params: {
     isOriginalOwner,
     isCommandOwner,
     resolveTargetPin,
+    livePapel,
   } = useLive();
 
   const {
@@ -593,6 +594,7 @@ export function useLiveFirestoreSync(params: {
               nickname: myNickname,
               lastSeen: now,
               role: deviceRole,
+              status: 'watcher',
               deviceType: getDeviceType(),
             },
           }).catch(() => {});
@@ -726,6 +728,7 @@ export function useLiveFirestoreSync(params: {
                 nickname: myNickname,
                 lastSeen: now,
                 role: 'judge',
+                status: judgeIsActive ? 'controller' : 'watcher',
                 deviceType: myDeviceType,
               },
               // T4.3: mantém judge.isActive sincronizado
@@ -748,6 +751,7 @@ export function useLiveFirestoreSync(params: {
               lastSeen: now,
               isOwner: true,
               role: 'owner',
+              status: 'watcher',
               deviceType: myDeviceType,
             },
           });
@@ -783,6 +787,7 @@ export function useLiveFirestoreSync(params: {
                 nickname: myNickname,
                 lastSeen: now,
                 role: heartbeatRole,
+                status: 'watcher',
                 deviceType: myDeviceType,
               },
             });
@@ -888,7 +893,8 @@ export function useLiveFirestoreSync(params: {
             // T4.1: controllers são escritos SEPARADAMENTE do gameState via field-path.
             // Isso reduz o payload do write de placar em ~40% e elimina a race condition
             // onde dois controllers sobrescrevem o objeto controllers inteiro ao mesmo tempo.
-            const controllerRole: 'owner' | 'judge' = isOriginalOwner ? 'owner' : 'judge';
+            const controllerRole: 'owner' | 'judge' | 'observer' =
+              livePapel === 'owner' ? 'owner' : (livePapel === 'judge' ? 'judge' : 'observer');
             const myDeviceType = getDeviceType();
             const shouldUpdateLastSeen = now - lastSeenUpdateRef.current > 30000;
 
@@ -957,6 +963,7 @@ export function useLiveFirestoreSync(params: {
                       lastSeen: now,
                       isOwner: isOriginalOwner,
                       role: controllerRole,
+                      status: 'controller' as const,
                       deviceType: myDeviceType,
                     };
                     updateDoc(doc(db, 'live_matches', targetPin), {

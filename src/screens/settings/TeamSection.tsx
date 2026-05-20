@@ -4,6 +4,8 @@ import { guessPartnerGender } from '@modules/partners/services/guessPartnerGende
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
+import { useGame } from '@modules/game';
+import { useLive } from '@modules/live';
 import type { Partner, QueuePlayer } from '@modules/partners/types';
 import { MatchSettings, GameState } from '../../types';
 import type { UserProfile } from '@modules/auth';
@@ -66,6 +68,17 @@ interface Props {
 }
 
 export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, onOpenPartners, onAutoRegisterPartner, userProfile, onJoinTournament }, ref) => {
+  const { gameState } = useGame();
+  const { isOriginalOwner, isCurrentController, cloudLiveExists } = useLive();
+
+  const isLiveActive = useMemo(() => {
+    return !!(gameState?.isMirroringActive || cloudLiveExists);
+  }, [gameState?.isMirroringActive, cloudLiveExists]);
+
+  const isReadOnly = useMemo(() => {
+    return isLiveActive && !isOriginalOwner && !isCurrentController;
+  }, [isLiveActive, isOriginalOwner, isCurrentController]);
+
   const [genders, setGenders] = useState<Record<string, Gender>>({
     p1: settings.p1Gender || 'M',
     p1Partner: settings.p1PartnerGender || 'M',
@@ -124,6 +137,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   }));
 
   const toggleGender = (key: string) => {
+    if (isReadOnly) return;
     const newGender: Gender = genders[key] === 'M' ? 'F' : 'M';
     setGenders(prev => ({ ...prev, [key]: newGender }));
     const settingsKey = `${key}Gender` as keyof MatchSettings;
@@ -131,6 +145,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const handleNameChange = (key: keyof MatchSettings, value: string) => {
+    if (isReadOnly) return;
     let finalValue = value;
     let isVerified = false;
     if (value.trim().toLowerCase() === 'eu' && userProfile?.nickname) {
@@ -152,6 +167,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const handleComplexVoice = async (targetField: keyof MatchSettings, name1: string, name2: string) => {
+    if (isReadOnly) return;
     const fieldPrefix = targetField.replace('Name', '');
     const verifiedKey = `${fieldPrefix}Verified` as keyof MatchSettings;
     
@@ -201,11 +217,13 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const handleT1ColorChange = (color: string) => {
+    if (isReadOnly) return;
     const index = T1_COLORS.indexOf(color);
     if (index !== -1) { setSettings(prev => ({ ...prev, p1Color: color, p2Color: T2_COLORS[index] })); }
   };
 
   const swapPlayersInTeam = (team: 1 | 2) => {
+    if (isReadOnly) return;
     setSettings(prev => {
       if (team === 1) {
         return { ...prev, p1Name: prev.p1Partner || '', p1Partner: prev.p1Name, p1Verified: prev.p1PartnerVerified, p1PartnerVerified: prev.p1Verified, p1Gender: prev.p1PartnerGender, p1PartnerGender: prev.p1Gender };
@@ -220,6 +238,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const handleSwapTeams = () => {
+    if (isReadOnly) return;
     setSettings(prev => ({
       ...prev,
       p1Name: prev.p2Name, p1Partner: prev.p2Partner,
@@ -236,6 +255,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const randomizeServerOrder = async () => {
+    if (isReadOnly) return;
     if (isShuffling) return;
     setIsShuffling(true);
     if (settings.isDoubles) {
@@ -249,6 +269,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const randomizeFormation = () => {
+    if (isReadOnly) return;
     runMultiShuffle(() => {
       if (settings.isDoubles) {
         const all = [
@@ -279,6 +300,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const randomizeMixed = () => {
+    if (isReadOnly) return;
     runMultiShuffle(() => {
       const all = [
         { n: settings.p1Name, g: genders.p1, v: settings.p1Verified },
@@ -328,6 +350,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const handleClearNames = () => {
+    if (isReadOnly) return;
     setSettings(prev => ({
       ...prev,
       p1Name: '', p1Partner: '', p2Name: '', p2Partner: '',
@@ -336,6 +359,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   };
 
   const handleToggleHistory = (val: boolean) => {
+    if (isReadOnly) return;
     setSettings(prev => {
       const next = { ...prev, isHistoryEnabled: val };
       if (!val) {
@@ -370,9 +394,10 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
       <div className={`flex gap-2 items-end transition-all duration-300 ${isShuffling ? 'opacity-50 scale-[0.97]' : 'opacity-100'}`}>
         <div className="flex-1">
           <Input 
+            disabled={isReadOnly}
             label={label} 
-            enableVoice 
-            enableCamera 
+            enableVoice={!isReadOnly} 
+            enableCamera={!isReadOnly} 
             partnerTerms={settings.voiceCommands.partnerTerm} 
             value={currentName} 
             onChange={e => handleNameChange(field, e.target.value)} 
@@ -381,7 +406,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
               isKnownPartner 
               ? `${colorStyles.bg} ${colorStyles.border} ${colorStyles.text} border-2 animate-in fade-in` 
               : 'bg-white border-gray-100 text-black'
-            }`} 
+            } ${isReadOnly ? 'opacity-70 cursor-not-allowed pointer-events-none bg-gray-50' : ''}`} 
             rightAction={isKnownPartner ? ( 
               <div className="p-1 mr-1 animate-in zoom-in duration-500 flex items-center justify-center relative">
                 <Users size={20} className="text-[#40E0D0]" />
@@ -389,14 +414,14 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
                   <Check size={8} strokeWidth={4} />
                 </div>
               </div> 
-            ) : (!currentName ? ( 
+            ) : (!currentName && !isReadOnly ? ( 
               <button type="button" onClick={(e) => { e.stopPropagation(); onOpenPartners?.(); }} className="p-1 mr-1 text-[#40E0D0] hover:opacity-80 transition-colors active:scale-90">
                 <Users size={20} />
               </button> 
             ) : null)} 
           />
         </div>
-        <button onClick={() => toggleGender(genderKey)} className={`w-[42px] h-[44px] rounded-2xl border-2 flex items-center justify-center shrink-0 transition-all active:scale-90 ${genders[genderKey] === 'M' ? 'bg-sky-50 text-sky-600 border-sky-100' : 'bg-pink-50 text-pink-600 border-pink-100'}`} > {genders[genderKey] === 'M' ? <MarsIcon /> : <VenusIcon />} </button>
+        <button disabled={isReadOnly} onClick={() => toggleGender(genderKey)} className={`w-[42px] h-[44px] rounded-2xl border-2 flex items-center justify-center shrink-0 transition-all active:scale-90 ${genders[genderKey] === 'M' ? 'bg-sky-50 text-sky-600 border-sky-100' : 'bg-pink-50 text-pink-600 border-pink-100'} ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`} > {genders[genderKey] === 'M' ? <MarsIcon /> : <VenusIcon />} </button>
       </div>
     );
   };
@@ -406,16 +431,18 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
 
   return (
     <div className="flex flex-col gap-2 animate-in fade-in duration-300 pb-16">
-      <div className="flex gap-2 mb-4">
+      <div className={`flex gap-2 mb-4 ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`}>
         <button 
+          disabled={isReadOnly}
           onClick={handleClearNames}
-          className="flex-1 py-4 bg-white border-2 border-red-500 rounded-full flex items-center justify-center gap-3 font-black text-red-500 text-xs active:scale-95 transition-all shadow-md"
+          className="flex-1 py-4 bg-white border-2 border-red-500 rounded-full flex items-center justify-center gap-3 font-black text-red-500 text-xs active:scale-95 transition-all shadow-md disabled:cursor-not-allowed"
         >
           <Eraser size={18} /> Limpar nomes
         </button>
         <button 
+          disabled={isReadOnly}
           onClick={() => handleToggleHistory(!settings.isHistoryEnabled)}
-          className={`flex-1 py-4 bg-white border-2 rounded-full flex items-center justify-center gap-3 font-black text-xs active:scale-95 transition-all shadow-md ${settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400'}`}
+          className={`flex-1 py-4 bg-white border-2 rounded-full flex items-center justify-center gap-3 font-black text-xs active:scale-95 transition-all shadow-md disabled:cursor-not-allowed ${settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400'}`}
         >
           <div className="relative flex items-center justify-center">
             <History size={18} className="text-blue-600" />
@@ -431,17 +458,49 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
         <div className="flex flex-col gap-3 px-1 mt-2">
           <h2 className="text-base font-black text-slate-800 tracking-tight">Times / jogadores</h2>
           <div className="flex gap-1">
-            <button onClick={() => setSettings(p => ({...p, isDoubles: false}))} className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-[1.5rem] text-sm font-black transition-all shadow-sm border-2 ${ !settings.isDoubles ? 'bg-white text-[#4B0082] border-[#4B0082] ring-2 ring-[#4B0082]/20' : 'bg-gray-100 text-slate-500 border-gray-200' }`} > <User size={18} className={!settings.isDoubles ? 'text-[#4B0082]' : ''} /> Simples </button>
-            <button onClick={() => setSettings(p => ({...p, isDoubles: true}))} className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-[1.5rem] text-sm font-black transition-all shadow-sm border-2 ${ settings.isDoubles ? 'bg-white text-[#40E0D0] border-[#40E0D0] ring-2 ring-[#40E0D0]/20' : 'bg-gray-100 text-slate-500 border-gray-200' }`} > <Users size={18} className={settings.isDoubles ? 'text-[#40E0D0]' : ''} /> Duplas </button>
+            <button 
+              disabled={isReadOnly}
+              onClick={() => setSettings(p => ({...p, isDoubles: false}))}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-[1.5rem] text-sm font-black transition-all shadow-sm border-2 ${ !settings.isDoubles ? 'bg-white text-[#4B0082] border-[#4B0082] ring-2 ring-[#4B0082]/20' : 'bg-gray-100 text-slate-500 border-gray-200' } ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed' : ''}`}
+            >
+              <User size={18} className={!settings.isDoubles ? 'text-[#4B0082]' : ''} /> Simples
+            </button>
+            <button 
+              disabled={isReadOnly}
+              onClick={() => setSettings(p => ({...p, isDoubles: true}))}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-[1.5rem] text-sm font-black transition-all shadow-sm border-2 ${ settings.isDoubles ? 'bg-white text-[#40E0D0] border-[#40E0D0] ring-2 ring-[#40E0D0]/20' : 'bg-gray-100 text-slate-500 border-gray-200' } ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed' : ''}`}
+            >
+              <Users size={18} className={settings.isDoubles ? 'text-[#40E0D0]' : ''} /> Duplas
+            </button>
           </div>
           
           <div className={`grid ${settings.isDoubles ? 'grid-cols-2' : 'grid-cols-1'} gap-1 mt-4`}>
-            <button onClick={randomizeServerOrder} className="bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all overflow-hidden" > {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear ordem sacadores</span> <RaquetIcon size={16} className="shrink-0" /> </div> )} </button>
-            {settings.isDoubles && ( <button onClick={randomizeFormation} className="bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all overflow-hidden" > {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear formação</span> <Users size={16} className="shrink-0 text-[#40E0D0]" /> </div> )} </button> )}
+            <button 
+              disabled={isReadOnly}
+              onClick={randomizeServerOrder}
+              className={`bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all overflow-hidden ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed bg-sky-400/50 text-white/70 shadow-none' : ''}`}
+            >
+              {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear ordem sacadores</span> <RaquetIcon size={16} className="shrink-0" /> </div> )}
+            </button>
+            {settings.isDoubles && (
+              <button 
+                disabled={isReadOnly}
+                onClick={randomizeFormation}
+                className={`bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all overflow-hidden ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed bg-sky-400/50 text-white/70 shadow-none' : ''}`}
+              >
+                {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear formação</span> <Users size={16} className="shrink-0 text-[#40E0D0]" /> </div> )}
+              </button>
+            )}
           </div>
           {settings.isDoubles && canShowMixed && (
             <div className="grid grid-cols-1 gap-1 mt-1 animate-in slide-in-from-top-2">
-              <button onClick={randomizeMixed} className="bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all" > {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear misto</span> <div className="flex items-center gap-0.5 shrink-0"> <span className="text-sky-300"><MarsIcon size={14} /></span> <span className="text-pink-300"><VenusIcon size={14} /></span> </div> </div> )} </button>
+              <button 
+                disabled={isReadOnly}
+                onClick={randomizeMixed}
+                className={`bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed bg-sky-400/50 text-white/70 shadow-none' : ''}`}
+              >
+                {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear misto</span> <div className="flex items-center gap-0.5 shrink-0"> <span className="text-sky-300"><MarsIcon size={14} /></span> <span className="text-pink-300"><VenusIcon size={14} /></span> </div> </div> )}
+              </button>
             </div>
           )}
         </div>
@@ -451,9 +510,22 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2"><span className="text-[12px] font-bold text-gray-400 tracking-wider">Time 1</span></div>
               <div className="flex gap-2">
-                {settings.isDoubles && ( <button onClick={() => swapPlayersInTeam(1)} className={`px-4 py-2 rounded-2xl flex items-center justify-center active:scale-90 transition-all shadow-lg border-2 border-white/20 ${SOLID_COLOR_STYLES[settings.p1Color]}`}> <ArrowUpDown size={16} /> </button> )}
+                {settings.isDoubles && ( 
+                  <button 
+                    disabled={isReadOnly} 
+                    onClick={() => swapPlayersInTeam(1)} 
+                    className={`px-4 py-2 rounded-2xl flex items-center justify-center active:scale-90 transition-all shadow-lg border-2 border-white/20 ${SOLID_COLOR_STYLES[settings.p1Color]} ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed shadow-none' : ''}`}
+                  > 
+                    <ArrowUpDown size={16} /> 
+                  </button> 
+                )}
                 <div className="relative">
-                  <select value={settings.p1Color} onChange={(e) => handleT1ColorChange(e.target.value)} className={`appearance-none flex items-center gap-2 px-6 py-2 rounded-2xl text-[12px] font-bold shadow-lg pr-10 border-2 border-white/20 ${SOLID_COLOR_STYLES[settings.p1Color]}`}>
+                  <select 
+                    disabled={isReadOnly} 
+                    value={settings.p1Color} 
+                    onChange={(e) => handleT1ColorChange(e.target.value)} 
+                    className={`appearance-none flex items-center gap-2 px-6 py-2 rounded-2xl text-[12px] font-bold shadow-lg pr-10 border-2 border-white/20 ${SOLID_COLOR_STYLES[settings.p1Color]} ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed shadow-none' : ''}`}
+                  >
                     {T1_COLORS.map(c => <option key={c} value={c} className="text-black bg-white">{COLOR_LABELS[c]}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white pointer-events-none opacity-60" />
@@ -466,14 +538,29 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
             </div>
           </div>
           <div className="flex justify-center my-1 relative z-20">
-            <button onClick={handleSwapTeams} className="w-14 h-14 bg-white rounded-full border-2 border-gray-200 shadow-xl flex items-center justify-center text-blue-600 active:scale-90 transition-all" title="Inverter jogadores entre os times" > <ArrowUpDown size={28} /> </button>
+            <button 
+              disabled={isReadOnly}
+              onClick={handleSwapTeams} 
+              className={`w-14 h-14 bg-white rounded-full border-2 border-gray-200 shadow-xl flex items-center justify-center text-blue-600 active:scale-90 transition-all ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed text-blue-400/50 shadow-none border-gray-100' : ''}`} 
+              title="Inverter jogadores entre os times" 
+            > 
+              <ArrowUpDown size={28} /> 
+            </button>
           </div>
           <div className={`p-3 rounded-[2.5rem] border-2 shadow-sm space-y-4 transition-colors duration-500 ${t2Styles.bg} ${t2Styles.border.replace('border-', 'border-')}/20`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2"><span className="text-[12px] font-bold text-gray-400 tracking-wider">Time 2</span></div>
               <div className="flex gap-2">
-                {settings.isDoubles && ( <button onClick={() => swapPlayersInTeam(2)} className={`px-4 py-2 rounded-2xl flex items-center justify-center active:scale-90 transition-all shadow-lg border-2 border-white/20 ${SOLID_COLOR_STYLES[settings.p2Color]}`}> <ArrowUpDown size={16} /> </button> )}
-                <div className={`flex items-center gap-2 px-6 py-2 rounded-2xl text-[12px] font-bold shadow-lg border-2 border-white/20 ${SOLID_COLOR_STYLES[settings.p2Color]}`}> {COLOR_LABELS[settings.p2Color]} </div>
+                {settings.isDoubles && ( 
+                  <button 
+                    disabled={isReadOnly} 
+                    onClick={() => swapPlayersInTeam(2)} 
+                    className={`px-4 py-2 rounded-2xl flex items-center justify-center active:scale-90 transition-all shadow-lg border-2 border-white/20 ${SOLID_COLOR_STYLES[settings.p2Color]} ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed shadow-none' : ''}`}
+                  > 
+                    <ArrowUpDown size={16} /> 
+                  </button> 
+                )}
+                <div className={`flex items-center gap-2 px-6 py-2 rounded-2xl text-[12px] font-bold shadow-lg border-2 border-white/20 ${SOLID_COLOR_STYLES[settings.p2Color]} ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`}> {COLOR_LABELS[settings.p2Color]} </div>
               </div>
             </div>
             <div className="space-y-4">

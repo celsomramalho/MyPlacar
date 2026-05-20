@@ -751,8 +751,17 @@ const AppContent: React.FC = () => {
         if (a && db && navigator.onLine) {
           const myPin = userProfile.pin?.toUpperCase();
           const targetPin = resolveTargetPin('write');
-            if (!targetPin) return;
-        const nextControllers = { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: isOriginalOwner ? 'owner' : 'judge' as const, deviceType: getDeviceType() } };
+          if (!targetPin) return;
+        const nextControllers = {
+          [deviceId]: {
+            label: currentFullDeviceName,
+            lastSeen: Date.now(),
+            isOwner: isOriginalOwner,
+            role: livePapel === 'owner' ? 'owner' : (livePapel === 'judge' ? 'judge' : 'observer'),
+            status: 'controller' as const,
+            deviceType: getDeviceType()
+          }
+        };
           // TRAVA DE PROPRIETÁRIO: ownerPin e ownerDeviceId são imutáveis — NUNCA
           // sobrescrever com o deviceId de quem está ativando o mirroring (pode ser
           // um judge ou device secundário). Preserva os valores já gravados no gameState.

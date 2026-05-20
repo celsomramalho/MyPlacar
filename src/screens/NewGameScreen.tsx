@@ -4,6 +4,7 @@ import { Toggle } from '../components/Toggle';
 import { MatchSettings, SportType, GameState, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../types';
 import type { TournamentEvent } from '@modules/events';
 import { useGame } from '@modules/game';
+import { useLive } from '@modules/live';
 import { ScoreboardIcon } from '../components/ScoreboardIcon';
 import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../constants';
 import { applyGoldenRule } from '../utils/formatters';
@@ -86,13 +87,16 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
     setResetPressProgress(0);
   };
 
+  const { isOriginalOwner, isCurrentController, cloudLiveExists: liveExistsFromContext } = useLive();
+  const effectiveLiveExists = cloudLiveExists ?? liveExistsFromContext;
+
   const isLiveActive = useMemo(() => {
-    return !!(gameState?.isMirroringActive || cloudLiveExists);
-  }, [gameState?.isMirroringActive, cloudLiveExists]);
+    return !!(gameState?.isMirroringActive || effectiveLiveExists);
+  }, [gameState?.isMirroringActive, effectiveLiveExists]);
 
   const isReadOnly = useMemo(() => {
-    return !!cloudLiveExists && !isController;
-  }, [cloudLiveExists, isController]);
+    return isLiveActive && !isOriginalOwner && !isCurrentController;
+  }, [isLiveActive, isOriginalOwner, isCurrentController]);
 
   useEffect(() => {
     if (isOfflineMode || !userProfile?.email) {

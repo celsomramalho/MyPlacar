@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
-import { Crown, Eye, RefreshCw, Trash2, UserCheck, X } from 'lucide-react';
+import { Crown, Eye, RefreshCw, Trash2, UserCheck, X, Gamepad2, Smartphone, Tablet, Laptop, Watch } from 'lucide-react';
 import { LiveIndicator } from '../../../components/LiveIndicator.tsx';
 import { useLive } from '../useLive.ts';
 import type { GameState } from '../../../types.ts';
 
-// ─── Props ────────────────────────────────────────────────────────────────────
-// Os handlers de lógica permanecem no App.tsx (serão migrados na Fase 7).
-// O componente lê papéis/permissões diretamente do LiveContext via useLive().
 interface Props {
   gameState: GameState | null;
   onClose: () => void;
@@ -33,7 +30,6 @@ export const LiveControlOverlay: React.FC<Props> = ({
     isOriginalOwner,
     livePapel,
     liveStatus,
-    isJudgeOnline,
   } = useLive();
 
   // Estados internos de confirmação — vivem aqui, não no App.tsx
@@ -46,104 +42,223 @@ export const LiveControlOverlay: React.FC<Props> = ({
     onClose();
   };
 
+  // Filtra dispositivos ativos (vistos nos últimos 60s)
+  const activeDevices = Object.entries(gameState?.controllers || {})
+    .map(([id, c]) => ({ id, ...c }))
+    .filter(c => c.lastSeen && (Date.now() - c.lastSeen < 60000))
+    .sort((a, b) => {
+      // Ordenação: Owner primeiro, Juiz em segundo, Observadores por último
+      const roleOrder = { owner: 0, judge: 1, observer: 2 };
+      const orderA = roleOrder[a.role || 'observer'];
+      const orderB = roleOrder[b.role || 'observer'];
+      if (orderA !== orderB) return orderA - orderB;
+      return (a.nickname || a.label).localeCompare(b.nickname || b.label);
+    });
+
+  const renderDeviceIcon = (deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop') => {
+    switch (deviceType) {
+      case 'watch':
+        return <Watch size={16} />;
+      case 'tablet':
+        return <Tablet size={16} />;
+      case 'laptop':
+        return <Laptop size={16} />;
+      case 'phone':
+      default:
+        return <Smartphone size={16} />;
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[100005] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white/90 backdrop-blur-2xl rounded-[3rem] p-8 w-full max-sm shadow-2xl border border-white/50 flex flex-col items-center gap-6 animate-in zoom-in duration-300 relative">
-        <button
-          onClick={handleClose}
-          className="absolute top-6 right-6 p-2 text-black hover:bg-gray-100 rounded-full transition-colors active:scale-90"
-        >
-          <X size={28} strokeWidth={3} />
-        </button>
-        <LiveIndicator variant="card" className="scale-125 mb-2" role={indicatorRole} />
+    <div className="fixed inset-0 z-[100005] flex items-center justify-center p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-[#1e293b] border border-slate-800 rounded-[2.5rem] p-6 w-full max-w-md shadow-2xl flex flex-col gap-5 animate-in zoom-in duration-300 relative text-white overflow-hidden max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <LiveIndicator variant="header" className="scale-90 pointer-events-none" role={indicatorRole} />
+            <h3 className="text-lg font-black tracking-tight text-white">
+              Painel da Live
+            </h3>
+          </div>
+          <button
+            onClick={handleClose}
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-all active:scale-90"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+        </div>
 
         {!confirmDeleteLive && !confirmDeleteJudge ? (
           <>
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-black text-black tracking-tight leading-tight">
-                {isCurrentController ? 'Você está no controle' : 'Live em andamento'}
-              </h3>
-              <p className="text-xs font-bold text-slate-500">
-                {livePapel === 'owner' ? 'Proprietário da live' : livePapel === 'judge' ? 'Juiz convidado' : 'Observador'}
+            {/* Status do Dispositivo Local */}
+            <div className="text-center bg-slate-850/50 border border-slate-800 p-4 rounded-2xl space-y-1.5">
+              <h4 className="text-base font-black tracking-tight leading-tight">
+                {isCurrentController ? 'Você está no controle' : 'Transmissão ativa'}
+              </h4>
+              <p className="text-xs font-bold text-slate-400">
+                Seu papel: <span className="text-[#7dd3fc]">{livePapel === 'owner' ? 'Proprietário' : livePapel === 'judge' ? 'Juiz convidado' : 'Espectador'}</span>
                 {liveStatus === 'controller' ? ' · Controlando' : ' · Assistindo'}
               </p>
             </div>
 
+            {/* Ações Rápidas */}
             <div className="flex flex-col w-full gap-3">
-
-              {/* ── Sua participação ─────────────────────────────────── */}
-              {/* A2: R2 — qualquer participante pode assumir o controle */}
+              {/* Botão de Assumir Controle (qualquer um pode pedir controle a qualquer momento) */}
               {!isCurrentController && (
                 <button
                   onClick={onControlLive}
-                  className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-base shadow-xl shadow-blue-100 active:scale-95 transition-all flex items-center justify-center gap-3"
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-900/30 active:scale-95 transition-all flex items-center justify-center gap-2.5"
                 >
-                  {livePapel === 'owner' ? <Crown size={24} /> : livePapel === 'judge' ? <UserCheck size={24} /> : <Eye size={24} />} Controlar
+                  {livePapel === 'owner' ? (
+                    <Crown size={18} className="fill-white/10" />
+                  ) : livePapel === 'judge' ? (
+                    <UserCheck size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )} 
+                  Pedir Controle da Partida
                 </button>
               )}
+            </div>
 
-              {/* ── Sincronizar Placar ── */}
-              <button
-                onClick={onSyncScoreboard}
-                className="w-full py-4 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl font-black text-sm active:scale-95 flex items-center justify-center gap-2 transition-all hover:bg-emerald-100"
-              >
-                <RefreshCw size={18} /> Sincronizar Placar
-              </button>
-
-              {/* ── Gestão (só proprietário) ─────────────────────────── */}
-              {livePapel === 'owner' && (
-                <div className="w-full mt-2 pt-4 border-t border-gray-100 space-y-3">
-                  <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase px-1">Proprietário</p>
-
-                  {/* Juiz */}
-                  {!!(gameState?.judge?.pin || gameState?.judgePin) && (
-                    <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            {/* Lista de Dispositivos Conectados */}
+            <div className="flex flex-col gap-2 flex-1 overflow-y-auto max-h-[260px] pr-1">
+              <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                Dispositivos conectados ({activeDevices.length})
+              </span>
+              
+              <div className="flex flex-col gap-2">
+                {activeDevices.length === 0 ? (
+                  <div className="text-center py-6 text-slate-500 text-xs font-bold bg-slate-900/20 border border-dashed border-slate-800 rounded-2xl">
+                    Nenhum dispositivo conectado
+                  </div>
+                ) : (
+                  activeDevices.map(device => (
+                    <div key={device.id} className="flex items-center justify-between p-3 bg-slate-900/30 hover:bg-slate-900/50 border border-slate-800 rounded-xl transition-all duration-200">
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-black text-black">Juiz</span>
-                        <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black ${isJudgeOnline ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
-                          <div className={`w-1 h-1 rounded-full ${isJudgeOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
-                          {isJudgeOnline ? 'Online' : 'Offline'}
+                        <div className="w-8 h-8 rounded-lg bg-slate-850 flex items-center justify-center text-slate-400 border border-slate-700/50">
+                          {renderDeviceIcon(device.deviceType)}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black tracking-tight text-white leading-snug">
+                            {device.nickname || device.label.split(' (')[0]}
+                          </span>
+                          <span className="text-[9px] font-bold text-slate-500 leading-none">
+                            {device.label.includes('(') ? device.label.substring(device.label.indexOf('(') + 1, device.label.length - 1) : device.label}
+                          </span>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
 
-              {/* ── Encerrar (owner controlando OU controller ativo) — R11 ── */}
-              {(livePapel === 'owner' && isCurrentController) || (!isOriginalOwner && isCurrentController) ? (
+                      <div className="flex items-center gap-1.5">
+                        {/* Badges de Role */}
+                        {device.role === 'owner' && (
+                          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400" title="Proprietário">
+                            <Crown size={12} className="fill-amber-400/20" />
+                          </div>
+                        )}
+                        {device.role === 'judge' && (
+                          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-400" title="Juiz Convidado">
+                            <UserCheck size={12} />
+                          </div>
+                        )}
+
+                        {/* Status Icon */}
+                        {device.status === 'controller' ? (
+                          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" title="Controlando">
+                            <Gamepad2 size={12} className="animate-pulse" />
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-slate-900 border border-slate-800 text-slate-500" title="Observando">
+                            <Eye size={12} />
+                          </div>
+                        )}
+
+                        {/* Botão de Remover Juiz (visível apenas para o Owner) */}
+                        {device.role === 'judge' && livePapel === 'owner' && (
+                          <button
+                            onClick={() => setConfirmDeleteJudge(true)}
+                            className="flex items-center justify-center w-6 h-6 rounded-md bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 transition-colors ml-1"
+                            title="Remover Juiz"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Rodapé e Ações Secundárias */}
+            <div className="flex flex-col gap-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={onSyncScoreboard}
+                className="w-full py-3.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-xl font-bold text-xs active:scale-98 transition-all flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={14} /> Sincronizar Placar
+              </button>
+
+              {/* Encerrar Transmissão (apenas se for Owner ou o Controller ativo) */}
+              {((livePapel === 'owner' && isCurrentController) || (!isOriginalOwner && isCurrentController)) && (
                 <button
                   onClick={() => setConfirmDeleteLive(true)}
-                  className="w-full py-4 text-red-500 font-black text-xs active:scale-95 flex items-center justify-center gap-2 mt-1"
+                  className="w-full py-2.5 text-red-400 hover:text-red-300 font-black text-xs active:scale-95 flex items-center justify-center gap-1.5 mt-1"
                 >
-                  <Trash2 size={16} /> Encerrar transmissão
+                  <Trash2 size={14} /> Encerrar transmissão
                 </button>
-              ) : null}
-
+              )}
             </div>
           </>
         ) : confirmDeleteLive ? (
-          <>
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-black text-red-500 tracking-tight leading-tight">Encerrar a live?</h3>
-              <p className="text-xs font-bold text-slate-500">Todos os participantes perderão a conexão.</p>
+          <div className="space-y-4 py-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto">
+              <Trash2 size={24} />
             </div>
-            <div className="flex flex-col w-full gap-3">
-              <button onClick={onCloseCloudLive} className="w-full py-5 bg-red-600 text-white rounded-3xl font-black text-base shadow-xl shadow-red-200 active:scale-95 transition-all">Confirmar encerramento</button>
-              <button onClick={() => setConfirmDeleteLive(false)} className="w-full py-4 text-slate-400 font-bold text-xs tracking-widest">Cancelar</button>
+            <div className="space-y-1">
+              <h4 className="text-lg font-black text-red-500">Encerrar a live?</h4>
+              <p className="text-xs font-bold text-slate-400">Todos os participantes conectados perderão a conexão e serão desconectados.</p>
             </div>
-          </>
+            <div className="flex flex-col gap-2 pt-2">
+              <button 
+                onClick={onCloseCloudLive} 
+                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-red-900/30 active:scale-95 transition-all"
+              >
+                Confirmar encerramento
+              </button>
+              <button 
+                onClick={() => setConfirmDeleteLive(false)} 
+                className="w-full py-3 text-slate-400 hover:text-white font-bold text-xs tracking-wider uppercase transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         ) : (
-          <>
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-black text-red-500 tracking-tight leading-tight">Remover juiz?</h3>
-              <p className="text-xs font-bold text-slate-500">O juiz perderá o acesso de controle à partida.</p>
+          <div className="space-y-4 py-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto">
+              <Trash2 size={24} />
             </div>
-            <div className="flex flex-col w-full gap-3">
-              <button onClick={onDeleteJudge} className="w-full py-5 bg-red-600 text-white rounded-3xl font-black text-base shadow-xl shadow-red-200 active:scale-95 transition-all">Confirmar remoção</button>
-              <button onClick={() => setConfirmDeleteJudge(false)} className="w-full py-4 text-slate-400 font-bold text-xs tracking-widest">Cancelar</button>
+            <div className="space-y-1">
+              <h4 className="text-lg font-black text-red-500">Remover Juiz?</h4>
+              <p className="text-xs font-bold text-slate-400">O juiz convidado perderá a permissão de controle e o acesso privilegiado à live.</p>
             </div>
-          </>
+            <div className="flex flex-col gap-2 pt-2">
+              <button 
+                onClick={() => { onDeleteJudge(); setConfirmDeleteJudge(false); }} 
+                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-red-900/30 active:scale-95 transition-all"
+              >
+                Confirmar remoção
+              </button>
+              <button 
+                onClick={() => setConfirmDeleteJudge(false)} 
+                className="w-full py-3 text-slate-400 hover:text-white font-bold text-xs tracking-wider uppercase transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

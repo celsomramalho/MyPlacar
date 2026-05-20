@@ -1,11 +1,12 @@
 import React from 'react';
-import { ShieldCheck, Eye, Gavel, Crown, UserCheck } from 'lucide-react';
+import { ShieldCheck, Eye, Gavel, Crown, UserCheck, Gamepad2 } from 'lucide-react';
 
 interface Props {
   className?: string;
   onClick?: () => void;
   variant?: 'header' | 'card';
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
+  status?: 'controller' | 'watcher';
   progress?: number;
   onPointerDown?: (e: any) => void;
   onPointerUp?: (e: any) => void;
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export const LiveIndicator: React.FC<Props> = ({ 
-  className = "", onClick, variant = 'header', role = 'spectator', 
+  className = "", onClick, variant = 'header', role = 'spectator', status,
   progress = 0, onPointerDown, onPointerUp, onPointerLeave 
 }) => (
   <button 
@@ -37,7 +38,7 @@ export const LiveIndicator: React.FC<Props> = ({
         height={variant === 'header' ? "20" : "24"} 
         viewBox="0 0 24 18" 
         fill="none" 
-        xmlns="http://www.w3.org/2000/svg" 
+        xmlns="http://www.w3.org/2000/svg"
         className="absolute"
       >
         <path d="M4 4C2.5 6 2.5 12 4 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
@@ -48,7 +49,11 @@ export const LiveIndicator: React.FC<Props> = ({
       
       {/* Ícone central dinâmico */}
       <div className={`relative z-10 flex items-center justify-center ${variant === 'header' ? '-mt-0.5' : '-mt-1'}`}>
-        {role === 'owner' ? (
+        {status === 'controller' ? (
+          <Gamepad2 size={variant === 'header' ? 18 : 22} className="text-[#3b82f6]" strokeWidth={2.5} />
+        ) : status === 'watcher' ? (
+          <Eye size={variant === 'header' ? 18 : 22} className="text-slate-400" strokeWidth={3} />
+        ) : role === 'owner' ? (
           <Crown size={variant === 'header' ? 18 : 22} className="text-blue-600 fill-white" strokeWidth={2.5} />
         ) : role === 'judge' ? (
           <Gavel size={variant === 'header' ? 18 : 22} className="text-emerald-500" strokeWidth={3} />

@@ -350,7 +350,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
             }`}
           >
             {isLiveActive
-              ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-full h-full pointer-events-none" />
+              ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} status={isLiveActive ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
               : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
             }
           </div>
@@ -394,7 +394,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                   onPointerDown={() => { setIsMenuOpen(false); onOpenLiveControl?.(); }}
                   className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
                 >
-                  <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} variant="header" className="w-8 h-8 shrink-0" />
+                  <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} status={isLiveActive ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-8 h-8 shrink-0" />
                   <span className="font-black text-sm">Live / Controle</span>
                 </div>
               )}
