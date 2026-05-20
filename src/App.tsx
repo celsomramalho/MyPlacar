@@ -689,10 +689,14 @@ const AppContent: React.FC = () => {
               title: "Você é o proprietário",
               message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",
               confirmLabel: "Sair da tela (live continua)",
-              onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('new-game'); },
+              onConfirm: () => { setModalConfig(null); setCurrentScreen('new-game'); },
               onCancel: () => setModalConfig(null),
             });
+          } else if (isCommandOwner) {
+            // Outro dispositivo no controle ativo: sai mantendo o controle
+            setCurrentScreen('new-game');
           } else {
+            // Observadores: saem e limpam sua presença
             handleLeaveLive(); setCurrentScreen('new-game');
           }
         } else {
@@ -707,9 +711,12 @@ const AppContent: React.FC = () => {
               title: "Você é o proprietário",
               message: "A live continua ativa mesmo depois que você sair. O que deseja fazer?",
               confirmLabel: "Sair da tela (live continua)",
-              onConfirm: () => { setModalConfig(null); handleLeaveLive(); setCurrentScreen('settings'); },
+              onConfirm: () => { setModalConfig(null); setCurrentScreen('settings'); },
               onCancel: () => setModalConfig(null),
             });
+          } else if (isCommandOwner) {
+            // Outro dispositivo no controle ativo: sai mantendo o controle
+            setCurrentScreen('settings');
           } else {
             handleLeaveLive(); setCurrentScreen('settings');
           }

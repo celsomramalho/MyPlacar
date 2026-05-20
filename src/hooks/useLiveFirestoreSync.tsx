@@ -48,6 +48,7 @@ export function useLiveFirestoreSync(params: {
 
   const {
     currentScreen,
+    setCurrentScreen,
     setModalConfig,
     setShowLiveControlOverlay,
     setIsWaitingSync,
@@ -285,6 +286,9 @@ export function useLiveFirestoreSync(params: {
                 isLiveClosed: false,
               };
             });
+            // Item 4: se o dono estava como observador em outra tela,
+            // redireciona automaticamente para o placar ao reassumir controle.
+            setCurrentScreen('scoreboard');
             return;
           }
 
