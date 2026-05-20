@@ -1437,7 +1437,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${isLiveActiveNew ? 'border-emerald-400 bg-white/5 text-emerald-400' : isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' : 'border-white bg-emerald-500 text-white'}`}
                 >
                   {isLiveActiveNew
-                    ? <LiveIndicator role={effectiveIndicatorRole} variant="header" className="w-full h-full pointer-events-none" />
+                    ? <LiveIndicator role={effectiveIndicatorRole} status={isLiveActiveNew ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
                     : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
                   }
                 </div>
@@ -1461,7 +1461,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     {isLiveActiveNew && (
                       <div role={isPublicView ? undefined : "button"} onPointerDown={() => { if (!isPublicView) { setNewMenuOpen(false); onOpenLiveControl?.(); } }}
                         className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${isPublicView ? 'bg-white/5 opacity-40 cursor-not-allowed' : 'bg-white/5 active:bg-white/10 cursor-pointer text-white'}`}>
-                        <LiveIndicator role={effectiveIndicatorRole} variant="header" className={`w-8 h-8 shrink-0 ${isPublicView ? 'grayscale opacity-50' : ''}`} />
+                        <LiveIndicator role={effectiveIndicatorRole} status={isLiveActiveNew ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className={`w-8 h-8 shrink-0 ${isPublicView ? 'grayscale opacity-50' : ''}`} />
                         <span className={`font-black text-sm ${isPublicView ? 'text-white/50' : ''}`}>Live / Controle</span>
                       </div>
                     )}

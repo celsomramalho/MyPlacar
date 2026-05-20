@@ -102,6 +102,31 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ─── Regras para Login Rápido do Relógio ─────────────────────────────────────
+    match /watch_tokens/{tokenId} {
+      // Permite ler um token individual (get), mas proíbe listar todos (list) por segurança
+      allow get: if true;
+      allow list: if false;
+
+      // Permite criar um novo token, desde que inicie com status 'pending'
+      allow create: if request.resource.data.status == 'pending';
+
+      // Permite atualizar:
+      // 1. O próprio relógio pode atualizar/expirar (desde que não mude para approved sem auth)
+      // 2. Um usuário autenticado pode aprovar o login, garantindo que o e-mail aprovado seja o seu próprio
+      allow update: if (
+        request.resource.data.status != 'approved'
+      ) || (
+        isAuthenticated() && 
+        request.auth.token.email != null &&
+        request.resource.data.email == request.auth.token.email &&
+        request.resource.data.status == 'approved'
+      );
+
+      // Permite exclusão (limpeza do token após o login concluído)
+      allow delete: if true;
+    }
+
     // Catch-all: nega tudo que não foi coberto acima.
     // Mantido como "false" (e não isAdmin()) exatamente para evitar
     // que o get() interno do isAdmin() dispare em paths desconhecidos.
