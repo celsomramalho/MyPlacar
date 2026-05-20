@@ -426,7 +426,8 @@ export const buildAnnouncementTennis = (
   if (matchPointTeam !== null) {
     const mpName = matchPointTeam === 1 ? state.p1.name : state.p2.name;
     const gameScore = getGameScoreText(state);
-    return `Match point ${mpName}, placar do game ${gameScore}.`;
+    const [gamesServ, gamesRecv] = getGamesFromServer(state);
+    return `Match point ${mpName}! Placar do set ${numToWord(gamesServ)} a ${numToWord(gamesRecv)}, placar do game ${gameScore}.`;
   }
 
   // F) Set point
@@ -434,7 +435,8 @@ export const buildAnnouncementTennis = (
   if (setPointTeam !== null) {
     const spName = setPointTeam === 1 ? state.p1.name : state.p2.name;
     const gameScore = getGameScoreText(state);
-    return `Set point ${spName}, placar do game ${gameScore}.`;
+    const [gamesServ, gamesRecv] = getGamesFromServer(state);
+    return `Set point ${spName}! Placar do set ${numToWord(gamesServ)} a ${numToWord(gamesRecv)}, placar do game ${gameScore}.`;
   }
 
   // C) Durante o game

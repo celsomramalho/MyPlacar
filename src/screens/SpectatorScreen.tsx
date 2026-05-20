@@ -154,7 +154,7 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
             <div className="flex flex-col items-center gap-3">
               {/* Nome */}
               <p className="text-sm font-black leading-tight text-center">{gameState.p1.name}</p>
-              {gameState.p1.partnerName && (
+              {gameState.matchConfig.isDoubles && gameState.p1.partnerName && (
                 <p className="text-[10px] font-bold text-white/40 text-center -mt-2">{gameState.p1.partnerName}</p>
               )}
               {/* Sets ganhos */}
@@ -195,7 +195,7 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
             <div className="flex flex-col items-center gap-3">
               {/* Nome */}
               <p className="text-sm font-black leading-tight text-center">{gameState.p2.name}</p>
-              {gameState.p2.partnerName && (
+              {gameState.matchConfig.isDoubles && gameState.p2.partnerName && (
                 <p className="text-[10px] font-bold text-white/40 text-center -mt-2">{gameState.p2.partnerName}</p>
               )}
               {/* Sets ganhos */}

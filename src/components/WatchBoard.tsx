@@ -1,6 +1,7 @@
 import React from 'react';
-import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch } from 'lucide-react';
+import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../types.ts';
+import { isWatchDevice } from '../utils/device';
 import { LiveIndicator } from './LiveIndicator.tsx';
 import { getTennisServerSide } from '../utils/tennisEngine.ts';
 
@@ -44,6 +45,7 @@ interface WatchBoardProps {
   onVoiceToggle?: () => void;
   isVoiceActive?: boolean;
   onToggleWatchMode?: () => void;
+  onToggleScoreboardMode?: () => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -78,7 +80,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive, onToggleWatchMode
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [showMic, setShowMic] = React.useState(false);
@@ -400,19 +402,67 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               )}
 
               {/* Modo relógio */}
-              <div
-                role="button"
-                onPointerDown={() => { onToggleWatchMode?.(); }}
-                className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
-              >
-                <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-slate-700 rounded-xl">
-                  <Watch size={18} />
-                </div>
-                <span className="font-black text-sm flex-1">Modo relógio</span>
-                <div className="w-12 h-6 rounded-full relative transition-colors duration-200 bg-emerald-500">
-                  <div className="absolute top-1 left-7 w-4 h-4 bg-white rounded-full shadow transition-all duration-200" />
-                </div>
-              </div>
+              {(() => {
+                const isWatchMode = !!gameState.matchConfig.isWatchMode;
+                const isScoreboardMode = !!gameState.matchConfig.isScoreboardMode;
+                const currentMode = isWatchMode ? 'watch' : (isScoreboardMode ? 'scoreboard' : 'control');
+                const show3WayToggle = !isOfflineMode && !isWatchDevice();
+
+                const handleModeChange = (targetMode: 'control' | 'watch' | 'scoreboard') => {
+                  if (currentMode === targetMode) return;
+
+                  if (targetMode === 'control') {
+                    if (isWatchMode) onToggleWatchMode?.();
+                    if (isScoreboardMode) onToggleScoreboardMode?.();
+                  } else if (targetMode === 'watch') {
+                    if (isScoreboardMode) onToggleScoreboardMode?.();
+                    if (!isWatchMode) onToggleWatchMode?.();
+                  } else if (targetMode === 'scoreboard') {
+                    if (isWatchMode) onToggleWatchMode?.();
+                    if (!isScoreboardMode) onToggleScoreboardMode?.();
+                  }
+                };
+
+                return show3WayToggle && (
+                  <div className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 text-white">
+                    <span className="font-black text-sm shrink-0">
+                      {currentMode === 'control' && 'Placar'}
+                      {currentMode === 'watch' && 'Modo relógio'}
+                      {currentMode === 'scoreboard' && 'Modo placar'}
+                    </span>
+
+                    <div className="flex-1 flex bg-slate-800/80 rounded-xl p-0.5 border border-white/5 gap-1.5">
+                      <button
+                        onPointerDown={() => handleModeChange('control')}
+                        className={`flex-1 h-10 rounded-lg flex items-center justify-center transition-all ${
+                          currentMode === 'control' ? 'bg-emerald-500 text-white shadow-md scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                        }`}
+                        title="Placar"
+                      >
+                        <SquareKanban size={16} />
+                      </button>
+                      <button
+                        onPointerDown={() => handleModeChange('watch')}
+                        className={`flex-1 h-10 rounded-lg flex items-center justify-center transition-all ${
+                          currentMode === 'watch' ? 'bg-emerald-500 text-white shadow-md scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                        }`}
+                        title="Modo relógio"
+                      >
+                        <Watch size={16} />
+                      </button>
+                      <button
+                        onPointerDown={() => handleModeChange('scoreboard')}
+                        className={`flex-1 h-10 rounded-lg flex items-center justify-center transition-all ${
+                          currentMode === 'scoreboard' ? 'bg-emerald-500 text-white shadow-md scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                        }`}
+                        title="Modo placar"
+                      >
+                        <Cast size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Regras */}
               <button
