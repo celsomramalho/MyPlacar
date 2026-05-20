@@ -1046,7 +1046,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     const controllerName = effectiveGameState.commandOwner || '';
     if (iAmController) {
       return (
-        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-[11px] font-black tracking-tight">
+        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-[#f59e0b] text-white text-[11px] font-black tracking-tight">
           {effectiveIsOriginalOwner ? <Crown size={13} /> : <Gavel size={13} />}
           <span>Você está no controle do placar</span>
         </div>
@@ -1054,8 +1054,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }
     if (effectiveGameState.isMirroringActive && controllerName) {
       return (
-        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white text-[11px] font-black tracking-tight">
-          <Gavel size={13} />
+        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-[11px] font-black tracking-tight">
+          <Eye size={13} />
           <span>{controllerName} está controlando · você está observando</span>
         </div>
       );
@@ -1628,8 +1628,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     const operColor = isCtrlActive ? 'text-orange-500' : 'text-blue-400';
                     const operLabel = isCtrlActive ? 'Ctrl' : null;
                     return (
-                      <div key={id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isCtrlActive ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm ring-2 ring-blue-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'}`}>
-                        <DeviceIcon size={12} className={isCtrlActive ? 'text-blue-500' : 'text-gray-400'} />
+                      <div key={id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isCtrlActive ? 'bg-orange-50 border-orange-200 text-orange-700 shadow-sm ring-2 ring-orange-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'}`}>
+                        <DeviceIcon size={12} className={isCtrlActive ? 'text-orange-500' : 'text-gray-400'} />
                         <span className="text-[10px] font-black">{shortLabel}</span>
                         {showHierarchyBadge && (
                           <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${hierarchyColor}`}>

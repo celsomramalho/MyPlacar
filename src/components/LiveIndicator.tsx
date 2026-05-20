@@ -50,7 +50,7 @@ export const LiveIndicator: React.FC<Props> = ({
       {/* Ícone central dinâmico */}
       <div className={`relative z-10 flex items-center justify-center ${variant === 'header' ? '-mt-0.5' : '-mt-1'}`}>
         {status === 'controller' ? (
-          <Gamepad2 size={variant === 'header' ? 18 : 22} className="text-[#3b82f6]" strokeWidth={2.5} />
+          <Gamepad2 size={variant === 'header' ? 18 : 22} className="text-orange-500" strokeWidth={2.5} />
         ) : status === 'watcher' ? (
           <Eye size={variant === 'header' ? 18 : 22} className="text-slate-400" strokeWidth={3} />
         ) : role === 'owner' ? (

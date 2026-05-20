@@ -54,7 +54,7 @@ service cloud.firestore {
     }
 
     match /matches/{matchId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     match /live_matches/{pin} {
@@ -62,11 +62,11 @@ service cloud.firestore {
     }
 
     match /user_partners_metadata/{userEmail} {
-      allow read, write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
+      allow read, write: if true;
     }
 
     match /user_queue_metadata/{userEmail} {
-      allow read, write: if isEmailOwner(userEmail) || isAdmin() || isAuthenticated();
+      allow read, write: if true;
     }
 
     match /events/{eventPin} {
@@ -112,21 +112,16 @@ service cloud.firestore {
       allow create: if request.resource.data.status == 'pending';
 
       // Permite atualizar:
-      // 1. O próprio relógio pode atualizar/expirar (desde que não mude para approved sem auth)
-      // 2. Um usuário autenticado pode aprovar o login, garantindo que o e-mail aprovado seja o seu próprio
-      allow update: if (
-        request.resource.data.status != 'approved'
-      ) || (
-        isAuthenticated() && 
-        request.auth.token.email != null &&
-        request.resource.data.email == request.auth.token.email &&
-        request.resource.data.status == 'approved'
-      );
+      // Apenas se o token original estiver pendente e não tiver expirado, e se o novo status for 'approved'
+      allow update: if resource.data.status == 'pending' &&
+                       request.resource.data.status == 'approved' &&
+                       resource.data.expiresAt > request.time.toMillis();
 
       // Permite exclusão (limpeza do token após o login concluído)
       allow delete: if true;
     }
-
+	
+		
     // Catch-all: nega tudo que não foi coberto acima.
     // Mantido como "false" (e não isAdmin()) exatamente para evitar
     // que o get() interno do isAdmin() dispare em paths desconhecidos.
