@@ -4,7 +4,7 @@ import { Screen } from '../../types';
 import type { QueuePlayer } from '@modules/partners/types';
 import { safeJsonParse } from '../../utils/safeJsonParse.ts';
 
-const UIContext = createContext<UIContextValue | undefined>(undefined);
+const UIContext = createContext<UIContextValue>({} as UIContextValue);
 
 interface UIProviderProps {
   children: React.ReactNode;
@@ -90,8 +90,5 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children, initialScreen 
 
 export const useUI = (): UIContextValue => {
   const context = useContext(UIContext);
-  if (context === undefined) {
-    throw new Error('useUI must be used within a UIProvider');
-  }
   return context;
 };

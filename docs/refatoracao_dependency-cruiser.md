@@ -1,8 +1,8 @@
 # Refatoração dependency-cruiser — MyPlacar
 
 > **Branch:** `refactor/dependency-cruiser`  
-> **Última atualização:** 2026-05-19  
-> **Como usar:** passos 1–12 concluídos (depcruise + CI + arquitetura). **Passo 13 em andamento** (Fases 1–5 ✅). Passos 14–15 opcionais.
+> **Última atualização:** 2026-05-21  
+> **Como usar:** passos 1–13 concluídos (depcruise + CI + arquitetura) ✅. Passos 14–15 opcionais.
 
 ---
 
@@ -17,7 +17,7 @@
 | `src/types.ts` importa módulos? | Sim (4 re-exports) | **Não** |
 
 **Objetivo desta refatoração:** eliminar dependências circulares sem quebrar o app.  
-**Status:** depcruise **limpo** + CI + [ARCHITECTURE.md](./ARCHITECTURE.md). **Passo 13:** Fases 1–5 ✅ ([APP_LOGIC_INVENTORY.md](./APP_LOGIC_INVENTORY.md)). Passos 14–15 opcionais.
+**Status:** depcruise **limpo** + CI + [ARCHITECTURE.md](./ARCHITECTURE.md). **Passo 13:** Fases 1–6 ✅ ([APP_LOGIC_INVENTORY.md](./APP_LOGIC_INVENTORY.md)). Passos 14–15 opcionais.
 
 ---
 
@@ -37,9 +37,7 @@ Passo 9   Resolver 6 módulos órfãos
 Passo 10  Regras no .dependency-cruiser.cjs
 Passo 11  CI (lint + test + depcruise no PR)
 Passo 12  Documentar arquitetura (ARCHITECTURE.md)
-
-── EM ANDAMENTO ───────────────────────────────────────────────
-Passo 13  Refatorar app.tsx (hooks) — Fases 1–5 ✅
+Passo 13  Refatorar app.tsx (hooks) — Fases 1–7 ✅
 
 ── OPCIONAL (após Passo 13) ─────────────────────────────────
 Passo 14  Store central (Zustand)
@@ -315,7 +313,7 @@ pnpm depcruise
 
 **Objetivo:** manutenção; **não** é necessário para depcruise. Respeitar [ARCHITECTURE.md](./ARCHITECTURE.md) e `pnpm depcruise` após cada sub-PR.
 
-**Diagnóstico (2026-05-19):** `src/App.tsx` ≈ **2.847 linhas**; `GameContext` já tem estado do jogo, mas `AppInner` mantém **espelhos** + `GameBridge` / `LiveBridge` (~112 refs `*LocalRef`).
+**Diagnóstico (2026-05-19):** `src/App.tsx` ≈ **2.847 linhas** (original); após Fase 6 → **264 linhas**. `GameContext` já tem estado do jogo, mas `AppInner` mantinha **espelhos** + `GameBridge` / `LiveBridge` (~112 refs `*LocalRef`).
 
 | Métrica | Valor |
 |---------|--------|
@@ -343,8 +341,8 @@ pnpm depcruise
 - [x] **Fase 3** — `LogViewer`, `AppModal`, `utils/appNavigation.ts` (`getUrlParams`, `getInitialScreen`)
 - [x] **Fase 4** — `useGameRules`, `useScoreboardEngine`, `useVoiceControl` (lint/test/depcruise 2026-05-19)
 - [x] **Fase 5** — Hooks transversais + `useLiveFirestoreSync`, `useDeepLinkScreen`, `useRemoteCloudMatch`, `useAppOfflineMode` (lint/test/depcruise 2026-05-19)
-- [ ] **Fase 6** — Router de telas
-- [ ] **Fase 7** — Meta &lt; 150 linhas + `pnpm test` / `lint` / `depcruise`
+- [x] **Fase 6** — Router de telas: `AppScreenRouter` — JSX das telas extraído para `src/app/AppScreenRouter.tsx`; `App.tsx` → 264 linhas; lint/test 64/depcruise 0 violações (2026-05-21)
+- [x] **Fase 7** — Meta &lt; 150 linhas → 135 linhas; lint/test 64/depcruise 0 violações (2026-05-21)
 
 **Verificação contínua:** após cada fase → `pnpm test` → `pnpm lint` → `pnpm depcruise`.
 
@@ -420,7 +418,7 @@ Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 [x] Passo 10 — .dependency-cruiser.cjs
 [x] Passo 11 — CI
 [x] Passo 12 — ARCHITECTURE.md
-[~] Passo 13 — hooks app (Fases 1–5 ✅; Fases 6–7 pendentes)
+[~] Passo 13 — hooks app (Fases 1–6 ✅; Fase 7 pendente)
 [ ] Passo 14 — store (opcional)
 [ ] Passo 15 — DDD pastas (opcional)
 ```
@@ -436,6 +434,7 @@ Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 | 2026-05-18 | 5 | ~13 | 6 | ~19 |
 | 2026-05-18 | 6–8 | **0** | 6 | **6** |
 | 2026-05-18 | 9 | **0** | **0** | **0** |
+| 2026-05-21 | 13 Fase 6 | **0** | **0** | **0** | — `App.tsx` 264 ln; `AppScreenRouter.tsx` criado; 158 módulos, 496 deps |
 
 ---
 
