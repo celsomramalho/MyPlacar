@@ -406,6 +406,71 @@ src/
 Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 
 ## Diagnóstico baseline (resumo)
+- [x] **Fase 6** — Router de telas: `AppScreenRouter` — JSX das telas extraído para `src/app/AppScreenRouter.tsx`; `App.tsx` → 264 linhas; lint/test 64/depcruise 0 violações (2026-05-21)
+- [x] **Fase 7** — Meta &lt; 150 linhas → 135 linhas; lint/test 64/depcruise 0 violações (2026-05-21)
+
+**Verificação contínua:** após cada fase → `pnpm test` → `pnpm lint` → `pnpm depcruise`.
+
+---
+
+## Passo 14 — (Opcional) Store central (Zustand)
+
+**Objetivo:** estado global único; reduz duplicação entre Contexts.
+
+- [ ] `src/store/gameStore.ts`
+- [ ] Migrar hooks para consumir store
+
+**Quando fazer:** se Passo 13 gerar necessidade clara de estado compartilhado.
+
+---
+
+## Passo 15 — (Opcional) Estrutura DDD + barrels seguros
+
+**Objetivo:** organização de pastas; barrels só na **borda** (App/screens).
+
+- [ ] Padrão por módulo: `types.ts`, `services/`, `hooks/`, `components/`, `index.ts` (só re-export público)
+- [ ] Regra: serviços internos **nunca** importam `index.ts` do próprio ou de outro módulo acoplado
+
+**Quando fazer:** refatoração de produto, não bloqueia métricas atuais.
+
+---
+
+# Parte C — Referência rápida
+
+## Arquitetura alvo (imports)
+
+```text
+src/
+├── types.ts              ← só tipos globais; SEM import de modules/
+├── modules/
+│   ├── auth/types.ts
+│   ├── game/types.ts     ← pode importar ../../types (GameState)
+│   ├── history/types.ts  ← importa PointEvent de ../../types (OK: unidirecional)
+│   ├── events/types.ts
+│   └── partners/types.ts
+├── infrastructure/
+│   ├── firebase/matches.ts   ← importa @modules/history/types
+│   └── firebase/client.ts
+└── utils/
+    ├── sportEngine.ts    ← ScoringEngine definido aqui
+    ├── scoreEngine.ts    ← dispatcher público de placar
+    ├── tennisEngine.ts
+    └── pickleballEngine.ts
+```
+
+## O que mudou em relação ao “plano por semanas” original
+
+| Tema | Plano antigo | O que fizemos |
+|------|--------------|---------------|
+| Ordem | Semanas 1→7 lineares | Passos 1–8: tipos + barrels + testes antecipados |
+| `src/domain/types/` | Criar pasta nova | Usamos `modules/*/types.ts` existentes |
+| Fase 3–4 antes de ciclos | Hooks + Zustand cedo | Adiados (Passos 13–14); ciclos eram de grafo |
+| Fase 5.2 barrels | Semana 5 | Antecipada no Passo 6 (necessário para 0 circulares) |
+| Diagnóstico Fase 1 | 6 artefatos JSON/MD | Baseline `report.html` + `depcruise-*.txt` |
+
+Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
+
+## Diagnóstico baseline (resumo)
 
 - **75 ciclos:** quase todos passavam por `src/types.ts` re-exportando módulos + barrels (`index.ts`) entre game, auth, firebase, history, partners, events, ui.
 - **6 órfãos:** módulos nunca importados (lista no Passo 9).
@@ -418,9 +483,9 @@ Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 [x] Passo 10 — .dependency-cruiser.cjs
 [x] Passo 11 — CI
 [x] Passo 12 — ARCHITECTURE.md
-[~] Passo 13 — hooks app (Fases 1–6 ✅; Fase 7 pendente)
+[x] Passo 13 — hooks app (Fases 1–7 ✅)
 [ ] Passo 14 — store (opcional)
-[ ] Passo 15 — DDD pastas (opcional)
+[/] Passo 15 — DDD pastas + limpeza do Router (em andamento ⏳)
 ```
 
 ---
@@ -435,6 +500,7 @@ Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 | 2026-05-18 | 6–8 | **0** | 6 | **6** |
 | 2026-05-18 | 9 | **0** | **0** | **0** |
 | 2026-05-21 | 13 Fase 6 | **0** | **0** | **0** | — `App.tsx` 264 ln; `AppScreenRouter.tsx` criado; 158 módulos, 496 deps |
+| 2026-05-21 | 14-15 (Item 1 & 2) | **0** | **0** | **0** | — `AppScreenRouter.tsx` reduzido para 678 ln; `screens/` deletada; 151 módulos, 492 deps |
 
 ---
 

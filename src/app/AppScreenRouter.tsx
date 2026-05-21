@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SettingsScreen } from '@modules/settings';
-import { ScoreboardScreen } from '../screens/ScoreboardScreen.tsx';
-import { NewGameScreen } from '../screens/NewGameScreen.tsx';
-import { AdminScreen } from '../screens/AdminScreen.tsx';
-import { SpectatorScreen } from '../screens/SpectatorScreen.tsx';
+import { ScoreboardScreen } from '@modules/game/screens/ScoreboardScreen.tsx';
+import { NewGameScreen } from '@modules/game/screens/NewGameScreen.tsx';
+import { AdminScreen } from '@modules/settings/screens/AdminScreen.tsx';
+import { SpectatorScreen } from '@modules/live/screens/SpectatorScreen.tsx';
 import { LocationScreen } from '@modules/history/screens/LocationScreen';
-import { removeHistoryMatches } from '@modules/history/services/removeHistoryMatches';
 import { AuthScreen } from '@modules/auth';
 import {
   PartnersScreen,
@@ -15,7 +14,7 @@ import {
   createManualPartner,
 } from '@modules/partners';
 import { EventDetailScreen, TournamentsScreen } from '@modules/events';
-import { CommunicationsScreen } from '../screens/CommunicationsScreen.tsx';
+import { CommunicationsScreen } from '@modules/auth/screens/CommunicationsScreen.tsx';
 import { useLive } from '@modules/live';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
@@ -29,19 +28,19 @@ import type { UserProfile } from '@modules/auth';
 import type { TournamentEvent, EventRegistration } from '@modules/events';
 import type { MatchHistoryItem } from '@modules/history/types';
 import { type AdminTab, type Tab, type GameState, type ControllerRecord } from '../types.ts';
-import { assertOwnerPin, clearLiveOwnerPin } from '../modules/live/liveHelpers.ts';
 import { DEFAULT_TENNIS_SETTINGS } from '../constants.ts';
-import { getDeviceType } from '../utils/device.ts';
-import { sanitizeForFirestore } from '../utils/sanitize.ts';
-import { findUserByPin, getDb, deleteCloudMatch, deleteCloudMatches } from '@infra/firebase';
-import { doc, setDoc, deleteDoc, getDoc, updateDoc, type Firestore } from 'firebase/firestore';
-import { AlertCircle, RotateCw, Wifi, X, Loader2, ArrowLeftRight } from 'lucide-react';
+import { getDb } from '@infra/firebase';
+import type { Firestore } from 'firebase/firestore';
+import { Loader2 } from 'lucide-react';
 import { useAppLogger } from '../hooks/useAppLogger.ts';
 import { useInstallPwa } from '../hooks/useInstallPwa.ts';
 import { useVoiceControl } from '../hooks/useVoiceControl.ts';
 import { useGameRules } from '@modules/game/hooks/useGameRules.ts';
 import { useScoreboardEngine } from '@modules/game/hooks/useScoreboardEngine.ts';
-import { deleteSupabaseMatch, deleteSupabaseMatches } from '@infra/supabase';
+import { useJudgeLookup } from '../hooks/useJudgeLookup.ts';
+import { useMatchDeletion } from '../hooks/useMatchDeletion.ts';
+import { useLiveActions } from '../hooks/useLiveActions.ts';
+import { GlobalOverlays } from '../components/GlobalOverlays.tsx';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 export interface AppScreenRouterProps {
@@ -204,6 +203,29 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   const { logs, clearLogs } = useAppLogger();
   const { deferredPrompt } = useInstallPwa();
 
+  const { handleDeleteMatch, handleDeleteManyMatches } = useMatchDeletion({
+    matchHistoryRef,
+    persistHistory,
+    setModalConfig,
+    userProfile,
+  });
+
+  const { handleToggleMirroring, handleConfirmMatch } = useLiveActions({
+    gameState,
+    setGameState,
+    userProfile,
+    deviceId,
+    currentFullDeviceName,
+    isOriginalOwner,
+    isCommandOwner,
+    livePapel,
+    resolveTargetPin,
+    setModalConfig,
+    setCloudLiveExists,
+    setActiveLives,
+    setMatchSettings,
+  });
+
   // ── Estado local de UI ────────────────────────────────────────────────────
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('config');
@@ -263,25 +285,8 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
     setPartners(prev => addPartnerToState(prev, partner));
   };
 
-  // ── Effect: lookup juiz por PIN (UI puro — getDoc único sem listener) ─────
-  useEffect(() => {
-    const lookup = async () => {
-      const pin = judgePinInput.toUpperCase().trim();
-      if (pin.length === 5) {
-        setIsSearchingJudgePin(true);
-        const db = getDb();
-        if (!db) { setIsSearchingJudgePin(false); return; }
-        try {
-          const user = await findUserByPin(db as Firestore, pin, { fallbackNickname: 'Juiz' });
-          setJudgeNicknameLookup(user ? user.nickname : 'Usuário não localizado');
-        } catch { setJudgeNicknameLookup(''); }
-        finally { setIsSearchingJudgePin(false); }
-      } else {
-        setJudgeNicknameLookup('');
-      }
-    };
-    lookup();
-  }, [judgePinInput, setIsSearchingJudgePin, setJudgeNicknameLookup]);
+  // ── Hook: lookup juiz por PIN ─────────────────────────────────────────────
+  useJudgeLookup({ judgePinInput, setIsSearchingJudgePin, setJudgeNicknameLookup });
 
   // ── Effect: prompt de instalação PWA ─────────────────────────────────────
   useEffect(() => {
@@ -319,36 +324,16 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
       />
 
       {/* ── Overlays globais ─────────────────────────────────────────────── */}
-      {isWaitingSync && (
-        <div className="fixed inset-0 z-[100002] bg-white flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
-          <Loader2 className="text-blue-600 animate-spin mb-6" size={48} />
-          <h2 className="text-2xl font-black text-black tracking-tight">Sincronizando com a nuvem...</h2>
-          <p className="text-slate-500 font-bold mt-2 mb-10">Aguardando dados da partida ao vivo</p>
-          <button onClick={() => setIsWaitingSync(false)} className="px-8 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs tracking-widest active:scale-95 transition-all shadow-sm border border-gray-100">Cancelar sincronismo</button>
-        </div>
-      )}
-
-      {isServiceInterrupted && (
-        <div className="fixed inset-0 z-[200000] bg-slate-900 flex items-center justify-center p-6 text-center">
-          <div className="bg-white rounded-[3rem] p-10 w-full max-md shadow-2xl space-y-8 animate-in zoom-in duration-500">
-            <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mx-auto shadow-inner">
-              <AlertCircle size={48} />
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">Versão descontinuada</h2>
-              <p className="text-sm font-bold text-slate-500 leading-relaxed">Esta versão do aplicativo não é mais suportada. Por favor, utilize o novo endereço oficial para continuar usando o My placar.</p>
-            </div>
-            <div className="pt-4">
-              <button
-                onClick={() => globalThis.location.href = newAppUrl}
-                className="w-full py-5 bg-blue-600 text-white rounded-3xl font-black text-base shadow-xl shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3"
-              >
-                Acessar novo endereço <ArrowLeftRight size={20} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <GlobalOverlays
+        isWaitingSync={isWaitingSync}
+        setIsWaitingSync={setIsWaitingSync}
+        isServiceInterrupted={isServiceInterrupted}
+        newAppUrl={newAppUrl}
+        isUpdatingVersion={isUpdatingVersion}
+        activeCloudMatch={activeCloudMatch}
+        handleConnectRemote={handleConnectRemote}
+        handleRejectRemote={handleRejectRemote}
+      />
 
       {liveOverlayVisible ? (
         <LiveControlOverlay
@@ -362,26 +347,6 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
         />
       ) : null}
 
-      {activeCloudMatch && (
-        <div className="fixed top-20 left-4 right-4 z-[999] bg-blue-600 text-white rounded-[2rem] p-5 shadow-2xl animate-in slide-in-from-top-10 flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><Wifi size={24} className="animate-pulse" /></div>
-            <div><p className="text-[10px] font-black tracking-tight opacity-80">Partida ativa detectada</p><p className="text-sm font-black">Conectar relógio como controle?</p></div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleConnectRemote} className="flex-1 bg-white text-blue-600 py-3 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95">Conectar</button>
-            <button onClick={handleRejectRemote} className="px-4 py-3 bg-white/10 rounded-xl"><X size={18} /></button>
-          </div>
-        </div>
-      )}
-
-      {isUpdatingVersion && (
-        <div className="fixed inset-0 z-[20000] bg-blue-600 flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
-          <RotateCw className="text-white animate-spin mb-8" size={48} />
-          <h2 className="text-3xl font-black text-white mb-4">Atualizando sistema</h2>
-          <p className="text-blue-100 font-bold text-lg">Sincronizando nova versão...</p>
-        </div>
-      )}
 
       <AppModal modalConfig={modalConfig} />
       <InstallPwaModal isOpen={showInstallPwa} onClose={() => setShowInstallPwa(false)} deferredPrompt={deferredPrompt} />
@@ -439,32 +404,8 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
       {currentScreen === 'settings' && (
         <SettingsScreen
           appUrl={appUrl}
-          onDeleteMatch={id => setModalConfig({
-            title: 'Excluir partida?', message: 'Apagar registro permanentemente?', confirmLabel: 'Excluir', variant: 'danger',
-            onConfirm: () => {
-              persistHistory(removeHistoryMatches(matchHistoryRef.current, [id]));
-              setModalConfig(null);
-              const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim();
-              if (db && cleanEmail && navigator.onLine) {
-                deleteCloudMatch(db as Firestore, id).catch(() => {});
-                deleteSupabaseMatch(id);
-              }
-            },
-            onCancel: () => setModalConfig(null),
-          })}
-          onDeleteManyMatches={ids => setModalConfig({
-            title: `Excluir ${ids.size} partidas?`, message: 'Apagar registros permanentemente?', confirmLabel: 'Excluir', variant: 'danger',
-            onConfirm: () => {
-              persistHistory(removeHistoryMatches(matchHistoryRef.current, ids));
-              setModalConfig(null);
-              const db = getDb(); const cleanEmail = userProfile.email?.toLowerCase().trim();
-              if (db && cleanEmail && navigator.onLine) {
-                deleteCloudMatches(db as Firestore, ids).catch(() => {});
-                deleteSupabaseMatches([...ids]);
-              }
-            },
-            onCancel: () => setModalConfig(null),
-          })}
+          onDeleteMatch={handleDeleteMatch}
+          onDeleteManyMatches={handleDeleteManyMatches}
           onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }}
           onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }}
           gameState={gameState}
@@ -661,89 +602,10 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }}
             isSettingsInicialSaved={isSettingsInicialSaved}
             isSettingsRegrasSaved={isSettingsRegrasSaved}
-            onToggleMirroring={async a => {
-              if (!gameState || gameState.isConfirmedFinished || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
-              if (a) {
-                const isStarted = (gameState.pointHistory?.length ?? 0) > 0 || gameState.p1.games > 0 || gameState.p2.games > 0 || (gameState.p1.score !== '0' && gameState.p1.score !== '') || (gameState.p2.score !== '0' && gameState.p2.score !== '');
-                if (isStarted) { setModalConfig({ title: 'Atenção', message: 'Não é possível iniciar a live com a partida em andamento.', onConfirm: () => setModalConfig(null) }); return; }
-                const db = getDb();
-                if (db && navigator.onLine && userProfile.pin) {
-                  const myPin = userProfile.pin.toUpperCase();
-                  const targetPin = resolveTargetPin('write');
-                  if (!targetPin) return;
-                  // Guard: consulta o Firestore diretamente pelo pin (não depende de activeLives
-                  // estar populado em memória — cobre o caso de reload/latência do onSnapshot).
-                  const pinsToCheck = Array.from(new Set([targetPin, myPin].filter(Boolean))) as string[];
-                  let foundActiveLive = false;
-                  for (const pin of pinsToCheck) {
-                    try {
-                      const existingSnap = await getDoc(doc(db, 'live_matches', pin));
-                      if (existingSnap.exists() && existingSnap.data().isLiveClosed !== true) {
-                        const existingData = existingSnap.data() as GameState;
-                        const hasActiveController = Object.values(existingData.controllers || {}).some((c: ControllerRecord) => c.lastSeen && (Date.now() - c.lastSeen) < 30000);
-                        if (hasActiveController) { foundActiveLive = true; break; }
-                      }
-                    } catch {}
-                  }
-                  if (foundActiveLive) {
-                    setModalConfig({ title: 'Live já ativa', message: 'Já existe uma transmissão ativa para esta partida. Deseja assumir o controle?', confirmLabel: 'Sim', onConfirm: () => { setGameState(p => p ? { ...p, isMirroringActive: true, commandOwnerId: deviceId } : null); setModalConfig(null); }, onCancel: () => setModalConfig(null) });
-                    return;
-                  }
-                }
-              }
-              const db = getDb();
-              if (a && db && navigator.onLine) {
-                const myPin = userProfile.pin?.toUpperCase();
-                const targetPin = resolveTargetPin('write');
-                if (!targetPin) return;
-                const nextControllers = {
-                  [deviceId]: {
-                    label: currentFullDeviceName,
-                    lastSeen: Date.now(),
-                    isOwner: isOriginalOwner,
-                    role: livePapel === 'owner' ? 'owner' : (livePapel === 'judge' ? 'judge' : 'observer'),
-                    status: 'controller' as const,
-                    deviceType: getDeviceType(),
-                  }
-                };
-                // TRAVA DE PROPRIETÁRIO: ownerPin e ownerDeviceId são imutáveis — NUNCA
-                // sobrescrever com o deviceId de quem está ativando o mirroring (pode ser
-                // um judge ou device secundário). Preserva os valores já gravados no gameState.
-                const lockedOwnerDeviceId = gameState.ownerDeviceId || (isOriginalOwner ? deviceId : undefined);
-                const lockedOwnerPin = gameState.ownerPin || userProfile.pin;
-                const stateToSave = sanitizeForFirestore({ ...gameState, isMirroringActive: true, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, ownerDeviceId: lockedOwnerDeviceId, ownerPin: lockedOwnerPin, controllers: nextControllers, isLiveClosed: false });
-                if (stateToSave && targetPin && assertOwnerPin(targetPin, lockedOwnerPin?.toUpperCase(), 'toggleMirroring')) {
-                  setDoc(doc(db, 'live_matches', targetPin), stateToSave).catch(() => {});
-                }
-                void myPin; // usado no pinsToCheck acima
-              }
-              // Owner que abre a live entra sempre em ScoreboardScreen (isScoreboardMode: false).
-              if (a) { setMatchSettings(prev => ({ ...prev, isScoreboardMode: false })); }
-              setGameState(p => p ? { ...p, isMirroringActive: a, isLiveClosed: false, commandOwnerId: a ? deviceId : p.commandOwnerId, matchConfig: { ...p.matchConfig, isScoreboardMode: a ? false : p.matchConfig.isScoreboardMode } } : null);
-            }}
+            onToggleMirroring={handleToggleMirroring}
             onCorrectScore={handleCorrectScore}
             isAdmin={isAdmin}
-            onConfirmMatch={async () => {
-              const db = getDb();
-              const targetPin = resolveTargetPin('write');
-              if (!targetPin) return;
-              if (db && targetPin && navigator.onLine) {
-                try {
-                  await updateDoc(doc(db, 'live_matches', targetPin), {
-                    isConfirmedFinished: true,
-                    isMatchOver: true,
-                    matchEndedAt: Date.now(),
-                    isLiveClosed: true,
-                    isMirroringActive: false,
-                  });
-                  setTimeout(() => { deleteDoc(doc(db, 'live_matches', targetPin)).catch(() => {}); }, 4000);
-                } catch {}
-              }
-              setGameState(p => p ? { ...p, isConfirmedFinished: true, isPaused: false, isMirroringActive: false, isLiveClosed: true } : null);
-              setCloudLiveExists(false);
-              setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
-              try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
-            }}
+            onConfirmMatch={handleConfirmMatch}
             isRecoveryFromMatchOver={isRecoveryFromMatchOver}
             currentDeviceId={deviceId}
             currentDeviceFullLabel={currentFullDeviceName}

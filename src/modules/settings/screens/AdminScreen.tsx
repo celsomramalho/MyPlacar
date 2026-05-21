@@ -4,18 +4,18 @@ import { getDb, getStorageInstance, clearFirestoreCache } from '@infra/firebase'
 import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, writeBatch, query, where, serverTimestamp } from 'firebase/firestore';
 import { deleteIcon, mirrorIcon, mirrorMatches, mirrorPartners, mirrorUser } from '@infra/supabase';
 import { ref, listAll, uploadBytes, getDownloadURL, deleteObject, StorageReference, getStorage, getMetadata } from 'firebase/storage';
-import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../constants.ts';
-import { Button } from '../components/Button.tsx';
-import { Toggle } from '../components/Toggle.tsx';
-import { applyGoldenRule, formatPortugueseName } from '../utils/formatters.ts';
-import { ScoreboardIcon } from '../components/ScoreboardIcon.tsx';
+import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../../../constants';
+import { Button } from '@shared/components/Button';
+import { Toggle } from '../../../components/Toggle';
+import { applyGoldenRule, formatPortugueseName } from '../../../utils/formatters';
+import { ScoreboardIcon } from '../../../components/ScoreboardIcon';
 import type { MatchHistoryItem } from '@modules/history/types';
 import type { TournamentEvent } from '@modules/events';
-import { VoiceCommands, ErrorSoundType } from '../types.ts';
+import { VoiceCommands, ErrorSoundType } from '../../../types';
 import type { UserProfile } from '@modules/auth';
-import { playErrorBeep, unlockAudio } from '../hooks/useScoreAnnouncer.ts';
+import { playErrorBeep, unlockAudio } from '../../../hooks/useScoreAnnouncer';
 
-import { CommunicationsPanel } from '../components/CommunicationsPanel.tsx';
+import { CommunicationsPanel } from '../../../components/CommunicationsPanel';
 
 interface Props {
   onBack: () => void;

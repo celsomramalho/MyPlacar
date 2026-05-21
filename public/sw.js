@@ -1,4 +1,4 @@
-const CACHE_NAME = 'myplacar-v2.5.18';
+const CACHE_NAME = 'myplacar-v2.5.20';
 
 const PRECACHE_URLS = [
   '/',

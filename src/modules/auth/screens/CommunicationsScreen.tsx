@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, Loader2 } from 'lucide-react';
-import { Communication, Reply } from '../types.ts';
+import { Communication, Reply } from '../../../types';
 import { useGame } from '@modules/game';
 import { getDb } from '@infra/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { Button } from '../components/Button.tsx';
+import { Button } from '@shared/components/Button';
 
 interface Props {
   onBack: () => void;
