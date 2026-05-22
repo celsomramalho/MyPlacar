@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, LogOut } from 'lucide-react';
 import { Toggle } from '../../../components/Toggle';
 import { MatchSettings, SportType, GameState, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../../../types';
-import type { TournamentEvent } from '@modules/events';
+import type { TournamentEvent } from '@modules/events/types';
 import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
 import { ScoreboardIcon } from '../../../components/ScoreboardIcon';
@@ -13,7 +13,7 @@ import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '../../../components/LazySportIcon';
 import { Button } from '@shared/components/Button';
-import { SettingsTabs } from '@modules/settings';
+import { SettingsTabs } from '@modules/settings/components/SettingsTabs';
 
 interface Props {
   baseSettings: MatchSettings; 

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
 import { getDb } from '@infra/firebase';
-import { useUI } from '@modules/ui';
+import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
 import { getDeviceId } from '../../../utils/device.ts';
 import { sanitizeForFirestore } from '../../../utils/sanitize.ts';

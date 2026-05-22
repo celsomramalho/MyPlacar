@@ -1,5 +1,5 @@
 import { normalizePartnerPin } from './addPartnerToState';
-import type { FirebaseReferredUser } from '@infra/firebase';
+import type { FirebaseReferredUser } from '@infra/firebase/users';
 
 import type { Partner } from '../types';
 

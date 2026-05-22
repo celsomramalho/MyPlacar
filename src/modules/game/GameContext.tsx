@@ -16,7 +16,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { GameContextValue } from './types.ts';
-import type { UserProfile } from '@modules/auth';
+import type { UserProfile } from '@modules/auth/types';
 import { hasPartnerWithPin, addPartnerToState } from '@modules/partners/services/addPartnerToState';
 import { autoRegisterPartnerByPin } from '@modules/partners/services/autoRegisterPartnerByPin';
 import type { Partner } from '@modules/partners/types';
@@ -30,7 +30,8 @@ import { incrementScore, undoPoint } from '../../utils/tennisEngine.ts';
 import { initPickleballState } from '../../utils/pickleballEngine.ts';
 import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
-import { findUserByPin, getDb } from '@infra/firebase';
+import { getDb } from '@infra/firebase/client';
+import { findUserByPin } from '@infra/firebase/users';
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, deleteField, Firestore, FieldValue, serverTimestamp } from 'firebase/firestore';
 import { mirrorUser } from '@infra/supabase';
 import { markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events/services/updateTournamentMatchProgress';

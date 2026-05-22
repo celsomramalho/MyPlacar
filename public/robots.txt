@@ -1,0 +1,11 @@
+# MyPlacar PWA — robots.txt (produção)
+# https://www.myplacar.app.br
+
+User-agent: *
+Disallow: /admin/
+Disallow: /private/
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /login
+
+Sitemap: https://www.myplacar.app.br/sitemap.xml

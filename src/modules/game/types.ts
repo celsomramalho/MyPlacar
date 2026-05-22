@@ -5,7 +5,7 @@
 
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import type { GameState, MatchSettings, PointType } from '../../types.ts';
-import type { UserProfile } from '@modules/auth';
+import type { UserProfile } from '@modules/auth/types';
 import type { MatchHistoryItem } from '@modules/history/types';
 import type { Partner } from '@modules/partners/types';
 import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';

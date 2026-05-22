@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
 import { getDb } from '@infra/firebase';
 import { useLive } from '@modules/live/useLive';
-import { useUI } from '@modules/ui';
+import { useUI } from '@modules/ui/UIContext';
 import type { GameState, MatchSettings } from '../../../types.ts';
 import { getDeviceId } from '../../../utils/device.ts';
 import { sanitizeForFirestore } from '../../../utils/sanitize.ts';

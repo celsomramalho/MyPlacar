@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { QueuePlayer } from '@modules/partners/types';
-import { HistorySection } from '@modules/history';
+import { HistorySection } from '@modules/history/components/HistorySection';
 import { GameState } from '../../../types.ts';
-import type { TournamentEvent } from '@modules/events';
+import type { TournamentEvent } from '@modules/events/types';
 import { useGame } from '@modules/game';
 import { ProfileScreen } from './ProfileScreen';
 import { HelpScreen } from './HelpScreen';

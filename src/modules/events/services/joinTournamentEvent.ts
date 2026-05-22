@@ -4,7 +4,7 @@ import {
   fetchEventEntry,
   saveEventEntry,
   saveUserEventRegistration,
-} from '@infra/firebase';
+} from '@infra/firebase/events';
 import type { EventRegistration, TournamentEntry, TournamentEvent } from '../types';
 
 interface EventJoinProfile {

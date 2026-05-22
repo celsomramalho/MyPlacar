@@ -1,4 +1,4 @@
-import { findUserByPin } from '@infra/firebase';
+import { findUserByPin } from '@infra/firebase/users';
 import type { Firestore } from 'firebase/firestore';
 
 import type { Partner } from '../types';

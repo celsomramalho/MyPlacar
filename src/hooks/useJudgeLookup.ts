@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { findUserByPin, getDb } from '@infra/firebase';
+import { getDb } from '@infra/firebase/client';
+import { findUserByPin } from '@infra/firebase/users';
 import type { Firestore } from 'firebase/firestore';
 
 interface UseJudgeLookupParams {

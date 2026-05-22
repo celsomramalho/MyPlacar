@@ -1,4 +1,4 @@
-import type { UserProfile } from '@modules/auth';
+import type { UserProfile } from '@modules/auth/types';
 import type { Screen } from '../types.ts';
 
 export const getUrlParams = () => new URLSearchParams(globalThis.location.search);

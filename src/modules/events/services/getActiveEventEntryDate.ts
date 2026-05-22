@@ -1,5 +1,5 @@
 import type { Firestore } from 'firebase/firestore';
-import { fetchEventEntry } from '@infra/firebase';
+import { fetchEventEntry } from '@infra/firebase/events';
 
 export const getActiveEventEntryDate = async (
   db: Firestore,

@@ -1,5 +1,5 @@
 import type { GameState, LiveLogEntry, LivePapel, LiveType, ControllerRecord } from '../../types.ts';
-import type { UserProfile } from '@modules/auth';
+import type { UserProfile } from '@modules/auth/types';
 
 // ─── Props de entrada do LiveProvider ────────────────────────────────────────
 // Dados externos que o Provider precisa receber do App para funcionar.

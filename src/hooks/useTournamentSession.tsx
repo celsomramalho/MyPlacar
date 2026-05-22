@@ -2,16 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { doc, getDoc, type Firestore } from 'firebase/firestore';
 import { CheckCircle } from 'lucide-react';
 import { getDb } from '@infra/firebase';
-import type { UserProfile } from '@modules/auth';
-import {
-  fetchRegisteredEvents,
-  getActiveEventEntryDate,
-  joinTournamentEvent,
-  type EventRegistration,
-  type TournamentEvent,
-} from '@modules/events';
-import { useUI } from '@modules/ui';
-import { useGame } from '@modules/game';
+import type { UserProfile } from '@modules/auth/types';
+import { fetchRegisteredEvents } from '@modules/events/services/fetchRegisteredEvents';
+import { getActiveEventEntryDate } from '@modules/events/services/getActiveEventEntryDate';
+import { joinTournamentEvent } from '@modules/events/services/joinTournamentEvent';
+import type { EventRegistration, TournamentEvent } from '@modules/events/types';
+import { useUI } from '@modules/ui/UIContext';
+import { useGame } from '@modules/game/useGame';
 import { safeJsonParse } from '../utils/safeJsonParse.ts';
 import { getUrlParams } from '../utils/appNavigation.ts';
 

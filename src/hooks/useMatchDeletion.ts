@@ -1,9 +1,10 @@
-import { getDb, deleteCloudMatch, deleteCloudMatches } from '@infra/firebase';
+import { getDb } from '@infra/firebase/client';
+import { deleteCloudMatch, deleteCloudMatches } from '@infra/firebase/matches';
 import { deleteSupabaseMatch, deleteSupabaseMatches } from '@infra/supabase';
 import { removeHistoryMatches } from '@modules/history/services/removeHistoryMatches';
 import type { Firestore } from 'firebase/firestore';
 import type { MatchHistoryItem } from '@modules/history/types';
-import type { UserProfile } from '@modules/auth';
+import type { UserProfile } from '@modules/auth/types';
 import type { ModalConfig } from '@modules/ui/types';
 import type { Dispatch, SetStateAction, MutableRefObject } from 'react';
 

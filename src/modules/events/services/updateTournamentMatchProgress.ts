@@ -1,5 +1,5 @@
 import type { Firestore } from 'firebase/firestore';
-import { fetchEventByPin, updateEventMatches } from '@infra/firebase';
+import { fetchEventByPin, updateEventMatches } from '@infra/firebase/events';
 import type { TournamentMatch } from '../types';
 
 export const markTournamentMatchLive = async (

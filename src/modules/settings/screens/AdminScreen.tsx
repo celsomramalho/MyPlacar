@@ -10,9 +10,9 @@ import { Toggle } from '../../../components/Toggle';
 import { applyGoldenRule, formatPortugueseName } from '../../../utils/formatters';
 import { ScoreboardIcon } from '../../../components/ScoreboardIcon';
 import type { MatchHistoryItem } from '@modules/history/types';
-import type { TournamentEvent } from '@modules/events';
+import type { TournamentEvent } from '@modules/events/types';
 import { VoiceCommands, ErrorSoundType } from '../../../types';
-import type { UserProfile } from '@modules/auth';
+import type { UserProfile } from '@modules/auth/types';
 import { playErrorBeep, unlockAudio } from '../../../hooks/useScoreAnnouncer';
 
 import { CommunicationsPanel } from '../../../components/CommunicationsPanel';

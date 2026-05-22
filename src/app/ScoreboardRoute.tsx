@@ -6,6 +6,7 @@ import { useUI } from '@modules/ui';
 import { useScoreboardEngine } from '@modules/game/hooks/useScoreboardEngine';
 import { useVoiceControl } from '../hooks/useVoiceControl';
 import { useLiveActions } from '../hooks/useLiveActions';
+import { useJudgeLookup } from '../hooks/useJudgeLookup';
 import type { Tab } from '../types';
 
 interface ScoreboardRouteProps {
@@ -64,8 +65,9 @@ export function ScoreboardRoute({
     setShowLiveControlOverlay,
     judgePinInput,
     setJudgePinInput,
-    judgeNicknameLookup,
     setJudgeNicknameLookup,
+    setIsSearchingJudgePin,
+    judgeNicknameLookup,
     isSearchingJudgePin,
     isSavingJudge,
     isSettingsInicialSaved,
@@ -76,6 +78,8 @@ export function ScoreboardRoute({
 
   const { handleTogglePause, handleSmartSwitchServer } = useScoreboardEngine();
   const { voiceLogs, setVoiceLogs } = useVoiceControl();
+
+  useJudgeLookup({ judgePinInput, setIsSearchingJudgePin, setJudgeNicknameLookup });
 
   const { handleToggleMirroring, handleConfirmMatch } = useLiveActions({
     gameState,

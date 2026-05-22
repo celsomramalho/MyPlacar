@@ -8,11 +8,11 @@ import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
 import type { Partner, QueuePlayer } from '@modules/partners/types';
 import { MatchSettings, GameState } from '../../../types';
-import type { UserProfile } from '@modules/auth';
-import type { TournamentEvent } from '@modules/events';
+import type { UserProfile } from '@modules/auth/types';
+import type { TournamentEvent } from '@modules/events/types';
 import { formatPortugueseName } from '../../../utils/formatters';
 import { SPORT_LIST } from '../../../constants';
-import { getDb } from '@infra/firebase';
+import { getDb } from '@infra/firebase/client';
 import { collection, getDocs } from 'firebase/firestore';
 
 type Gender = 'M' | 'F';

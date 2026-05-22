@@ -1,8 +1,8 @@
 # Refatoração dependency-cruiser — MyPlacar
 
 > **Branch:** `refactor/dependency-cruiser`  
-> **Última atualização:** 2026-05-21  
-> **Como usar:** passos 1–13 concluídos (depcruise + CI + arquitetura) ✅. Passos 14–15 opcionais.
+> **Última atualização:** 2026-05-22  
+> **Como usar:** passos 1–13 concluídos ✅. Passos 14–15 opcionais — Item 3 do plano 14–15 em andamento ([`scripts/implementation_plan_14_15.md`](../scripts/implementation_plan_14_15.md)).
 
 ---
 
@@ -15,9 +15,10 @@
 | `no-orphans` | 6 | **0** |
 | Testes | 48 | **64** |
 | `src/types.ts` importa módulos? | Sim (4 re-exports) | **Não** |
+| `AppScreenRouter.tsx` | — | **~310 ln** (Item 3 + 3.5 ✅) |
 
 **Objetivo desta refatoração:** eliminar dependências circulares sem quebrar o app.  
-**Status:** depcruise **limpo** + CI + [ARCHITECTURE.md](./ARCHITECTURE.md). **Passo 13:** Fases 1–6 ✅ ([APP_LOGIC_INVENTORY.md](./APP_LOGIC_INVENTORY.md)). Passos 14–15 opcionais.
+**Status:** ciclos **0** + CI + [ARCHITECTURE.md](./ARCHITECTURE.md). **Passo 13** Fases 1–7 ✅. **Passo 15** Item 3 sub-passos A–F ✅ — ver plano 14–15.
 
 ---
 
@@ -40,8 +41,8 @@ Passo 12  Documentar arquitetura (ARCHITECTURE.md)
 Passo 13  Refatorar app.tsx (hooks) — Fases 1–7 ✅
 
 ── OPCIONAL (após Passo 13) ─────────────────────────────────
-Passo 14  Store central (Zustand)
-Passo 15  Reorganizar pastas DDD + barrels “públicos” seguros
+Passo 14  Zustand — plano em implementation_plan_14_zustand.md (⏳ 14.0)
+Passo 15  DDD + AppScreenRouter — Item 3 A–F ✅ (3.5 opcional)
 ```
 
 ---
@@ -350,77 +351,23 @@ pnpm depcruise
 
 ## Passo 14 — (Opcional) Store central (Zustand)
 
-**Objetivo:** estado global único; reduz duplicação entre Contexts.
+**Objetivo:** estado global por fatias; reduz props drilling e estado em hooks transversais.
 
-- [ ] `src/store/gameStore.ts`
-- [ ] Migrar hooks para consumir store
+**Plano detalhado:** [`scripts/implementation_plan_14_zustand.md`](../scripts/implementation_plan_14_zustand.md)
 
-**Quando fazer:** se Passo 13 gerar necessidade clara de estado compartilhado.
+| Sub-passo | Conteúdo | Status |
+|-----------|----------|--------|
+| 14.0 | Instalar `zustand`, pasta `src/store/`, docs | ⏳ |
+| 14.1 | `tournamentStore` ← `useTournamentSession` | ⏳ |
+| 14.2 | `appShellStore` ← deep link / remote / offline | ⏳ |
+| 14.3 | `uiStore` (opcional) | — |
+| 14.4 | `gameStore` parcial + adaptador `GameContext` | — |
+| 14.5 | `liveStore` parcial (opcional) | — |
+| 14.6 | Enxugar `AppScreenRouterProps` | — |
 
----
+**MVP recomendado:** 14.0 → 14.1 → 14.2 → validar → decidir 14.4.
 
-## Passo 15 — (Opcional) Estrutura DDD + barrels seguros
-
-**Objetivo:** organização de pastas; barrels só na **borda** (App/screens).
-
-- [ ] Padrão por módulo: `types.ts`, `services/`, `hooks/`, `components/`, `index.ts` (só re-export público)
-- [ ] Regra: serviços internos **nunca** importam `index.ts` do próprio ou de outro módulo acoplado
-
-**Quando fazer:** refatoração de produto, não bloqueia métricas atuais.
-
----
-
-# Parte C — Referência rápida
-
-## Arquitetura alvo (imports)
-
-```text
-src/
-├── types.ts              ← só tipos globais; SEM import de modules/
-├── modules/
-│   ├── auth/types.ts
-│   ├── game/types.ts     ← pode importar ../../types (GameState)
-│   ├── history/types.ts  ← importa PointEvent de ../../types (OK: unidirecional)
-│   ├── events/types.ts
-│   └── partners/types.ts
-├── infrastructure/
-│   ├── firebase/matches.ts   ← importa @modules/history/types
-│   └── firebase/client.ts
-└── utils/
-    ├── sportEngine.ts    ← ScoringEngine definido aqui
-    ├── scoreEngine.ts    ← dispatcher público de placar
-    ├── tennisEngine.ts
-    └── pickleballEngine.ts
-```
-
-## O que mudou em relação ao “plano por semanas” original
-
-| Tema | Plano antigo | O que fizemos |
-|------|--------------|---------------|
-| Ordem | Semanas 1→7 lineares | Passos 1–8: tipos + barrels + testes antecipados |
-| `src/domain/types/` | Criar pasta nova | Usamos `modules/*/types.ts` existentes |
-| Fase 3–4 antes de ciclos | Hooks + Zustand cedo | Adiados (Passos 13–14); ciclos eram de grafo |
-| Fase 5.2 barrels | Semana 5 | Antecipada no Passo 6 (necessário para 0 circulares) |
-| Diagnóstico Fase 1 | 6 artefatos JSON/MD | Baseline `report.html` + `depcruise-*.txt` |
-
-Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
-
-## Diagnóstico baseline (resumo)
-- [x] **Fase 6** — Router de telas: `AppScreenRouter` — JSX das telas extraído para `src/app/AppScreenRouter.tsx`; `App.tsx` → 264 linhas; lint/test 64/depcruise 0 violações (2026-05-21)
-- [x] **Fase 7** — Meta &lt; 150 linhas → 135 linhas; lint/test 64/depcruise 0 violações (2026-05-21)
-
-**Verificação contínua:** após cada fase → `pnpm test` → `pnpm lint` → `pnpm depcruise`.
-
----
-
-## Passo 14 — (Opcional) Store central (Zustand)
-
-**Objetivo:** estado global único; reduz duplicação entre Contexts.
-
-- [ ] `src/store/gameStore.ts`
-- [ ] Migrar hooks para consumir store
-
-**Quando fazer:** se Passo 13 gerar necessidade clara de estado compartilhado.
+**Quando fazer:** após barrel audit ✅; **não** substituir `GameContext` inteiro na primeira PR.
 
 ---
 
@@ -428,10 +375,13 @@ Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 
 **Objetivo:** organização de pastas; barrels só na **borda** (App/screens).
 
-- [ ] Padrão por módulo: `types.ts`, `services/`, `hooks/`, `components/`, `index.ts` (só re-export público)
-- [ ] Regra: serviços internos **nunca** importam `index.ts` do próprio ou de outro módulo acoplado
+- [x] Itens 1–2 do plano — órfãos `screens/` e `pages/` removidos; telas em `src/modules/*/screens` (2026-05-21)
+- [x] Item 3 + 3.5 — `AppScreenRouter` ([`implementation_plan_14_15.md`](../scripts/implementation_plan_14_15.md)) — A–F + 7 rotas ✅; Router **~310 ln**
+- [x] Revisão barrels pré-Passo 14 — [BARREL_AUDIT.md](./BARREL_AUDIT.md) (2026-05-22)
+- [x] Padrão por módulo: `types.ts`, `services/`, `hooks/`, `components/`, `index.ts` (só borda)
+- [x] Serviços/contextos: imports diretos (corrigidos em `services/`, `types`, `GameContext`)
 
-**Quando fazer:** refatoração de produto, não bloqueia métricas atuais.
+**Quando fazer:** Item 3 núcleo concluído. **Opcional:** Item 3.5 ou Passo 14 (Zustand) se houver necessidade de estado global.
 
 ---
 
@@ -479,13 +429,13 @@ Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 ## Checklist de acompanhamento (cole no PR / notas)
 
 ```text
-[x] Passo 9  — órfãos (0 violações)
+[x] Passo 9  — órfãos estruturais (0 violações)
 [x] Passo 10 — .dependency-cruiser.cjs
 [x] Passo 11 — CI
 [x] Passo 12 — ARCHITECTURE.md
 [x] Passo 13 — hooks app (Fases 1–7 ✅)
-[ ] Passo 14 — store (opcional)
-[/] Passo 15 — DDD pastas + limpeza do Router (em andamento ⏳)
+[/] Passo 14 — Zustand (plano ✅; código ⏳ 14.0)
+[x] Passo 15 — Item 3 Router + 3.5 rotas ✅ (~310 ln)
 ```
 
 ---
@@ -500,7 +450,13 @@ Isso **não invalida** o plano — condensa o caminho mínimo para o resultado.
 | 2026-05-18 | 6–8 | **0** | 6 | **6** |
 | 2026-05-18 | 9 | **0** | **0** | **0** |
 | 2026-05-21 | 13 Fase 6 | **0** | **0** | **0** | — `App.tsx` 264 ln; `AppScreenRouter.tsx` criado; 158 módulos, 496 deps |
-| 2026-05-21 | 14-15 (Item 1 & 2) | **0** | **0** | **0** | — `AppScreenRouter.tsx` reduzido para 678 ln; `screens/` deletada; 151 módulos, 492 deps |
+| 2026-05-21 | 14-15 (Item 1 & 2) | **0** | **0** | **0** | — `AppScreenRouter.tsx` 678 ln; `screens/` deletada; 151 módulos, 492 deps |
+| 2026-05-21 | 14-15 (Item 3 A,B,D) | **0** | **0** | **0** | — hooks/overlays extraídos |
+| 2026-05-22 | 14-15 (Item 3 C) | **0** | **0** | **0** | — `useLiveActions.ts`; Router **674 ln**; test/lint OK |
+| 2026-05-22 | docs (Passo 1) | **0** | **1** | **1** | — `useVersionTap.ts` órfão até sub-passo E; 156 módulos, 512 deps |
+| 2026-05-22 | 14-15 (Item 3 E) | **0** | **0** | **0** | — `useVersionTap` integrado; Router ~662 ln; 156 módulos, 513 deps |
+| 2026-05-22 | 14-15 (Item 3 F) | **0** | **0** | **0** | — `ScoreboardRoute` integrado; Router **550 ln**; 156 módulos, 511 deps |
+| 2026-05-22 | 14-15 (Item 3.5) | **0** | **0** | **0** | — 7 rotas (`Settings`, `Partners`, …); Router **~310 ln**; 163 módulos, 548 deps |
 
 ---
 

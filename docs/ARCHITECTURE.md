@@ -26,7 +26,7 @@ Dependências fluem **de cima para baixo**. Camadas inferiores não importam tel
 
 | Camada | Pastas típicas | Pode importar |
 |--------|----------------|---------------|
-| UI / shell | `App.tsx`, `src/screens/`, `src/components/` | módulos (`@modules/*`), infra (`@infra/*`), `src/types`, `utils/` |
+| UI / shell | `App.tsx`, `src/app/*Route.tsx`, `src/components/` | módulos (`@modules/*`), infra (`@infra/*`), `src/types`, `utils/` |
 | Hooks / context | `GameContext`, `UIContext`, `useGame`, `useLive` | `types` do módulo, `services/` concretos, outros `types` |
 | Serviços | `src/modules/*/services/` | `types` (próprio e de outros módulos), `@infra/firebase/matches`, etc. |
 | Infra | `src/infrastructure/` | `@modules/*/types`, utilitários; **não** `App.tsx` |
@@ -88,7 +88,9 @@ Prefira o **arquivo concreto** em vez de `@infra/firebase` (barrel) quando o bar
 
 ### Onde ficam as telas
 
-Funcionalidade de produto está em `src/screens/` (ex.: `AdminScreen`, `SpectatorScreen`, `ScoreboardScreen`). Barrels placeholder removidos no Passo 9 — ver [DELETED_MODULES.md](./DELETED_MODULES.md).
+Telas em `src/modules/<módulo>/screens/` (ex.: `game/screens/ScoreboardScreen`, `settings/screens/SettingsScreen`). Roteamento fino em `src/app/*Route.tsx` + `AppScreenRouter.tsx`. Pasta `src/screens/` removida no Passo 14–15 — ver [DELETED_MODULES.md](./DELETED_MODULES.md).
+
+**Revisão de barrels (2026-05-22):** [BARREL_AUDIT.md](./BARREL_AUDIT.md)
 
 ---
 
@@ -150,7 +152,7 @@ Relatório HTML (opcional, sobrescreve baseline): `pnpm depcruise:report` → `d
 src/
 ├── types.ts                 ← só tipos globais; zero import de modules/
 ├── App.tsx
-├── screens/
+├── app/                     ← AppScreenRouter, *Route.tsx (borda)
 ├── modules/
 │   ├── auth/types.ts
 │   ├── game/types.ts        ← pode importar ../../types
@@ -173,12 +175,13 @@ src/
 
 ## Próximos passos (opcionais)
 
-Não bloqueiam o depcruise atual; ver [refatoracao_dependency-cruiser.md](./refatoracao_dependency-cruiser.md):
+Ver [refatoracao_dependency-cruiser.md](./refatoracao_dependency-cruiser.md):
 
-- Passo 13 — extrair hooks de `App.tsx`
-- Passo 14 — store central (Zustand)
-- Passo 15 — pastas DDD + barrels só na borda
+- [x] Passo 13 — `App.tsx` enxuto
+- [x] Passo 15 Item 3 — Router + rotas (`~310 ln`)
+- [x] Revisão barrels — [BARREL_AUDIT.md](./BARREL_AUDIT.md)
+- [ ] **Passo 14** — Zustand ([`implementation_plan_14_zustand.md`](../scripts/implementation_plan_14_zustand.md)) — próximo
 
 ---
 
-*Última atualização: 2026-05-19 — alinhado à branch `refactor/dependency-cruiser` (0 violações depcruise).*
+*Última atualização: 2026-05-22 — 0 violações depcruise; barrels revisados.*
