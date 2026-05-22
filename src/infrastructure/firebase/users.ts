@@ -121,7 +121,13 @@ export const findUsersReferredByPin = async (
 export const updateUserProfileFields = (
   db: Firestore,
   email: string,
-  data: { gender?: 'M' | 'F'; nickname?: string },
+  data: {
+    authMethod?: 'pin' | 'password';
+    gender?: 'M' | 'F';
+    nickname?: string;
+    passkeyCredentialId?: string;
+    passkeyPublicKey?: string;
+  },
 ) => updateDoc(doc(db, 'users', email.toLowerCase().trim()), data);
 
 export { getResolvedNickname, getUserAddedAt, normalizeUserPin };

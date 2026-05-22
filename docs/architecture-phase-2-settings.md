@@ -400,3 +400,152 @@ Por isso, a recomendacao permanece:
 - nao redesenhar o fluxo;
 - nao puxar `TeamSection`;
 - nao mover responsabilidades globais de `App.tsx` nesta mesma leva.
+
+## 17. Checkpoint pos dependency-cruiser e DDD/router
+Data de referencia: 22 de maio de 2026
+
+Esta secao registra o estado real encontrado apos a refatoracao de `dependency-cruiser` e a reorganizacao DDD/router descritas em `docs/refatoracao_dependency-cruiser.md`.
+
+O codigo atual avancou alem do planejamento original deste documento. Portanto, as secoes anteriores continuam validas como historico de decisao, mas nao representam mais fielmente a arvore atual.
+
+### 17.1 Estado real atual
+O modulo `settings` contem hoje:
+
+```text
+src/modules/settings/
+  components/
+    SettingsHeader.tsx
+    SettingsTabs.tsx
+    TeamSection.tsx
+  screens/
+    AdminScreen.tsx
+    HelpScreen.tsx
+    ProfileScreen.tsx
+    SettingsScreen.tsx
+  index.ts
+```
+
+A pasta legada `src/screens` nao existe mais no estado atual.
+
+`SettingsScreen` ja compoe internamente:
+
+- `ProfileScreen`
+- `HelpScreen`
+- `TeamSection`
+- `HistorySection` de `@modules/history/components/HistorySection`
+
+`SettingsTabs` continua sendo usado fora do fluxo principal de settings por `NewGameScreen`. Por isso, ele permanece exposto pela API publica de `@modules/settings` enquanto esse acoplamento existir.
+
+### 17.2 Validacao tecnica do estado atual
+Validado neste checkpoint:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Observacao operacional:
+- `pnpm test` e `pnpm build` precisaram rodar fora do sandbox porque o `esbuild` falhou com `spawn EPERM` dentro do sandbox.
+
+### 17.3 Avaliacao arquitetural
+O modulo `settings` esta fisicamente consolidado, mas ainda nao deve ser considerado conceitualmente encerrado.
+
+O estado atual e aceitavel como ponto de retomada porque:
+
+- nao ha violacoes no `dependency-cruiser`;
+- a tipagem passa;
+- os testes passam;
+- o build passa;
+- nao ha mais `src/screens`;
+- o fluxo principal de settings ja consome arquivos internos do proprio modulo.
+
+Porem, ainda existem dividas conscientes:
+
+- `ProfileScreen` mistura perfil, senha, passkey, permissao, dispositivo, versao/cache e Firebase Auth;
+- `TeamSection` continua parecendo mais proximo de configuracao de partida/game do que de settings puro;
+- `AdminScreen` esta fisicamente dentro de `settings`, mas o dominio `admin` ainda precisa de decisao propria;
+- algumas telas ainda consomem barrels de infraestrutura ou componentes/utilitarios legados como manutencao transitoria;
+- `SettingsTabs` ainda e compartilhado com `game`, o que deve ser reduzido ou formalizado depois.
+
+### 17.4 Decisao operacional
+Para retomar a fase 2, `settings` nao deve receber novas funcionalidades nem novas responsabilidades ate que as dividas acima sejam reduzidas ou documentadas como excecoes temporarias.
+
+A proxima leva recomendada e pequena:
+
+1. manter `SettingsScreen`, `ProfileScreen` e `HelpScreen` em `settings`;
+2. tratar `ProfileScreen` com extracoes tecnicas minimas, sem redesenhar fluxo;
+3. decidir explicitamente o destino de `TeamSection`;
+4. decidir explicitamente o destino de `AdminScreen`, preferencialmente abrindo uma frente propria de `admin`;
+5. manter `SettingsTabs` na API publica apenas enquanto houver consumidor externo real.
+
+### 17.5 Criterio atualizado de pronto para Settings
+`settings` so deve ser considerado encerrado quando:
+
+- `ProfileScreen` nao concentrar acesso tecnico externo desnecessario;
+- `TeamSection` tiver fronteira decidida e documentada;
+- `AdminScreen` tiver fronteira decidida e documentada;
+- consumidores externos usarem apenas a API publica do modulo, salvo excecoes documentadas em rotas de borda;
+- `pnpm lint`, `pnpm test`, `pnpm depcruise` e `pnpm build` continuarem passando.
+
+## 18. Checkpoint da leva pequena de ProfileScreen
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma leva pequena e conservadora em `ProfileScreen`, sem redesenhar o fluxo visual e sem mexer na migracao sensivel de passkey/auth.
+
+### 18.1 Consolidado nesta leva
+`ProfileScreen` continuou em:
+
+```text
+src/modules/settings/screens/ProfileScreen.tsx
+```
+
+Foram reduzidas responsabilidades tecnicas diretas da tela:
+
+- validacao de senha passou a reutilizar `validatePassword` de `@modules/auth/services/passwordPolicy`;
+- icones de genero passaram a reutilizar `@shared/components/GenderIcons`;
+- atualizacoes simples de perfil no Firestore passaram por `updateUserProfileFields` em `@infra/firebase`;
+- leitura, gravacao e deteccao do label local do dispositivo foram isoladas em `src/modules/settings/services/profileDevice.ts`;
+- checagem e solicitacao de permissoes de microfone, camera e localizacao foram isoladas em `src/modules/settings/services/profilePermissions.ts`;
+- teste de latencia do perfil tambem ficou em `profilePermissions.ts`;
+- limpeza best-effort de service workers/caches e reload com versao foram isolados em `src/modules/settings/services/profileVersionUpdate.ts`.
+
+### 18.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- fluxo de criacao/migracao de senha no Firebase Auth alem do reaproveitamento da politica de senha;
+- criacao, recadastro e persistencia de passkey;
+- redesenho visual de `ProfileScreen`;
+- reorganizacao de estado raiz de perfil;
+- decisao de fronteira de `TeamSection`;
+- decisao de fronteira de `AdminScreen`.
+
+Esses pontos continuam exigindo levas proprias e revisao cuidadosa.
+
+### 18.3 Estado arquitetural apos a leva
+`ProfileScreen` ficou mais proxima de uma tela de composicao e estado local, enquanto detalhes tecnicos de navegador e atualizacao passaram para services do proprio modulo `settings`.
+
+A decisao de manter esses helpers dentro de `settings` e intencional:
+
+- eles ainda nascem de necessidades especificas da tela de perfil;
+- ainda nao ha prova suficiente de transversalidade para move-los para `shared`;
+- promover `profileVersionUpdate` para helper transversal pode ser avaliado depois, ja que existe logica parecida em `useAppConfig`.
+
+### 18.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+### 18.5 Proximo passo recomendado
+Nao continuar com passkey/auth migration por arrasto.
+
+A proxima decisao recomendada e abrir uma frente propria para `admin`, porque `AdminScreen` esta fisicamente dentro de `settings`, mas representa um dominio maior e mais tecnico que ainda nao tem fronteira documentada.

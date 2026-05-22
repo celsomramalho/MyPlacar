@@ -1,5 +1,5 @@
 import React from 'react';
-import { AdminScreen } from '@modules/settings/screens/AdminScreen';
+import { AdminScreen } from '@modules/admin';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
 import type { AdminTab, Tab } from '../types';

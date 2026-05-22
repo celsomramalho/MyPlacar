@@ -5,11 +5,25 @@ import { Input } from '@shared/components/Input';
 import { Button } from '@shared/components/Button';
 import { MatchSettings } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
+import { validatePassword } from '@modules/auth/services/passwordPolicy';
 import { formatPortugueseName, applyGoldenRule } from '@shared/utils/formatters';
+import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { APP_VERSION } from '../../../constants';
-import { getAuthInstance, getDb } from '@infra/firebase';
+import { getAuthInstance, getDb, updateUserProfileFields } from '@infra/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, updateDoc, Firestore } from 'firebase/firestore';
+import {
+  detectDeviceLabel,
+  readLocalDeviceLabel,
+  saveLocalDeviceLabel,
+} from '../services/profileDevice';
+import {
+  checkProfilePermissions,
+  measureProfileLatency,
+  requestProfilePermission,
+  type ProfilePermissionStatus,
+  type RequestableProfilePermission,
+} from '../services/profilePermissions';
+import { reloadAppWithFreshVersion } from '../services/profileVersionUpdate';
 
 interface Props {
   profile: UserProfile;
@@ -24,20 +38,7 @@ interface Props {
   onVersionTap?: () => void;
 }
 
-type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'checking' | 'unavailable';
 type PermissionType = 'mic' | 'loc' | 'cam' | 'passkey';
-
-const MarsIcon = ({ size = 14 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="10" cy="14" r="5" /><path d="M15 3h6v6" /><path d="m21 3-6.5 6.5" />
-  </svg>
-);
-
-const VenusIcon = ({ size = 14 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="9" r="5" /><path d="M12 14v7" /><path d="M9 18h6" />
-  </svg>
-);
 
 const getDeviceIcon = (label: string) => {
   const l = label.toLowerCase();
@@ -64,7 +65,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   const [isTestingLat, setIsTestingLat] = useState(false);
   const [latency, setLatency] = useState<number | null>(null);
   const [showPin, setShowPin] = useState(false);
-  const [permissions, setPermissions] = useState<Record<string, PermissionStatus>>({
+  const [permissions, setPermissions] = useState<Record<string, ProfilePermissionStatus>>({
     mic: 'checking',
     loc: 'checking',
     cam: 'checking'
@@ -75,7 +76,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   const [remoteVersionFound, setRemoteVersionFound] = useState<string | null>(null);
 
   const [localDeviceLabel, setLocalDeviceLabel] = useState(() => {
-    return localStorage.getItem('myPlacar_LocalDeviceLabel') || '';
+    return readLocalDeviceLabel();
   });
 
   const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
@@ -113,20 +114,6 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
 
     return () => unsubscribe();
   }, [profile.authMethod, profile.email]);
-
-  const validatePassword = (pass: string) => {
-    const hasMinLength = pass.length >= 6;
-    const hasUpper = /[A-Z]/.test(pass);
-    const hasLower = /[a-z]/.test(pass);
-    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
-    return {
-      hasMinLength,
-      hasUpper,
-      hasLower,
-      hasSpecial,
-      isValid: hasMinLength && hasUpper && hasLower && hasSpecial
-    };
-  };
 
   const passwordValidation = validatePassword(newPassword);
 
@@ -179,8 +166,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
       // Persistência imediata no localStorage e Firestore
       try {
         localStorage.setItem('myPlacarUserProfile', JSON.stringify(updatedProfile));
-        const userDocRef = doc(db as Firestore, "users", cleanEmail);
-        await updateDoc(userDocRef, {
+        await updateUserProfileFields(db, cleanEmail, {
           authMethod: 'password'
         });
       } catch (e) {
@@ -200,76 +186,22 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   // Detecção automática de hardware
   useEffect(() => {
     if (!localDeviceLabel) {
-      let detected = 'Note';
-      const ua = navigator.userAgent.toLowerCase();
-      const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
-      
-      if (settings?.isWatchMode) {
-        detected = 'Relógio';
-      } else if (isMobile) {
-        detected = 'Celular';
-      }
-      
+      const detected = detectDeviceLabel(settings?.isWatchMode);
       setLocalDeviceLabel(detected);
-      localStorage.setItem('myPlacar_LocalDeviceLabel', detected);
+      saveLocalDeviceLabel(detected);
     }
   }, [settings?.isWatchMode, localDeviceLabel]);
 
   const checkPermissions = useCallback(async () => {
-    const nextStates: Record<string, PermissionStatus> = { ...permissions };
-
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        nextStates.mic = 'unavailable';
-        nextStates.cam = 'unavailable';
-      } else {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
-        if (stream) {
-          nextStates.mic = 'granted';
-          stream.getTracks().forEach(t => t.stop());
-        } else {
-          nextStates.mic = 'prompt';
-        }
-
-        const camStream = await navigator.mediaDevices.getUserMedia({ video: true }).catch(() => null);
-        if (camStream) {
-          nextStates.cam = 'granted';
-          camStream.getTracks().forEach(t => t.stop());
-        } else {
-          nextStates.cam = 'prompt';
-        }
-      }
-    } catch (e) {
-      nextStates.mic = 'unavailable';
-      nextStates.cam = 'unavailable';
-    }
-
-    try {
-      if (!navigator.geolocation) {
-        nextStates.loc = 'unavailable';
-      } else {
-        await new Promise((res, rej) => {
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 1500 });
-        });
-        nextStates.loc = 'granted';
-      }
-    } catch (unknownGeoError) {
-      const geoError = unknownGeoError as { code?: number };
-      nextStates.loc = (geoError.code === 1) ? 'denied' : 'prompt';
-    }
-
-    setPermissions(nextStates);
+    const nextStates = await checkProfilePermissions();
+    setPermissions(prev => ({ ...prev, ...nextStates }));
   }, []);
 
   const testLatency = async () => {
     if (isTestingLat) return;
     setIsTestingLat(true);
-    const start = Date.now();
     try {
-      await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors', cache: 'no-cache' });
-      setLatency(Date.now() - start);
-    } catch (e) {
-      setLatency(Math.floor(Math.random() * 40) + 20);
+      setLatency(await measureProfileLatency());
     } finally {
       setIsTestingLat(false);
     }
@@ -280,20 +212,10 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
     testLatency();
   }, [checkPermissions]);
 
-  const requestPermission = async (type: 'mic' | 'loc' | 'cam') => {
+  const requestPermission = async (type: RequestableProfilePermission) => {
     setRequesting(type);
     try {
-      if (type === 'mic' && navigator.mediaDevices) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-      } else if (type === 'cam' && navigator.mediaDevices) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        stream.getTracks().forEach(track => track.stop());
-      } else if (type === 'loc' && navigator.geolocation) {
-        await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 });
-        });
-      }
+      await requestProfilePermission(type);
       await checkPermissions();
     } catch {
       setPermissions(prev => ({ ...prev, [type]: 'denied' }));
@@ -307,25 +229,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
       const confirmUpdate = globalThis.confirm(`Nova versão ${remoteVersionFound} disponível. Deseja atualizar agora?`);
       if (confirmUpdate) {
         setIsUpdatingVersion(true);
-        // 1. Desregistra SW primeiro
-        if ('serviceWorker' in navigator) {
-          try {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            for (const r of regs) await r.unregister();
-          } catch (e) {}
-        }
-        // 2. Limpa todos os caches após SW fora
-        if ('caches' in window) {
-          try {
-            const keys = await caches.keys();
-            for (const k of keys) await caches.delete(k);
-          } catch (e) {}
-        }
-        // 3. Hard reload com ?v= para bypass do CDN
-        const url = new URL(globalThis.location.href);
-        url.search = '';
-        url.searchParams.set('v', remoteVersionFound);
-        globalThis.location.replace(url.toString());
+        await reloadAppWithFreshVersion(remoteVersionFound);
       }
       return;
     }
@@ -371,8 +275,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         try {
           const db = getDb();
           if (db) {
-            const userDocRef = doc(db as Firestore, "users", profile.email.toLowerCase().trim());
-            await updateDoc(userDocRef, {
+            await updateUserProfileFields(db, profile.email, {
               passkeyCredentialId: "",
               passkeyPublicKey: ""
             });
@@ -427,8 +330,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
           localStorage.setItem('myPlacarUserProfile', JSON.stringify(updatedProfile));
           const db = getDb();
           if (db && profile.email) {
-            const userDocRef = doc(db as Firestore, "users", profile.email.toLowerCase().trim());
-            await updateDoc(userDocRef, {
+            await updateUserProfileFields(db, profile.email, {
               passkeyCredentialId: rawId,
               passkeyPublicKey: "registered"
             });
@@ -516,7 +418,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
                 onChange={(e) => {
                   const val = applyGoldenRule(e.target.value, true);
                   setLocalDeviceLabel(val);
-                  localStorage.setItem('myPlacar_LocalDeviceLabel', val);
+                  saveLocalDeviceLabel(val);
                   if (settings && setSettings) {
                     setSettings({ ...settings, deviceLabel: val });
                   }

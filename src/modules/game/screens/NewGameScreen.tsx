@@ -13,7 +13,7 @@ import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '../../../components/LazySportIcon';
 import { Button } from '@shared/components/Button';
-import { SettingsTabs } from '@modules/settings/components/SettingsTabs';
+import { SettingsTabs } from '@modules/settings';
 
 interface Props {
   baseSettings: MatchSettings; 
