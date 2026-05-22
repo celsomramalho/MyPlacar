@@ -90,3 +90,26 @@ export const fetchAllCloudMatches = async (db: Firestore): Promise<MatchHistoryI
   snap.forEach((docSnap) => matches.push({ id: docSnap.id, ...docSnap.data() } as MatchHistoryItem));
   return matches;
 };
+
+export const linkLegacyMatchesToOwnerEmail = async (
+  db: Firestore,
+  ownerEmail: string,
+): Promise<number> => {
+  const snap = await getDocs(matchesCollection(db));
+  const batch = writeBatch(db);
+  let linkedCount = 0;
+
+  snap.forEach((docSnap) => {
+    const data = docSnap.data();
+    if (!data.ownerEmail || data.ownerEmail === '' || data.ownerEmail === null) {
+      batch.update(docSnap.ref, { ownerEmail });
+      linkedCount++;
+    }
+  });
+
+  if (linkedCount > 0) {
+    await batch.commit();
+  }
+
+  return linkedCount;
+};

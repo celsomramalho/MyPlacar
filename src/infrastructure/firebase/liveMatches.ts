@@ -1,4 +1,10 @@
-import { collection, onSnapshot, query, type Firestore, type Unsubscribe } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, writeBatch, type Firestore, type Unsubscribe } from 'firebase/firestore';
+
+export interface FirebaseLiveMatchesStats {
+  total: number;
+  expired: number;
+  expiredIds: string[];
+}
 
 export interface FirebaseTournamentLiveScore {
   p1Score: string;
@@ -11,6 +17,7 @@ export interface FirebaseTournamentLiveScore {
 }
 
 interface FirebaseLiveMatchData {
+  startTime?: number;
   tournamentPin?: string;
   tournamentMatchId?: string;
   p1?: {
@@ -28,6 +35,40 @@ interface FirebaseLiveMatchData {
 
 const countSetsWon = (ownSets: number[] = [], opponentSets: number[] = []) => {
   return ownSets.filter((score, index) => score > (opponentSets[index] ?? 0)).length;
+};
+
+export const fetchLiveMatchesStats = async (
+  db: Firestore,
+  expirationMs = 24 * 60 * 60 * 1000,
+): Promise<FirebaseLiveMatchesStats> => {
+  const snapshot = await getDocs(collection(db, 'live_matches'));
+  const expirationLimit = Date.now() - expirationMs;
+  const expiredIds: string[] = [];
+
+  snapshot.forEach(docSnapshot => {
+    const data = docSnapshot.data() as FirebaseLiveMatchData;
+    if (data.startTime && data.startTime < expirationLimit) {
+      expiredIds.push(docSnapshot.id);
+    }
+  });
+
+  return {
+    total: snapshot.size,
+    expired: expiredIds.length,
+    expiredIds,
+  };
+};
+
+export const deleteLiveMatchesByIds = async (
+  db: Firestore,
+  ids: string[],
+) => {
+  const batch = writeBatch(db);
+  ids.forEach(id => {
+    batch.delete(doc(db, 'live_matches', id));
+  });
+
+  await batch.commit();
 };
 
 export const subscribeTournamentLiveScores = (

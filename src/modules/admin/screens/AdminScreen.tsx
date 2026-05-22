@@ -1,30 +1,32 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Loader2, CheckCircle2, AlertCircle, Sparkles, Plus, Trash2, ChevronDown, Save, Clock, User, Settings as SettingsIcon, ArrowLeft, Edit2, Database, Wand2, X, ShieldCheck, LayoutGrid, Trophy, Mic, Type, HelpCircle, ChevronUp, Volume2, Info, Search, Star, Crown, Edit3, Download, HardDrive, Copy, ExternalLink, FileText, RotateCw, Check, Wifi, Ticket, Image as ImageIcon, Send, Menu } from 'lucide-react';
-import { getDb, getStorageInstance, clearFirestoreCache } from '@infra/firebase';
-import { doc, collection, getDocs, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { Upload, Loader2, Sparkles, Plus, Trash2, ChevronDown, Save, Edit2, Database, Wand2, LayoutGrid, Trophy, Type, HelpCircle, Volume2, Info, Crown, Download, RotateCw, Check, Wifi } from 'lucide-react';
+import { getDb } from '@infra/firebase';
 import { deleteAdminEvent, fetchAdminEvents, saveAdminEvent } from '@infra/firebase/adminEvents';
 import {
-  deleteAdminIcon,
   fetchAdminIconCatalog,
-  saveAdminIcon,
   type FirebaseAdminCategoryIcon,
   type FirebaseAdminSportIcon,
 } from '@infra/firebase/adminIcons';
-import {
-  deleteAdminStorageFile,
-  fetchAdminStorageFiles,
-  uploadAdminStorageFile,
-  type FirebaseAdminStorageFile,
-} from '@infra/firebase/adminStorage';
+import { deleteLiveMatchesByIds, fetchLiveMatchesStats as fetchFirebaseLiveMatchesStats } from '@infra/firebase/liveMatches';
+import { linkLegacyMatchesToOwnerEmail } from '@infra/firebase/matches';
 import { fetchSystemConfig, saveSystemConfigPatch } from '@infra/firebase/systemConfig';
-import { searchUserProfilesByEmailPrefix, updateUserPlanType } from '@infra/firebase/users';
-import { deleteIcon, mirrorIcon, mirrorMatches, mirrorPartners, mirrorUser } from '@infra/supabase';
+import { searchUserProfilesByEmailPrefix } from '@infra/firebase/users';
+import { migrateFirebaseAdminDataToSupabase } from '@infra/supabase/adminMigration';
+import { AdminBottomNav } from '@modules/admin/components/AdminBottomNav';
+import { AdminConfirmModals, type AdminDeleteConfirm } from '@modules/admin/components/AdminConfirmModals';
+import { AdminEventsPanel } from '@modules/admin/components/AdminEventsPanel';
+import { AdminHeader } from '@modules/admin/components/AdminHeader';
+import { AdminHiddenFileInputs } from '@modules/admin/components/AdminHiddenFileInputs';
+import { AdminStatusAlert, type AdminStatus } from '@modules/admin/components/AdminStatusAlert';
+import { AdminSupabaseMigrationCard, type AdminMigrationResult } from '@modules/admin/components/AdminSupabaseMigrationCard';
+import { AdminUsersPanel } from '@modules/admin/components/AdminUsersPanel';
+import { AdminVoiceRulesPanel } from '@modules/admin/components/AdminVoiceRulesPanel';
+import { deleteAdminIconAndMirror, saveAdminIconAndMirror, updateAdminUserPlan } from '@modules/admin/services/adminPersistence';
+import { clearAdminFirestoreCache } from '@modules/admin/services/adminTechnicalActions';
+import type { AdminIconUploadTarget, AdminTab } from '@modules/admin/types';
 import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../../../constants';
 import { Button } from '@shared/components/Button';
-import { Toggle } from '../../../components/Toggle';
-import { applyGoldenRule, formatPortugueseName } from '../../../utils/formatters';
-import { ScoreboardIcon } from '../../../components/ScoreboardIcon';
-import type { MatchHistoryItem } from '@modules/history/types';
+import { Toggle } from '@shared/components/Toggle';
 import type { TournamentEvent } from '@modules/events/types';
 import { VoiceCommands, ErrorSoundType } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
@@ -38,25 +40,23 @@ interface Props {
   onExportData?: () => void;
   onImportData?: (jsonStr: string) => void;
   onClearAllHistory?: () => void;
-  initialTab?: 'configs' | 'users' | 'icons' | 'events' | 'comms';
+  initialTab?: AdminTab;
   onOpenMenu?: () => void;
   userProfile?: UserProfile;
 }
-
-type StorageFile = FirebaseAdminStorageFile;
 
 type CategoryItem = FirebaseAdminCategoryIcon;
 type SportItem = FirebaseAdminSportIcon;
 
 export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory, initialTab, onOpenMenu, userProfile }) => {
-  const [adminTab, setAdminTab] = useState<'configs' | 'users' | 'icons' | 'events' | 'comms'>(initialTab || 'configs');
+  const [adminTab, setAdminTab] = useState<AdminTab>(initialTab || 'configs');
   const [loading, setLoading] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
   const [showConfirmFix, setShowConfirmFix] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<{users: number, matches: number, partners: number, icons: number} | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{type: 'category' | 'sport' | 'file' | 'bucket' | 'expired_lives' | 'event', id: string, path?: string} | null>(null);
-  const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
+  const [migrationResult, setMigrationResult] = useState<AdminMigrationResult | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<AdminDeleteConfirm | null>(null);
+  const [status, setStatus] = useState<AdminStatus | null>(null);
   const [goldenRule, setGoldenRule] = useState(true);
   
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -93,11 +93,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isOpenCVS, setIsOpenCVS] = useState(false);
   const [isOpenCVO, setIsOpenCVO] = useState(false);
 
-  const [_storageFiles, setStorageFiles] = useState<StorageFile[]>([]);
-  const [_isLoadingFiles, setIsLoadingFiles] = useState(false);
-  const [_isUploadingFile, setIsUploadingFile] = useState(false);
-  const [_storageError, setStorageError] = useState<string | null>(null);
-  
   const [liveStats, setLiveStats] = useState({ total: 0, expired: 0, expiredIds: [] as string[] });
   const [_isCleaningLives, setIsCleaningLives] = useState(false);
   
@@ -107,19 +102,10 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [showConfirmClearCache, setShowConfirmClearCache] = useState(false);
 
-  const mainStorage = getStorageInstance();
-  const defaultBucketName = mainStorage?.app.options.storageBucket || "";
-  const [activeBucket, setActiveBucket] = useState(defaultBucketName);
-  const [_isAddingBucket, setIsAddingBucket] = useState(false);
-  const [newBucketName, setNewBucketName] = useState("");
-  
-  const [buckets, setBuckets] = useState<string[]>([defaultBucketName]);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRefImport = useRef<HTMLInputElement>(null);
-  const genericFileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
-  const [uploadTarget, setUploadTarget] = useState<{id: string, type: 'category' | 'sport'} | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<AdminIconUploadTarget | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -130,7 +116,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (adminTab === 'events') {
       fetchEvents();
     }
-  }, [adminTab, activeBucket]);
+  }, [adminTab]);
 
   const slugify = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
@@ -147,23 +133,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const db = getDb();
     if (!db) return;
     try {
-      const snap = await getDocs(collection(db, "live_matches"));
-      const now = Date.now();
-      const limit = now - (24 * 60 * 60 * 1000);
-      let totalCount = 0;
-      let expiredCount = 0;
-      const ids: string[] = [];
-      
-      snap.forEach(doc => {
-        totalCount++;
-        const data = doc.data();
-        if (data.startTime && data.startTime < limit) {
-          expiredCount++;
-          ids.push(doc.id);
-        }
-      });
-      
-      setLiveStats({ total: totalCount, expired: expiredCount, expiredIds: ids });
+      const stats = await fetchFirebaseLiveMatchesStats(db);
+      setLiveStats(stats);
     } catch (e) { console.error("Erro ao buscar estatísticas de transmissões:", e); }
   };
 
@@ -208,46 +179,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             setAppUrl(data.appUrl);
           }
         }
-        if (data.buckets && Array.isArray(data.buckets)) {
-          setBuckets(data.buckets.includes(defaultBucketName) ? data.buckets : [defaultBucketName, ...data.buckets]);
-        }
       }
     } catch (e) { console.error(e); }
-  };
-
-  const fetchStorageFiles = async () => {
-    const mainStorageInstance = getStorageInstance();
-    if (!mainStorageInstance) return;
-    setIsLoadingFiles(true);
-    setStorageError(null);
-    setStorageFiles([]);
-    
-    try {
-      const files = await fetchAdminStorageFiles(mainStorageInstance, defaultBucketName, activeBucket);
-      setStorageFiles(files);
-    } catch (e: unknown) {
-      const storageErr = e as { message?: string };
-      setStorageError(storageErr.message || "Erro ao acessar o armazenamento.");
-    } finally {
-      setIsLoadingFiles(false);
-    }
-  };
-
-  const handleAddBucket = async () => {
-    const clean = newBucketName.trim().replace(/^gs:\/\//, '');
-    if (!clean) return;
-    const db = getDb();
-    if (!db) return;
-
-    if (!buckets.includes(clean)) {
-      const updated = [...buckets, clean];
-      setBuckets(updated);
-      await saveSystemConfigPatch(db, { buckets: updated });
-      setStatus({ type: 'success', msg: "Bucket adicionado com sucesso!" });
-    }
-    setNewBucketName("");
-    setIsAddingBucket(false);
-    setTimeout(() => setStatus(null), 2000);
   };
 
   const handleDeleteExpiredLives = async () => {
@@ -255,11 +188,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db || liveStats.expiredIds.length === 0) return;
     setIsCleaningLives(true);
     try {
-      const batch = writeBatch(db);
-      liveStats.expiredIds.forEach(id => {
-        batch.delete(doc(db, "live_matches", id));
-      });
-      await batch.commit();
+      await deleteLiveMatchesByIds(db, liveStats.expiredIds);
       setStatus({ type: 'success', msg: `${liveStats.expired} transmissões removidas com sucesso.` });
       fetchLiveMatchesStats();
     } catch (_e) {
@@ -273,28 +202,10 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return;
-    const { type, id, path } = deleteConfirm;
+    const { type, id } = deleteConfirm;
     
     if (type === 'expired_lives') {
       handleDeleteExpiredLives();
-      return;
-    }
-
-    if (type === 'file' && path) {
-      handleDeleteStorageFile(path);
-      return;
-    }
-
-    if (type === 'bucket') {
-      const db = getDb();
-      if (!db) return;
-      const updated = buckets.filter(b => b !== id);
-      setBuckets(updated);
-      await saveSystemConfigPatch(db, { buckets: updated });
-      if (activeBucket === id) setActiveBucket(defaultBucketName);
-      setStatus({ type: 'success', msg: "Bucket removido da lista." });
-      setDeleteConfirm(null);
-      setTimeout(() => setStatus(null), 2000);
       return;
     }
 
@@ -317,8 +228,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       const db = getDb();
       if (!db) return;
       try {
-        await deleteAdminIcon(db, type, id);
-        deleteIcon(type, id);
+        await deleteAdminIconAndMirror(db, type, id);
         if (type === 'category') { setCategories(prev => prev.filter(c => c.id !== id)); setSelectedCatId(""); }
         else { setSports(prev => prev.filter(s => s.id !== id)); setSelectedSportId(""); }
         setStatus({ type: 'success', msg: "Excluído com sucesso." });
@@ -326,39 +236,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         setDeleteConfirm(null);
         setTimeout(() => setStatus(null), 2000);
       }
-    }
-  };
-
-  const handleUploadGenericFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const mainStorageInstance = getStorageInstance();
-    if (!file || !mainStorageInstance) return;
-
-    setIsUploadingFile(true);
-    try {
-      await uploadAdminStorageFile(mainStorageInstance, defaultBucketName, activeBucket, file);
-      setStatus({ type: 'success', msg: "Arquivo enviado com sucesso!" });
-      fetchStorageFiles();
-    } catch (_e) {
-      setStatus({ type: 'error', msg: "Falha ao enviar arquivo." });
-    } finally {
-      setIsUploadingFile(false);
-      setTimeout(() => setStatus(null), 3000);
-    }
-  };
-
-  const handleDeleteStorageFile = async (path: string) => {
-    const mainStorageInstance = getStorageInstance();
-    if (!mainStorageInstance) return;
-    try {
-      await deleteAdminStorageFile(mainStorageInstance, defaultBucketName, activeBucket, path);
-      setStatus({ type: 'success', msg: "Arquivo removido do storage." });
-      fetchStorageFiles();
-    } catch (_e) {
-      setStatus({ type: 'error', msg: "Erro ao excluir arquivo." });
-    } finally {
-      setDeleteConfirm(null);
-      setTimeout(() => setStatus(null), 3000);
     }
   };
 
@@ -381,8 +258,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db) return;
     const nextPlan: 'free' | 'premium' = user.planType === 'premium' ? 'free' : 'premium';
     try {
-      await updateUserPlanType(db, user.email, nextPlan);
-      mirrorUser({ ...user, planType: nextPlan });
+      await updateAdminUserPlan(db, user, nextPlan);
       setFoundUsers(prev => prev.map(u => u.email === user.email ? { ...u, planType: nextPlan } : u));
       setStatus({ type: 'success', msg: `Usuário ${user.nickname} agora é ${nextPlan === 'premium' ? 'premium' : 'free'}` });
       setTimeout(() => setStatus(null), 2000);
@@ -394,61 +270,9 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db) return;
     setIsMigrating(true);
     setMigrationResult(null);
-    let usersCount = 0;
-    let matchesCount = 0;
-    let partnersCount = 0;
-    let iconsCount = 0;
     try {
-      // 1. Migrar users
-      const usersSnap = await getDocs(collection(db, 'users'));
-      for (const docSnap of usersSnap.docs) {
-        const data = docSnap.data() as UserProfile;
-        if (data.email && data.pin) {
-          mirrorUser(data);
-          usersCount++;
-        }
-      }
-      // 2. Migrar matches
-      const matchesSnap = await getDocs(collection(db, 'matches'));
-      const matchesByOwner = new Map<string, { match: Record<string, unknown>; ownerPin: string }[]>();
-      matchesSnap.forEach(docSnap => {
-        const data = { id: docSnap.id, ...docSnap.data() } as Record<string, unknown>;
-        const ownerEmail = (data.ownerEmail as string) || '';
-        const ownerPin = (data.ownerPin as string) || '';
-        if (!ownerEmail) return;
-        if (!matchesByOwner.has(ownerEmail)) matchesByOwner.set(ownerEmail, []);
-        matchesByOwner.get(ownerEmail)!.push({ match: data, ownerPin });
-      });
-      for (const [ownerEmail, items] of matchesByOwner) {
-        const ownerPin = items[0].ownerPin;
-        const matches = items.map(i => i.match) as unknown as MatchHistoryItem[];
-        mirrorMatches(matches, ownerEmail, ownerPin);
-        matchesCount += matches.length;
-      }
-      // 3. Migrar parceiros de cada usuário
-      const partnersSnap = await getDocs(collection(db, 'user_partners_metadata'));
-      for (const docSnap of partnersSnap.docs) {
-        const ownerEmail = docSnap.id; // document ID é o email do dono
-        const partnersList = docSnap.data().partners_list || [];
-        // Filtra parceiros sem PIN para evitar dados inconsistentes
-        const validPartners = partnersList.filter((p: Record<string, unknown>) => p.pin && typeof p.pin === 'string' && p.pin.trim().length > 0);
-        if (ownerEmail && validPartners.length > 0) {
-          mirrorPartners(ownerEmail, validPartners);
-          partnersCount += validPartners.length;
-        }
-      }
-      // 4. Migrar sport_icons e category_icons
-      const sportSnap = await getDocs(collection(db, 'sport_icons'));
-      sportSnap.forEach(docSnap => {
-        mirrorIcon('sport', { id: docSnap.id, name: '', url: '', ...docSnap.data() });
-        iconsCount++;
-      });
-      const catSnap = await getDocs(collection(db, 'category_icons'));
-      catSnap.forEach(docSnap => {
-        mirrorIcon('category', { id: docSnap.id, name: '', url: '', ...docSnap.data() });
-        iconsCount++;
-      });
-      setMigrationResult({ users: usersCount, matches: matchesCount, partners: partnersCount, icons: iconsCount });
+      const result = await migrateFirebaseAdminDataToSupabase(db);
+      setMigrationResult(result);
     } catch (e) {
       console.error('Migração Supabase:', e);
       setStatus({ type: 'error', msg: 'Erro durante a migração. Verifique o console.' });
@@ -464,20 +288,9 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db) return;
 
     try {
-      const matchesRef = collection(db, "matches");
-      const snap = await getDocs(matchesRef);
-      const batch = writeBatch(db);
-      let count = 0;
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (!data.ownerEmail || data.ownerEmail === "" || data.ownerEmail === null) {
-          batch.update(docSnap.ref, { ownerEmail: userProfile?.email || '' });
-          count++;
-        }
-      });
-      if (count > 0) {
-        await batch.commit();
-        setStatus({ type: 'success', msg: `${count} partidas vinculadas com sucesso!` });
+      const linkedCount = await linkLegacyMatchesToOwnerEmail(db, userProfile?.email || '');
+      if (linkedCount > 0) {
+        setStatus({ type: 'success', msg: `${linkedCount} partidas vinculadas com sucesso!` });
       } else {
         setStatus({ type: 'success', msg: "Nenhuma partida órfã encontrada." });
       }
@@ -534,8 +347,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     setLoading(item.id);
     try {
       const itemWithTimestamp = { ...item, updatedAt: new Date().toISOString() };
-      await saveAdminIcon(db, type, itemWithTimestamp);
-      mirrorIcon(type, itemWithTimestamp);
+      await saveAdminIconAndMirror(db, type, itemWithTimestamp);
       setStatus({ type: 'success', msg: "Salvo com sucesso!" });
       setIsEditingId(false);
       if (type === 'category') setIsCatSaved(true);
@@ -594,14 +406,19 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     }
   };
 
-  const handleEventBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingEvent) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setEditingEvent({ ...editingEvent, bannerUrl: reader.result as string });
-    };
-    reader.readAsDataURL(file);
+  const handleEventBannerLoaded = (bannerUrl: string) => {
+    if (!editingEvent) return;
+    setEditingEvent({ ...editingEvent, bannerUrl });
+  };
+
+  const handleIconFileLoaded = (target: AdminIconUploadTarget, base64: string) => {
+    if (target.type === 'category') {
+      setCategories(prev => prev.map(c => c.id === target.id ? { ...c, url: base64 } : c));
+      setIsCatSaved(false);
+    } else {
+      setSports(prev => prev.map(s => s.id === target.id ? { ...s, url: base64 } : s));
+      setIsSportSaved(false);
+    }
   };
 
   const currentCat = categories.find(c => c.id === selectedCatId);
@@ -609,112 +426,24 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const sortedCategories = sortItems(categories);
   const sortedSports = sortItems(sports);
 
-  const renderCmdItem = (id: string, label: string, field: keyof VoiceCommands | null, condition: string | null, purpose: string, usage: string) => (
-    <div className="space-y-2 p-4 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm animate-in fade-in">
-      <div className="flex items-start justify-between">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-black font-black text-sm">{id}) {label}</span>
-          {condition && <span className="text-[9px] font-bold text-blue-600 font-mono">{condition}</span>}
-        </div>
-      </div>
-      <div className="space-y-1.5 border-l-2 border-gray-200 pl-3">
-        <p className="text-[10px] font-bold text-gray-500 leading-tight">Para que serve esse comando: <span className="text-black">{purpose}</span></p>
-        <p className="text-[10px] font-bold text-gray-500 leading-tight">Como usar<span className="text-black">{usage}</span></p>
-      </div>
-      {field && (
-        <div className="mt-2">
-           <input 
-            type="text" 
-            value={voiceCommands[field].join(', ')}
-            onChange={(e) => updateCommandField(field, e.target.value)}
-            placeholder="Termos separados por vírgula"
-            className="w-full h-[40px] bg-white border border-gray-200 rounded-xl px-4 text-sm font-bold text-black outline-none focus:ring-2 focus:ring-blue-100 transition-all"
-          />
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-[#f3f4f6] flex flex-col animate-in fade-in">
-      {showConfirmClearCache && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-           <div className="bg-white rounded-[2.5rem] p-8 max-sm w-full shadow-2xl space-y-6">
-              <h3 className="text-xl font-black text-black">Limpar cache técnico?</h3>
-              <p className="text-black font-bold text-sm">Isso removerá dados temporários do banco de dados local e reiniciará o app. Útil para resolver erros de armazenamento (QuotaExceeded).</p>
-              <div className="flex gap-3">
-                 <button onClick={() => setShowConfirmClearCache(false)} className="flex-1 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs">Cancelar</button>
-                 <button onClick={clearFirestoreCache} className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black text-xs">Limpar e reiniciar</button>
-              </div>
-           </div>
-        </div>
-      )}
+      <AdminConfirmModals
+        showClearCache={showConfirmClearCache}
+        showFixLegacyMatches={showConfirmFix}
+        deleteConfirm={deleteConfirm}
+        onCancelClearCache={() => setShowConfirmClearCache(false)}
+        onConfirmClearCache={clearAdminFirestoreCache}
+        onCancelFixLegacyMatches={() => setShowConfirmFix(false)}
+        onConfirmFixLegacyMatches={executeFixLegacyMatches}
+        onCancelDelete={() => setDeleteConfirm(null)}
+        onConfirmDelete={confirmDelete}
+      />
 
-      {showConfirmFix && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-           <div className="bg-white rounded-[2.5rem] p-8 max-sm w-full shadow-2xl space-y-6">
-              <h3 className="text-xl font-black text-black">Vincular partidas?</h3>
-              <p className="text-black font-bold text-sm">Esta ação vinculará todas as partidas sem dono ao e-mail administrativo.</p>
-              <div className="flex gap-3">
-                 <button onClick={() => setShowConfirmFix(false)} className="flex-1 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs">Cancelar</button>
-                 <button onClick={executeFixLegacyMatches} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs">Sim, vincular</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-           <div className="bg-white rounded-[2.5rem] p-8 max-sm w-full shadow-2xl space-y-6">
-              <h3 className="text-xl font-black text-black">
-                {deleteConfirm.type === 'bucket' ? 'Remover bucket?' : 
-                 deleteConfirm.type === 'expired_lives' ? 'Limpar transmissões?' : 
-                 deleteConfirm.type === 'event' ? 'Excluir evento?' : 'Excluir item?'}
-              </h3>
-              <p className="text-black font-bold text-sm">
-                {deleteConfirm.type === 'expired_lives' 
-                 ? 'Esta ação removerá permanentemente todas as partidas ao vivo com mais de 24 horas.' 
-                 : 'Esta ação não pode ser desfeita e removerá o item permanentemente.'}
-              </p>
-              <div className="flex gap-3">
-                 <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs">Cancelar</button>
-                 <button onClick={confirmDelete} className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black text-xs">Excluir</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      <header className="px-6 py-6 bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="flex items-center justify-between max-w-md mx-auto">
-          <button onClick={onBack} className="p-2 -ml-2 text-black active:scale-90"><ArrowLeft size={24} /></button>
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={24} className="text-black" />
-            <h1 className="text-xl font-black text-black tracking-tight leading-tight">Painel administrativo</h1>
-          </div>
-          <div className="w-10"></div>
-        </div>
-        
-        <div className="grid grid-cols-5 gap-1 mt-6 max-w-md mx-auto">
-          {[
-            { id: 'configs' as const, label: 'Configs', icon: <SettingsIcon size={14} /> },
-            { id: 'users' as const, label: 'Usuários', icon: <User size={14} /> },
-            { id: 'icons' as const, label: 'Ícones', icon: <LayoutGrid size={14} /> },
-            { id: 'events' as const, label: 'Eventos', icon: <Ticket size={14} /> },
-            { id: 'comms' as const, label: 'Avisos', icon: <Send size={14} /> }
-          ].map(tab => (
-            <button 
-              key={tab.id}
-              onClick={() => setAdminTab(tab.id)}
-              className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl text-[8px] font-black transition-all border leading-tight text-center ${adminTab === tab.id ? 'bg-black text-white border-black shadow-md scale-105' : 'bg-white text-black border-slate-100'}`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
-        </div>
-      </header>
+      <AdminHeader activeTab={adminTab} onBack={onBack} onSelectTab={setAdminTab} />
 
       <main className="flex-1 p-6 space-y-8 max-w-md mx-auto w-full pb-40">
-        {status && <div className={`p-4 rounded-2xl flex items-center gap-2 text-sm font-bold animate-in zoom-in shadow-sm ${status.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>{status.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}{status.msg}</div>}
+        <AdminStatusAlert status={status} />
 
         {adminTab === 'configs' && (
           <>
@@ -781,119 +510,35 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-center gap-2 px-2">
-                <Mic size={20} className="text-blue-500" />
-                <h2 className="text-sm font-black text-black">Regras de voz</h2>
-              </div>
-              <section className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-white space-y-5">
-                <div className="bg-gray-50/50 rounded-[2rem] overflow-hidden">
-                  <button onClick={() => setIsOpenCVP(!isOpenCVP)} className="w-full px-6 py-4 flex items-center justify-between text-black active:bg-gray-100 transition-colors">
-                    <span className="text-xs font-black">Regras de voz que alteram o placar (cvp):</span>
-                    {isOpenCVP ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
-                  </button>
-                  {isOpenCVP && (
-                    <div className="p-4 pt-0 space-y-4">
-                      {renderCmdItem('cvp1', 'Prefixo', 'pointTerm', "raw.includes('.') || LIKE(text, FONETICA.ponto)", 'Prefixo para dar o comando de pontuação (sendo: prefixo0 = ponto e prefixo1 = .)', 'Diga: ponto ou .')}
-                      <div className="space-y-2 p-4 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm animate-in fade-in">
-                        <div className="flex items-start justify-between">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-black font-black text-sm">cvp2) Alvo: [cor], [nome], [time]</span>
-                            <span className="text-[9px] font-bold text-blue-600 font-mono">(n?: string, p?: string, c?: string, t?: string)</span>
-                          </div>
-                        </div>
-                        <div className="space-y-1.5 border-l-2 border-gray-200 pl-3">
-                          <p className="text-[10px] font-bold text-gray-500 leading-tight">Para que serve esse comando: <span className="text-black">{applyGoldenRule('quando a pontuação é da [cor], do [nome], do [time]', true)}</span></p>
-                          <p className="text-[10px] font-bold text-gray-500 leading-tight">Como usar <span className="text-black">{applyGoldenRule('diga: ponto [nome do jogador] ou ponto [cor do time] ou ponto [time 1 / time 2]', true)}</span></p>
-                        </div>
-                      </div>
-                      {renderCmdItem('cvp3', 'Sacador', 'serverTerm', 'LIKE(text, FONETICA.sacador)', 'quando a pontuação é do time sacador', 'diga: ponto sacador')}
-                      {renderCmdItem('cvp4', 'Contra', 'receiverTerm', 'LIKE(text, FONETICA.contra)', 'quando a pontuação é do time recebedor', 'diga: ponto contra')}
-                      {renderCmdItem('cvp5', 'Ace', 'ace', 'LIKE(text, FONETICA.ace) || LIKE(text, FONETICA.saque)', 'quando o sacador faz um ace', 'diga: ponto ace or ponto de saque')}
-                      {renderCmdItem('cvp6', 'Falta', 'fault', 'LIKE(text, FONETICA.falta)', 'quando the sacador saca na rede ou fora da quadra', 'diga: saque errado ou erro de saque')}
-                      {renderCmdItem('cvp7', 'Voltar', 'undo', 'LIKE(text, FONETICA.voltar)', 'volta o placar para o último ponto', 'diga: desfazer ponto ou voltar ponto')}
-                    </div>
-                  )}
-                </div>
+              <AdminVoiceRulesPanel
+                voiceCommands={voiceCommands}
+                isOpenCVP={isOpenCVP}
+                isOpenCVS={isOpenCVS}
+                isOpenCVO={isOpenCVO}
+                onToggleCVP={() => setIsOpenCVP(!isOpenCVP)}
+                onToggleCVS={() => setIsOpenCVS(!isOpenCVS)}
+                onToggleCVO={() => setIsOpenCVO(!isOpenCVO)}
+                onUpdateCommandField={updateCommandField}
+              />
 
-                <div className="bg-gray-50/50 rounded-[2rem] overflow-hidden">
-                  <button onClick={() => setIsOpenCVS(!isOpenCVS)} className="w-full px-6 py-4 flex items-center justify-between text-black active:bg-gray-100 transition-colors">
-                    <span className="text-xs font-black">Regras de voz que não alteram o placar (cvs):</span>
-                    {isOpenCVS ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
-                  </button>
-                  {isOpenCVS && (
-                    <div className="p-4 pt-0 space-y-4">
-                      {renderCmdItem('cvs1', 'Trocar', 'switchServer', 'LIKE(text, FONETICA.trocar) && LIKE(text, FONETICA.saque)', 'caso durante a partida precisar ajustar quem está sacando', 'diga: trocar sacador')}
-                      {renderCmdItem('cvs2', 'Placar', 'scoreStatus', 'LIKE(text, FONETICA.placar)', 'para anunciar o placar atual', 'diga: placar ou quanto tá')}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-gray-50/50 rounded-[2rem] overflow-hidden">
-                  <button onClick={() => setIsOpenCVO(!isOpenCVO)} className="w-full px-6 py-4 flex items-center justify-between text-black active:bg-gray-100 transition-colors">
-                    <span className="text-xs font-black">Comandos de voz (outros):</span>
-                    {isOpenCVO ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
-                  </button>
-                  {isOpenCVO && (
-                    <div className="p-4 pt-0 space-y-4">
-                      {renderCmdItem('cvd1', 'Parceiro', 'partnerTerm', null, 'usado na tela inicial para informar os nomes do time num só comando de voz', 'diga: [nome1] mais [nome2], ou [nome1] com [nome2]')}
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-violet-100 rounded-2xl flex items-center justify-center text-violet-600"><Database size={24} /></div>
-                  <div className="text-left">
-                    <p className="text-base font-black text-black leading-tight">Migração Supabase</p>
-                    <p className="text-[11px] font-bold text-slate-400">Copia users, partidas e ícones do Firebase para o Supabase de uma vez</p>
-                  </div>
-                </div>
-                {migrationResult && (
-                  <div className="bg-green-50 border border-green-100 rounded-2xl p-4 space-y-1">
-                    <p className="text-xs font-black text-green-700">Migração concluída!</p>
-                    <p className="text-[11px] font-bold text-green-600">{migrationResult.users} usuários · {migrationResult.matches} partidas · {migrationResult.partners} parceiros · {migrationResult.icons} ícones</p>
-                  </div>
-                )}
-                <button
-                  onClick={executeMigrateToSupabase}
-                  disabled={isMigrating}
-                  className="w-full py-4 bg-violet-600 text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all disabled:opacity-50"
-                >
-                  {isMigrating ? <><Loader2 size={16} className="animate-spin" /> Migrando...</> : <><Database size={16} /> Migrar Firebase → Supabase</>}
-                </button>
-              </section>
+              <AdminSupabaseMigrationCard
+                isMigrating={isMigrating}
+                migrationResult={migrationResult}
+                onMigrate={executeMigrateToSupabase}
+              />
             </div>
           </>
         )}
 
         {adminTab === 'users' && (
-          <section className="space-y-4">
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-4">
-              <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-100 text-black rounded-xl flex items-center justify-center"><User size={20}/></div><h3 className="font-black text-black">Gestão de usuários</h3></div>
-              <div className="relative">
-                <input type="text" value={userSearch} onChange={(e) => setUserSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearchUsers()} placeholder="Buscar por e-mail..." className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 pr-12 text-sm font-bold outline-none text-black" />
-                <button onClick={handleSearchUsers} className="absolute right-3 top-1/2 -translate-y-1/2 text-black">{isSearchingUsers ? <Loader2 className="animate-spin" size={18}/> : <Search size={18}/>}</button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {foundUsers.map(user => (
-                <div key={user.email} className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-between">
-                  <div className="flex-1 min-w-0 pr-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-black text-black truncate">{user.nickname || user.name}</span>
-                      {user.planType === 'premium' && <div className="bg-blue-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-1"><Star size={6} fill="currentColor"/> Premium</div>}
-                    </div>
-                    <span className="text-[10px] font-bold text-black block truncate">{applyGoldenRule(user.email, true)}</span>
-                  </div>
-                  <button onClick={() => toggleUserPremium(user)} className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all border ${user.planType === 'premium' ? 'bg-red-50 border-red-100 text-red-500' : 'bg-slate-50 border-slate-100 text-black'}`}>
-                    {user.planType === 'premium' ? 'Revogar premium' : 'Ativar premium'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
+          <AdminUsersPanel
+            userSearch={userSearch}
+            foundUsers={foundUsers}
+            isSearchingUsers={isSearchingUsers}
+            onUserSearchChange={setUserSearch}
+            onSearchUsers={handleSearchUsers}
+            onToggleUserPremium={toggleUserPremium}
+          />
         )}
 
         {adminTab === 'icons' && (
@@ -1034,112 +679,17 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         )}
 
         {adminTab === 'events' && (
-          <div className="space-y-6 animate-in fade-in">
-             <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-6">
-                <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
-                        <Ticket size={22} />
-                      </div>
-                      <h3 className="font-black text-black tracking-tight leading-none">Gestão de eventos</h3>
-                   </div>
-                   <button onClick={() => { setEditingEvent({ pin: '', name: '', active: true, createdAt: Date.now() }); }} className="p-2 bg-amber-500 text-white rounded-xl active:scale-90 shadow-sm">
-                      <Plus size={20} />
-                   </button>
-                </div>
-
-                {editingEvent && (
-                  <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200 space-y-5 animate-in slide-in-from-top-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-slate-500 tracking-tight">Configurar evento</h4>
-                      <button onClick={() => setEditingEvent(null)} className="p-1 text-slate-400"><X size={20}/></button>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 ml-1">Pin exclusivo (ex: CarmoFev26)</label>
-                        <input 
-                          type="text" 
-                          value={editingEvent.pin}
-                          onChange={e => setEditingEvent({...editingEvent, pin: e.target.value})}
-                          placeholder="Pin do evento"
-                          className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 ml-1">Nome do evento</label>
-                        <input 
-                          type="text" 
-                          value={editingEvent.name}
-                          onChange={e => setEditingEvent({...editingEvent, name: e.target.value})}
-                          placeholder="Nome visível"
-                          className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 ml-1">Banner do evento (imagem)</label>
-                        <div className="flex gap-3">
-                          <button 
-                            onClick={() => bannerInputRef.current?.click()}
-                            className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-500"
-                          >
-                            <ImageIcon size={16} /> Carregar capa
-                          </button>
-                          {editingEvent.bannerUrl && (
-                            <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 shrink-0">
-                               <img src={editingEvent.bannerUrl} className="w-full h-full object-cover" />
-                            </div>
-                          )}
-                        </div>
-                        <input type="file" ref={bannerInputRef} className="hidden" accept="image/*" onChange={handleEventBannerUpload} />
-                      </div>
-                      <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] font-black text-slate-400">Status do evento</span>
-                        <Toggle id="sw-event-active" checked={editingEvent.active} onChange={v => setEditingEvent({...editingEvent, active: v})} />
-                      </div>
-                    </div>
-
-                    <Button onClick={handleSaveEvent} disabled={isSavingEvent} className="w-full !bg-amber-500 !py-4 rounded-xl font-black flex gap-2 text-white">
-                      {isSavingEvent ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar evento
-                    </Button>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                   {isLoadingEvents ? (
-                     <div className="py-12 flex flex-col items-center gap-3 text-slate-300">
-                        <Loader2 className="animate-spin" size={32} />
-                        <span className="text-xs font-bold tracking-tight">Carregando eventos...</span>
-                     </div>
-                   ) : eventList.length === 0 ? (
-                     <div className="bg-slate-50 rounded-3xl p-10 text-center border-2 border-dashed border-slate-200">
-                        <p className="text-slate-400 font-bold text-sm">Nenhum evento criado ainda.</p>
-                     </div>
-                   ) : (
-                     eventList.map(ev => (
-                       <div key={ev.pin} className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100 flex items-center justify-between group">
-                          <div className="flex-1 min-w-0 pr-4">
-                             <p className="font-black text-black text-sm truncate">{ev.name}</p>
-                             <div className="flex items-center gap-2 mt-0.5">
-                                <p className="text-[10px] font-black text-amber-500 uppercase">{ev.pin}</p>
-                                <span className="text-[8px] font-black text-slate-300">•</span>
-                                <p className={`text-[8px] font-black uppercase ${ev.active ? 'text-green-500' : 'text-red-500'}`}>{ev.active ? 'Ativo' : 'Encerrado'}</p>
-                             </div>
-                          </div>
-                          <div className="flex gap-1">
-                             <button onClick={() => setEditingEvent(ev)} className="p-3 bg-slate-50 text-slate-600 rounded-xl border border-slate-100 active:scale-90 transition-all">
-                                <Edit3 size={16} />
-                             </button>
-                             <button onClick={() => setDeleteConfirm({ type: 'event', id: ev.pin })} className="p-3 bg-red-50 text-red-500 rounded-xl border border-red-100 active:scale-90 transition-all">
-                                <Trash2 size={16} />
-                             </button>
-                          </div>
-                       </div>
-                     ))
-                   )}
-                </div>
-             </section>
-          </div>
+          <AdminEventsPanel
+            eventList={eventList}
+            editingEvent={editingEvent}
+            isLoadingEvents={isLoadingEvents}
+            isSavingEvent={isSavingEvent}
+            bannerInputRef={bannerInputRef}
+            onCreateEvent={() => setEditingEvent({ pin: '', name: '', active: true, createdAt: Date.now() })}
+            onChangeEditingEvent={setEditingEvent}
+            onSaveEvent={handleSaveEvent}
+            onDeleteEvent={(pin) => setDeleteConfirm({ type: 'event', id: pin })}
+          />
         )}
         {adminTab === 'comms' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1148,62 +698,21 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         )}
       </main>
 
-      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
-        const file = e.target.files?.[0];
-        if (!file || !uploadTarget) return;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = reader.result as string;
-          if (uploadTarget.type === 'category') {
-            setCategories(prev => prev.map(c => c.id === uploadTarget.id ? { ...c, url: base64 } : c));
-            setIsCatSaved(false);
-          } else {
-            setSports(prev => prev.map(s => s.id === uploadTarget.id ? { ...s, url: base64 } : s));
-            setIsSportSaved(false);
-          }
-        };
-        reader.readAsDataURL(file);
-      }} />
-
-      <input 
-        type="file" 
-        ref={fileInputRefImport} 
-        className="hidden" 
-        accept="application/json" 
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file || !onImportData) return;
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const result = event.target?.result as string;
-            onImportData(result);
-          };
-          reader.readAsText(file);
-        }} 
+      <AdminHiddenFileInputs
+        iconInputRef={fileInputRef}
+        importInputRef={fileInputRefImport}
+        eventBannerInputRef={bannerInputRef}
+        uploadTarget={uploadTarget}
+        onIconLoaded={handleIconFileLoaded}
+        onImportJson={onImportData}
+        onEventBannerLoaded={handleEventBannerLoaded}
       />
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 px-4 pt-3 pb-safe flex justify-between items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        <button onClick={() => onNavigateToTab?.('config')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40">
-           <ScoreboardIcon className="w-6 h-6" />
-           <span className="text-[10px] font-black text-black">Início</span>
-        </button>
-        <button onClick={() => onOpenRules?.()} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40">
-           <SettingsIcon size={22} className="text-black" />
-           <span className="text-[10px] font-black text-black">Regras</span>
-        </button>
-        <button onClick={() => onNavigateToTab?.('history')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40">
-           <Clock size={22} className="text-black" />
-           <span className="text-[10px] font-black text-black">Histórico</span>
-        </button>
-        <button onClick={() => onNavigateToTab?.('profile')} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40">
-           <User size={22} className="text-black" />
-           <span className="text-[10px] font-black text-black">Perfil</span>
-        </button>
-        <button onClick={onOpenMenu} className="flex flex-col items-center justify-center gap-1 transition-all flex-1 min-h-[56px] opacity-40">
-           <Menu size={22} className="text-black" />
-           <span className="text-[10px] font-black text-black">Menu</span>
-        </button>
-      </nav>
+      <AdminBottomNav
+        onNavigateToTab={onNavigateToTab}
+        onOpenRules={onOpenRules}
+        onOpenMenu={onOpenMenu}
+      />
     </div>
   );
 };
