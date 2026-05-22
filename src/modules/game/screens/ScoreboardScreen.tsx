@@ -1237,7 +1237,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                        <div onClick={() => onSwitchServer(2, false)} className="cursor-pointer active:scale-95 transition-transform">
                          <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 1 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p2.name}</span>
                        </div>
-                       {effectiveGameState.p2.partnerName && (
+                       {effectiveGameState.matchConfig.isDoubles && effectiveGameState.p2.partnerName && (
                          <div onClick={() => onSwitchServer(2, true)} className="cursor-pointer active:scale-95 transition-transform">
                            <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 3 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p2.partnerName}</span>
                          </div>

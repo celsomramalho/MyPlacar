@@ -240,7 +240,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   // 1. O observer veja as alterações de regras e nomes em tempo real na tela.
   // 2. Se o observer assumir o controle (take control), não sobrescreva a nuvem com dados obsoletos.
   useEffect(() => {
-    if (!gameState || !gameState.isMirroringActive || gameState.commandOwnerId === deviceId) {
+    if (!gameState || !gameState.isMirroringActive || !gameState.commandOwnerId || gameState.commandOwnerId === deviceId) {
       return;
     }
 
