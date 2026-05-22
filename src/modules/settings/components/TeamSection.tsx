@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useMemo, useEffect, useRef } from 'react';
 import { ArrowUpDown, Play, User, Users, ChevronDown, Dices, Loader2, Eraser, History, Ticket, Check } from 'lucide-react';
 import { guessPartnerGender } from '@modules/partners/services/guessPartnerGender';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
@@ -87,7 +87,8 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   });
   const [isShuffling, setIsShuffling] = useState(false);
   const [dbSportsIcons, setDbSportsIcons] = useState<Record<string, string>>({});
-  
+  const prevScoringModeRef = useRef(settings.pickleballScoringMode);
+
   useEffect(() => {
     const fetchIcons = async () => {
       const db = getDb();
@@ -103,6 +104,17 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     };
     fetchIcons();
   }, []);
+
+  useEffect(() => {
+    const prev = prevScoringModeRef.current;
+    const curr = settings.pickleballScoringMode;
+    if (prev !== curr) {
+      prevScoringModeRef.current = curr;
+      if (curr === 'rally')    setSettings(s => ({ ...s, gamesPerSet: 21 }));
+      if (curr === 'side-out') setSettings(s => ({ ...s, gamesPerSet: 11 }));
+    }
+    // Se o modo não mudou, não toca no gamesPerSet — respeita escolha manual do usuário
+  }, [settings.pickleballScoringMode]);
 
   const canStart = useMemo(() => {
     const hasP1 = settings.p1Name.trim().length > 0;
