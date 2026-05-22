@@ -1,19 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Send, MessageSquare, PieChart, Users, User, Pin, Trash2, Loader2, Plus, X, ChevronDown, ChevronUp, Mail } from 'lucide-react';
-import { Communication, Reply } from '../types.ts';
+import type { Communication, Reply } from '@modules/communications/types';
 import type { UserProfile } from '@modules/auth';
 import { getDb } from '@infra/firebase';
-import { collection, addDoc, serverTimestamp, query, getDocs, deleteDoc, doc, where, orderBy, limit, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
-import { Button } from './Button.tsx';
-import { Input } from './Input.tsx';
-import { notificationService } from '../services/notificationService.ts';
+import {
+  addCommunication,
+  appendCommunicationReply,
+  deleteCommunication,
+  fetchAllCommunicationRecipients,
+  fetchCommunicationTargetPinByEmail,
+  subscribeRecentCommunications,
+  type FirebaseCommunicationDraft,
+} from '@infra/firebase/communications';
+import { Button } from '@shared/components/Button';
+import { Input } from '@shared/components/Input';
+import { notificationService } from '../services/notificationService';
 
 interface Props {
   adminProfile: UserProfile;
   appUrl: string;
 }
 
-export const CommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) => {
+export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) => {
   const [type, setType] = useState<'message' | 'poll'>('message');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -31,11 +39,7 @@ export const CommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) =
   useEffect(() => {
     const db = getDb();
     if (!db || !adminProfile?.email) return;
-    const q = query(collection(db, 'communications'), orderBy('createdAt', 'desc'), limit(10));
-    const unsub = onSnapshot(q, (snap) => {
-      setRecentComms(snap.docs.map(d => ({ id: d.id, ...d.data() } as Communication)));
-    });
-    return unsub;
+    return subscribeRecentCommunications(db, 10, setRecentComms);
   }, [adminProfile?.email]);
 
   const handleAddOption = () => {
@@ -65,16 +69,14 @@ export const CommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) =
 
       let targetId = 'all';
       if (targetType === 'individual') {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', targetEmail.toLowerCase().trim()));
-        const snap = await getDocs(q);
-        if (snap.empty) {
+        const targetPin = await fetchCommunicationTargetPinByEmail(db, targetEmail);
+        if (!targetPin) {
           throw new Error('Usuário não encontrado com este e-mail');
         }
-        targetId = snap.docs[0].data().pin;
+        targetId = targetPin;
       }
 
-      const commData: any = {
+      const commData: FirebaseCommunicationDraft = {
         type,
         title,
         content,
@@ -95,19 +97,12 @@ export const CommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) =
         };
       }
 
-      await addDoc(collection(db, 'communications'), commData);
+      await addCommunication(db, commData);
       
       // Gatilho de notificações híbridas (Push + Email)
-      const usersToNotify: { email: string; pushToken?: string }[] = [];
-      if (targetType === 'individual') {
-        usersToNotify.push({ email: targetEmail });
-      } else {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        usersSnap.forEach(d => {
-          const u = d.data();
-          if (u.email) usersToNotify.push({ email: u.email, pushToken: u.pushToken });
-        });
-      }
+      const usersToNotify = targetType === 'individual'
+        ? [{ email: targetEmail }]
+        : await fetchAllCommunicationRecipients(db);
 
       await notificationService.triggerHybridNotifications(commData, usersToNotify, sendEmail, appUrl);
       
@@ -137,9 +132,7 @@ export const CommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) =
       createdAt: Date.now()
     };
 
-    await updateDoc(doc(db, 'communications', commId), {
-      replies: arrayUnion(reply)
-    });
+    await appendCommunicationReply(db, commId, reply);
 
     setAdminReply('');
   };
@@ -147,7 +140,7 @@ export const CommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl }) =
   const handleDeleteComm = async (id: string) => {
     const db = getDb();
     if (!db) return;
-    await deleteDoc(doc(db, 'communications', id));
+    await deleteCommunication(db, id);
   };
 
   return (

@@ -10,7 +10,7 @@ import { EventDetailRoute } from './EventDetailRoute.tsx';
 import { SpectatorScreen } from '@modules/live/screens/SpectatorScreen.tsx';
 import { LocationScreen } from '@modules/history/screens/LocationScreen';
 import { TournamentsScreen } from '@modules/events';
-import { CommunicationsScreen } from '@modules/auth/screens/CommunicationsScreen.tsx';
+import { CommunicationsScreen } from '@modules/communications';
 import { useLive } from '@modules/live';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';

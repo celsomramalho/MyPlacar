@@ -1,5 +1,5 @@
-import { emailService } from './emailService.ts';
-import { Communication } from '../types.ts';
+import { emailService } from '@infra/email';
+import type { Communication } from '@modules/communications/types';
 
 /**
  * Serviço híbrido de notificações (Push + E-mail)

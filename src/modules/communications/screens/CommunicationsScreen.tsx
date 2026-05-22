@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, Loader2 } from 'lucide-react';
-import { Communication, Reply } from '../../../types';
+import type { Communication, Reply } from '@modules/communications/types';
 import { useGame } from '@modules/game';
 import { getDb } from '@infra/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import {
+  appendCommunicationReply,
+  markCommunicationAsRead,
+  subscribeUserCommunications,
+  updateCommunicationPoll,
+  updateCommunicationReactions,
+} from '@infra/firebase/communications';
 import { Button } from '@shared/components/Button';
 
 interface Props {
@@ -22,24 +28,14 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
     const db = getDb();
     if (!db) { setIsLoading(false); return; }
 
-    // Query for global messages or messages targeted to this user
-    const q = query(
-      collection(db, 'communications'),
-      where('targetUserId', 'in', ['all', userProfile.pin]),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Communication));
+    const unsubscribe = subscribeUserCommunications(db, userProfile.pin, (docs) => {
       setCommunications(docs);
       setIsLoading(false);
 
       // Mark as read
       docs.forEach(comm => {
         if (!comm.readBy?.includes(userProfile.pin)) {
-          updateDoc(doc(db, 'communications', comm.id), {
-            readBy: arrayUnion(userProfile.pin)
-          });
+          markCommunicationAsRead(db, comm.id, userProfile.pin);
         }
       });
     });
@@ -72,10 +68,7 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
         return opt;
       });
 
-      await updateDoc(doc(db, 'communications', commId), {
-        'poll.options': newOptions,
-        'poll.totalVotes': comm.poll.totalVotes + 1
-      });
+      await updateCommunicationPoll(db, commId, newOptions, comm.poll.totalVotes + 1);
     } catch (error) {
       console.error('Erro ao votar:', error);
     } finally {
@@ -99,7 +92,7 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
       reactions[emoji] = [...users, userProfile.pin];
     }
 
-    await updateDoc(doc(db, 'communications', commId), { reactions });
+    await updateCommunicationReactions(db, commId, reactions);
   };
 
   const handleSendReply = async (commId: string) => {
@@ -114,9 +107,7 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
       createdAt: Date.now()
     };
 
-    await updateDoc(doc(db, 'communications', commId), {
-      replies: arrayUnion(reply)
-    });
+    await appendCommunicationReply(db, commId, reply);
 
     setReplyText(prev => ({ ...prev, [commId]: '' }));
   };

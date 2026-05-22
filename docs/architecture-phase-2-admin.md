@@ -287,3 +287,559 @@ Resultado:
 - 64 testes passando;
 - 0 violacoes no dependency-cruiser;
 - build concluido com sucesso.
+
+## 16. Checkpoint da leva pequena de system/config
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma segunda leva pequena em `AdminScreen`, limitada a reduzir conhecimento direto do documento tecnico `system/config`.
+
+### 16.1 Consolidado nesta leva
+Foi criado o helper tecnico:
+
+```text
+src/infrastructure/firebase/systemConfig.ts
+```
+
+Esse helper centraliza:
+
+- leitura de `system/config`;
+- escrita parcial com merge em `system/config`;
+- tipo tecnico `FirebaseSystemConfig`.
+
+`AdminScreen` passou a usar:
+
+- `fetchSystemConfig`;
+- `saveSystemConfigPatch`.
+
+### 16.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- reorganizacao de Firebase Storage ou buckets alem da persistencia da lista em `system/config`;
+- extracao de eventos administrativos;
+- extracao de usuarios/admin;
+- extracao de icones/categorias/esportes;
+- decomposicao visual de `AdminScreen`;
+- mudancas em Supabase ou comunicacoes.
+
+### 16.3 Estado arquitetural apos a leva
+`AdminScreen` nao referencia mais diretamente o caminho Firestore `system/config`.
+
+A tela ainda decide como aplicar os valores em estado local e continua responsavel pela UI e pelas mensagens de status. Isso preserva comportamento atual e deixa a infraestrutura apenas com acesso tecnico.
+
+### 16.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 17. Checkpoint da leva pequena de usuarios/admin
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma terceira leva pequena em `AdminScreen`, limitada aos acessos tecnicos de gestao administrativa de usuarios.
+
+### 17.1 Consolidado nesta leva
+Foram adicionados helpers em:
+
+```text
+src/infrastructure/firebase/users.ts
+```
+
+Esses helpers centralizam:
+
+- busca de perfis por prefixo de e-mail;
+- atualizacao do `planType` do usuario com merge no documento existente.
+
+`AdminScreen` passou a usar:
+
+- `searchUserProfilesByEmailPrefix`;
+- `updateUserPlanType`.
+
+### 17.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- migracao manual Firebase -> Supabase;
+- espelhamento Supabase alem da chamada ja existente apos alterar plano;
+- regras de autorizacao admin;
+- tela ou UX de busca de usuarios;
+- demais operacoes de usuarios fora de busca e plano.
+
+### 17.3 Estado arquitetural apos a leva
+`AdminScreen` nao monta mais diretamente a query Firestore de busca de usuarios por e-mail e nao escreve diretamente o `planType` no documento `users`.
+
+A tela continua responsavel por orquestrar estado local, mensagens e espelhamento Supabase ja existente, preservando comportamento.
+
+### 17.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 18. Checkpoint da leva pequena de icones administrativos
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma quarta leva pequena em `AdminScreen`, limitada ao acesso Firestore dos metadados de categorias e esportes.
+
+### 18.1 Consolidado nesta leva
+Foi criado o helper tecnico:
+
+```text
+src/infrastructure/firebase/adminIcons.ts
+```
+
+Esse helper centraliza:
+
+- leitura de `category_icons` e `sport_icons`;
+- salvamento de um item administrativo de categoria ou esporte;
+- exclusao de um item administrativo de categoria ou esporte;
+- tipos tecnicos `FirebaseAdminCategoryIcon` e `FirebaseAdminSportIcon`.
+
+`AdminScreen` passou a usar:
+
+- `fetchAdminIconCatalog`;
+- `saveAdminIcon`;
+- `deleteAdminIcon`.
+
+### 18.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- upload de imagens/base64;
+- Firebase Storage;
+- reorganizacao do mirror Supabase de icones;
+- migracao manual Firebase -> Supabase;
+- UI de edicao de categorias/esportes.
+
+### 18.3 Estado arquitetural apos a leva
+`AdminScreen` nao monta mais diretamente as operacoes Firestore principais de `category_icons` e `sport_icons`.
+
+A tela continua responsavel por estado local, selecao, edicao visual e chamada ao espelhamento Supabase ja existente.
+
+### 18.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 19. Checkpoint da leva pequena de eventos administrativos
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma quinta leva pequena em `AdminScreen`, limitada ao acesso Firestore da gestao administrativa de eventos.
+
+### 19.1 Consolidado nesta leva
+Foi criado o helper tecnico:
+
+```text
+src/infrastructure/firebase/adminEvents.ts
+```
+
+Esse helper centraliza:
+
+- listagem de documentos de `events` para administracao;
+- salvamento de um evento administrativo com merge;
+- exclusao de um evento administrativo.
+
+`AdminScreen` passou a usar:
+
+- `fetchAdminEvents`;
+- `saveAdminEvent`;
+- `deleteAdminEvent`.
+
+### 19.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- subcolecoes de inscricoes de eventos;
+- regras de pareamento, partidas ou coadministradores;
+- telas publicas do modulo `events`;
+- upload e persistencia de banner em Storage;
+- reorganizacao de Supabase ou comunicacoes;
+- decomposicao visual de `AdminScreen`.
+
+### 19.3 Estado arquitetural apos a leva
+`AdminScreen` nao monta mais diretamente as operacoes Firestore principais da colecao `events` usadas pela aba administrativa.
+
+A tela continua responsavel por estado local, ordenacao, edicao visual, mensagens de status e recarregamento da lista apos salvar.
+
+### 19.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 20. Checkpoint da leva estrutural de comunicacoes/admin
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma leva estrutural pequena para tirar o painel administrativo de comunicacoes da pasta legada `src/components`.
+
+### 20.1 Consolidado nesta leva
+O painel administrativo de comunicacoes foi movido para:
+
+```text
+src/modules/communications/components/AdminCommunicationsPanel.tsx
+```
+
+Foi criada a API publica minima do modulo:
+
+```text
+src/modules/communications/index.ts
+```
+
+Essa API publica expoe somente:
+
+- `AdminCommunicationsPanel`
+
+`AdminScreen` passou a consumir o painel por:
+
+- `@modules/communications`
+
+### 20.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- mover a tela publica de comunicados que ainda esta em `auth`;
+- extrair helpers Firestore de comunicacoes;
+- alterar `notificationService`;
+- mover tipos globais de `Communication` e `Reply`;
+- redesenhar o painel ou mudar UX de envio;
+- alterar regras de e-mail, push, enquetes, respostas ou reacoes.
+
+### 20.3 Estado arquitetural apos a leva
+`CommunicationsPanel` deixou de existir em `src/components` como componente legado.
+
+O dominio `communications` agora tem fronteira propria inicial e pode receber, em levas separadas, a tela publica e os helpers tecnicos de Firestore.
+
+### 20.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 21. Checkpoint da leva estrutural da tela publica de comunicacoes
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma leva estrutural pequena para tirar a tela publica de comunicados do modulo `auth`.
+
+### 21.1 Consolidado nesta leva
+A tela publica de comunicacoes foi movida para:
+
+```text
+src/modules/communications/screens/CommunicationsScreen.tsx
+```
+
+A API publica do modulo `communications` passou a expor:
+
+- `AdminCommunicationsPanel`;
+- `CommunicationsScreen`.
+
+`AppScreenRouter` passou a consumir a tela por:
+
+- `@modules/communications`
+
+### 21.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- extrair helpers Firestore de comunicacoes;
+- mover tipos globais de `Communication`, `Reply` e `PollOption`;
+- alterar regras de leitura, voto, reacao ou resposta;
+- alterar `notificationService`;
+- redesenhar a tela publica ou o painel admin.
+
+### 21.3 Estado arquitetural apos a leva
+`auth` nao contem mais a tela publica de comunicados.
+
+O modulo `communications` agora concentra a entrada administrativa e a entrada publica do dominio, ainda preservando os acessos tecnicos diretos para uma proxima leva pequena.
+
+### 21.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 22. Checkpoint da leva pequena de infraestrutura de comunicacoes
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma leva pequena para reduzir acesso direto ao Firestore nos fluxos de comunicacoes.
+
+### 22.1 Consolidado nesta leva
+Foi criado o helper tecnico:
+
+```text
+src/infrastructure/firebase/communications.ts
+```
+
+Esse helper centraliza:
+
+- assinatura dos comunicados recentes para administracao;
+- assinatura dos comunicados visiveis para um usuario;
+- contagem de comunicados nao lidos;
+- criacao e exclusao de comunicados;
+- marcacao de comunicado como lido;
+- adicao de respostas;
+- atualizacao de votos de enquete;
+- atualizacao de reacoes;
+- busca do PIN de destinatario por e-mail;
+- busca de destinatarios para notificacoes em massa.
+
+Passaram a usar esse helper:
+
+- `AdminCommunicationsPanel`;
+- `CommunicationsScreen`;
+- `useCommunicationsBadge`.
+
+### 22.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- mover tipos globais de `Communication`, `Reply` e `PollOption`;
+- alterar contrato de dados da colecao `communications`;
+- mudar UX de envio, leitura, voto, reacao ou resposta;
+- alterar `notificationService`;
+- reorganizar e-mail ou push.
+
+### 22.3 Estado arquitetural apos a leva
+As telas de comunicacoes e o hook de badge nao montam mais queries ou updates diretamente contra a colecao `communications`.
+
+As telas continuam responsaveis por estado local, validacoes de interacao e montagem dos dados de UI, enquanto `infrastructure/firebase/communications` concentra o acesso tecnico ao Firestore.
+
+### 22.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 23. Checkpoint da leva pequena de tipos de comunicacoes
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma leva pequena para tirar os tipos de comunicacoes do arquivo global `src/types.ts`.
+
+### 23.1 Consolidado nesta leva
+Foi criado:
+
+```text
+src/modules/communications/types.ts
+```
+
+Esse arquivo passou a concentrar:
+
+- `Communication`;
+- `Reply`;
+- `PollOption`.
+
+A API publica do modulo `communications` passou a expor esses tipos por:
+
+- `@modules/communications`
+
+Foram atualizados os imports em:
+
+- `AdminCommunicationsPanel`;
+- `CommunicationsScreen`;
+- `src/infrastructure/firebase/communications.ts`;
+- `src/services/notificationService.ts`.
+
+### 23.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- alterar o contrato de dados de `communications`;
+- renomear campos Firestore;
+- mover `notificationService` para dentro do modulo;
+- revisar modelo de push/e-mail;
+- mexer nos demais tipos globais de `src/types.ts`.
+
+### 23.3 Estado arquitetural apos a leva
+`src/types.ts` nao contem mais os tipos de comunicacoes.
+
+O dominio `communications` agora concentra seus componentes, telas, tipos e helpers tecnicos de Firebase.
+
+### 23.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 24. Checkpoint da leva pequena de servico de notificacoes de comunicacoes
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma leva pequena para aproximar o servico de notificacoes do dominio `communications`.
+
+### 24.1 Consolidado nesta leva
+O servico foi movido de:
+
+```text
+src/services/notificationService.ts
+```
+
+para:
+
+```text
+src/modules/communications/services/notificationService.ts
+```
+
+`AdminCommunicationsPanel` passou a consumir o servico por caminho interno do modulo.
+
+A compat layer legada:
+
+```text
+src/services/emailService.ts
+```
+
+foi removida porque nao havia mais consumidores; os fluxos continuam usando a infraestrutura oficial:
+
+- `@infra/email`
+
+### 24.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- implementar push real no lugar da simulacao atual;
+- alterar templates de e-mail;
+- alterar contrato de envio hibrido;
+- mover a infraestrutura de e-mail;
+- redesenhar o painel de comunicacoes.
+
+### 24.3 Estado arquitetural apos a leva
+O dominio `communications` concentra agora:
+
+- componentes;
+- telas;
+- tipos;
+- helpers tecnicos de Firebase;
+- servico de notificacao especifico de comunicados.
+
+### 24.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.
+
+## 25. Checkpoint da leva pequena de Firebase Storage/admin
+Data de referencia: 22 de maio de 2026
+
+Foi executada uma leva pequena para reduzir acesso direto ao Firebase Storage dentro de `AdminScreen`.
+
+### 25.1 Consolidado nesta leva
+Foi criado o helper tecnico:
+
+```text
+src/infrastructure/firebase/adminStorage.ts
+```
+
+Esse helper centraliza:
+
+- normalizacao do nome do bucket;
+- selecao do bucket padrao ou bucket adicional;
+- listagem recursiva de arquivos;
+- leitura de URL e metadados de arquivos;
+- upload de arquivo administrativo;
+- exclusao de arquivo administrativo;
+- tipo tecnico `FirebaseAdminStorageFile`.
+
+`AdminScreen` passou a usar:
+
+- `fetchAdminStorageFiles`;
+- `uploadAdminStorageFile`;
+- `deleteAdminStorageFile`.
+
+### 25.2 O que permaneceu propositalmente fora
+Nao foram tratados nesta leva:
+
+- persistencia da lista de buckets em `system/config`;
+- UI da aba de storage;
+- regras de seguranca do Firebase Storage;
+- upload de imagens/base64 dos icones administrativos;
+- reorganizacao de arquivos ou pastas dentro dos buckets.
+
+### 25.3 Estado arquitetural apos a leva
+`AdminScreen` nao importa mais APIs diretas de `firebase/storage`.
+
+A tela continua responsavel por estado local, bucket ativo, mensagens e recarregamento da lista apos upload/exclusao.
+
+### 25.4 Validacao
+Validado nesta leva:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm depcruise`
+- `pnpm build`
+
+Resultado:
+
+- tipagem OK;
+- 64 testes passando;
+- 0 violacoes no dependency-cruiser;
+- build concluido com sucesso.

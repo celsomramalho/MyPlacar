@@ -1,9 +1,24 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Upload, Loader2, CheckCircle2, AlertCircle, Sparkles, Plus, Trash2, ChevronDown, Save, Clock, User, Settings as SettingsIcon, ArrowLeft, Edit2, Database, Wand2, X, ShieldCheck, LayoutGrid, Trophy, Mic, Type, HelpCircle, ChevronUp, Volume2, Info, Search, Star, Crown, Edit3, Download, HardDrive, Copy, ExternalLink, FileText, RotateCw, Check, Wifi, Ticket, Image as ImageIcon, Send, Menu } from 'lucide-react';
 import { getDb, getStorageInstance, clearFirestoreCache } from '@infra/firebase';
-import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, writeBatch, query, where, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, getDocs, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { deleteAdminEvent, fetchAdminEvents, saveAdminEvent } from '@infra/firebase/adminEvents';
+import {
+  deleteAdminIcon,
+  fetchAdminIconCatalog,
+  saveAdminIcon,
+  type FirebaseAdminCategoryIcon,
+  type FirebaseAdminSportIcon,
+} from '@infra/firebase/adminIcons';
+import {
+  deleteAdminStorageFile,
+  fetchAdminStorageFiles,
+  uploadAdminStorageFile,
+  type FirebaseAdminStorageFile,
+} from '@infra/firebase/adminStorage';
+import { fetchSystemConfig, saveSystemConfigPatch } from '@infra/firebase/systemConfig';
+import { searchUserProfilesByEmailPrefix, updateUserPlanType } from '@infra/firebase/users';
 import { deleteIcon, mirrorIcon, mirrorMatches, mirrorPartners, mirrorUser } from '@infra/supabase';
-import { ref, listAll, uploadBytes, getDownloadURL, deleteObject, StorageReference, getStorage, getMetadata } from 'firebase/storage';
 import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../../../constants';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '../../../components/Toggle';
@@ -13,9 +28,8 @@ import type { MatchHistoryItem } from '@modules/history/types';
 import type { TournamentEvent } from '@modules/events/types';
 import { VoiceCommands, ErrorSoundType } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
+import { AdminCommunicationsPanel } from '@modules/communications';
 import { playErrorBeep, unlockAudio } from '../../../hooks/useScoreAnnouncer';
-
-import { CommunicationsPanel } from '../../../components/CommunicationsPanel';
 
 interface Props {
   onBack: () => void;
@@ -29,32 +43,10 @@ interface Props {
   userProfile?: UserProfile;
 }
 
-interface StorageFile {
-  name: string;
-  fullPath: string;
-  url: string;
-  size: number;
-  updated: string;
-  contentType: string;
-}
+type StorageFile = FirebaseAdminStorageFile;
 
-interface CategoryItem {
-  id: string;
-  name: string;
-  url: string;
-  isActive?: boolean;
-  updatedAt?: string;
-}
-
-interface SportItem {
-  id: string;
-  name: string;
-  url: string;
-  group: string;
-  engine: string;
-  isActive?: boolean;
-  updatedAt?: string;
-}
+type CategoryItem = FirebaseAdminCategoryIcon;
+type SportItem = FirebaseAdminSportIcon;
 
 export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory, initialTab, onOpenMenu, userProfile }) => {
   const [adminTab, setAdminTab] = useState<'configs' | 'users' | 'icons' | 'events' | 'comms'>(initialTab || 'configs');
@@ -180,9 +172,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db) return;
     setIsLoadingEvents(true);
     try {
-      const snap = await getDocs(collection(db, "events"));
-      const list: TournamentEvent[] = [];
-      snap.forEach(d => list.push({ pin: d.id, ...d.data() } as TournamentEvent));
+      const list = await fetchAdminEvents(db);
       setEventList(list.sort((a,b) => b.createdAt - a.createdAt));
     } catch (_e) { console.error('Erro ao carregar eventos:', _e); } finally { setIsLoadingEvents(false); }
   };
@@ -191,12 +181,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const db = getDb();
     if (!db) return;
     try {
-      const catSnap = await getDocs(collection(db, "category_icons"));
-      const sportSnap = await getDocs(collection(db, "sport_icons"));
-      const catList: CategoryItem[] = [];
-      catSnap.forEach(doc => catList.push({ id: doc.id, isActive: true, ...doc.data() } as CategoryItem));
-      const sportList: SportItem[] = [];
-      sportSnap.forEach(doc => sportList.push({ id: doc.id, isActive: true, ...doc.data() } as SportItem));
+      const { categories: catList, sports: sportList } = await fetchAdminIconCatalog(db);
       
       const finalCats = catList.length === 0 ? INITIAL_SPORT_GROUPS.map(g => ({ id: g.id, name: g.name, url: g.icon, isActive: true })) : catList;
       const finalSports = sportList.length === 0 ? INITIAL_SPORT_LIST.map(s => ({ id: s.id, name: s.name, url: s.defaultIcon, group: s.group, engine: s.engine, isActive: true })) : sportList;
@@ -211,10 +196,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const db = getDb();
     if (!db) return;
     try {
-      const configRef = doc(db, "system", "config");
-      const snap = await getDoc(configRef);
-      if (snap.exists()) {
-        const data = snap.data();
+      const data = await fetchSystemConfig(db);
+      if (data) {
         setGoldenRule(data.goldenRuleEnabled ?? true);
         if (data.voiceCommands) setVoiceCommands(data.voiceCommands);
         if (data.errorSoundType) setErrorSound(data.errorSoundType);
@@ -240,44 +223,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     setStorageFiles([]);
     
     try {
-      const cleanBucket = activeBucket.trim().replace(/^gs:\/\//, '');
-      const storageInstance = cleanBucket === defaultBucketName ? mainStorageInstance : getStorage(mainStorageInstance.app, `gs://${cleanBucket}`);
-      
-      const allFiles: StorageFile[] = [];
-
-      const crawl = async (folderRef: StorageReference) => {
-        try {
-          const res = await listAll(folderRef);
-          const filePromises = res.items.map(async (item) => {
-            try {
-              const [url, metadata] = await Promise.all([
-                getDownloadURL(item),
-                getMetadata(item)
-              ]);
-              return { 
-                name: item.name, 
-                fullPath: item.fullPath, 
-                url: url,
-                size: metadata.size,
-                updated: metadata.timeCreated,
-                contentType: metadata.contentType || 'unknown'
-              };
-            } catch (_e) {
-              return { name: item.name, fullPath: item.fullPath, url: '#', size: 0, updated: '', contentType: 'unknown' };
-            }
-          });
-          const levelFiles = await Promise.all(filePromises);
-          allFiles.push(...levelFiles);
-          for (const prefix of res.prefixes) await crawl(prefix);
-        } catch (err: unknown) {
-          const storageErr = err as { code?: string; message?: string };
-          if (storageErr.code === 'storage/unauthorized') throw new Error("Acesso negado ao bucket. Verifique as regras de segurança.");
-          throw err;
-        }
-      };
-
-      await crawl(ref(storageInstance, ''));
-      setStorageFiles(allFiles);
+      const files = await fetchAdminStorageFiles(mainStorageInstance, defaultBucketName, activeBucket);
+      setStorageFiles(files);
     } catch (e: unknown) {
       const storageErr = e as { message?: string };
       setStorageError(storageErr.message || "Erro ao acessar o armazenamento.");
@@ -295,7 +242,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!buckets.includes(clean)) {
       const updated = [...buckets, clean];
       setBuckets(updated);
-      await setDoc(doc(db, "system", "config"), { buckets: updated }, { merge: true });
+      await saveSystemConfigPatch(db, { buckets: updated });
       setStatus({ type: 'success', msg: "Bucket adicionado com sucesso!" });
     }
     setNewBucketName("");
@@ -343,7 +290,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       if (!db) return;
       const updated = buckets.filter(b => b !== id);
       setBuckets(updated);
-      await setDoc(doc(db, "system", "config"), { buckets: updated }, { merge: true });
+      await saveSystemConfigPatch(db, { buckets: updated });
       if (activeBucket === id) setActiveBucket(defaultBucketName);
       setStatus({ type: 'success', msg: "Bucket removido da lista." });
       setDeleteConfirm(null);
@@ -355,7 +302,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       const db = getDb();
       if (!db) return;
       try {
-        await deleteDoc(doc(db, "events", id));
+        await deleteAdminEvent(db, id);
         setEventList(prev => prev.filter(e => e.pin !== id));
         setStatus({ type: 'success', msg: "Evento removido com sucesso." });
       } catch (_e) {
@@ -366,18 +313,19 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       return;
     }
 
-    const db = getDb();
-    if (!db) return;
-    try {
-      const coll = type === 'category' ? "category_icons" : "sport_icons";
-      await deleteDoc(doc(db, coll, id));
-      if (type === 'sport' || type === 'category') deleteIcon(type, id);
-      if (type === 'category') { setCategories(prev => prev.filter(c => c.id !== id)); setSelectedCatId(""); }
-      else { setSports(prev => prev.filter(s => s.id !== id)); setSelectedSportId(""); }
-      setStatus({ type: 'success', msg: "Excluído com sucesso." });
-    } catch (_e) { setStatus({ type: 'error', msg: "Erro ao excluir." }); } finally {
-      setDeleteConfirm(null);
-      setTimeout(() => setStatus(null), 2000);
+    if (type === 'category' || type === 'sport') {
+      const db = getDb();
+      if (!db) return;
+      try {
+        await deleteAdminIcon(db, type, id);
+        deleteIcon(type, id);
+        if (type === 'category') { setCategories(prev => prev.filter(c => c.id !== id)); setSelectedCatId(""); }
+        else { setSports(prev => prev.filter(s => s.id !== id)); setSelectedSportId(""); }
+        setStatus({ type: 'success', msg: "Excluído com sucesso." });
+      } catch (_e) { setStatus({ type: 'error', msg: "Erro ao excluir." }); } finally {
+        setDeleteConfirm(null);
+        setTimeout(() => setStatus(null), 2000);
+      }
     }
   };
 
@@ -388,10 +336,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
     setIsUploadingFile(true);
     try {
-      const cleanBucket = activeBucket.trim().replace(/^gs:\/\//, '');
-      const storageInstance = cleanBucket === defaultBucketName ? mainStorageInstance : getStorage(mainStorageInstance.app, `gs://${cleanBucket}`);
-      const storageRef = ref(storageInstance, `${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
+      await uploadAdminStorageFile(mainStorageInstance, defaultBucketName, activeBucket, file);
       setStatus({ type: 'success', msg: "Arquivo enviado com sucesso!" });
       fetchStorageFiles();
     } catch (_e) {
@@ -406,10 +351,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const mainStorageInstance = getStorageInstance();
     if (!mainStorageInstance) return;
     try {
-      const cleanBucket = activeBucket.trim().replace(/^gs:\/\//, '');
-      const storageInstance = cleanBucket === defaultBucketName ? mainStorageInstance : getStorage(mainStorageInstance.app, `gs://${cleanBucket}`);
-      const fileRef = ref(storageInstance, path);
-      await deleteObject(fileRef);
+      await deleteAdminStorageFile(mainStorageInstance, defaultBucketName, activeBucket, path);
       setStatus({ type: 'success', msg: "Arquivo removido do storage." });
       fetchStorageFiles();
     } catch (_e) {
@@ -424,12 +366,12 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!userSearch.trim()) return;
     setIsSearchingUsers(true);
     const db = getDb();
-    if (!db) return;
+    if (!db) {
+      setIsSearchingUsers(false);
+      return;
+    }
     try {
-      const q = query(collection(db, "users"), where("email", ">=", userSearch.toLowerCase().trim()), where("email", "<=", userSearch.toLowerCase().trim() + '\uf8ff'));
-      const snap = await getDocs(q);
-      const list: UserProfile[] = [];
-      snap.forEach(d => list.push(d.data() as UserProfile));
+      const list = await searchUserProfilesByEmailPrefix(db, userSearch);
       setFoundUsers(list);
     } catch (e) { console.error(e); } finally { setIsSearchingUsers(false); }
   };
@@ -439,7 +381,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db) return;
     const nextPlan: 'free' | 'premium' = user.planType === 'premium' ? 'free' : 'premium';
     try {
-      await setDoc(doc(db, "users", user.email), { planType: nextPlan }, { merge: true });
+      await updateUserPlanType(db, user.email, nextPlan);
       mirrorUser({ ...user, planType: nextPlan });
       setFoundUsers(prev => prev.map(u => u.email === user.email ? { ...u, planType: nextPlan } : u));
       setStatus({ type: 'success', msg: `Usuário ${user.nickname} agora é ${nextPlan === 'premium' ? 'premium' : 'free'}` });
@@ -553,7 +495,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const db = getDb();
     if (!db) return;
     try {
-      await setDoc(doc(db, "system", "config"), { goldenRuleEnabled: val }, { merge: true });
+      await saveSystemConfigPatch(db, { goldenRuleEnabled: val });
       setStatus({ type: 'success', msg: "Regra de ouro atualizada!" });
       setTimeout(() => setStatus(null), 2000);
     } catch (_e) { setStatus({ type: 'error', msg: "Falha ao salvar." }); }
@@ -564,12 +506,12 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db) return;
     setIsSavingVoice(true);
     try {
-      await setDoc(doc(db, "system", "config"), { 
+      await saveSystemConfigPatch(db, {
         voiceCommands: voiceCommands,
         errorSoundType: errorSound,
         appVersion: remoteAppVersion,
         appUrl: appUrl
-      }, { merge: true });
+      });
       setStatus({ type: 'success', msg: "Configurações globais salvas!" });
       setIsVoiceSaved(true);
     } catch (_e) {
@@ -591,9 +533,9 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db) return;
     setLoading(item.id);
     try {
-      const coll = type === 'category' ? "category_icons" : "sport_icons";
-      await setDoc(doc(db, coll, item.id), { ...item, updatedAt: new Date().toISOString() });
-      mirrorIcon(type, { ...item, updatedAt: new Date().toISOString() });
+      const itemWithTimestamp = { ...item, updatedAt: new Date().toISOString() };
+      await saveAdminIcon(db, type, itemWithTimestamp);
+      mirrorIcon(type, itemWithTimestamp);
       setStatus({ type: 'success', msg: "Salvo com sucesso!" });
       setIsEditingId(false);
       if (type === 'category') setIsCatSaved(true);
@@ -640,10 +582,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const db = getDb();
     if (!db) return;
     try {
-      await setDoc(doc(db, "events", editingEvent.pin), {
-        ...editingEvent,
-        createdAt: editingEvent.createdAt || Date.now()
-      }, { merge: true });
+      await saveAdminEvent(db, editingEvent);
       setStatus({ type: 'success', msg: "Evento salvo com sucesso!" });
       fetchEvents();
       setEditingEvent(null);
@@ -1204,7 +1143,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         )}
         {adminTab === 'comms' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <CommunicationsPanel appUrl={appUrl} adminProfile={{ name: 'Admin', nickname: 'Administrador', email: 'admin@myplacar.pro', phone: '', pin: 'admin', isProfileComplete: true, isAdmin: true }} />
+            <AdminCommunicationsPanel appUrl={appUrl} adminProfile={{ name: 'Admin', nickname: 'Administrador', email: 'admin@myplacar.pro', phone: '', pin: 'admin', isProfileComplete: true, isAdmin: true }} />
           </div>
         )}
       </main>

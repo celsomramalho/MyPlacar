@@ -1,4 +1,5 @@
-import { collection, doc, getDocs, getDocsFromServer, query, updateDoc, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, doc, getDocs, getDocsFromServer, query, setDoc, updateDoc, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
+import type { PlanType, UserProfile } from '@modules/auth/types';
 
 export interface FirebaseUserByPin {
   id: string;
@@ -129,5 +130,28 @@ export const updateUserProfileFields = (
     passkeyPublicKey?: string;
   },
 ) => updateDoc(doc(db, 'users', email.toLowerCase().trim()), data);
+
+export const searchUserProfilesByEmailPrefix = async (
+  db: Firestore,
+  emailPrefix: string,
+): Promise<UserProfile[]> => {
+  const normalizedPrefix = emailPrefix.toLowerCase().trim();
+  if (!normalizedPrefix) return [];
+
+  const usersQuery = query(
+    collection(db, 'users'),
+    where('email', '>=', normalizedPrefix),
+    where('email', '<=', `${normalizedPrefix}\uf8ff`),
+  );
+  const snapshot = await getDocs(usersQuery);
+
+  return snapshot.docs.map(docSnapshot => docSnapshot.data() as UserProfile);
+};
+
+export const updateUserPlanType = (
+  db: Firestore,
+  email: string,
+  planType: PlanType,
+) => setDoc(doc(db, 'users', email), { planType }, { merge: true });
 
 export { getResolvedNickname, getUserAddedAt, normalizeUserPin };
