@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
-import { ScoreboardRoute } from './ScoreboardRoute.tsx';
-import { SettingsRoute } from './SettingsRoute.tsx';
-import { PartnersRoute } from './PartnersRoute.tsx';
-import { NewGameRoute } from './NewGameRoute.tsx';
-import { AdminRoute } from './AdminRoute.tsx';
-import { AuthRoute } from './AuthRoute.tsx';
-import { PublicScoreboardRoute } from './PublicScoreboardRoute.tsx';
-import { EventDetailRoute } from './EventDetailRoute.tsx';
-import { SpectatorScreen } from '@modules/live/screens/SpectatorScreen.tsx';
-import { LocationScreen } from '@modules/history/screens/LocationScreen';
-import { TournamentsScreen } from '@modules/events';
-import { CommunicationsScreen } from '@modules/communications';
+import React, { useState, Suspense, lazy } from 'react';
+
+const ScoreboardRoute = lazy(() => import('./ScoreboardRoute.tsx').then(m => ({ default: m.ScoreboardRoute })));
+const SettingsRoute = lazy(() => import('./SettingsRoute.tsx').then(m => ({ default: m.SettingsRoute })));
+const PartnersRoute = lazy(() => import('./PartnersRoute.tsx').then(m => ({ default: m.PartnersRoute })));
+const NewGameRoute = lazy(() => import('./NewGameRoute.tsx').then(m => ({ default: m.NewGameRoute })));
+const AdminRoute = lazy(() => import('./AdminRoute.tsx').then(m => ({ default: m.AdminRoute })));
+const AuthRoute = lazy(() => import('./AuthRoute.tsx').then(m => ({ default: m.AuthRoute })));
+const PublicScoreboardRoute = lazy(() => import('./PublicScoreboardRoute.tsx').then(m => ({ default: m.PublicScoreboardRoute })));
+const EventDetailRoute = lazy(() => import('./EventDetailRoute.tsx').then(m => ({ default: m.EventDetailRoute })));
+const SpectatorScreen = lazy(() => import('@modules/live/screens/SpectatorScreen.tsx').then(m => ({ default: m.SpectatorScreen })));
+const LocationScreen = lazy(() => import('@modules/history/screens/LocationScreen').then(m => ({ default: m.LocationScreen })));
+const TournamentsScreen = lazy(() => import('@modules/events').then(m => ({ default: m.TournamentsScreen })));
+const CommunicationsScreen = lazy(() => import('@modules/communications').then(m => ({ default: m.CommunicationsScreen })));
+
 import { useLive } from '@modules/live';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
@@ -183,126 +185,132 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
 
       <AppModal modalConfig={modalConfig} />
       <InstallPwaModal isOpen={showInstallPwa} onClose={() => setShowInstallPwa(false)} deferredPrompt={deferredPrompt} />
-
-      {currentScreen === 'spectator' && (spectatorMatchId || spectatorPin) && (
-        <SpectatorScreen matchId={spectatorMatchId || ''} spectatorPin={spectatorPin || ''} onExit={handleExitSpectator} />
-      )}
-
-      {currentScreen === 'public-scoreboard' && initialSpectatorPin && (
-        <PublicScoreboardRoute appUrl={appUrl} />
-      )}
-
-      {currentScreen === 'auth' && (
-        <AuthRoute
-          appUrl={appUrl}
-          handleCheckUpdate={handleCheckUpdate}
-          setIsUpdatingVersion={setIsUpdatingVersion}
-          setIsOfflineMode={setIsOfflineMode}
-          onOfflineMode={handleOfflineMode}
-        />
-      )}
-
-      {currentScreen === 'settings' && (
-        <SettingsRoute
-          appUrl={appUrl}
-          isSyncing={isSyncing}
-          isDownloading={isDownloading}
-          cloudMatchesCount={cloudMatchesCount}
-          syncHistoryToFirebase={syncHistoryToFirebase}
-          downloadHistoryFromFirebase={downloadHistoryFromFirebase}
-          handleLogout={handleLogout}
-          handleCheckUpdate={handleCheckUpdate}
-          unreadCommsCount={unreadCommsCount}
-          activeEvent={activeEvent}
-          userEntryDate={userEntryDate}
-          handleExitTournament={handleExitTournament}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }}
-          setIsUpdatingVersion={setIsUpdatingVersion}
-          onOpenMenu={() => setIsMenuOpen(true)}
-          setShowInstallPwa={setShowInstallPwa}
-          installPromptShownSession={installPromptShownSession}
-          setInstallPromptShownSession={setInstallPromptShownSession}
-        />
-      )}
-
-      {currentScreen === 'partners' && (
-        <PartnersRoute
-          appUrl={appUrl}
-          authReady={authReady}
-          activeEvent={activeEvent}
-          setSpectatorPin={setSpectatorPin}
-        />
-      )}
-
-      {currentScreen === 'new-game' && (
-        <NewGameRoute
-          activeEvent={activeEvent}
-          handleExitTournament={handleExitTournament}
-          isOfflineMode={isOfflineMode}
-          onExitOffline={handleExitOffline}
-          onOpenMenu={() => setIsMenuOpen(true)}
-          setActiveTab={setActiveTab}
-          onVersionTap={handleVersionTap}
-        />
-      )}
-
       {showLogViewer && <LogViewer logs={logs} onClose={() => setShowLogViewer(false)} onClear={clearLogs} />}
 
-      {currentScreen === 'admin' && (
-        <AdminRoute
-          adminTab={adminTab}
-          setActiveTab={setActiveTab}
-          handleImportData={handleImportData}
-          handleClearAllHistory={handleClearAllHistory}
-          onOpenMenu={() => setIsMenuOpen(true)}
-        />
-      )}
+      <Suspense fallback={
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] bg-slate-50">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <p className="mt-4 text-xs font-black uppercase tracking-widest text-slate-400 animate-pulse">Carregando...</p>
+        </div>
+      }>
+        {currentScreen === 'spectator' && (spectatorMatchId || spectatorPin) && (
+          <SpectatorScreen matchId={spectatorMatchId || ''} spectatorPin={spectatorPin || ''} onExit={handleExitSpectator} />
+        )}
 
-      {currentScreen === 'scoreboard' &&
-        new URLSearchParams(window.location.search).get('viewMode') !== 'scoreboard' &&
-        (gameState || isWaitingSync) && (
-          <ScoreboardRoute
+        {currentScreen === 'public-scoreboard' && initialSpectatorPin && (
+          <PublicScoreboardRoute appUrl={appUrl} />
+        )}
+
+        {currentScreen === 'auth' && (
+          <AuthRoute
             appUrl={appUrl}
-            deviceId={deviceId}
-            currentFullDeviceName={currentFullDeviceName}
+            handleCheckUpdate={handleCheckUpdate}
+            setIsUpdatingVersion={setIsUpdatingVersion}
+            setIsOfflineMode={setIsOfflineMode}
+            onOfflineMode={handleOfflineMode}
+          />
+        )}
+
+        {currentScreen === 'settings' && (
+          <SettingsRoute
+            appUrl={appUrl}
+            isSyncing={isSyncing}
+            isDownloading={isDownloading}
+            cloudMatchesCount={cloudMatchesCount}
+            syncHistoryToFirebase={syncHistoryToFirebase}
+            downloadHistoryFromFirebase={downloadHistoryFromFirebase}
+            handleLogout={handleLogout}
+            handleCheckUpdate={handleCheckUpdate}
+            unreadCommsCount={unreadCommsCount}
+            activeEvent={activeEvent}
+            userEntryDate={userEntryDate}
+            handleExitTournament={handleExitTournament}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            onViewMap={id => { setFocusMatchId(id); setCurrentScreen('location'); }}
+            setIsUpdatingVersion={setIsUpdatingVersion}
+            onOpenMenu={() => setIsMenuOpen(true)}
+            setShowInstallPwa={setShowInstallPwa}
+            installPromptShownSession={installPromptShownSession}
+            setInstallPromptShownSession={setInstallPromptShownSession}
+          />
+        )}
+
+        {currentScreen === 'partners' && (
+          <PartnersRoute
+            appUrl={appUrl}
+            authReady={authReady}
+            activeEvent={activeEvent}
+            setSpectatorPin={setSpectatorPin}
+          />
+        )}
+
+        {currentScreen === 'new-game' && (
+          <NewGameRoute
+            activeEvent={activeEvent}
+            handleExitTournament={handleExitTournament}
             isOfflineMode={isOfflineMode}
             onExitOffline={handleExitOffline}
             onOpenMenu={() => setIsMenuOpen(true)}
             setActiveTab={setActiveTab}
-            setInitialConfirmDeleteJudge={setInitialConfirmDeleteJudge}
+            onVersionTap={handleVersionTap}
           />
         )}
 
-      {currentScreen === 'location' && (
-        <LocationScreen
-          focusMatchId={focusMatchId}
-          onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }}
-        />
-      )}
+        {currentScreen === 'admin' && (
+          <AdminRoute
+            adminTab={adminTab}
+            setActiveTab={setActiveTab}
+            handleImportData={handleImportData}
+            handleClearAllHistory={handleClearAllHistory}
+            onOpenMenu={() => setIsMenuOpen(true)}
+          />
+        )}
 
-      {currentScreen === 'tournaments' && (
-        <TournamentsScreen
-          registrations={registeredEvents}
-          onBack={() => setCurrentScreen('settings')}
-          onJoin={handleJoinTournament}
-          onSelectEvent={ev => handleSelectEvent(ev as unknown as TournamentEvent)}
-        />
-      )}
+        {currentScreen === 'scoreboard' &&
+          new URLSearchParams(window.location.search).get('viewMode') !== 'scoreboard' &&
+          (gameState || isWaitingSync) && (
+            <ScoreboardRoute
+              appUrl={appUrl}
+              deviceId={deviceId}
+              currentFullDeviceName={currentFullDeviceName}
+              isOfflineMode={isOfflineMode}
+              onExitOffline={handleExitOffline}
+              onOpenMenu={() => setIsMenuOpen(true)}
+              setActiveTab={setActiveTab}
+              setInitialConfirmDeleteJudge={setInitialConfirmDeleteJudge}
+            />
+          )}
 
-      {currentScreen === 'event-detail' && activeEvent && (
-        <EventDetailRoute
-          appUrl={appUrl}
-          event={activeEvent}
-          handleExitTournament={handleExitTournament}
-          setModalConfig={setModalConfig}
-        />
-      )}
+        {currentScreen === 'location' && (
+          <LocationScreen
+            focusMatchId={focusMatchId}
+            onBack={() => { setFocusMatchId(null); setActiveTab('history'); setCurrentScreen('settings'); }}
+          />
+        )}
 
-      {currentScreen === 'communications' && (
-        <CommunicationsScreen onBack={() => setCurrentScreen('settings')} />
-      )}
+        {currentScreen === 'tournaments' && (
+          <TournamentsScreen
+            registrations={registeredEvents}
+            onBack={() => setCurrentScreen('settings')}
+            onJoin={handleJoinTournament}
+            onSelectEvent={ev => handleSelectEvent(ev as unknown as TournamentEvent)}
+          />
+        )}
+
+        {currentScreen === 'event-detail' && activeEvent && (
+          <EventDetailRoute
+            appUrl={appUrl}
+            event={activeEvent}
+            handleExitTournament={handleExitTournament}
+            setModalConfig={setModalConfig}
+          />
+        )}
+
+        {currentScreen === 'communications' && (
+          <CommunicationsScreen onBack={() => setCurrentScreen('settings')} />
+        )}
+      </Suspense>
 
     </div>
   );

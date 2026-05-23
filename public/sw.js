@@ -4,6 +4,7 @@ const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/fonts.css',
 ];
 
 const OFFLINE_FALLBACK = `<!DOCTYPE html>

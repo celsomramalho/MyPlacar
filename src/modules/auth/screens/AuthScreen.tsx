@@ -27,7 +27,7 @@ interface Props {
 }
 
 export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, onOfflineMode, initialReferralPin = '', appUrl }) => {
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
   const [remoteVersionFound, setRemoteVersionFound] = useState<string | null>(null);
@@ -118,21 +118,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     };
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-      console.log("MyPlacar: Splash removido via timer.");
-    }, 2800);
-    
-    // Fail-safe extra: garante que após 6 segundos a tela sempre saia, 
-    // mesmo que haja algum erro no render anterior.
-    const failSafe = setTimeout(() => setShowSplash(false), 6000);
 
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(failSafe);
-    };
-  }, []);
 
   useEffect(() => {
     const initialCheck = async () => {
@@ -920,12 +906,12 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   return (
     <div className="min-h-screen bg-white flex flex-col p-8 animate-in slide-in-from-bottom-6 duration-700 overflow-y-auto no-scrollbar">
-      <div className="flex flex-col items-center justify-center mb-10 mt-6 text-center">
+      <div className="flex flex-col items-center justify-center mb-10 mt-6 text-center min-h-[240px]">
         <ScoreboardIcon className="w-32 h-32 mb-6 drop-shadow-2xl" />
         <h1 className="text-[36px] font-black text-black tracking-tighter leading-none font-display">MyPlacar Pro</h1>
         
         {/* Indicador de Status de Rede */}
-        <div className={`mt-4 px-4 py-1.5 rounded-full flex items-center gap-2 border transition-all duration-500 ${isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-amber-50 border-amber-100 text-amber-600 animate-pulse'}`}>
+        <div className={`mt-4 px-4 py-1.5 rounded-full flex items-center justify-center gap-2 border transition-all duration-500 min-w-[125px] ${isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-amber-50 border-amber-100 text-amber-600 animate-pulse'}`}>
           {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
           <span className="text-[10px] font-black uppercase tracking-widest">{isOnline ? 'Online' : 'Modo Offline'}</span>
         </div>
