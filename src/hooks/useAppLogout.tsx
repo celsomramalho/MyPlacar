@@ -50,11 +50,10 @@ export function useAppLogout(
         } else {
           const logoutUpdate: UpdateData<unknown> = {
             [`controllers.${deviceId}`]: deleteField(),
+            ...(gameState.commandOwnerId === deviceId
+              ? { commandOwnerId: null, commandOwner: null }
+              : {}),
           };
-          if (gameState.commandOwnerId === deviceId) {
-            logoutUpdate.commandOwnerId = null;
-            logoutUpdate.commandOwner = null;
-          }
           await updateDoc(doc(db, 'live_matches', targetPin), logoutUpdate).catch(() => {});
         }
       }
