@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+
 import { getDb } from '@infra/firebase';
 import { useUI } from '@modules/ui';
 import { APP_VERSION as LOCAL_CODE_VERSION } from '../constants.ts';
@@ -26,20 +26,23 @@ export function useAppConfig(authReady: boolean) {
     if (!authReady) return;
     const db = getDb();
     if (!db) return;
-    const unsubscribe = onSnapshot(doc(db, 'system', 'config'), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.appUrl) {
-          const isDev =
-            window.location.hostname.includes('run.app') ||
-            window.location.hostname.includes('localhost');
-          if (!isDev) {
-            setAppUrl(data.appUrl);
+    let unsubscribe: (() => void) | undefined;
+    import('firebase/firestore').then(({ doc, onSnapshot }) => {
+      unsubscribe = onSnapshot(doc(db, 'system', 'config'), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.appUrl) {
+            const isDev =
+              window.location.hostname.includes('run.app') ||
+              window.location.hostname.includes('localhost');
+            if (!isDev) {
+              setAppUrl(data.appUrl);
+            }
           }
         }
-      }
+      });
     });
-    return () => unsubscribe();
+    return () => unsubscribe?.();
   }, [authReady]);
 
   const handleCheckUpdate = useCallback(async () => {
@@ -47,6 +50,7 @@ export function useAppConfig(authReady: boolean) {
     const db = getDb();
     if (!db) return false;
     try {
+      const { doc, getDoc } = await import('firebase/firestore');
       const snap = await getDoc(doc(db, 'system', 'config'));
       if (snap.exists()) {
         const remoteVersion = (snap.data().appVersion || '').toString().trim().replace(/^v/, '');

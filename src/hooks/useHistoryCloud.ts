@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { serverTimestamp } from 'firebase/firestore';
+
 import {
   clearCloudHistory,
   downloadHistoryBatch,
@@ -74,6 +74,7 @@ export function useHistoryCloud(authReady: boolean) {
       setIsSyncing(true);
       const safetyTimeout = setTimeout(() => setIsSyncing(false), 15000);
       try {
+        const { serverTimestamp } = await import('firebase/firestore');
         const { updatedHistory, syncedCount } = await syncHistoryBatch({
           db,
           history: currentList,

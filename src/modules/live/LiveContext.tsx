@@ -1,6 +1,5 @@
 import React, { createContext, useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { doc, setDoc, updateDoc, deleteField } from 'firebase/firestore';
-import type { FieldValue } from 'firebase/firestore';
+import type { doc, setDoc, updateDoc, deleteField, FieldValue } from 'firebase/firestore';
 import { getDb } from '@infra/firebase';
 import type { ControllerRecord, GameState, LiveLogEntry, LivePapel, LiveType } from '../../types.ts';
 import type { LiveContextValue, LiveProviderProps } from './types.ts';
@@ -235,7 +234,7 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
   // gameState e activeLives NÃO entram no dep array — são lidos via ref
   // para que o handler não seja recriado (e o exitTimer cancelado) a cada ponto.
   useEffect(() => {
-    const performExit = () => {
+    const performExit = async () => {
       // Se a flag 'alive' existe, o app foi montado recentemente — é um reload,
       // não uma saída definitiva. Consome a flag e aborta para não fechar a live.
       try {
@@ -251,6 +250,7 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
       if (!gs?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
       const db = getDb();
       if (!db) return;
+      const { doc, setDoc, updateDoc, deleteField } = await import('firebase/firestore');
       const myPin = userProfile.pin?.toUpperCase();
       const judgeMatch = lives.find(l => l.judgePin?.toUpperCase() === myPin);
 

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { doc, setDoc, updateDoc, deleteField, type FieldValue } from 'firebase/firestore';
+
 import { CheckCircle } from 'lucide-react';
 import { getDb } from '@infra/firebase';
 import { useGame } from '@modules/game';
@@ -7,6 +7,7 @@ import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import { DEFAULT_TENNIS_SETTINGS } from '../constants.ts';
 import { getDeviceId } from '../utils/device.ts';
+import type { UpdateData } from 'firebase/firestore';
 
 type ClearTournamentSession = () => void;
 
@@ -39,6 +40,7 @@ export function useAppLogout(
       if (db) {
         const targetPin = resolveTargetPin('write');
         if (!targetPin) return;
+        const { doc, setDoc, updateDoc, deleteField } = await import('firebase/firestore');
         if (gameState.commandOwnerId === deviceId) {
           await setDoc(
             doc(db, 'live_matches', targetPin),
@@ -46,10 +48,9 @@ export function useAppLogout(
             { merge: true },
           ).catch(() => {});
         } else {
-          const logoutUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> =
-            {
-              [`controllers.${deviceId}`]: deleteField(),
-            };
+          const logoutUpdate: UpdateData<unknown> = {
+            [`controllers.${deviceId}`]: deleteField(),
+          };
           if (gameState.commandOwnerId === deviceId) {
             logoutUpdate.commandOwnerId = null;
             logoutUpdate.commandOwner = null;

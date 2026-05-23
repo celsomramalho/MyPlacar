@@ -15,7 +15,7 @@ import { useCommunicationsBadge } from './hooks/useCommunicationsBadge.ts';
 import { useHistoryCloud } from './hooks/useHistoryCloud.ts';
 import { useTournamentSession } from './hooks/useTournamentSession.tsx';
 import { useDeepLinkScreen } from './hooks/useDeepLinkScreen.ts';
-import { useLiveFirestoreSync } from './hooks/useLiveFirestoreSync.tsx';
+const LiveSyncManager = React.lazy(() => import('./app/LiveSyncManager.tsx'));
 import { useRemoteCloudMatch } from './hooks/useRemoteCloudMatch.ts';
 import { useAppOfflineMode } from './hooks/useAppOfflineMode.ts';
 import { useAppStartup } from './hooks/useAppStartup.ts';
@@ -70,7 +70,7 @@ const AppContent: React.FC = () => {
   // ── Hooks de side-effect (listeners / wake-lock / startup) ───────────────
   useAppStartup({ partners, playerQueue, userProfile, matchSettings, setModalConfig });
 
-  useLiveFirestoreSync({ deviceId, currentFullDeviceName, initialSpectatorPin });
+
 
   // Mantém a tela acesa enquanto o placar estiver visível
   useWakeLock(currentScreen === 'scoreboard' || currentScreen === 'public-scoreboard');
@@ -81,43 +81,59 @@ const AppContent: React.FC = () => {
   });
 
   // ── Render ────────────────────────────────────────────────────────────────
+  // LiveSyncManager é carregado de forma lazy — o SDK do Firestore e toda a
+  // lógica de sincronização (~1000 linhas) só são baixados após o primeiro paint.
+  const shouldLoadLiveSync =
+    userProfile.pin !== '' || currentScreen === 'public-scoreboard';
+
   return (
-    <AppScreenRouter
-      authReady={authReady}
-      appUrl={appUrl}
-      newAppUrl={newAppUrl}
-      isServiceInterrupted={isServiceInterrupted}
-      handleCheckUpdate={handleCheckUpdate}
-      isSyncing={isSyncing}
-      isDownloading={isDownloading}
-      cloudMatchesCount={cloudMatchesCount}
-      syncHistoryToFirebase={syncHistoryToFirebase}
-      downloadHistoryFromFirebase={downloadHistoryFromFirebase}
-      handleClearAllHistory={handleClearAllHistory}
-      handleImportData={handleImportData}
-      activeEvent={activeEvent}
-      userEntryDate={userEntryDate}
-      registeredEvents={registeredEvents}
-      handleJoinTournament={handleJoinTournament}
-      handleExitTournament={handleExitTournament}
-      handleSelectEvent={handleSelectEvent}
-      handleLogout={handleLogout}
-      initialSpectatorPin={initialSpectatorPin}
-      spectatorMatchId={spectatorMatchId}
-      spectatorPin={spectatorPin}
-      setSpectatorPin={setSpectatorPin}
-      handleExitSpectator={handleExitSpectator}
-      activeCloudMatch={activeCloudMatch}
-      handleConnectRemote={handleConnectRemote}
-      handleRejectRemote={handleRejectRemote}
-      isOfflineMode={isOfflineMode}
-      setIsOfflineMode={setIsOfflineMode}
-      handleOfflineMode={handleOfflineMode}
-      handleExitOffline={handleExitOffline}
-      unreadCommsCount={unreadCommsCount}
-      currentFullDeviceName={currentFullDeviceName}
-      deviceId={deviceId}
-    />
+    <>
+      {shouldLoadLiveSync && (
+        <React.Suspense fallback={null}>
+          <LiveSyncManager
+            deviceId={deviceId}
+            currentFullDeviceName={currentFullDeviceName}
+            initialSpectatorPin={initialSpectatorPin}
+          />
+        </React.Suspense>
+      )}
+      <AppScreenRouter
+        authReady={authReady}
+        appUrl={appUrl}
+        newAppUrl={newAppUrl}
+        isServiceInterrupted={isServiceInterrupted}
+        handleCheckUpdate={handleCheckUpdate}
+        isSyncing={isSyncing}
+        isDownloading={isDownloading}
+        cloudMatchesCount={cloudMatchesCount}
+        syncHistoryToFirebase={syncHistoryToFirebase}
+        downloadHistoryFromFirebase={downloadHistoryFromFirebase}
+        handleClearAllHistory={handleClearAllHistory}
+        handleImportData={handleImportData}
+        activeEvent={activeEvent}
+        userEntryDate={userEntryDate}
+        registeredEvents={registeredEvents}
+        handleJoinTournament={handleJoinTournament}
+        handleExitTournament={handleExitTournament}
+        handleSelectEvent={handleSelectEvent}
+        handleLogout={handleLogout}
+        initialSpectatorPin={initialSpectatorPin}
+        spectatorMatchId={spectatorMatchId}
+        spectatorPin={spectatorPin}
+        setSpectatorPin={setSpectatorPin}
+        handleExitSpectator={handleExitSpectator}
+        activeCloudMatch={activeCloudMatch}
+        handleConnectRemote={handleConnectRemote}
+        handleRejectRemote={handleRejectRemote}
+        isOfflineMode={isOfflineMode}
+        setIsOfflineMode={setIsOfflineMode}
+        handleOfflineMode={handleOfflineMode}
+        handleExitOffline={handleExitOffline}
+        unreadCommsCount={unreadCommsCount}
+        currentFullDeviceName={currentFullDeviceName}
+        deviceId={deviceId}
+      />
+    </>
   );
 };
 

@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { getDbLite } from '../firebaseLite.ts';
-import { doc, getDoc } from 'firebase/firestore/lite';
 
 interface Props {
   sportId: string;
@@ -45,9 +43,11 @@ export const LazySportIcon: React.FC<Props> = ({ sportId, defaultIcon = '🎾', 
       }
 
       // 3. Buscar no Firestore apenas este ID específico (Lazy Loading com Lite)
-      const db = getDbLite();
-      if (db) {
-        try {
+      try {
+        const { getDbLite } = await import('../firebaseLite.ts');
+        const db = getDbLite();
+        if (db) {
+          const { doc, getDoc } = await import('firebase/firestore/lite');
           const docRef = doc(db, "sport_icons", sportId);
           const snap = await getDoc(docRef);
           
@@ -64,9 +64,9 @@ export const LazySportIcon: React.FC<Props> = ({ sportId, defaultIcon = '🎾', 
             assets[sportId] = fetchedUrl;
             localStorage.setItem('myPlacarAssets', JSON.stringify(assets));
           }
-        } catch (e) {
-          console.error(`Erro ao buscar ícone ${sportId}:`, e);
         }
+      } catch (e) {
+        console.error(`Erro ao buscar ícone ${sportId}:`, e);
       }
       setIsLoading(false);
     };

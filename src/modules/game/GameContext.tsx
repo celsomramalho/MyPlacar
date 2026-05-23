@@ -32,7 +32,8 @@ import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
 import { getDb } from '@infra/firebase/client';
 import { findUserByPin } from '@infra/firebase/users';
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, deleteField, Firestore, FieldValue, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import type { Firestore, FieldValue } from 'firebase/firestore';
 import { mirrorUser } from '@infra/supabase';
 import { markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events/services/updateTournamentMatchProgress';
 import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
@@ -146,6 +147,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       if (navigator.onLine && userProfile.email) {
         const db = getDb();
         if (db) {
+          const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
           await setDoc(doc(db as Firestore, "users", userProfile.email.toLowerCase().trim()), {
             name: userProfile.name,
             nickname: userProfile.nickname,
@@ -416,6 +418,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       const targetPin = resolveTargetPin('write');
       if (!targetPin) return;
       if (targetPin && navigator.onLine) {
+        const { doc, updateDoc } = await import('firebase/firestore');
         updateDoc(doc(db, "live_matches", targetPin), {
           isMatchOver: true,
           isConfirmedFinished: true,
@@ -424,7 +427,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           isMirroringActive: false,
           lastActivityAt: Date.now()
         }).catch(() => {});
-        setTimeout(() => {
+        setTimeout(async () => {
+          const { doc, deleteDoc } = await import('firebase/firestore');
           deleteDoc(doc(db, "live_matches", targetPin)).catch(() => {});
         }, 4000);
       }
@@ -445,6 +449,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
     const db = getDb();
     if (db && userProfile.pin && navigator.onLine) {
+      const { doc, updateDoc } = await import('firebase/firestore');
       updateDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), {
         isMatchOver: true,
         isConfirmedFinished: true,
@@ -462,6 +467,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
     try {
       const isActiveController = gameState.commandOwnerId === deviceId;
+      const { doc, updateDoc, deleteField } = await import('firebase/firestore');
 
       if (isOriginalOwner) {
         if (isActiveController) {
@@ -509,6 +515,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     }, 6000);
 
     try {
+      const { doc, updateDoc, deleteDoc } = await import('firebase/firestore');
       const liveRef = doc(db, "live_matches", targetPin);
       await updateDoc(liveRef, {
         isLiveClosed: true,
@@ -543,6 +550,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const db = getDb();
     if (!db) return;
     try {
+      const { doc, updateDoc } = await import('firebase/firestore');
       await updateDoc(doc(db as Firestore, "live_matches", userProfile.pin.toUpperCase()), { 
         judgePin: null,
         judgeNickname: null,
@@ -572,6 +580,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       const targetPin = localOwnerPin || resolveTargetPin('write');
       if (!targetPin) return;
       try {
+        const { doc, getDoc, setDoc, updateDoc } = await import('firebase/firestore');
         const snap = await getDoc(doc(db, "live_matches", targetPin));
         if (snap.exists() && snap.data().isLiveClosed !== true) {
           const cloudState = snap.data() as GameState;
@@ -689,6 +698,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (db && pinToObserve) {
       const pinUpper = pinToObserve.toUpperCase();
       try {
+        const { doc, getDoc, updateDoc } = await import('firebase/firestore');
         const snap = await getDoc(doc(db, "live_matches", pinUpper));
         if (snap.exists() && snap.data().isLiveClosed !== true) {
           const cloudData = snap.data() as GameState;
@@ -753,6 +763,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const isController = gameState.commandOwnerId === deviceId;
 
     try {
+      const { doc, getDoc, setDoc } = await import('firebase/firestore');
       if (isController) {
         const stateToSync = sanitizeForFirestore({ ...gameState, controllers: undefined });
         if (stateToSync) {
@@ -809,6 +820,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         setPartners(prev => addPartnerToState(prev, newPartner));
 
         if (db && userProfile.pin) {
+          const { doc, setDoc } = await import('firebase/firestore');
           await setDoc(doc(db as Firestore, 'users', userProfile.pin.toUpperCase(), 'partners', pinUpper), {
             pin: pinUpper,
             nickname: finalNickname,
@@ -818,6 +830,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         }
       }
 
+      const { doc, updateDoc } = await import('firebase/firestore');
       await updateDoc(doc(db as Firestore, "live_matches", userProfile.pin.toUpperCase()), { 
         judgePin: pinUpper,
         judgeNickname: finalNickname,

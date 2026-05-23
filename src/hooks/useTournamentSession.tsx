@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, getDoc, type Firestore } from 'firebase/firestore';
+import { type Firestore } from 'firebase/firestore';
 import { CheckCircle } from 'lucide-react';
 import { getDb } from '@infra/firebase';
 import type { UserProfile } from '@modules/auth/types';
@@ -132,13 +132,15 @@ export function useTournamentSession() {
     if (userProfile.email && navigator.onLine) {
       const db = getDb();
       if (db) {
-        getDoc(doc(db, 'user_queue_metadata', userProfile.email.toLowerCase().trim())).then(
-          (snap) => {
-            if (snap.exists() && snap.data().queue_list) {
-              setPlayerQueue(snap.data().queue_list);
-            }
-          },
-        );
+        import('firebase/firestore').then(({ doc, getDoc }) => {
+          getDoc(doc(db, 'user_queue_metadata', userProfile.email.toLowerCase().trim())).then(
+            (snap) => {
+              if (snap.exists() && snap.data().queue_list) {
+                setPlayerQueue(snap.data().queue_list);
+              }
+            },
+          );
+        });
         fetchUserRegistrations(userProfile.email);
       }
     }

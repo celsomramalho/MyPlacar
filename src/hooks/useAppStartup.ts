@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { getDb, clearFirestoreCache } from '@infra/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+
 import { APP_VERSION as LOCAL_CODE_VERSION } from '../constants.ts';
 import type { Partner, MatchSettings } from '../types.ts';
 import type { UserProfile } from '@modules/auth';
@@ -144,11 +144,13 @@ export function useAppStartup({
       if (userProfile.email && navigator.onLine) {
         const db = getDb();
         if (db) {
-          setDoc(
-            doc(db, 'user_queue_metadata', userProfile.email.toLowerCase().trim()),
-            { queue_list: playerQueue, updatedAt: Date.now() },
-            { merge: true },
-          ).catch(() => {});
+          import('firebase/firestore').then(({ doc, setDoc }) => {
+            setDoc(
+              doc(db, 'user_queue_metadata', userProfile.email.toLowerCase().trim()),
+              { queue_list: playerQueue, updatedAt: Date.now() },
+              { merge: true },
+            ).catch(() => {});
+          });
         }
       }
     } catch {}
