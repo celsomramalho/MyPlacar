@@ -1427,9 +1427,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             <Button 
               onClick={onOfflineMode}
               variant="secondary"
-              className="w-full py-4 rounded-4xl font-black border-2 border-slate-200 text-slate-500 text-lg gap-3"
+              className="w-full py-4 rounded-4xl font-black border-2 border-slate-200 text-orange-500 text-lg gap-3"
             >
-              <WifiOff size={20} /> Usar offline
+              <WifiOff size={20} /> Placar off-line
             </Button>
           </div>
         ) : (mode !== 'verifying' && mode !== 'recovery_sent' && mode !== 'watch_login') ? (
