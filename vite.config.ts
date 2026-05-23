@@ -126,6 +126,11 @@ export default defineConfig({
             if (id.includes('leaflet'))       return 'vendor-leaflet';
             if (id.includes('@google/genai')) return 'vendor-gemini';
             if (id.includes('lucide-react'))  return 'vendor-icons';
+            // React e ReactDOM raramente mudam — chunk dedicado maximiza cache de longo prazo
+            if (id.includes('react-dom') || id.includes('/react/'))
+                                              return 'vendor-react';
+            // Supabase isolado: não invalida cache do React ao atualizar
+            if (id.includes('@supabase'))     return 'vendor-supabase';
             return 'vendor';
           }
         },
