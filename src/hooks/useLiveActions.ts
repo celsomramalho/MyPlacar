@@ -153,23 +153,30 @@ export function useLiveActions({
   };
 
   const handleConfirmMatch = async () => {
-    const db = getDb();
-    const targetPin = resolveTargetPin('write');
-    if (!targetPin) return;
-    if (db && targetPin && navigator.onLine) {
-      try {
-        await updateDoc(doc(db, 'live_matches', targetPin), {
-          isConfirmedFinished: true,
-          isMatchOver: true,
-          matchEndedAt: Date.now(),
-          isLiveClosed: true,
-          isMirroringActive: false,
-        });
-        setTimeout(() => {
-          deleteDoc(doc(db, 'live_matches', targetPin)).catch(() => {});
-        }, 4000);
-      } catch {}
+    // Ação remota — SOMENTE se live ativa
+    if (gameState?.isMirroringActive) {
+      const db = getDb();
+      const targetPin = resolveTargetPin('write');
+      if (db && targetPin && navigator.onLine) {
+        try {
+          await updateDoc(doc(db, 'live_matches', targetPin), {
+            isConfirmedFinished: true,
+            isMatchOver: true,
+            matchEndedAt: Date.now(),
+            isLiveClosed: true,
+            isMirroringActive: false,
+          });
+          setTimeout(() => {
+            deleteDoc(doc(db, 'live_matches', targetPin)).catch(() => {});
+          }, 4000);
+        } catch {}
+      }
+      setCloudLiveExists(false);
+      setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
+      try { clearLiveOwnerPin(); } catch {}
     }
+
+    // Ação local — SEMPRE executa (offline ou não)
     setGameState(p => p ? {
       ...p,
       isConfirmedFinished: true,
@@ -177,12 +184,7 @@ export function useLiveActions({
       isMirroringActive: false,
       isLiveClosed: true,
     } : null);
-    setCloudLiveExists(false);
-    setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
-    try {
-      localStorage.removeItem('myPlacarActiveGameState');
-      clearLiveOwnerPin();
-    } catch {}
+    try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
   };
 
   return { handleToggleMirroring, handleConfirmMatch };
