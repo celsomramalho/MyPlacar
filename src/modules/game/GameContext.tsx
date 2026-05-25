@@ -1010,12 +1010,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             (resetState.pickleball.server.serverNumber === 2 ? 2 : 0);
         }
 
+        setIsRecoveryFromMatchOver(false);
+        setIsWaitingSync(false);
         startGame(resetState);
         setModalConfig(null);
       },
       onCancel: () => setModalConfig(null)
     });
-  }, [gameState, setModalConfig, startGame]);
+  }, [gameState, setModalConfig, setIsRecoveryFromMatchOver, setIsWaitingSync, startGame]);
 
   const canStartMatch = useMemo(() => {
     const s = matchSettings;

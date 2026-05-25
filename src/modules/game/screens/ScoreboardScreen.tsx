@@ -666,9 +666,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const isCommandOwner = useMemo(() => {
+    if (isOfflineMode) return true;
     if (!effectiveGameState.isMirroringActive) return true;
     return currentDeviceId === effectiveGameState.commandOwnerId;
-  }, [effectiveGameState.isMirroringActive, effectiveGameState.commandOwnerId, currentDeviceId]);
+  }, [isOfflineMode, effectiveGameState.isMirroringActive, effectiveGameState.commandOwnerId, currentDeviceId]);
 
   const isLiveActive = useMemo(() => {
     return !!(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) || !!effectiveCloudLiveExists;
@@ -868,6 +869,25 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }
   }, [effectiveGameState.matchId]);
 
+  useEffect(() => {
+    if (!effectiveGameState.matchId) return;
+    setIsWaitingAck(false);
+    setRemoteActionFeedback(null);
+    setScorePressProgress(null);
+    setCorrectionMode('none');
+    setCorrectionPlayer(null);
+    isLongPressActive.current = false;
+    hasDraggedRef.current = false;
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    if (scoreProgressIntervalRef.current) {
+      clearInterval(scoreProgressIntervalRef.current);
+      scoreProgressIntervalRef.current = null;
+    }
+  }, [effectiveGameState.matchId]);
+
   currentGameStateRef.current = effectiveGameState;
 
   useEffect(() => {
@@ -965,7 +985,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const handleScoreCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => {
-    if (effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver || isWaitingAck || isRecoveryFromMatchOver || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner) return;
+    const waitingForRemoteAck = !isOfflineMode && isWaitingAck;
+    const recoveringFromFinishedMatch = !isOfflineMode && isRecoveryFromMatchOver;
+    if (effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver || waitingForRemoteAck || recoveringFromFinishedMatch || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner) return;
     isLongPressActive.current = false; 
     hasDraggedRef.current = false;
     touchStartPos.current = { x: e.clientX, y: e.clientY };

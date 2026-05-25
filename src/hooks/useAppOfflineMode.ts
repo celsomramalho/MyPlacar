@@ -9,11 +9,13 @@ import { initPickleballState } from '../utils/pickleballEngine.ts';
 /** Modo offline local (sem histórico na nuvem). */
 export function useAppOfflineMode() {
   const { matchSettings, setMatchSettings, setGameState, startGame } = useGame();
-  const { setCurrentScreen } = useUI();
+  const { setCurrentScreen, setIsRecoveryFromMatchOver, setIsWaitingSync } = useUI();
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
 
   const handleOfflineMode = useCallback(() => {
     setIsOfflineMode(true);
+    setIsRecoveryFromMatchOver(false);
+    setIsWaitingSync(false);
 
     let p1Name = 'Jogador 1';
     let p2Name = 'Jogador 2';
@@ -54,8 +56,14 @@ export function useAppOfflineMode() {
       history: [],
       currentSet: 0,
       isMatchOver: false,
+      isConfirmedFinished: false,
       matchDuration: 0,
       isPaused: false,
+      isMirroringActive: false,
+      isLiveClosed: false,
+      ownerPin: '',
+      ownerDeviceId: '',
+      commandOwnerId: '',
       scoringEngine: getEngineForSport(offlineSettings.sportType),
     };
 
@@ -68,7 +76,7 @@ export function useAppOfflineMode() {
     startGame(initialGameState);
     setCurrentScreen('scoreboard');
     setTimeout(() => startGame(initialGameState), 100);
-  }, [matchSettings, startGame, setMatchSettings, setCurrentScreen]);
+  }, [matchSettings, startGame, setMatchSettings, setCurrentScreen, setIsRecoveryFromMatchOver, setIsWaitingSync]);
 
   const handleExitOffline = useCallback(() => {
     setIsOfflineMode(false);
