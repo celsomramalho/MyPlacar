@@ -12,6 +12,7 @@ const SpectatorScreen = lazy(() => import('@modules/live/screens/SpectatorScreen
 const LocationScreen = lazy(() => import('@modules/history/screens/LocationScreen').then(m => ({ default: m.LocationScreen })));
 const TournamentsScreen = lazy(() => import('@modules/events').then(m => ({ default: m.TournamentsScreen })));
 const CommunicationsScreen = lazy(() => import('@modules/communications').then(m => ({ default: m.CommunicationsScreen })));
+const HomeScreen = lazy(() => import('@modules/home').then(m => ({ default: m.HomeScreen })));
 
 import { useLive } from '@modules/live';
 import { useGame } from '@modules/game';
@@ -199,6 +200,20 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
 
         {currentScreen === 'public-scoreboard' && initialSpectatorPin && (
           <PublicScoreboardRoute appUrl={appUrl} />
+        )}
+
+        {currentScreen === 'home' && (
+          <HomeScreen
+            userProfile={userProfile}
+            unreadCommsCount={unreadCommsCount}
+            onNavigate={(screen, tab) => {
+              setCurrentScreen(screen);
+              if (tab) setActiveTab(tab);
+            }}
+            onLogout={handleLogout}
+            onCheckUpdate={handleCheckUpdate}
+            onOpenMenu={() => setIsMenuOpen(true)}
+          />
         )}
 
         {currentScreen === 'auth' && (

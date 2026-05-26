@@ -38,7 +38,7 @@ export function AuthRoute({
           } catch {}
         }
         setUserProfile(p);
-        setCurrentScreen('settings');
+        setCurrentScreen('home');
       }}
       onCheckUpdate={() => handleCheckUpdate().then(v => v ?? false)}
       setIsUpdatingVersion={setIsUpdatingVersion}

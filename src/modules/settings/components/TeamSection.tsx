@@ -6,6 +6,7 @@ import { Input } from '@shared/components/Input';
 import { Button } from '@shared/components/Button';
 import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
+import { useUI } from '@modules/ui';
 import type { Partner, QueuePlayer } from '@modules/partners/types';
 import { MatchSettings, GameState } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
@@ -70,6 +71,7 @@ interface Props {
 export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, onOpenPartners, onAutoRegisterPartner, userProfile, onJoinTournament }, ref) => {
   const { gameState } = useGame();
   const { isOriginalOwner, isCurrentController, cloudLiveExists } = useLive();
+  const { setModalConfig } = useUI();
 
   const isLiveActive = useMemo(() => {
     return !!(gameState?.isMirroringActive || cloudLiveExists);
@@ -585,11 +587,19 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
 
       <div className="pt-6 pb-6 px-1 flex flex-col gap-3">
         <Button 
-          onClick={onStartMatch} 
-          disabled={!canStart}
-          className={`w-full text-center shadow-2xl py-6 rounded-[2.5rem] grid grid-cols-[auto_1fr] items-center font-bold px-10 transition-all ${
-            canStart ? '!bg-sky-500 hover:!bg-sky-600' : '!bg-gray-300 opacity-60 cursor-not-allowed'
-          }`}
+          onClick={() => {
+            if (canStart) {
+              onStartMatch();
+            } else {
+              setModalConfig({
+                title: 'Atenção',
+                message: 'Não é possível iniciar a partida. Verifique se os nomes dos jogadores estão preenchidos.',
+                onConfirm: () => setModalConfig(null),
+                onCancel: () => setModalConfig(null)
+              });
+            }
+          }} 
+          className="w-full text-center shadow-2xl py-6 rounded-[2.5rem] grid grid-cols-[auto_1fr] items-center font-bold px-10 transition-all !bg-sky-500 hover:!bg-sky-600 text-white"
         >
            <div className="flex items-center justify-center pl-4">
              <Play size={44} fill="currentColor" className="text-green-600" />
@@ -606,9 +616,6 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
              </div>
            </div>
         </Button>
-
-        <Button variant="secondary" onClick={onOpenPartners} className="w-full py-5 rounded-[2.5rem] border-2 border-blue-100 text-blue-600 font-black flex gap-2 active:scale-95 transition-all bg-blue-50/30" > <Users size={20} className="text-[#40E0D0]" /> Meus parceiros </Button>
-        <Button variant="secondary" onClick={() => onJoinTournament()} className="w-full py-5 rounded-[2.5rem] border-2 border-amber-100 text-amber-600 font-black flex gap-2 active:scale-95 transition-all bg-amber-50/30" > <Ticket size={20} /> Meus torneios </Button>
       </div>
     </div>
   );

@@ -127,8 +127,32 @@ export function SettingsRoute({
       onBack={() => { persistMatchSettings(); setCurrentScreen('settings'); }}
       onNewGame={() => { persistMatchSettings(); setCurrentScreen('new-game'); }}
       gameState={gameState}
-      onStart={() => { persistMatchSettings(); initGameState(true); }}
-      onPlayShortcut={() => { persistMatchSettings(); initGameState(false); }}
+      onStart={() => {
+        if (canStartMatch) {
+          persistMatchSettings();
+          initGameState(true);
+        } else {
+          setModalConfig({
+            title: 'Atenção',
+            message: 'Não é possível iniciar a partida. Verifique se os nomes dos jogadores estão preenchidos.',
+            onConfirm: () => setModalConfig(null),
+            onCancel: () => setModalConfig(null)
+          });
+        }
+      }}
+      onPlayShortcut={() => {
+        if (canStartMatch) {
+          persistMatchSettings();
+          initGameState(false);
+        } else {
+          setModalConfig({
+            title: 'Atenção',
+            message: 'Não é possível iniciar a partida. Verifique se os nomes dos jogadores estão preenchidos.',
+            onConfirm: () => setModalConfig(null),
+            onCancel: () => setModalConfig(null)
+          });
+        }
+      }}
       onOpenRules={() => { persistMatchSettings(); setCurrentScreen('new-game'); }}
       activeTab={activeTab}
       setActiveTab={t => { persistMatchSettings(); setActiveTab(t); }}

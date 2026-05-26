@@ -668,27 +668,6 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         >
           {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={24} /> Salvar perfil</>}
         </Button>
-
-        <Button 
-          variant="secondary"
-          onClick={() => {
-            handleManualUpdateCheck();
-            if (onVersionTap) onVersionTap();
-          }}
-          disabled={isCheckingUpdate}
-          className={`w-full py-4 rounded-3xl font-black border-2 text-sm gap-3 transition-all duration-300 ${remoteVersionFound ? 'border-amber-200 text-amber-600 animate-bounce' : 'border-emerald-100 text-emerald-600'}`}
-        >
-           {isCheckingUpdate ? <Loader2 size={18} className="animate-spin" /> : <RotateCw size={18} />}
-           {updateFeedback || (remoteVersionFound ? `Atualizar para ${remoteVersionFound}` : `Versão ${APP_VERSION}`)}
-        </Button>
-
-        <Button 
-          variant="secondary"
-          onClick={onLogout} 
-          className="w-full py-4 rounded-3xl font-black border-2 border-slate-100 text-black text-sm gap-3"
-        >
-          <LogOut size={18} /> Sair da conta
-        </Button>
       </div>
     </div>
   );

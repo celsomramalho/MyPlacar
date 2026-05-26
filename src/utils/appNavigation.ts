@@ -26,7 +26,7 @@ export const getInitialScreen = (): Screen => {
     if (saved) {
       const profile = JSON.parse(saved) as UserProfile;
       if (profile?.email && profile?.pin && profile?.isProfileComplete) {
-        return 'settings';
+        return 'home';
       }
     }
     return 'auth';

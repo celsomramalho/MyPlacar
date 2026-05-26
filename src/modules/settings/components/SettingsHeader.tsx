@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { Play, User, X, Clock, Trash2, Share2, Check, Bell, Menu, LogOut } from 'lucide-react';
+import { Play, User, X, Clock, Trash2, Share2, Check, Bell, Menu, LogOut, Users } from 'lucide-react';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { LiveIndicator } from '../../../components/LiveIndicator';
 import { isWatchDevice } from '@shared/utils/device';
@@ -136,10 +136,10 @@ export const SettingsHeader: React.FC<Props> = ({
             {isMirroringActive && <LiveIndicator onClick={onOpenLiveControl} role={role} />}
           </div>
           <div className="flex items-center justify-center gap-2 flex-1">
-            <div className={`p-1.5 rounded-full transition-colors duration-500 relative ${isHistory ? 'bg-emerald-500 shadow-lg' : (isSettingsInicialSaved ? 'bg-emerald-500 shadow-emerald-100 shadow-lg' : 'bg-amber-500 shadow-amber-100 shadow-lg')}`}>
-              {isHistory ? <Clock size={20} className="text-white" /> : <ScoreboardIcon className="w-6 h-6" />}
+            <div className={`p-1.5 rounded-full transition-colors duration-500 relative ${isHistory ? 'bg-emerald-500 shadow-lg' : (isSettingsInicialSaved ? 'bg-sky-600 shadow-sky-100 shadow-lg' : 'bg-amber-500 shadow-amber-100 shadow-lg')}`}>
+              {isHistory ? <Clock size={20} className="text-white" /> : <Users size={20} className="text-white" />}
               {!isHistory && isSettingsInicialSaved && isLiveActive && (
-                <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100 animate-in zoom-in">
+                <div className="absolute -top-1 -right-1 bg-white text-sky-600 rounded-full p-0.5 shadow-sm border border-sky-100 animate-in zoom-in">
                   <Check size={8} strokeWidth={4} />
                 </div>
               )}
@@ -158,8 +158,7 @@ export const SettingsHeader: React.FC<Props> = ({
           ) : (
             <button 
               onClick={onStart} 
-              disabled={!canStartMatch}
-              className={`p-2 -mr-2 active:scale-90 transition-all ${canStartMatch ? 'text-green-500' : 'text-slate-300 opacity-50 cursor-not-allowed'}`}
+              className="p-2 -mr-2 active:scale-90 transition-all text-green-500"
             >
               <Play size={30} fill="currentColor" />
             </button>
