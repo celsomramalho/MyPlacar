@@ -173,7 +173,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <button
               key={item.label}
               onClick={item.action}
-              className={`flex flex-col items-center justify-center gap-3 p-6 bg-white rounded-3xl border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all aspect-square relative ${item.colorClass}`}
+              className={`flex flex-col items-center justify-center gap-3 p-4 bg-white rounded-3xl border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all aspect-[3/2] relative ${item.colorClass}`}
             >
               <div className="p-3 bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                 {item.icon}
