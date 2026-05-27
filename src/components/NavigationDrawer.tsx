@@ -68,7 +68,7 @@ export const NavigationDrawer: React.FC<Props> = ({
         { id: 'home', label: 'Home', icon: Home, screen: 'home' as Screen },
         { id: 'config', label: 'Times', icon: Users, screen: 'settings' as Screen, tab: 'config' },
         { id: 'partners', label: 'Meus parceiros', icon: Users, screen: 'partners' as Screen },
-        { id: 'tournaments', label: 'Meus eventos', icon: Trophy, screen: 'tournaments' as Screen },
+        { id: 'tournaments', label: 'Meus torneios', icon: Trophy, screen: 'tournaments' as Screen },
       ]
     },
     {

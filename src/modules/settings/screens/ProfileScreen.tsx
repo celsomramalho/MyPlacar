@@ -367,7 +367,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-40 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-6 pb-6 animate-in fade-in duration-500">
       <section className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 space-y-8">
         <div className="flex items-center gap-4 border-b border-gray-50 pb-6 relative">
           <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 relative">

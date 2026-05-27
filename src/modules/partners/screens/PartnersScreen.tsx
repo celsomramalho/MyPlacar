@@ -860,13 +860,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
         )}
       </div>
 
-      {!isSelectionMode && (
-        <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent z-40 animate-in slide-in-from-bottom">
-          <button onClick={confirmSelection} className="w-full bg-black text-white py-6 rounded-[2.5rem] font-black shadow-2xl active:scale-95 transition-all text-sm flex items-center justify-center gap-3"> 
-            <ArrowLeft size={20} /> <span>Voltar</span> 
-          </button>
-        </div>
-      )}
+
     </div>
   );
 };

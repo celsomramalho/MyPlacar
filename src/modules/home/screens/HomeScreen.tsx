@@ -125,7 +125,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       action: () => onNavigate('settings', 'history'),
     },
     {
-      label: 'Eventos',
+      label: 'Torneios',
       icon: <Trophy size={28} className="text-blue-500" />,
       colorClass: 'bg-blue-50/60 text-blue-600 border-blue-100/50 hover:bg-blue-100/50',
       action: () => onNavigate('tournaments'),
