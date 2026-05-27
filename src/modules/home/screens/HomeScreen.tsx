@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight } from 'lucide-react';
+import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight, Menu } from 'lucide-react';
 import type { UserProfile } from '@modules/auth/types';
 import { APP_VERSION } from '../../../constants';
 import { SettingsTabs } from '@modules/settings';
 import { useGame } from '@modules/game';
 import { useGameRules } from '@modules/game/hooks/useGameRules';
 import { useUI } from '@modules/ui';
+import { isWatchDevice } from '@shared/utils/device';
 
 interface HomeScreenProps {
   userProfile: UserProfile;
@@ -27,14 +28,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
 
-  const { initGameState } = useGame();
+  const { initGameState, matchSettings } = useGame();
   const { canStartMatch, persistMatchSettings } = useGameRules();
   const { setModalConfig } = useUI();
 
   const handlePlayShortcut = () => {
     if (canStartMatch) {
       persistMatchSettings();
-      initGameState(false); // Inicia a partida ativa
+      // Respeita a configuração de modo definida na tela de Regras:
+      // - Dispositivo relógio OU modo relógio ativo → ScoreboardScreen renderiza WatchBoard
+      // - Modo placar ativo → ScoreboardScreen renderiza no modo placar
+      // - Sem modo ativo → ScoreboardScreen no modo controle padrão
+      // Em todos os casos o ScoreboardScreen resolve internamente qual UI renderizar
+      // com base no matchConfig.isWatchMode e matchConfig.isScoreboardMode persistidos.
+      initGameState(false);
+      onNavigate('scoreboard');
     } else {
       setModalConfig({
         title: 'Atenção',
@@ -47,6 +55,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       });
     }
   };
+
+  // Referência local dos modos para uso futuro (ex: ícone dinâmico no card Play)
+  const _isWatch = isWatchDevice() || !!matchSettings.isWatchMode;
+  void _isWatch; // evita warning de variável não usada
 
   // Calcula as iniciais do nome (CR)
   const getInitials = (name: string) => {
@@ -135,13 +147,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   return (
     <div className="flex flex-col min-h-screen bg-[#F3F4F6] relative pb-32">
       {/* Cabeçalho */}
-      <header className="bg-white border-b border-gray-100 px-6 py-5 flex items-center justify-between sticky top-0 z-40 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+      <header className="bg-white border-b border-gray-100 px-4 py-5 flex items-center justify-between sticky top-0 z-40 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+        {/* Botão Menu (hambúrguer) */}
+        <button
+          onClick={onOpenMenu}
+          className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all border border-slate-100"
+        >
+          <Menu size={20} />
+        </button>
+
+        {/* Perfil clicável */}
         <button
           onClick={() => onNavigate('settings', 'profile')}
           className="flex items-center gap-3 active:scale-95 transition-all"
         >
           {/* Avatar circular */}
-          <div className="w-12 h-12 rounded-full bg-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-inner">
+          <div className="w-10 h-10 rounded-full bg-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-inner">
             {initials}
           </div>
           {/* Perfil */}
@@ -197,15 +218,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <span>{updateFeedback || `Versão ${APP_VERSION}`}</span>
         </button>
       </main>
-
-      {/* Navegação Inferior */}
-      <SettingsTabs
-        activeTab=""
-        setActiveTab={(tab) => onNavigate('settings', tab)}
-        onOpenRules={() => onNavigate('new-game')}
-        onOpenMenu={onOpenMenu}
-        isOfflineMode={false}
-      />
     </div>
   );
 };

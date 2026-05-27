@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, LogOut } from 'lucide-react';
+import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, Menu } from 'lucide-react';
 import { Toggle } from '../../../components/Toggle';
 import { MatchSettings, SportType, GameState, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../../../types';
 import type { TournamentEvent } from '@modules/events/types';
@@ -223,38 +223,17 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
   return (
     <div className="min-h-screen bg-[#E5E7EB] flex flex-col relative font-sans">
       <header className="px-6 py-4 flex items-center bg-white border-b border-gray-100 sticky top-0 z-50 relative">
-        <div className="flex items-center gap-3">
-          {!isOfflineMode && (
-            <button onClick={onHome} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-              <ScoreboardIcon className="w-6 h-6" />
-              {isSettingsInicialSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
-            </button>
-          )}
-          {isOfflineMode && (
-            <button 
-              onPointerDown={startResetPress}
-              onPointerUp={stopResetPress}
-              onPointerLeave={stopResetPress}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-black bg-yellow-500 shadow-md border-2 border-white relative overflow-hidden active:scale-95 transition-transform"
-            >
-              {resetPressProgress > 0 && (
-                <div 
-                  className="absolute inset-0 bg-black/10 origin-left transition-all duration-75" 
-                  style={{ transform: `scaleX(${resetPressProgress / 100})` }} 
-                />
-              )}
-              <WifiOff size={22} className="relative z-10" />
-            </button>
-          )}
-          {isOfflineMode && onExitOffline && (
-            <button
-              onClick={onExitOffline}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-500 shadow-md active:scale-95 transition-transform"
-              title="Sair do modo offline"
-            >
-              <LogOut size={18} />
-            </button>
-          )}
+        <div className="w-16 flex items-center justify-start">
+          <button
+            onClick={onOpenMenu}
+            className={isOfflineMode
+              ? "w-10 h-10 rounded-full flex items-center justify-center text-orange-500 bg-white shadow-md border border-orange-100 active:scale-95 transition-transform"
+              : "p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
+            }
+            title="Menu"
+          >
+            <Menu size={isOfflineMode ? 22 : 24} />
+          </button>
         </div>
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-colors duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
@@ -270,13 +249,29 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           </h1>
         </div>
         <div className="flex-1 flex justify-end">
-          <button onClick={onPlayShortcut} disabled={!canStartMatch} className={`p-2 active:scale-90 transition-all ${canStartMatch ? 'text-emerald-500' : 'text-slate-200 opacity-50'}`}>
-            <Play size={28} fill="currentColor" />
-          </button>
+          {isOfflineMode ? (
+            <button
+              onPointerDown={startResetPress}
+              onPointerUp={stopResetPress}
+              onPointerLeave={stopResetPress}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-black bg-yellow-500 shadow-md border-2 border-white relative overflow-hidden active:scale-95 transition-transform"
+              title="Modo offline"
+            >
+              {resetPressProgress > 0 && (
+                <div
+                  className="absolute inset-0 bg-black/10 origin-left transition-all duration-75"
+                  style={{ transform: `scaleX(${resetPressProgress / 100})` }}
+                />
+              )}
+              <WifiOff size={22} className="relative z-10" />
+            </button>
+          ) : (
+            <div className="w-10" />
+          )}
         </div>
       </header>
 
-      <div className="flex-1 px-4 pt-6 pb-40 space-y-6 max-w-2xl mx-auto w-full no-scrollbar overflow-y-auto">
+      <div className="flex-1 px-4 pt-6 pb-6 space-y-6 max-w-2xl mx-auto w-full no-scrollbar overflow-y-auto">
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-2"><Watch size={20} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Otimização do placar</h2></div>
           <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
@@ -529,18 +524,6 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           </div>
         )}
       </div>
-
-      <SettingsTabs 
-        activeTab="regras" 
-        setActiveTab={onNavigateToTab || (() => {})} 
-        onOpenRules={() => {}} 
-        isSettingsRegrasSaved={isSettingsRegrasSaved}
-        isSettingsInicialSaved={isSettingsInicialSaved}
-        isMirroringActive={isLiveActive}
-        onOpenMenu={onOpenMenu || (() => {})}
-        isOfflineMode={isOfflineMode}
-        onExitOffline={onExitOffline}
-      />
     </div>
   );
 };

@@ -77,15 +77,10 @@ export const SettingsHeader: React.FC<Props> = ({
       {isProfile ? (
         <div className="flex items-center justify-between w-full">
           <button 
-            onClick={onOpenCommunications}
-            className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors relative"
+            onClick={onOpenMenu}
+            className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
           >
-            <Bell size={24} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
+            <Menu size={24} />
           </button>
           <div className="flex items-center justify-center gap-2 flex-1">
             {/* MC1: Círculo de status dinâmico para o perfil */}
@@ -99,40 +94,17 @@ export const SettingsHeader: React.FC<Props> = ({
             </div>
             <h1 className="text-lg font-bold text-black tracking-tight">Meu perfil</h1>
           </div>
-          {isWatchDevice() ? (
-            <button
-              onClick={onStart}
-              disabled={!canStartMatch}
-              className={`p-2 -mr-2 active:scale-90 transition-all ${canStartMatch ? 'text-green-500' : 'text-slate-300 opacity-50 cursor-not-allowed'}`}
-            >
-              <Play size={30} fill="currentColor" />
-            </button>
-          ) : (
-            <div className="w-10" />
-          )}
+          <div className="w-10" />
         </div>
       ) : (
         <>
-          <div className={`${isWatchDevice() ? 'w-24' : 'w-16'} flex items-center justify-start gap-1`}>
+          <div className="w-16 flex items-center justify-start gap-1">
             <button 
-              onClick={onOpenCommunications}
-              className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors relative"
+              onClick={onOpenMenu}
+              className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
             >
-              <Bell size={24} />
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
+              <Menu size={24} />
             </button>
-            {isWatchDevice() && (
-              <button
-                onClick={onOpenMenu}
-                className="p-2 text-slate-400 hover:text-brand-600 transition-colors active:scale-90"
-              >
-                <Menu size={22} />
-              </button>
-            )}
             {isMirroringActive && <LiveIndicator onClick={onOpenLiveControl} role={role} />}
           </div>
           <div className="flex items-center justify-center gap-2 flex-1">
@@ -148,21 +120,7 @@ export const SettingsHeader: React.FC<Props> = ({
               {isHistory ? 'Histórico' : 'Nova partida'}
             </h1>
           </div>
-          {isWatchDevice() && isOfflineMode ? (
-            <button
-              onClick={onExitOffline}
-              className="p-2 -mr-2 active:scale-90 transition-all text-red-500"
-            >
-              <LogOut size={26} />
-            </button>
-          ) : (
-            <button 
-              onClick={onStart} 
-              className="p-2 -mr-2 active:scale-90 transition-all text-green-500"
-            >
-              <Play size={30} fill="currentColor" />
-            </button>
-          )}
+          <div className="w-10" />
         </>
       )}
     </header>

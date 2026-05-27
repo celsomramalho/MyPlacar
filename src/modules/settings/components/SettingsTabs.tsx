@@ -15,6 +15,7 @@ interface Props {
   onOpenMenu: () => void;
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
+  hideMenu?: boolean;
 }
 
 export const SettingsTabs: React.FC<Props> = ({ 
@@ -27,7 +28,8 @@ export const SettingsTabs: React.FC<Props> = ({
   isMirroringActive = false, 
   onOpenMenu, 
   isOfflineMode = false,
-  onExitOffline
+  onExitOffline,
+  hideMenu = false,
 }) => {
   const { currentScreen, setCurrentScreen } = useUI();
 
@@ -160,7 +162,7 @@ export const SettingsTabs: React.FC<Props> = ({
         <span className="text-[10px] font-black text-black">Perfil</span>
       </button>
 
-      {!isOfflineMode && (
+      {!isOfflineMode && !hideMenu && (
         <button onClick={onOpenMenu} className={getBtnClass(false)}>
           <div className="w-10 h-10 rounded-full flex items-center justify-center text-black transition-colors duration-500 bg-transparent">
             <Menu size={22} />

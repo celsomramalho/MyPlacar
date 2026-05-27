@@ -11,6 +11,7 @@ interface PartnersRouteProps {
   authReady: boolean;
   activeEvent: TournamentEvent | null;
   setSpectatorPin: React.Dispatch<React.SetStateAction<string | null>>;
+  onOpenMenu: () => void;
 }
 
 export function PartnersRoute({
@@ -18,6 +19,7 @@ export function PartnersRoute({
   authReady,
   activeEvent,
   setSpectatorPin,
+  onOpenMenu,
 }: PartnersRouteProps) {
   const { userProfile, setPartners, matchSettings, setMatchSettings, handleObserveLive } = useGame();
   const { activeLives } = useLive();
@@ -49,8 +51,10 @@ export function PartnersRoute({
       isAuthReady={authReady}
       playerQueue={playerQueue}
       setPlayerQueue={setPlayerQueue}
+      onOpenMenu={onOpenMenu}
       onBack={() => {
         if (isSelectingJudge) {
+          setIsSelectingJudge(false);
           setIsSelectingJudge(false);
           setCurrentScreen('scoreboard');
         } else {

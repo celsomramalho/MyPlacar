@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, Plus, Play, CloudDownload, CloudUpload, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Wifi, Dices, ArrowRightLeft, History, CheckSquare, Mic, Clock, Gavel } from 'lucide-react';
+import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, Plus, Play, CloudDownload, CloudUpload, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Wifi, Dices, ArrowRightLeft, History, CheckSquare, Mic, Clock, Gavel, Menu } from 'lucide-react';
 import { addPartnerToState, hasPartnerWithPin, normalizePartnerPin } from '../services/addPartnerToState';
 import { createQueuePartner } from '../services/createQueuePartner';
 import { createReferralPartner } from '../services/createReferralPartner';
@@ -37,6 +37,7 @@ interface Props {
   activeEvent: TournamentEvent | null;
   appUrl: string;
   isAuthReady?: boolean;
+  onOpenMenu: () => void;
 }
 
 const SOLID_COLORS_BG: Record<string, string> = {
@@ -60,7 +61,7 @@ const LIGHT_BG_COLORS: Record<string, string> = {
   lilas: 'bg-violet-50', verde: 'bg-green-50', vermelho: 'bg-red-50', roxo: 'bg-purple-50',
 };
 
-export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, activeEvent, appUrl, isAuthReady = false }) => {
+export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, activeEvent, appUrl, isAuthReady = false, onOpenMenu }) => {
   const { partners, setPartners, userProfile, matchSettings } = useGame();
   const [activeTab, setActiveTab] = useState<'list' | 'queue'>('list');
   const [isShuffling, setIsShuffling] = useState(false);
@@ -620,8 +621,11 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
       ) : (
         <header className="px-6 py-4 flex flex-col bg-white border-b border-gray-100 sticky top-0 z-40">
           <div className="flex items-center justify-between mb-4 min-h-[72px]">
-            <button onClick={() => { if(activeTab === 'list' && navigationSource === 'queue') { setActiveTab('queue'); setNavigationSource('settings'); setPendingQueueIndex(null); } else onBackProp(); }} className="p-2 -ml-2 text-black active:scale-90 flex items-center justify-center">
-              <ScoreboardIcon className="w-8 h-8" />
+            <button 
+              onClick={onOpenMenu}
+              className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
+            >
+              <Menu size={24} />
             </button>
             <div className="flex-1 flex items-center justify-center gap-2">
               <Users size={22} className="text-[#40E0D0] stroke-[2.5]" />
@@ -640,7 +644,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
         </header>
       )}
 
-      <div className="flex-1 overflow-y-auto p-5 space-y-8 pb-48 no-scrollbar">
+      <div className="flex-1 overflow-y-auto p-5 space-y-8 pb-6 no-scrollbar">
         {activeTab === 'list' && (
           <div className="space-y-8 animate-in fade-in">
             {!isSelectionMode && displayedLives.length > 0 && (

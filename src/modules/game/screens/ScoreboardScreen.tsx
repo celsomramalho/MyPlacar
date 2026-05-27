@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw, SquareKanban, Cast } from 'lucide-react';
+import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw, SquareKanban, Cast, Menu } from 'lucide-react';
 import { getDeviceType } from '../../../utils/device';
 import { Button } from '@shared/components/Button';
 import { ScoreboardIcon } from '../../../components/ScoreboardIcon';
@@ -1170,12 +1170,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
        />
        <header className="px-4 py-3 flex items-center justify-between bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          {!isOfflineMode && (
-            <button onClick={onHome} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsInicialSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-              <ScoreboardIcon className="w-6 h-6" />
-              {isSettingsInicialSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
-            </button>
-          )}
+          <button 
+            onClick={props.onOpenMenu}
+            className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
+          >
+            <Menu size={24} />
+          </button>
           {isOfflineMode && (
             <button 
               onPointerDown={startResetPress}
@@ -1201,14 +1201,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
               {isTieBreak && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ml-1">Tb</span>}
             </span>
           </button>
-
         </div>
         <div className="flex items-center gap-2">
           {!isLiveActive && isWatchConnected && <div className="p-2 bg-sky-100 text-sky-600 rounded-xl animate-pulse flex items-center gap-2 px-3 border border-sky-200" title="Relógio conectado"><Watch size={18} /><span className="text-[9px] font-black tracking-tight hidden md:inline">Relógio conectado</span></div>}
-          <button onClick={onBack} className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-500 relative ${isSettingsRegrasSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-            <Settings size={22} />
-            {isSettingsRegrasSaved && isLiveActive && <div className="absolute -top-1 -right-1 bg-white text-emerald-600 rounded-full p-0.5 shadow-sm border border-emerald-100"><Check size={8} strokeWidth={4} /></div>}
-          </button>
+          <div className="w-10" />
         </div>
       </header>
 

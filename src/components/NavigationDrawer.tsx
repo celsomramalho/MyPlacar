@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { Screen } from '../types.ts';
 import { useGame } from '@modules/game';
+import { useGameRules } from '@modules/game/hooks/useGameRules';
+import { useUI } from '@modules/ui';
 
 interface Props {
   isOpen: boolean;
@@ -13,8 +15,10 @@ interface Props {
   currentTab?: string;
   onNavigate: (screen: Screen, tab?: string) => void;
   onLogout: () => void;
+  onExitOffline?: () => void;
   isAdmin: boolean;
   canStartMatch: boolean;
+  isOfflineMode?: boolean;
 }
 
 export const NavigationDrawer: React.FC<Props> = ({ 
@@ -24,11 +28,36 @@ export const NavigationDrawer: React.FC<Props> = ({
   currentTab,
   onNavigate, 
   onLogout,
+  onExitOffline,
   isAdmin,
-  canStartMatch
+  canStartMatch: _unused_canStartMatch,
+  isOfflineMode = false
 }) => {
-  const { userProfile } = useGame();
+  const { userProfile, initGameState } = useGame();
+  const { canStartMatch, persistMatchSettings } = useGameRules();
+  const { setModalConfig } = useUI();
+
   if (!isOpen) return null;
+
+  const handlePlayShortcut = () => {
+    if (canStartMatch) {
+      persistMatchSettings();
+      initGameState(false);
+      onNavigate('scoreboard');
+      onClose();
+    } else {
+      setModalConfig({
+        title: 'Atenção',
+        message: 'Não é possível iniciar a partida. Verifique se os nomes dos jogadores estão preenchidos na tela de Times.',
+        onConfirm: () => {
+          setModalConfig(null);
+          onNavigate('settings', 'config');
+          onClose();
+        },
+        onCancel: () => setModalConfig(null)
+      });
+    }
+  };
 
   const menuGroups = [
     {
@@ -55,7 +84,7 @@ export const NavigationDrawer: React.FC<Props> = ({
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
       items: [
-        { id: 'scoreboard', label: 'Placar', icon: Play, screen: 'scoreboard' as Screen },
+        { id: 'scoreboard', label: 'Placar', icon: Play, screen: 'scoreboard' as Screen, action: handlePlayShortcut },
       ]
     },
     {
@@ -101,12 +130,76 @@ export const NavigationDrawer: React.FC<Props> = ({
   ];
 
   const handleNavigate = (screen: Screen, tab?: string) => {
-    if (screen === 'scoreboard' && !canStartMatch) {
-      return;
-    }
     onNavigate(screen, tab);
     onClose();
   };
+
+  if (isOfflineMode) {
+    return (
+      <div className="fixed inset-0 z-[1000] flex animate-in fade-in duration-300">
+        <div
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={onClose}
+        />
+
+        <div className="relative w-80 max-w-[85%] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
+          <div className="py-5 pl-5 pr-5 flex items-center justify-between bg-amber-50 border-b border-amber-100/50 text-slate-700">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => handleNavigate('scoreboard')}
+                className="p-2 text-orange-500 hover:bg-amber-100/40 rounded-full transition-colors"
+                title="Placar"
+              >
+                <Play size={22} />
+              </button>
+              {onExitOffline && (
+                <button
+                  onClick={() => { onExitOffline(); onClose(); }}
+                  className="p-2 text-red-500 hover:bg-amber-100/40 rounded-full transition-colors"
+                  title="Sair do modo offline"
+                >
+                  <LogOut size={22} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-500 hover:bg-amber-100/40 rounded-full transition-colors"
+              title="Fechar"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto py-4 px-3 space-y-4">
+            <div className="space-y-1">
+              <button
+                onClick={() => handleNavigate('scoreboard')}
+                className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all active:scale-[0.98] ${
+                  currentScreen === 'scoreboard' ? 'bg-orange-50' : 'hover:bg-slate-50'
+                }`}
+              >
+                <Play size={20} className="text-orange-500" />
+                <span className="text-sm font-bold text-black">Placar</span>
+              </button>
+            </div>
+
+            <div className="h-[2px] bg-slate-200 mx-4 my-2" />
+
+            {onExitOffline && (
+              <button
+                onClick={() => { onExitOffline(); onClose(); }}
+                className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-red-500 hover:bg-red-50 transition-all active:scale-[0.98]"
+              >
+                <LogOut size={20} />
+                <span className="text-sm font-bold">Sair do modo offline</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[1000] flex animate-in fade-in duration-300">
@@ -119,19 +212,34 @@ export const NavigationDrawer: React.FC<Props> = ({
       {/* Drawer Content */}
       <div className="relative w-80 max-w-[85%] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
         {/* Header */}
-        <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-blue-600 text-white">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <User size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-black tracking-tight leading-none">{userProfile.nickname || userProfile.name || 'Usuário'}</p>
-              <p className="text-[10px] font-bold opacity-70 mt-1 uppercase tracking-widest">{userProfile.pin}</p>
-            </div>
+        <div className="py-5 pl-14 pr-5 flex items-center justify-between bg-amber-50 border-b border-amber-100/50 text-slate-700">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => handleNavigate('settings', 'config')}
+              className="p-2 text-blue-600 hover:bg-amber-100/40 rounded-full transition-colors"
+              title="Times"
+            >
+              <Users size={22} />
+            </button>
+            <button 
+              onClick={() => handleNavigate('new-game')}
+              className="p-2 text-emerald-600 hover:bg-amber-100/40 rounded-full transition-colors"
+              title="Regras"
+            >
+              <Settings size={22} />
+            </button>
+            <button 
+              onClick={handlePlayShortcut}
+              className="p-2 text-orange-500 hover:bg-amber-100/40 rounded-full transition-colors"
+              title="Play"
+            >
+              <Play size={22} />
+            </button>
           </div>
           <button 
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            className="p-2 text-slate-500 hover:bg-amber-100/40 rounded-full transition-colors"
+            title="Fechar"
           >
             <X size={24} />
           </button>
@@ -150,20 +258,23 @@ export const NavigationDrawer: React.FC<Props> = ({
                       {group.label}
                     </p>
                   )}
-                  {group.items.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => handleNavigate(item.screen, item.tab)}
-                      className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all active:scale-[0.98] ${
-                        currentScreen === item.screen && (!item.tab || item.tab === currentTab)
-                          ? group.bgColor 
-                          : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      <item.icon size={20} className={currentScreen === item.screen && (!item.tab || item.tab === currentTab) ? group.color : 'text-slate-400'} />
-                      <span className={`text-sm font-bold ${group.color}`}>{item.label}</span>
-                    </button>
-                  ))}
+                  {group.items.map((item) => {
+                    const isActive = currentScreen === item.screen && (!item.tab || item.tab === currentTab);
+                    const iconColor = item.id === 'home' ? 'text-orange-500' : group.color;
+                    const activeBg = item.id === 'home' ? 'bg-orange-50' : group.bgColor;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={item.action ? item.action : () => handleNavigate(item.screen, item.tab)}
+                        className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all active:scale-[0.98] ${
+                          isActive ? activeBg : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <item.icon size={20} className={iconColor} />
+                        <span className="text-sm font-bold text-black">{item.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </React.Fragment>
             );

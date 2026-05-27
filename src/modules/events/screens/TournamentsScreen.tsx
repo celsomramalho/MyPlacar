@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight } from 'lucide-react';
+import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu } from 'lucide-react';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import type { EventRegistration } from '../types';
 
@@ -9,9 +9,10 @@ interface Props {
   onBack: () => void;
   onJoin: (pin: string) => void;
   onSelectEvent: (event: EventRegistration) => void;
+  onOpenMenu: () => void;
 }
 
-export const TournamentsScreen: React.FC<Props> = ({ registrations, onBack, onJoin, onSelectEvent }) => {
+export const TournamentsScreen: React.FC<Props> = ({ registrations, onBack, onJoin, onSelectEvent, onOpenMenu }) => {
   const [pinInput, setPinInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
@@ -25,8 +26,8 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onBack, onJo
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden animate-in fade-in duration-300 font-sans">
       <header className="px-6 py-4 flex items-center bg-white border-b border-gray-100 sticky top-0 z-40 min-h-[72px]">
-        <button onClick={onBack} className="p-2 -ml-2 text-black active:scale-90 flex items-center justify-center">
-          <ScoreboardIcon className="w-8 h-8" />
+        <button onClick={onOpenMenu} className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors">
+          <Menu size={24} />
         </button>
         <div className="flex-1 flex items-center justify-center gap-2">
           <Trophy size={22} className="text-amber-500 stroke-[2.5]" />
@@ -35,7 +36,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onBack, onJo
         <div className="w-10"></div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5 space-y-8 no-scrollbar pb-32">
+      <div className="flex-1 overflow-y-auto p-5 space-y-8 no-scrollbar pb-6">
         {/* BUSCAR EVENTO */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1 text-amber-500 font-black">

@@ -195,7 +195,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           />
         );
       case 'help':
-        return <HelpScreen profile={userProfile} onNavigateToTab={props.setActiveTab} onOpenRules={props.onOpenRules} onPlay={props.onPlayShortcut} canStartMatch={props.canStartMatch} />;
+        return <HelpScreen profile={userProfile} onNavigateToTab={props.setActiveTab} onOpenRules={props.onOpenRules} onPlay={props.onPlayShortcut} canStartMatch={props.canStartMatch} onOpenMenu={props.onOpenMenu} />;
       case 'config':
       default:
         return <TeamSection 
@@ -236,22 +236,11 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           onExitOffline={props.onExitOffline}
         />
       )}
-      <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} pb-32 no-scrollbar`}>
+      <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} pb-6 no-scrollbar`}>
         <div className={props.activeTab === 'help' ? "w-full h-full" : "max-w-md mx-auto"}>
           {renderActiveContent()}
         </div>
       </div>
-      <SettingsTabs 
-        activeTab={props.activeTab} 
-        setActiveTab={props.setActiveTab} 
-        onOpenRules={props.onOpenRules} 
-        isSettingsInicialSaved={props.isSettingsInicialSaved}
-        isSettingsRegrasSaved={props.isSettingsRegrasSaved}
-        isProfileSaved={props.isProfileSaved}
-        isMirroringActive={props.gameState?.isMirroringActive || props.cloudLiveExists}
-        onOpenMenu={props.onOpenMenu}
-        isOfflineMode={props.isOfflineMode}
-      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 
 const ScoreboardRoute = lazy(() => import('./ScoreboardRoute.tsx').then(m => ({ default: m.ScoreboardRoute })));
 const SettingsRoute = lazy(() => import('./SettingsRoute.tsx').then(m => ({ default: m.SettingsRoute })));
@@ -142,6 +142,24 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   const [initialConfirmDeleteJudge, setInitialConfirmDeleteJudge] = useState(false);
 
   const isAdmin = userProfile.isAdmin === true;
+  const offlineAllowedScreens = currentScreen === 'scoreboard' || currentScreen === 'new-game';
+
+  useEffect(() => {
+    if (isOfflineMode && gameState && !offlineAllowedScreens) {
+      setCurrentScreen('scoreboard');
+    }
+  }, [isOfflineMode, gameState, offlineAllowedScreens, setCurrentScreen]);
+
+  const handleDrawerNavigate = (screen: Parameters<typeof setCurrentScreen>[0], tab?: string) => {
+    if (isOfflineMode && screen !== 'scoreboard' && screen !== 'new-game') {
+      setCurrentScreen('scoreboard');
+      return;
+    }
+
+    setCurrentScreen(screen);
+    if (screen === 'admin' && tab) { setAdminTab(tab as AdminTab); }
+    else if (tab) { setActiveTab(tab as Tab); }
+  };
 
   return (
     <div className="min-h-screen w-full bg-gray-50 flex flex-col">
@@ -151,14 +169,12 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
         onClose={() => setIsMenuOpen(false)}
         currentScreen={currentScreen}
         currentTab={currentScreen === 'admin' ? adminTab : activeTab}
-        onNavigate={(screen, tab) => {
-          setCurrentScreen(screen);
-          if (screen === 'admin' && tab) { setAdminTab(tab as AdminTab); }
-          else if (tab) { setActiveTab(tab as Tab); }
-        }}
+        onNavigate={handleDrawerNavigate}
         onLogout={handleLogout}
+        onExitOffline={handleExitOffline}
         isAdmin={isAdmin}
         canStartMatch={canStartMatch}
+        isOfflineMode={isOfflineMode}
       />
 
       <GlobalOverlays
@@ -257,6 +273,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             authReady={authReady}
             activeEvent={activeEvent}
             setSpectatorPin={setSpectatorPin}
+            onOpenMenu={() => setIsMenuOpen(true)}
           />
         )}
 
@@ -310,6 +327,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             onBack={() => setCurrentScreen('settings')}
             onJoin={handleJoinTournament}
             onSelectEvent={ev => handleSelectEvent(ev as unknown as TournamentEvent)}
+            onOpenMenu={() => setIsMenuOpen(true)}
           />
         )}
 

@@ -330,5 +330,3 @@ src\shared\assets
 src\shared\hooks
 src\shared\styles
 src\shared\types
-
-

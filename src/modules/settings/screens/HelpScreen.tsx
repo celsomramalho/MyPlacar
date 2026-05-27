@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, Zap, Cloud, MapPin, Mic, Play, Activity } from 'lucide-react';
+import { HelpCircle, Zap, Cloud, MapPin, Mic, Play, Activity, Menu } from 'lucide-react';
 import type { UserProfile } from '@modules/auth/types';
 
 interface Props {
@@ -8,9 +8,10 @@ interface Props {
   onOpenRules: () => void;
   onPlay?: () => void;
   canStartMatch: boolean;
+  onOpenMenu: () => void;
 }
 
-export const HelpScreen: React.FC<Props> = ({ onPlay, canStartMatch }) => {
+export const HelpScreen: React.FC<Props> = ({ onPlay, canStartMatch, onOpenMenu }) => {
   const helpItems = [
     {
       title: "Placar e voz",
@@ -38,18 +39,14 @@ export const HelpScreen: React.FC<Props> = ({ onPlay, canStartMatch }) => {
     <div className="flex flex-col h-full bg-gray-50 overflow-hidden animate-in fade-in duration-300">
       {/* CABEÇALHO CENTRALIZADO + PLAY BUTTON */}
       <header className="px-6 py-4 flex items-center bg-white border-b border-gray-100 sticky top-0 z-40 min-h-[72px]">
-        <div className="w-10"></div>
+        <button onClick={onOpenMenu} className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors">
+          <Menu size={24} />
+        </button>
         <div className="flex-1 flex items-center justify-center gap-2">
           <HelpCircle size={24} className="text-black stroke-[2.5]" />
           <h1 className="text-lg font-black text-black tracking-tight">Ajuda</h1>
         </div>
-        <button 
-          onClick={onPlay} 
-          disabled={!canStartMatch}
-          className={`p-2 -mr-2 active:scale-90 transition-all ${canStartMatch ? 'text-green-500' : 'text-slate-300 opacity-50 cursor-not-allowed'}`}
-        >
-          <Play size={30} fill="currentColor" />
-        </button>
+        <div className="w-10"></div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-5 no-scrollbar space-y-8">
