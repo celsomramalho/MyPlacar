@@ -227,7 +227,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           >
             {scorePressProgress?.player === 1 && scorePressProgress?.type === 'matchSet' && (
               <div 
-                className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
+                className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
                 style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
               />
             )}
@@ -241,7 +241,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           >
             {scorePressProgress?.player === 1 && scorePressProgress?.type === 'gameSet' && (
               <div 
-                className="absolute inset-0 bg-black/5 origin-left transition-all duration-75 z-0" 
+                className="absolute inset-0 bg-black/10 origin-left transition-all duration-75 z-0" 
                 style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
               />
             )}
@@ -275,7 +275,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           >
             {scorePressProgress?.player === 2 && scorePressProgress?.type === 'gameSet' && (
               <div 
-                className="absolute inset-0 bg-black/5 origin-left transition-all duration-75 z-0" 
+                className="absolute inset-0 bg-black/10 origin-left transition-all duration-75 z-0" 
                 style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
               />
             )}
@@ -289,7 +289,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           >
             {scorePressProgress?.player === 2 && scorePressProgress?.type === 'matchSet' && (
               <div 
-                className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
+                className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
                 style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
               />
             )}
@@ -302,7 +302,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 1); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 1)} className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner ? 'opacity-70' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} >
           {scorePressProgress?.player === 1 && scorePressProgress?.type === 'game' && (
             <div 
-              className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
+              className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
               style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
             />
           )}
@@ -494,7 +494,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 2); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} >
           {scorePressProgress?.player === 2 && scorePressProgress?.type === 'game' && (
             <div 
-              className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
+              className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
               style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
             />
           )}

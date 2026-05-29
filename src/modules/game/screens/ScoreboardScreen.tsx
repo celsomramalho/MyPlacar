@@ -1145,6 +1145,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
           pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
           handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
+          scorePressProgress={scorePressProgress}
           cloudLiveExists={effectiveCloudLiveExists}
           role={effectiveIndicatorRole}
           fbSyncStatus={effectiveFbSyncStatus}
@@ -1376,7 +1377,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 >
                   {scorePressProgress?.player === team && scorePressProgress?.type === 'gameSet' && (
                     <span
-                      className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0"
+                      className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0"
                       style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
                     />
                   )}
@@ -1410,7 +1411,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 }}
               >
                 {scorePressProgress?.player === team && scorePressProgress?.type === 'game' && (
-                  <div className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} />
+                  <div className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} />
                 )}
                 {/* Número grande */}
                 {team === 1 && (
