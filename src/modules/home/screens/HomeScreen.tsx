@@ -159,8 +159,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {/* Logo + Título */}
         <div className="flex items-center gap-2">
-          <ScoreboardIcon className="w-8 h-8" />
-          <span className="text-lg font-black text-slate-800 tracking-tighter">MyPlacar</span>
+          <ScoreboardIcon className="w-16 h-16" />
+          <span className="text-[2.25rem] font-black text-slate-800 tracking-tighter leading-none">MyPlacar</span>
         </div>
 
         {/* Notificações (Sino) */}
