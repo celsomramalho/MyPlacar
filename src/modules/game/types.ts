@@ -103,7 +103,7 @@ export interface GameContextValue {
    * - `'gameSet'`: games no set atual (ex: '3-2')
    * - `'matchSet'`: sets da partida (ex: '1-0')
    */
-  handleCorrectScore: (type: 'game' | 'gameSet' | 'matchSet', value: string) => void;
+  handleCorrectScore: (type: 'game' | 'gameSet' | 'matchSet', value: string, options?: { forceLocal?: boolean }) => void;
 
   /**
    * Desfaz o último ponto marcado revertendo o `historyStack`.

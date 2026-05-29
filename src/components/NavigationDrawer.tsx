@@ -73,16 +73,16 @@ export const NavigationDrawer: React.FC<Props> = ({
     },
     {
       id: 2,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50',
+      color: 'text-amber-500',
+      bgColor: 'bg-amber-50',
       items: [
         { id: 'rules', label: 'Regras e configurações', icon: Settings, screen: 'new-game' as Screen },
       ]
     },
     {
       id: 3,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
       items: [
         { id: 'scoreboard', label: 'Placar', icon: Play, screen: 'scoreboard' as Screen, action: handlePlayShortcut },
       ]
@@ -147,10 +147,10 @@ export const NavigationDrawer: React.FC<Props> = ({
             <div className="flex items-center gap-4">
               <button
                 onClick={() => handleNavigate('scoreboard')}
-                className="p-2 text-orange-500 hover:bg-amber-100/40 rounded-full transition-colors"
+                className="p-2 text-emerald-500 hover:bg-amber-100/40 rounded-full transition-colors"
                 title="Placar"
               >
-                <Play size={22} />
+                <Play size={22} className="fill-emerald-500" />
               </button>
               {onExitOffline && (
                 <button
@@ -179,7 +179,7 @@ export const NavigationDrawer: React.FC<Props> = ({
                   currentScreen === 'scoreboard' ? 'bg-orange-50' : 'hover:bg-slate-50'
                 }`}
               >
-                <Play size={20} className="text-orange-500" />
+                <Play size={20} className="text-emerald-500 fill-emerald-500" />
                 <span className="text-sm font-bold text-black">Placar</span>
               </button>
             </div>
@@ -223,17 +223,17 @@ export const NavigationDrawer: React.FC<Props> = ({
             </button>
             <button 
               onClick={() => handleNavigate('new-game')}
-              className="p-2 text-emerald-600 hover:bg-amber-100/40 rounded-full transition-colors"
+              className="p-2 text-amber-500 hover:bg-amber-100/40 rounded-full transition-colors"
               title="Regras"
             >
               <Settings size={22} />
             </button>
             <button 
               onClick={handlePlayShortcut}
-              className="p-2 text-orange-500 hover:bg-amber-100/40 rounded-full transition-colors"
+              className="p-2 text-emerald-500 hover:bg-amber-100/40 rounded-full transition-colors"
               title="Play"
             >
-              <Play size={22} />
+              <Play size={22} className="fill-emerald-500" />
             </button>
           </div>
           <button 

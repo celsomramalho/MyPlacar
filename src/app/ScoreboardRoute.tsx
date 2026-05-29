@@ -152,7 +152,7 @@ export function ScoreboardRoute({
       isSettingsInicialSaved={isSettingsInicialSaved}
       isSettingsRegrasSaved={isSettingsRegrasSaved}
       onToggleMirroring={handleToggleMirroring}
-      onCorrectScore={handleCorrectScore}
+      onCorrectScore={(type, value) => handleCorrectScore(type, value, { forceLocal: isOfflineMode })}
       isAdmin={isAdmin}
       onConfirmMatch={handleConfirmMatch}
       isRecoveryFromMatchOver={isRecoveryFromMatchOver}

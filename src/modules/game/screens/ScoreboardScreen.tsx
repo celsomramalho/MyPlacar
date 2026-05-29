@@ -984,7 +984,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     }
   };
 
-  const handleScoreCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => {
+  const handleScoreCardPointerDown = (e: React.PointerEvent<HTMLElement>, type: 'game' | 'gameSet' | 'matchSet', player: 1 | 2) => {
     const waitingForRemoteAck = !isOfflineMode && isWaitingAck;
     const recoveringFromFinishedMatch = !isOfflineMode && isRecoveryFromMatchOver;
     if (effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver || waitingForRemoteAck || recoveringFromFinishedMatch || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner) return;
@@ -1009,7 +1009,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       openCorrection(type, player); 
     }, duration);
   };
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
     const dx = e.clientX - touchStartPos.current.x;
     const dy = e.clientY - touchStartPos.current.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1100,6 +1100,18 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     );
   }
 
+  const correctionPickerModal = (
+    <ScorePickerModal 
+      isOpen={correctionMode !== 'none'} 
+      onClose={closeCorrection} 
+      onConfirm={handleApplyPickerCorrection} 
+      title={`Corrigir ${correctionMode === 'game' ? 'game' : correctionMode === 'gameSet' ? 'games no set' : 'sets vencidos'}: ${correctionPlayer === 1 ? effectiveGameState.p1.name : effectiveGameState.p2.name}`} 
+      options={pickerOptions} 
+      initialValue={correctionPlayer === 1 ? (correctionMode === 'game' ? effectiveGameState.p1.score : correctionMode === 'gameSet' ? effectiveGameState.p1.games.toString() : p1WonSets.toString()) : (correctionMode === 'game' ? effectiveGameState.p2.score : correctionMode === 'gameSet' ? effectiveGameState.p2.games.toString() : p2WonSets.toString())} 
+      isWatchMode={effectiveGameState.matchConfig.isWatchMode}
+    />
+  );
+
   if (effectiveGameState.matchConfig.isScoreboardMode) {
     return (
       <ScoreboardDisplay
@@ -1121,24 +1133,27 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   if (effectiveGameState.matchConfig.isWatchMode) {
     return (
-      <WatchBoard 
-        gameState={effectiveGameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
-        onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
-        isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
-        handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
-        isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} onSyncScoreboard={onSyncScoreboard} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
-        isOfflineMode={isOfflineMode}
-        correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
-        pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
-        handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
-        cloudLiveExists={effectiveCloudLiveExists}
-        role={effectiveIndicatorRole}
-        fbSyncStatus={effectiveFbSyncStatus}
-        onVoiceToggle={handleVoiceToggle}
-        isVoiceActive={isVoiceActive}
-        onToggleWatchMode={onToggleWatchMode}
-        onToggleScoreboardMode={onToggleScoreboardMode}
-      />
+      <>
+        {correctionPickerModal}
+        <WatchBoard 
+          gameState={effectiveGameState} onScoreUpdate={onScoreUpdate} onUndo={onUndo} onSwitchServer={onSwitchServer} 
+          onBack={onBack} onConfirmMatch={onConfirmMatch} isListening={isListening} 
+          isAudioLocked={isAudioLocked} unlockAudio={unlockAudio} announceFullScore={announceFullScore} 
+          handleUndoWithLog={handleUndoWithLog} isDimmed={isDimmed} setIsDimmed={setIsDimmed} resetDimTimer={resetDimTimer} dimProgress={dimProgress}
+          isCommandOwner={isCommandOwner} onResetMatch={onResetMatch} onOpenLiveControl={onOpenLiveControl} onSyncScoreboard={onSyncScoreboard} remoteActionFeedback={remoteActionFeedback} p1WonSets={p1WonSets} p2WonSets={p2WonSets}
+          isOfflineMode={isOfflineMode}
+          correctionMode={correctionMode} closeCorrection={closeCorrection} handleApplyPickerCorrection={handleApplyPickerCorrection}
+          pickerOptions={pickerOptions} correctionPlayer={correctionPlayer} handleScoreCardPointerDown={handleScoreCardPointerDown}
+          handlePointerMove={handlePointerMove} handleScoreCardPointerUp={handleScoreCardPointerUp}
+          cloudLiveExists={effectiveCloudLiveExists}
+          role={effectiveIndicatorRole}
+          fbSyncStatus={effectiveFbSyncStatus}
+          onVoiceToggle={handleVoiceToggle}
+          isVoiceActive={isVoiceActive}
+          onToggleWatchMode={onToggleWatchMode}
+          onToggleScoreboardMode={onToggleScoreboardMode}
+        />
+      </>
     );
   }
 
@@ -1160,14 +1175,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
          </div>
        )}
        {isAudioLocked && <div onClick={async () => { await unlockAudio(); announceFullScore(); setIsAudioLocked(false); }} className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl bg-orange-600 text-white flex items-center gap-3 animate-bounce cursor-pointer"><VolumeX size={20} /><span className="text-sm font-bold">Ativar som</span></div>}
-       <ScorePickerModal 
-         isOpen={correctionMode !== 'none'} 
-         onClose={closeCorrection} 
-         onConfirm={handleApplyPickerCorrection} 
-         title={`Corrigir ${correctionMode === 'game' ? 'game' : correctionMode === 'gameSet' ? 'games no set' : 'sets vencidos'}: ${correctionPlayer === 1 ? effectiveGameState.p1.name : effectiveGameState.p2.name}`} 
-         options={pickerOptions} 
-         initialValue={correctionPlayer === 1 ? (correctionMode === 'game' ? effectiveGameState.p1.score : correctionMode === 'gameSet' ? effectiveGameState.p1.games.toString() : p1WonSets.toString()) : (correctionMode === 'game' ? effectiveGameState.p2.score : correctionMode === 'gameSet' ? effectiveGameState.p2.games.toString() : p2WonSets.toString())} 
-       />
+       {correctionPickerModal}
        <header className="px-4 py-3 flex items-center justify-between bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <button 
@@ -1344,8 +1352,35 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 {pastSets.length > 0 && (
                   <span className="font-black leading-none text-white/30 text-7xl select-none">|</span>
                 )}
-                <span className="font-black leading-none text-[#bef264] text-7xl flex items-center gap-2">
-                  {currentScore}
+                <span
+                  role="button"
+                  className="font-black leading-none text-[#bef264] text-7xl flex items-center gap-2 relative overflow-hidden rounded px-1 touch-none"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleScoreCardPointerDown(e, 'gameSet', team);
+                  }}
+                  onPointerMove={(e) => {
+                    e.stopPropagation();
+                    handlePointerMove(e);
+                  }}
+                  onPointerUp={(e) => {
+                    e.stopPropagation();
+                    handleScoreCardPointerUp('gameSet', team);
+                  }}
+                  onPointerCancel={(e) => {
+                    e.stopPropagation();
+                    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+                    if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
+                    setScorePressProgress(null);
+                  }}
+                >
+                  {scorePressProgress?.player === team && scorePressProgress?.type === 'gameSet' && (
+                    <span
+                      className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0"
+                      style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
+                    />
+                  )}
+                  <span className="relative z-10">{currentScore}</span>
                   {isMatchOver && isMatchWinner && (
                     <Trophy size={48} className="text-yellow-400 animate-bounce" style={{ animationIterationCount: 3 }} />
                   )}

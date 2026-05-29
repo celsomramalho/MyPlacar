@@ -226,13 +226,10 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
         <div className="w-16 flex items-center justify-start">
           <button
             onClick={onOpenMenu}
-            className={isOfflineMode
-              ? "w-10 h-10 rounded-full flex items-center justify-center text-orange-500 bg-white shadow-md border border-orange-100 active:scale-95 transition-transform"
-              : "w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all"
-            }
+            className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all"
             title="Menu"
           >
-            <Menu size={isOfflineMode ? 22 : 20} />
+            <Menu size={20} />
           </button>
         </div>
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">

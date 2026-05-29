@@ -339,11 +339,12 @@ Times:			src\modules\settings\components\TeamSection.tsx
 Regras:			src\modules\game\screens\NewGameScreen.tsx
 Play:			src\modules\game\screens\ScoreboardScreen.tsx
 Modo placar:	src\modules\game\screens\ScoreboardScreen.tsx
-Modo regógio: 	src\components\WatchBoard.tsx	
+Modo regógio: 	src\components\WatchBoard.tsx
 Histórico:		src\modules\history\components\HistorySection.tsx
 Torneios:		src\modules\events\screens\TournamentsScreen.tsx
 Parceiros: 		src\modules\partners\screens\PartnersScreen.tsx
 Ajuda:			src\modules\settings\screens\HelpScreen.tsx
 Login:			src\modules\auth\screens\AuthScreen.tsx
 Novo cadastro:	src\modules\auth\screens\AuthScreen.tsx
+Menu:			src\components\NavigationDrawer.tsx
 

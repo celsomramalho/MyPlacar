@@ -867,9 +867,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     });
   }, [deviceId]);
 
-  const handleCorrectScore = useCallback((type: 'game' | 'gameSet' | 'matchSet', value: string) => {
-    if (!gameState || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
-    if (gameState.isMirroringActive && gameState.commandOwnerId !== deviceId) return;
+  const handleCorrectScore = useCallback((type: 'game' | 'gameSet' | 'matchSet', value: string, options?: { forceLocal?: boolean }) => {
+    const forceLocal = options?.forceLocal === true;
+    if (!gameState || gameState.isMatchOver || (!forceLocal && gameState.isMirroringActive && gameState.isLiveClosed)) return;
+    if (!forceLocal && gameState.isMirroringActive && gameState.commandOwnerId !== deviceId) return;
     
     const match = value.toLowerCase().match(/(\d+|ad)\s*[a-]\s*(\d+|ad)/);
     if (!match) return;
