@@ -1044,16 +1044,34 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const p1WonSets = useMemo(() => effectiveGameState.p1.sets.filter((s, i) => s > effectiveGameState.p2.sets[i]).length, [effectiveGameState.p1.sets, effectiveGameState.p2.sets]);
   const p2WonSets = useMemo(() => effectiveGameState.p2.sets.filter((s, i) => s > effectiveGameState.p1.sets[i]).length, [effectiveGameState.p1.sets, effectiveGameState.p2.sets]);
   const currentSportDef = SPORT_LIST.find(s => s.id === effectiveGameState.matchConfig.sportType) || SPORT_LIST[0];
+  const makeNumericOptions = (max: number) => Array.from({ length: Math.max(0, max) + 1 }, (_, i) => i.toString());
   const pickerOptions = useMemo(() => {
+    const config = effectiveGameState.matchConfig;
     if (correctionMode === 'matchSet') {
-      return Array.from({ length: 4 }, (_, i) => i.toString());
+      const bestOf = Number(config.setsToWin ?? config.sets) || 1;
+      const setsNeeded = Math.max(1, Math.ceil(bestOf / 2));
+      return makeNumericOptions(setsNeeded);
     }
     if (correctionMode === 'gameSet') {
-      const maxGames = effectiveGameState.matchConfig.gamesPerSet || 6;
-      return Array.from({ length: maxGames + 2 }, (_, i) => i.toString());
+      const maxGames = Number(config.gamesPerSet) || 6;
+      return makeNumericOptions(maxGames);
     }
-    return (currentSportDef.engine === 'tennis' && !isTieBreak ? ['0', '15', '30', '40', 'Ad'] : Array.from({ length: 31 }, (_, i) => i.toString()));
-  }, [correctionMode, currentSportDef, isTieBreak, effectiveGameState.matchConfig.gamesPerSet]);
+    if (currentSportDef.engine === 'tennis' && !isTieBreak) {
+      return config.noAd ? ['0', '15', '30', '40'] : ['0', '15', '30', '40', 'Ad'];
+    }
+
+    if (currentSportDef.engine === 'tennis' && isTieBreak) {
+      const tieBreakTarget = Number(config.tieBreakPoints) || 7;
+      return makeNumericOptions(config.tieBreakWinByTwo ? tieBreakTarget + 2 : tieBreakTarget);
+    }
+
+    if (currentSportDef.engine === 'rally') {
+      const pointTarget = Number(config.gamesPerSet) || (config.sportType === 'pickleball' ? 11 : 21);
+      return makeNumericOptions(config.tieBreakWinByTwo ? pointTarget + 2 : pointTarget);
+    }
+
+    return makeNumericOptions(30);
+  }, [correctionMode, currentSportDef, isTieBreak, effectiveGameState.matchConfig]);
   
   const isVoiceActive = isListening && !voiceWasManuallyStopped && effectiveGameState.matchConfig.voiceEnabled && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner && !effectiveGameState.isMatchOver;
   

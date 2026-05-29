@@ -220,32 +220,32 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       <div className="w-[22%] h-full flex flex-col bg-black border-r border-white/10 shrink-0 p-1 gap-1">
         <div className="flex-1 flex flex-col gap-1">
           <div 
-            onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 1)} 
+            onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 1)} 
             onPointerMove={handlePointerMove} 
-            onPointerUp={() => handleScoreCardPointerUp('matchSet', 1)}
+            onPointerUp={() => handleScoreCardPointerUp('gameSet', 1)}
             className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p1.color || 'azul']}`}
           >
-            {scorePressProgress?.player === 1 && scorePressProgress?.type === 'matchSet' && (
+            {scorePressProgress?.player === 1 && scorePressProgress?.type === 'gameSet' && (
               <div 
                 className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
                 style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
               />
             )}
-            <span className="text-5xl font-black text-white relative z-10">{p1WonSets}</span>
+            <span className="text-5xl font-black text-white relative z-10">{gameState.p1.games}</span>
           </div>
           <div 
-            onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 1)} 
+            onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 1)} 
             onPointerMove={handlePointerMove} 
-            onPointerUp={() => handleScoreCardPointerUp('gameSet', 1)}
+            onPointerUp={() => handleScoreCardPointerUp('matchSet', 1)}
             className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
           >
-            {scorePressProgress?.player === 1 && scorePressProgress?.type === 'gameSet' && (
+            {scorePressProgress?.player === 1 && scorePressProgress?.type === 'matchSet' && (
               <div 
                 className="absolute inset-0 bg-black/10 origin-left transition-all duration-75 z-0" 
                 style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
               />
             )}
-            <span className="text-5xl font-black text-black relative z-10">{gameState.p1.games}</span>
+            <span className="text-5xl font-black text-black relative z-10">{p1WonSets}</span>
           </div>
         </div>
         <div className={`h-16 flex items-center justify-center rounded-2xl transition-all relative overflow-hidden ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}>
@@ -268,32 +268,32 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         </div>
         <div className="flex-1 flex flex-col gap-1">
           <div 
-            onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 2)} 
+            onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 2)} 
             onPointerMove={handlePointerMove} 
-            onPointerUp={() => handleScoreCardPointerUp('gameSet', 2)}
+            onPointerUp={() => handleScoreCardPointerUp('matchSet', 2)}
             className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
           >
-            {scorePressProgress?.player === 2 && scorePressProgress?.type === 'gameSet' && (
+            {scorePressProgress?.player === 2 && scorePressProgress?.type === 'matchSet' && (
               <div 
                 className="absolute inset-0 bg-black/10 origin-left transition-all duration-75 z-0" 
                 style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
               />
             )}
-            <span className="text-5xl font-black text-black relative z-10">{gameState.p2.games}</span>
+            <span className="text-5xl font-black text-black relative z-10">{p2WonSets}</span>
           </div>
           <div 
-            onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 2)} 
+            onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 2)} 
             onPointerMove={handlePointerMove} 
-            onPointerUp={() => handleScoreCardPointerUp('matchSet', 2)}
+            onPointerUp={() => handleScoreCardPointerUp('gameSet', 2)}
             className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p2.color || 'vermelho']}`}
           >
-            {scorePressProgress?.player === 2 && scorePressProgress?.type === 'matchSet' && (
+            {scorePressProgress?.player === 2 && scorePressProgress?.type === 'gameSet' && (
               <div 
                 className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
                 style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
               />
             )}
-            <span className="text-5xl font-black text-white relative z-10">{p2WonSets}</span>
+            <span className="text-5xl font-black text-white relative z-10">{gameState.p2.games}</span>
           </div>
         </div>
       </div>
