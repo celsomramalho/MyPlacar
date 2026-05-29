@@ -1172,9 +1172,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         <div className="flex items-center gap-3">
           <button 
             onClick={props.onOpenMenu}
-            className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
+            className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all"
           >
-            <Menu size={24} />
+            <Menu size={20} />
           </button>
           {isOfflineMode && (
             <button 

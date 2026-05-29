@@ -623,9 +623,9 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
           <div className="flex items-center justify-between mb-4 min-h-[72px]">
             <button 
               onClick={onOpenMenu}
-              className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
+              className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all"
             >
-              <Menu size={24} />
+              <Menu size={20} />
             </button>
             <div className="flex-1 flex items-center justify-center gap-2">
               <Users size={22} className="text-[#40E0D0] stroke-[2.5]" />

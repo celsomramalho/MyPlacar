@@ -95,54 +95,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const gridItems = [
-    {
-      label: 'Times',
-      icon: <Users size={28} className="text-sky-600" />,
-      colorClass: 'bg-sky-50/60 text-sky-600 border-sky-100/50 hover:bg-sky-100/50',
-      action: () => onNavigate('settings', 'config'),
-    },
-    {
-      label: 'Play',
-      icon: <Play size={28} className="text-emerald-500 fill-emerald-500" />,
-      colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50',
-      action: handlePlayShortcut,
-    },
-    {
-      label: 'Regras',
-      icon: <Settings size={28} className="text-amber-500" />,
-      colorClass: 'bg-amber-50/60 text-amber-600 border-amber-100/50 hover:bg-amber-100/50',
-      action: () => onNavigate('new-game'),
-    },
-    {
-      label: 'Parceiros',
-      icon: <UserCheck size={28} className="text-[#40E0D0]" />,
-      colorClass: 'bg-[#40E0D0]/10 text-teal-700 border-teal-100/30 hover:bg-[#40E0D0]/20',
-      action: () => onNavigate('partners'),
-    },
-    {
-      label: 'Histórico',
-      icon: <History size={28} className="text-emerald-500" />,
-      colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50',
-      action: () => onNavigate('settings', 'history'),
-    },
-    {
-      label: 'Torneios',
-      icon: <Trophy size={28} className="text-blue-500" />,
-      colorClass: 'bg-blue-50/60 text-blue-600 border-blue-100/50 hover:bg-blue-100/50',
-      action: () => onNavigate('tournaments'),
-    },
-    {
-      label: 'Ajuda',
-      icon: <HelpCircle size={28} className="text-gray-500" />,
-      colorClass: 'bg-gray-50/60 text-gray-600 border-gray-100/50 hover:bg-gray-100/50',
-      action: () => onNavigate('settings', 'help'),
-    },
-    {
-      label: 'Sair',
-      icon: <LogOut size={28} className="text-red-500" />,
-      colorClass: 'bg-red-50/60 text-red-600 border-red-100/50 hover:bg-red-100/50',
-      action: onLogout,
-    },
+    { label: 'Times',     icon: <Users     size={36} className="text-sky-600" />,                    colorClass: 'bg-sky-50/60 text-sky-600 border-sky-100/50 hover:bg-sky-100/50',           action: () => onNavigate('settings', 'config') },
+    { label: 'Play',      icon: <Play      size={36} className="text-emerald-500 fill-emerald-500" />, colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: handlePlayShortcut },
+    { label: 'Regras',    icon: <Settings  size={36} className="text-amber-500" />,                    colorClass: 'bg-amber-50/60 text-amber-600 border-amber-100/50 hover:bg-amber-100/50',     action: () => onNavigate('new-game') },
+    { label: 'Parceiros', icon: <UserCheck size={36} className="text-[#40E0D0]" />,                    colorClass: 'bg-[#40E0D0]/10 text-teal-700 border-teal-100/30 hover:bg-[#40E0D0]/20',    action: () => onNavigate('partners') },
+    { label: 'Histórico', icon: <History   size={36} className="text-emerald-500" />,                  colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: () => onNavigate('settings', 'history') },
+    { label: 'Torneios',  icon: <Trophy    size={36} className="text-blue-500" />,                     colorClass: 'bg-blue-50/60 text-blue-600 border-blue-100/50 hover:bg-blue-100/50',        action: () => onNavigate('tournaments') },
+    { label: 'Ajuda',     icon: <HelpCircle size={36} className="text-gray-500" />,                   colorClass: 'bg-gray-50/60 text-gray-600 border-gray-100/50 hover:bg-gray-100/50',        action: () => onNavigate('settings', 'help') },
+    { label: 'Sair',      icon: <LogOut    size={36} className="text-red-500" />,                      colorClass: 'bg-red-50/60 text-red-600 border-red-100/50 hover:bg-red-100/50',            action: onLogout },
   ];
 
   return (
@@ -152,7 +112,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* Botão Menu (hambúrguer) */}
         <button
           onClick={onOpenMenu}
-          className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all border border-slate-100"
+          className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all border border-slate-200"
         >
           <Menu size={20} />
         </button>
@@ -166,7 +126,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* Notificações (Sino) */}
         <button
           onClick={() => onNavigate('communications')}
-          className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all border border-slate-100 relative"
+          className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all border border-slate-200 relative"
         >
           <Bell size={20} />
           {unreadCommsCount > 0 && (
@@ -189,8 +149,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {initials}
           </div>
           <div className="flex flex-col text-left flex-1">
-            <span className="text-sm font-black text-slate-800 leading-tight">Olá, {greetingName}</span>
-            <span className="text-[11px] font-bold text-slate-400 lowercase">{userProfile.email}</span>
+            <span className="text-[21px] font-black text-slate-800 leading-tight">Olá, {greetingName}</span>
+            <span className="text-[16.5px] font-bold text-slate-400 lowercase">{userProfile.email}</span>
           </div>
           <ChevronRight size={16} className="text-slate-300" />
         </button>
@@ -199,12 +159,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <button
               key={item.label}
               onClick={item.action}
-              className={`flex flex-col items-center justify-center gap-3 p-4 bg-white rounded-3xl border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all aspect-[3/2] relative ${item.colorClass}`}
+              className={`flex flex-col items-center justify-center gap-2 p-4 bg-white rounded-3xl border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all aspect-[3/2] relative ${item.colorClass}`}
             >
               <div className="p-3 bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                 {item.icon}
               </div>
-              <span className="text-sm font-black tracking-tight">{item.label}</span>
+              <span className="text-[21px] font-black tracking-tight">{item.label}</span>
             </button>
           ))}
         </div>
@@ -220,7 +180,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ) : (
             <RotateCw size={18} className="text-emerald-500" />
           )}
-          <span>{updateFeedback || `Versão ${APP_VERSION}`}</span>
+          <span className="text-[21px]">{updateFeedback || `Versão ${APP_VERSION}`}</span>
         </button>
       </main>
     </div>

@@ -449,14 +449,15 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
         <button 
           disabled={isReadOnly}
           onClick={handleClearNames}
-          className="flex-1 py-4 bg-white border-2 border-red-500 rounded-full flex items-center justify-center gap-3 font-black text-red-500 text-xs active:scale-95 transition-all shadow-md disabled:cursor-not-allowed"
+          className="flex-1 py-4 bg-white border-2 border-red-500 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 font-black text-red-500 text-sm active:scale-95 transition-all shadow-md disabled:cursor-not-allowed"
         >
-          <Eraser size={18} /> Limpar nomes
+          <Eraser size={18} />
+          <span className="leading-tight text-center">Limpar nomes</span>
         </button>
         <button 
           disabled={isReadOnly}
           onClick={() => handleToggleHistory(!settings.isHistoryEnabled)}
-          className={`flex-1 py-4 bg-white border-2 rounded-full flex items-center justify-center gap-3 font-black text-xs active:scale-95 transition-all shadow-md disabled:cursor-not-allowed ${settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400'}`}
+          className={`flex-1 py-4 bg-white border-2 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 font-black text-sm active:scale-95 transition-all shadow-md disabled:cursor-not-allowed ${settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400'}`}
         >
           <div className="relative flex items-center justify-center">
             <History size={18} className="text-blue-600" />
@@ -464,7 +465,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-[2px] bg-red-600 -rotate-45 rounded-full shadow-sm pointer-events-none" />
             )}
           </div>
-          Gravar histórico
+          <span className="leading-tight text-center">Gravar histórico</span>
         </button>
       </div>
 
@@ -494,7 +495,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
               onClick={randomizeServerOrder}
               className={`bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all overflow-hidden ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed bg-sky-400/50 text-white/70 shadow-none' : ''}`}
             >
-              {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear ordem sacadores</span> <RaquetIcon size={16} className="shrink-0" /> </div> )}
+              {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={20} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={20} className="shrink-0 text-yellow-400" /> <span className="text-sm font-black leading-tight text-center">Sortear ordem sacadores</span> <RaquetIcon size={20} className="shrink-0" /> </div> )}
             </button>
             {settings.isDoubles && (
               <button 
@@ -502,7 +503,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
                 onClick={randomizeFormation}
                 className={`bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all overflow-hidden ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed bg-sky-400/50 text-white/70 shadow-none' : ''}`}
               >
-                {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear formação</span> <Users size={16} className="shrink-0 text-[#40E0D0]" /> </div> )}
+                {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={20} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={20} className="shrink-0 text-yellow-400" /> <span className="text-sm font-black leading-tight text-center">Sortear formação</span> <Users size={20} className="shrink-0 text-[#40E0D0]" /> </div> )}
               </button>
             )}
           </div>
@@ -513,7 +514,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
                 onClick={randomizeMixed}
                 className={`bg-sky-500 text-white py-4 px-2 rounded-[1.5rem] shadow-md active:scale-95 transition-all ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed bg-sky-400/50 text-white/70 shadow-none' : ''}`}
               >
-                {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={16} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={16} className="shrink-0 text-yellow-400" /> <span className="text-[10px] font-black leading-tight text-center">Sortear misto</span> <div className="flex items-center gap-0.5 shrink-0"> <span className="text-sky-300"><MarsIcon size={14} /></span> <span className="text-pink-300"><VenusIcon size={14} /></span> </div> </div> )}
+                {isShuffling ? ( <div className="flex items-center justify-center"><Loader2 size={20} className="animate-spin" /></div> ) : ( <div className="flex items-center justify-center gap-1.5"> <Dices size={20} className="shrink-0 text-yellow-400" /> <span className="text-sm font-black leading-tight text-center">Sortear misto</span> <div className="flex items-center gap-0.5 shrink-0"> <span className="text-sky-300"><MarsIcon size={18} /></span> <span className="text-pink-300"><VenusIcon size={18} /></span> </div> </div> )}
               </button>
             </div>
           )}

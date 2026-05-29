@@ -78,12 +78,11 @@ export const SettingsHeader: React.FC<Props> = ({
         <div className="flex items-center justify-between w-full">
           <button 
             onClick={onOpenMenu}
-            className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
+            className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all"
           >
-            <Menu size={24} />
+            <Menu size={20} />
           </button>
           <div className="flex items-center justify-center gap-2 flex-1">
-            {/* MC1: Círculo de status dinâmico para o perfil */}
             <div className={`p-1.5 rounded-full shadow-lg transition-colors duration-500 relative ${isProfileSaved ? 'bg-emerald-500' : 'bg-amber-500'}`}>
               <User size={22} className="text-white stroke-[2.5]" />
               {isProfileSaved && isLiveActive && (
@@ -101,9 +100,9 @@ export const SettingsHeader: React.FC<Props> = ({
           <div className="w-16 flex items-center justify-start gap-1">
             <button 
               onClick={onOpenMenu}
-              className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors"
+              className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all"
             >
-              <Menu size={24} />
+              <Menu size={20} />
             </button>
             {isMirroringActive && <LiveIndicator onClick={onOpenLiveControl} role={role} />}
           </div>

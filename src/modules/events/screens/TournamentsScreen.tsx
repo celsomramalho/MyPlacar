@@ -26,8 +26,8 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onBack, onJo
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden animate-in fade-in duration-300 font-sans">
       <header className="px-6 py-4 flex items-center bg-white border-b border-gray-100 sticky top-0 z-40 min-h-[72px]">
-        <button onClick={onOpenMenu} className="p-2 -ml-2 text-slate-400 hover:text-brand-600 transition-colors">
-          <Menu size={24} />
+        <button onClick={onOpenMenu} className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all">
+          <Menu size={20} />
         </button>
         <div className="flex-1 flex items-center justify-center gap-2">
           <Trophy size={22} className="text-amber-500 stroke-[2.5]" />
