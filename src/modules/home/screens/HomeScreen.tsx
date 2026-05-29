@@ -7,6 +7,7 @@ import { useGame } from '@modules/game';
 import { useGameRules } from '@modules/game/hooks/useGameRules';
 import { useUI } from '@modules/ui';
 import { isWatchDevice } from '@shared/utils/device';
+import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 
 interface HomeScreenProps {
   userProfile: UserProfile;
@@ -156,22 +157,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <Menu size={20} />
         </button>
 
-        {/* Perfil clicável */}
-        <button
-          onClick={() => onNavigate('settings', 'profile')}
-          className="flex items-center gap-3 active:scale-95 transition-all"
-        >
-          {/* Avatar circular */}
-          <div className="w-10 h-10 rounded-full bg-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-inner">
-            {initials}
-          </div>
-          {/* Perfil */}
-          <div className="flex flex-col text-left">
-            <h3 className="text-sm font-black text-slate-800 leading-tight">Olá {greetingName}</h3>
-            <span className="text-[11px] font-bold text-slate-400 lowercase">{userProfile.email}</span>
-          </div>
-          <ChevronRight size={16} className="text-slate-300 ml-1" />
-        </button>
+        {/* Logo + Título */}
+        <div className="flex items-center gap-2">
+          <ScoreboardIcon className="w-8 h-8" />
+          <span className="text-lg font-black text-slate-800 tracking-tighter">MyPlacar</span>
+        </div>
 
         {/* Notificações (Sino) */}
         <button
@@ -189,6 +179,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Grid de Atalhos */}
       <main className="flex-1 p-5 max-w-md mx-auto w-full space-y-6">
+
+        {/* Botão de Perfil */}
+        <button
+          onClick={() => onNavigate('settings', 'profile')}
+          className="w-full bg-white border border-gray-100 text-slate-700 py-4 px-6 rounded-3xl font-black text-sm flex items-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50"
+        >
+          <div className="w-9 h-9 rounded-full bg-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-inner shrink-0">
+            {initials}
+          </div>
+          <div className="flex flex-col text-left flex-1">
+            <span className="text-sm font-black text-slate-800 leading-tight">Olá, {greetingName}</span>
+            <span className="text-[11px] font-bold text-slate-400 lowercase">{userProfile.email}</span>
+          </div>
+          <ChevronRight size={16} className="text-slate-300" />
+        </button>
         <div className="grid grid-cols-2 gap-4">
           {gridItems.map((item) => (
             <button
