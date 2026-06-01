@@ -5,6 +5,15 @@ import { isWatchDevice } from '../utils/device';
 import { LiveIndicator } from './LiveIndicator.tsx';
 import { getTennisServerSide } from '../utils/tennisEngine.ts';
 
+type WatchStatusPanel = 'set' | 'mic' | 'battery';
+type BatteryStatus = { percent: number; charging: boolean };
+type BatteryManagerLike = EventTarget & {
+  level: number;
+  charging: boolean;
+  addEventListener: (type: 'levelchange' | 'chargingchange', listener: () => void) => void;
+  removeEventListener: (type: 'levelchange' | 'chargingchange', listener: () => void) => void;
+};
+
 interface WatchBoardProps {
   gameState: GameState;
   onScoreUpdate: (player: 1 | 2, type?: PointType, source?: string) => void;
@@ -83,21 +92,56 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const [showMic, setShowMic] = React.useState(false);
+  const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
+  const [batteryStatus, setBatteryStatus] = React.useState<BatteryStatus | null>(null);
   const pauseRotationUntil = React.useRef(0);
 
   React.useEffect(() => {
+    const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryManagerLike> };
+    if (!nav.getBattery) return;
+
+    let battery: BatteryManagerLike | null = null;
+    let cancelled = false;
+
+    const updateBatteryStatus = () => {
+      if (!battery) return;
+      const percent = Math.max(0, Math.min(100, Math.round(battery.level * 100)));
+      setBatteryStatus({ percent, charging: battery.charging });
+    };
+
+    nav.getBattery().then((manager) => {
+      if (cancelled) return;
+      battery = manager;
+      updateBatteryStatus();
+      manager.addEventListener('levelchange', updateBatteryStatus);
+      manager.addEventListener('chargingchange', updateBatteryStatus);
+    }).catch(() => {
+      setBatteryStatus(null);
+    });
+
+    return () => {
+      cancelled = true;
+      battery?.removeEventListener('levelchange', updateBatteryStatus);
+      battery?.removeEventListener('chargingchange', updateBatteryStatus);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const panels: WatchStatusPanel[] = batteryStatus ? ['set', 'mic', 'battery'] : ['set', 'mic'];
     const interval = setInterval(() => {
       if (Date.now() < pauseRotationUntil.current) return;
-      setShowMic(prev => !prev);
+      setStatusPanel(prev => {
+        const currentIndex = panels.includes(prev) ? panels.indexOf(prev) : 0;
+        return panels[(currentIndex + 1) % panels.length];
+      });
     }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [batteryStatus]);
 
   const handleMicInteraction = (e: React.PointerEvent) => {
     e.stopPropagation();
     onVoiceToggle?.();
-    setShowMic(true);
+    setStatusPanel('mic');
     resetDimTimer();
     pauseRotationUntil.current = Date.now() + 6000;
   };
@@ -129,6 +173,81 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   };
 
   const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
+  const batteryFillClass = batteryStatus?.charging
+    ? 'bg-emerald-500'
+    : (batteryStatus?.percent ?? 100) <= 20
+      ? 'bg-red-500'
+      : (batteryStatus?.percent ?? 100) <= 50
+        ? 'bg-amber-500'
+        : 'bg-orange-600';
+
+  const gamesSetT1 = (
+    <div
+      onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 1)}
+      onPointerMove={handlePointerMove}
+      onPointerUp={() => handleScoreCardPointerUp('gameSet', 1)}
+      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p1.color || 'azul']}`}
+    >
+      {scorePressProgress?.player === 1 && scorePressProgress?.type === 'gameSet' && (
+        <div
+          className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0"
+          style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
+        />
+      )}
+      <span className="text-5xl font-black text-white relative z-10">{gameState.p1.games}</span>
+    </div>
+  );
+
+  const setsPartidaT1 = (
+    <div
+      onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 1)}
+      onPointerMove={handlePointerMove}
+      onPointerUp={() => handleScoreCardPointerUp('matchSet', 1)}
+      className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
+    >
+      {scorePressProgress?.player === 1 && scorePressProgress?.type === 'matchSet' && (
+        <div
+          className="absolute inset-0 bg-black/10 origin-left transition-all duration-75 z-0"
+          style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
+        />
+      )}
+      <span className="text-5xl font-black text-black relative z-10">{p1WonSets}</span>
+    </div>
+  );
+
+  const gamesSetT2 = (
+    <div
+      onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 2)}
+      onPointerMove={handlePointerMove}
+      onPointerUp={() => handleScoreCardPointerUp('gameSet', 2)}
+      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p2.color || 'vermelho']}`}
+    >
+      {scorePressProgress?.player === 2 && scorePressProgress?.type === 'gameSet' && (
+        <div
+          className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0"
+          style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
+        />
+      )}
+      <span className="text-5xl font-black text-white relative z-10">{gameState.p2.games}</span>
+    </div>
+  );
+
+  const setsPartidaT2 = (
+    <div
+      onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 2)}
+      onPointerMove={handlePointerMove}
+      onPointerUp={() => handleScoreCardPointerUp('matchSet', 2)}
+      className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
+    >
+      {scorePressProgress?.player === 2 && scorePressProgress?.type === 'matchSet' && (
+        <div
+          className="absolute inset-0 bg-black/10 origin-left transition-all duration-75 z-0"
+          style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
+        />
+      )}
+      <span className="text-5xl font-black text-black relative z-10">{p2WonSets}</span>
+    </div>
+  );
 
   // ── Indicador de saque ────────────────────────────────────────────────────
   // Renderiza para pickleball, tênis e beach tênis.
@@ -219,37 +338,11 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
       <div className="w-[22%] h-full flex flex-col bg-black border-r border-white/10 shrink-0 p-1 gap-1">
         <div className="flex-1 flex flex-col gap-1">
-          <div 
-            onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 1)} 
-            onPointerMove={handlePointerMove} 
-            onPointerUp={() => handleScoreCardPointerUp('gameSet', 1)}
-            className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p1.color || 'azul']}`}
-          >
-            {scorePressProgress?.player === 1 && scorePressProgress?.type === 'gameSet' && (
-              <div 
-                className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
-                style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
-              />
-            )}
-            <span className="text-5xl font-black text-white relative z-10">{gameState.p1.games}</span>
-          </div>
-          <div 
-            onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 1)} 
-            onPointerMove={handlePointerMove} 
-            onPointerUp={() => handleScoreCardPointerUp('matchSet', 1)}
-            className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
-          >
-            {scorePressProgress?.player === 1 && scorePressProgress?.type === 'matchSet' && (
-              <div 
-                className="absolute inset-0 bg-black/10 origin-left transition-all duration-75 z-0" 
-                style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
-              />
-            )}
-            <span className="text-5xl font-black text-black relative z-10">{p1WonSets}</span>
-          </div>
+          {setsPartidaT1}
+          {gamesSetT1}
         </div>
         <div className={`h-16 flex items-center justify-center rounded-2xl transition-all relative overflow-hidden ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}>
-          <div className={`absolute inset-0 flex items-center justify-center gap-1 transition-opacity duration-500 ${showMic ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <div className={`absolute inset-0 flex items-center justify-center gap-1 transition-opacity duration-500 ${statusPanel === 'set' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <span className="text-5xl font-black leading-none text-white">{gameState.currentSet + 1}</span>
             <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold ${isDimmed ? 'text-white/70' : 'text-slate-400'}`}>
               <span>S</span>
@@ -260,41 +353,26 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           <div 
             role="button"
             onPointerDown={handleMicInteraction}
-            className={`absolute inset-0 flex items-center justify-center transition-all duration-500 cursor-pointer ${showMic ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}`}
+            className={`absolute inset-0 flex items-center justify-center transition-all duration-500 cursor-pointer ${statusPanel === 'mic' ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}`}
           >
             <Mic size={32} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-blue-400' : 'text-slate-400'} />
             {!isVoiceActive && <div className="absolute w-8 h-[2.5px] bg-red-500 -rotate-45 pointer-events-none shadow-sm" />}
           </div>
+          {batteryStatus && (
+            <div className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${statusPanel === 'battery' ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
+              <div
+                className={`absolute inset-y-0 left-0 ${batteryFillClass}`}
+                style={{ width: `${batteryStatus.percent}%` }}
+              />
+              <span className="relative z-10 text-3xl font-black leading-none text-white tabular-nums">
+                {batteryStatus.percent}%
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex-1 flex flex-col gap-1">
-          <div 
-            onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 2)} 
-            onPointerMove={handlePointerMove} 
-            onPointerUp={() => handleScoreCardPointerUp('matchSet', 2)}
-            className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
-          >
-            {scorePressProgress?.player === 2 && scorePressProgress?.type === 'matchSet' && (
-              <div 
-                className="absolute inset-0 bg-black/10 origin-left transition-all duration-75 z-0" 
-                style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
-              />
-            )}
-            <span className="text-5xl font-black text-black relative z-10">{p2WonSets}</span>
-          </div>
-          <div 
-            onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 2)} 
-            onPointerMove={handlePointerMove} 
-            onPointerUp={() => handleScoreCardPointerUp('gameSet', 2)}
-            className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p2.color || 'vermelho']}`}
-          >
-            {scorePressProgress?.player === 2 && scorePressProgress?.type === 'gameSet' && (
-              <div 
-                className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
-                style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
-              />
-            )}
-            <span className="text-5xl font-black text-white relative z-10">{gameState.p2.games}</span>
-          </div>
+          {gamesSetT2}
+          {setsPartidaT2}
         </div>
       </div>
 
