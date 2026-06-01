@@ -5,6 +5,7 @@ import type { GameState, MatchSettings } from '../types.ts';
 import type { UserProfile } from '@modules/auth';
 import { getEngineForSport } from '../utils/sportEngine.ts';
 import { initPickleballState } from '../utils/pickleballEngine.ts';
+import { isWatchDevice } from '../utils/device.ts';
 
 /** Modo offline local (sem histórico na nuvem). */
 export function useAppOfflineMode() {
@@ -40,6 +41,7 @@ export function useAppOfflineMode() {
       cloudSync: false,
       useGeminiVoice: false,
       isWatchMode: true,
+      isScoreboardMode: isWatchDevice() ? true : matchSettings.isScoreboardMode,
     };
     setMatchSettings(offlineSettings);
 

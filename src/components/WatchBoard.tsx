@@ -194,7 +194,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
         />
       )}
-      <span className="text-5xl font-black text-white relative z-10">{gameState.p1.games}</span>
+      <span className="text-[56px] font-black text-white relative z-10 leading-none [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">{gameState.p1.games}</span>
     </div>
   );
 
@@ -211,7 +211,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
         />
       )}
-      <span className="text-5xl font-black text-black relative z-10">{p1WonSets}</span>
+      <span className="text-[56px] font-black text-black relative z-10 leading-none">{p1WonSets}</span>
     </div>
   );
 
@@ -228,7 +228,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
         />
       )}
-      <span className="text-5xl font-black text-white relative z-10">{gameState.p2.games}</span>
+      <span className="text-[56px] font-black text-white relative z-10 leading-none [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">{gameState.p2.games}</span>
     </div>
   );
 
@@ -245,7 +245,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }}
         />
       )}
-      <span className="text-5xl font-black text-black relative z-10">{p2WonSets}</span>
+      <span className="text-[56px] font-black text-black relative z-10 leading-none">{p2WonSets}</span>
     </div>
   );
 
@@ -343,7 +343,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         </div>
         <div className={`h-16 flex items-center justify-center rounded-2xl transition-all relative overflow-hidden ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}>
           <div className={`absolute inset-0 flex items-center justify-center gap-1 transition-opacity duration-500 ${statusPanel === 'set' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <span className="text-5xl font-black leading-none text-white">{gameState.currentSet + 1}</span>
+            <span className="text-[56px] font-black leading-none text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">{gameState.currentSet + 1}</span>
             <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold ${isDimmed ? 'text-white/70' : 'text-slate-400'}`}>
               <span>S</span>
               <span>e</span>
@@ -364,7 +364,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 className={`absolute inset-y-0 left-0 ${batteryFillClass}`}
                 style={{ width: `${batteryStatus.percent}%` }}
               />
-              <span className="relative z-10 flex items-center gap-1 text-3xl font-black leading-none text-white tabular-nums">
+              <span className="relative z-10 flex items-center gap-1 text-[34px] font-black leading-none text-white tabular-nums [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">
                 {batteryStatus.charging && <BatteryCharging size={22} strokeWidth={3.5} />}
                 <span>{batteryStatus.percent}%</span>
               </span>
@@ -484,7 +484,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {(() => {
                 const isWatchMode = !!gameState.matchConfig.isWatchMode;
                 const isScoreboardMode = !!gameState.matchConfig.isScoreboardMode;
-                const currentMode = isWatchMode ? 'watch' : (isScoreboardMode ? 'scoreboard' : 'control');
+                const currentMode = isScoreboardMode ? 'scoreboard' : (isWatchMode ? 'watch' : 'control');
                 const show3WayToggle = !isOfflineMode && !isWatchDevice();
 
                 const handleModeChange = (targetMode: 'control' | 'watch' | 'scoreboard') => {

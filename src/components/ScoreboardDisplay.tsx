@@ -308,7 +308,11 @@ const renderCenterBar = (horizontal: boolean) => (
 {/* Botão microfone — só para controller ou fora da live */}
 {showMic && (
 <button
-onPointerDown={onVoiceToggle}
+onPointerDown={(e) => {
+e.preventDefault();
+e.stopPropagation();
+onVoiceToggle?.();
+}}
 className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform border-2 shadow-md ${
            isVoiceActive ? 'bg-blue-600 border-blue-700' : 'bg-white border-blue-300'
          }`}
@@ -380,7 +384,7 @@ className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colo
 {(() => {
   const isWatchMode = !!gameState.matchConfig.isWatchMode;
   const isScoreboardMode = !!gameState.matchConfig.isScoreboardMode;
-  const currentMode = isWatchMode ? 'watch' : (isScoreboardMode ? 'scoreboard' : 'control');
+  const currentMode = isScoreboardMode ? 'scoreboard' : (isWatchMode ? 'watch' : 'control');
   const show3WayToggle = !isOfflineMode && !isWatchDevice();
 
   const handleModeChange = (targetMode: 'control' | 'watch' | 'scoreboard') => {

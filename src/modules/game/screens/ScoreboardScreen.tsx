@@ -383,6 +383,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   const currentGameStateRef = useRef(effectiveGameState);
   const pendingLogIdRef = useRef<string | null>(null);
+  const lastVoiceToggleAtRef = useRef(0);
   const voiceLogsRef = useRef<CommandLogEntry[]>([]);
 
   useEffect(() => { voiceLogsRef.current = effectiveVoiceLogs || []; }, [effectiveVoiceLogs]);
@@ -811,6 +812,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const handleVoiceToggle = () => {
+    const now = Date.now();
+    if (now - lastVoiceToggleAtRef.current < 700) return;
+    lastVoiceToggleAtRef.current = now;
     if (!effectiveGameState.matchConfig.voiceEnabled || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver) return;
     if (voiceWasManuallyStopped) {
       setVoiceWasManuallyStopped(false);
@@ -1543,7 +1547,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     {(() => {
                       const isWatchMode = !!effectiveGameState.matchConfig.isWatchMode;
                       const isScoreboardMode = !!effectiveGameState.matchConfig.isScoreboardMode;
-                      const currentMode = isWatchMode ? 'watch' : (isScoreboardMode ? 'scoreboard' : 'control');
+                      const currentMode = isScoreboardMode ? 'scoreboard' : (isWatchMode ? 'watch' : 'control');
                       const show3WayToggle = !isOfflineMode && !isWatchDevice();
 
                       const handleModeChange = (targetMode: 'control' | 'watch' | 'scoreboard') => {

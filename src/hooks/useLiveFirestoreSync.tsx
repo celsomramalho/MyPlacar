@@ -7,7 +7,7 @@ import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import type { GameState } from '../types.ts';
 import { isValidGameState } from '../utils/validation.ts';
-import { getDeviceType } from '../utils/device.ts';
+import { getDeviceType, isWatchDevice } from '../utils/device.ts';
 import { sanitizeForFirestore } from '../utils/sanitize.ts';
 
 export function useLiveFirestoreSync(params: {
@@ -335,12 +335,14 @@ export function useLiveFirestoreSync(params: {
             const lockedOwnerPin = prev?.ownerPin || cloudData.ownerPin;
             const lockedOwnerDeviceId = prev?.ownerDeviceId || cloudData.ownerDeviceId;
             // Se este device perdeu o controle (era controller, agora não é mais):
-            // volta para ScoreboardDisplay (isScoreboardMode: true), exceto se for relógio.
+            // volta para ScoreboardDisplay. No relógio, ScoreboardDisplay também é o padrão.
             const justLostControl =
               prev?.commandOwnerId === deviceId && cloudData.commandOwnerId !== deviceId;
             const isWatchMode = baseConfig.isWatchMode;
-            const resolvedScoreboardMode = isWatchMode
-              ? baseConfig.isScoreboardMode // relógio: preserva modo atual
+            const resolvedScoreboardMode = isWatchDevice()
+              ? true
+              : isWatchMode
+              ? baseConfig.isScoreboardMode
               : justLostControl
                 ? true // perdeu controle → volta ao placar
                 : baseConfig.isScoreboardMode; // demais: preserva preferência local
@@ -374,7 +376,7 @@ export function useLiveFirestoreSync(params: {
             cloudData.commandOwnerId !== deviceId
           ) {
             const localWatchMode = matchSettingsRef.current.isWatchMode;
-            if (!localWatchMode) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
+            if (isWatchDevice() || !localWatchMode) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
           }
           setIsWaitingSync(false);
         } else {

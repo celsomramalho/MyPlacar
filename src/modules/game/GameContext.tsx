@@ -76,6 +76,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (saved && saved.matchConfig?.sportType === 'pickleball' && !saved.pickleball) {
       saved.pickleball = initPickleballState(saved);
     }
+    if (saved?.matchConfig && isWatchDevice()) {
+      saved.matchConfig = { ...saved.matchConfig, isWatchMode: true, isScoreboardMode: true };
+    }
     return saved;
   });
   const gameStateRef = useRef(gameState);
@@ -94,6 +97,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       s.volume = parseInt(localStorage.getItem('myPlacar_LocalVolume') || '100');
       if (isWatchDevice()) {
         s.isWatchMode = true;
+        s.isScoreboardMode = true;
         localStorage.setItem('myPlacar_LocalWatchMode', 'true');
       } else {
         const savedWatchMode = localStorage.getItem('myPlacar_LocalWatchMode');
@@ -647,11 +651,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, status: 'controller', deviceType: getDeviceType() };
 
             tookControlAtRef.current = Date.now();
-            const settingsAsController = { ...syncedSettings, isScoreboardMode: false };
+            const isWatchController = isWatchDevice();
+            const settingsAsController = { ...syncedSettings, isScoreboardMode: isWatchController };
             setMatchSettings(settingsAsController); 
             try { localStorage.setItem('myPlacarSettings', JSON.stringify(settingsAsController)); } catch {}
             setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
-            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: resolveWatchMode(matchSettings.isWatchMode ?? false), isScoreboardMode: false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: resolveWatchMode(matchSettings.isWatchMode ?? false), isScoreboardMode: isWatchController, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
             try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
 
             overlayAcceptedRef.current = targetPin;
@@ -735,8 +740,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, status: initialStatus, deviceType: getDeviceType(), isOwner: joinRole === 'owner' }
           };
           const watchModeForEntry = resolveWatchMode(matchSettings.isWatchMode ?? false);
-          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: watchModeForEntry ? false : (enterAsObserver ? true : false), brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
-          if (enterAsObserver) setMatchSettings(prev => ({ ...prev, isScoreboardMode: watchModeForEntry ? false : true, isWatchMode: watchModeForEntry }));
+          const scoreboardModeForEntry = isWatchDevice() ? true : (watchModeForEntry ? false : enterAsObserver);
+          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: scoreboardModeForEntry, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+          if (enterAsObserver || isWatchDevice()) setMatchSettings(prev => ({ ...prev, isScoreboardMode: scoreboardModeForEntry, isWatchMode: watchModeForEntry }));
           overlayAcceptedRef.current = pinUpper;
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
@@ -1060,6 +1066,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         }
     }
 
+    if (isWatchDevice()) {
+      configToUse = { ...configToUse, isWatchMode: true, isScoreboardMode: true };
+    }
+
     if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
        const db = getDb();
        if (db) {
@@ -1113,7 +1123,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       const updatedState: GameState = { 
         ...gameState, 
         isLiveClosed: false,
-        matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: !!matchSettings.isScoreboardMode }, 
+        matchConfig: { ...matchSettings, setsToWin: matchSettings.sets, isWatchMode: !!matchSettings.isWatchMode, isScoreboardMode: isWatchDevice() ? true : !!matchSettings.isScoreboardMode }, 
         p1: { ...gameState.p1, name: matchSettings.p1Name, partnerName: matchSettings.p1Partner, gender: matchSettings.p1Gender, partnerGender: matchSettings.p1PartnerGender, color: matchSettings.p1Color }, 
         p2: { ...gameState.p2, name: matchSettings.p2Name, partnerName: matchSettings.p2Partner, gender: matchSettings.p2Gender, partnerGender: matchSettings.p2PartnerGender, color: matchSettings.p2Color }, 
         isPaused: false 
@@ -1141,7 +1151,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       p1: { name: configToUse.p1Name, partnerName: configToUse.p1Partner, gender: configToUse.p1Gender, partnerGender: configToUse.p1PartnerGender, score: '0', games: 0, sets: [], color: configToUse.p1Color },
       p2: { name: configToUse.p2Name, partnerName: configToUse.p2Partner, gender: configToUse.p2Gender, partnerGender: configToUse.p2PartnerGender, score: '0', games: 0, sets: [], color: configToUse.p2Color },
       server: configToUse.initialServer, servingOrderOffset: configToUse.initialServer === 1 ? 0 : 1,
-      pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode }, history: [], currentSet: 0, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
+      pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode, isScoreboardMode: isWatchDevice() ? true : !!configToUse.isScoreboardMode }, history: [], currentSet: 0, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
       isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin, ownerDeviceId: deviceId,
       liveSessionCounter: globalLiveCount, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, 
       controllers: { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: true, role: 'owner' } },
