@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast } from 'lucide-react';
+import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../types.ts';
 import { isWatchDevice } from '../utils/device';
 import { LiveIndicator } from './LiveIndicator.tsx';
@@ -177,9 +177,9 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     ? 'bg-emerald-500'
     : (batteryStatus?.percent ?? 100) <= 20
       ? 'bg-red-500'
-      : (batteryStatus?.percent ?? 100) <= 50
+      : (batteryStatus?.percent ?? 100) < 60
         ? 'bg-amber-500'
-        : 'bg-orange-600';
+        : 'bg-emerald-500';
 
   const gamesSetT1 = (
     <div
@@ -364,8 +364,9 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 className={`absolute inset-y-0 left-0 ${batteryFillClass}`}
                 style={{ width: `${batteryStatus.percent}%` }}
               />
-              <span className="relative z-10 text-3xl font-black leading-none text-white tabular-nums">
-                {batteryStatus.percent}%
+              <span className="relative z-10 flex items-center gap-1 text-3xl font-black leading-none text-white tabular-nums">
+                {batteryStatus.charging && <BatteryCharging size={22} strokeWidth={3.5} />}
+                <span>{batteryStatus.percent}%</span>
               </span>
             </div>
           )}
