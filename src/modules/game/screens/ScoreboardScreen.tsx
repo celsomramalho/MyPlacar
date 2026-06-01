@@ -1134,7 +1134,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     />
   );
 
-  if (effectiveGameState.matchConfig.isScoreboardMode) {
+  if (effectiveGameState.matchConfig.isScoreboardMode && !(isWatchDevice() && effectiveGameState.matchConfig.isWatchMode)) {
     return (
       <ScoreboardDisplay
         gameState={effectiveGameState}

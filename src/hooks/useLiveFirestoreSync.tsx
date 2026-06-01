@@ -335,12 +335,12 @@ export function useLiveFirestoreSync(params: {
             const lockedOwnerPin = prev?.ownerPin || cloudData.ownerPin;
             const lockedOwnerDeviceId = prev?.ownerDeviceId || cloudData.ownerDeviceId;
             // Se este device perdeu o controle (era controller, agora não é mais):
-            // volta para ScoreboardDisplay. No relógio, ScoreboardDisplay também é o padrão.
+            // volta para ScoreboardDisplay, exceto no relógio, onde WatchBoard é o padrão.
             const justLostControl =
               prev?.commandOwnerId === deviceId && cloudData.commandOwnerId !== deviceId;
             const isWatchMode = baseConfig.isWatchMode;
             const resolvedScoreboardMode = isWatchDevice()
-              ? true
+              ? false
               : isWatchMode
               ? baseConfig.isScoreboardMode
               : justLostControl
@@ -376,7 +376,11 @@ export function useLiveFirestoreSync(params: {
             cloudData.commandOwnerId !== deviceId
           ) {
             const localWatchMode = matchSettingsRef.current.isWatchMode;
-            if (isWatchDevice() || !localWatchMode) setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
+            if (isWatchDevice()) {
+              setMatchSettings(prev => ({ ...prev, isScoreboardMode: false, isWatchMode: true }));
+            } else if (!localWatchMode) {
+              setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
+            }
           }
           setIsWaitingSync(false);
         } else {
@@ -1025,10 +1029,21 @@ export function useLiveFirestoreSync(params: {
       !hasAutoEnabledScoreboardRef.current
     ) {
       hasAutoEnabledScoreboardRef.current = true;
-      setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
+      setMatchSettings(prev => ({
+        ...prev,
+        isWatchMode: isWatchDevice() ? true : prev.isWatchMode,
+        isScoreboardMode: isWatchDevice() ? false : true,
+      }));
       setGameState(prev => {
         if (!prev) return prev;
-        return { ...prev, matchConfig: { ...prev.matchConfig, isScoreboardMode: true } };
+        return {
+          ...prev,
+          matchConfig: {
+            ...prev.matchConfig,
+            isWatchMode: isWatchDevice() ? true : prev.matchConfig.isWatchMode,
+            isScoreboardMode: isWatchDevice() ? false : true,
+          },
+        };
       });
     }
     // Reset do ref: só quando device passa a ser owner ou controller ativo

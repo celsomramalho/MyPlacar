@@ -41,7 +41,7 @@ export function useAppOfflineMode() {
       cloudSync: false,
       useGeminiVoice: false,
       isWatchMode: true,
-      isScoreboardMode: isWatchDevice() ? true : matchSettings.isScoreboardMode,
+      isScoreboardMode: isWatchDevice() ? false : matchSettings.isScoreboardMode,
     };
     setMatchSettings(offlineSettings);
 
