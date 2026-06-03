@@ -1,5 +1,5 @@
 /**
- * Testes de regressão: src/utils/sportEngine.ts
+ * Testes de regressão: src/modules/game/domain/sportEngine.ts
  *
  * Cobertura:
  * - getEngineForSport: mapeamento correto de sport → engine
@@ -9,7 +9,7 @@
  * o comportamento desta função.
  */
 import { describe, it, expect } from 'vitest';
-import { getEngineForSport } from '../../src/utils/sportEngine';
+import { getEngineForSport } from '../../src/modules/game/domain/sportEngine';
 
 describe('sportEngine — getEngineForSport', () => {
   it('retorna "pickleball" para sportType === "pickleball"', () => {

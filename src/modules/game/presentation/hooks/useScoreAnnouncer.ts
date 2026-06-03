@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { GameState, GeminiVoiceName, GeminiPersona, ErrorSoundType } from '../types.ts';
-import { isTennisTieBreak } from '../utils/tennisEngine.ts';
+import { GameState, GeminiVoiceName, GeminiPersona, ErrorSoundType } from '../../../../types.ts';
+import { isTennisTieBreak } from '@modules/game/domain/tennisEngine';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared audio infra (unchanged)

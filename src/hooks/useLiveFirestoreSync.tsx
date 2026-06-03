@@ -6,8 +6,8 @@ import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import type { GameState } from '../types.ts';
-import { isValidGameState } from '../utils/validation.ts';
-import { getDeviceType, isWatchDevice } from '../utils/device.ts';
+import { isValidGameState } from '@modules/game/domain/validation';
+import { getDeviceType, isWatchDevice } from '@shared/utils/device';
 import { sanitizeForFirestore } from '../utils/sanitize.ts';
 
 export function useLiveFirestoreSync(params: {

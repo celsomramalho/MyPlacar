@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '@infra/supabase';
-import { ScoreboardIcon } from '../../../components/ScoreboardIcon.tsx';
+import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');

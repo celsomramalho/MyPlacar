@@ -31,7 +31,7 @@ import type { TournamentEvent } from '@modules/events/types';
 import { VoiceCommands, ErrorSoundType } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
 import { AdminCommunicationsPanel } from '@modules/communications';
-import { playErrorBeep, unlockAudio } from '../../../hooks/useScoreAnnouncer';
+import { playErrorBeep, unlockAudio } from '@modules/game/presentation/hooks/useScoreAnnouncer';
 
 interface Props {
   onBack: () => void;

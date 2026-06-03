@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Search, Loader2, Clock, Trophy, ChevronDown, ChevronUp, MapPin, Cloud, Trash2, CloudUpload, CloudDownload, Calendar, Smartphone, Share2 } from 'lucide-react';
-import { Input } from '../../../components/Input';
+import { Input } from '@shared/components/Input';
 import { LazySportIcon } from '../../../components/LazySportIcon';
 import { MatchTimeline } from '@shared/components/MatchTimeline';
 import type { MatchHistoryItem } from '../types';

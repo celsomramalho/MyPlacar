@@ -4,7 +4,7 @@ import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import { useScoreboardEngine } from '@modules/game/hooks/useScoreboardEngine';
-import { useVoiceControl } from '../hooks/useVoiceControl';
+import { useVoiceControl } from '@modules/game/presentation/hooks/useVoiceControl';
 import { useLiveActions } from '../hooks/useLiveActions';
 import { useJudgeLookup } from '../hooks/useJudgeLookup';
 import type { Tab } from '../types';

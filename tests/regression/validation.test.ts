@@ -1,8 +1,8 @@
 /**
- * Testes de regressão: src/utils/validation.ts
+ * Testes de regressão: src/modules/game/domain/validation.ts
  */
 import { describe, it, expect } from 'vitest';
-import { isValidPlayer, isValidMatchSettings, isValidGameState } from '../../src/utils/validation';
+import { isValidGameState, isValidMatchSettings, isValidPlayer } from '../../src/modules/game/domain/validation';
 import { createGameState } from '../helpers/gameStateFactory';
 
 describe('validation — isValidPlayer', () => {

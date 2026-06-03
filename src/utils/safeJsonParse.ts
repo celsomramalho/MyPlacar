@@ -6,7 +6,7 @@
 // sem depender do App.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { isValidGameState, isValidMatchSettings } from '../utils/validation.ts';
+import { isValidGameState, isValidMatchSettings } from '@modules/game/domain/validation';
 
 /**
  * Lê e faz parse de um valor do localStorage de forma segura.

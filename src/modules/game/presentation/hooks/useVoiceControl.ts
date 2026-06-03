@@ -1,6 +1,6 @@
 import { useUI } from '@modules/ui';
 import { useGame } from '@modules/game';
-import type { MatchSettings } from '../types.ts';
+import type { MatchSettings } from '../../../../types.ts';
 
 type VoicePrefs = Pick<
   MatchSettings,

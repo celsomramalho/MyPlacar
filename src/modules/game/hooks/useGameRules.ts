@@ -3,7 +3,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { getDb } from '@infra/firebase';
 import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
-import { getDeviceId } from '../../../utils/device.ts';
+import { getDeviceId } from '@shared/utils/device';
 import { sanitizeForFirestore } from '../../../utils/sanitize.ts';
 import { useGame } from '../useGame.ts';
 

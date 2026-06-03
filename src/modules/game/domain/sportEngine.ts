@@ -1,4 +1,4 @@
-// ─── src/utils/sportEngine.ts ────────────────────────────────────────────────
+// ─── src/modules/game/domain/sportEngine.ts ──────────────────────────────────
 // Mapeia o sportType para o motor de pontuação correspondente.
 // Usado para detectar trocas de motor durante uma partida em andamento.
 //

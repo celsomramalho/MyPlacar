@@ -3,7 +3,7 @@ import type { UserProfile } from '@modules/auth';
 import { GameProvider, useGame } from '@modules/game';
 import { LiveProvider } from '@modules/live';
 import type { GameState } from '../types.ts';
-import { getDeviceId } from '../utils/device.ts';
+import { getDeviceId } from '@shared/utils/device';
 
 /** Props que o LiveProvider precisa do Game — ciclo Game ↔ Live exige sync mínimo. */
 export type LiveGameFeed = {

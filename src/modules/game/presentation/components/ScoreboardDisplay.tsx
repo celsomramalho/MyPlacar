@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw, MonitorSmartphone, Trophy, SquareKanban, Watch, Cast } from 'lucide-react';
-import { GameState, CourtSide } from '../types.ts';
-import { isWatchDevice } from '../utils/device';
-import { LiveIndicator } from '../components/LiveIndicator.tsx';
-import { getTennisServerSide } from '../utils/tennisEngine.ts';
+import { GameState, CourtSide } from '../../../../types.ts';
+import { isWatchDevice } from '@shared/utils/device';
+import { LiveIndicator } from '../../../../components/LiveIndicator.tsx';
+import { getTennisServerSide } from '@modules/game/domain/tennisEngine';
 import { useMatchTimer } from '../hooks/useMatchTimer.ts';
 
 // ─── Props ────────────────────────────────────────────────────────────────────

@@ -5,8 +5,8 @@ import { getDb } from '@infra/firebase';
 import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
-import { DEFAULT_TENNIS_SETTINGS } from '../constants.ts';
-import { getDeviceId } from '../utils/device.ts';
+import { DEFAULT_TENNIS_SETTINGS } from '../../constants.ts';
+import { getDeviceId } from '@shared/utils/device';
 import type { UpdateData } from 'firebase/firestore';
 
 type ClearTournamentSession = () => void;

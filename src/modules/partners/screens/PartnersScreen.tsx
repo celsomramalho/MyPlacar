@@ -12,14 +12,14 @@ import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { GameState, MatchSettings } from '../../../types';
 import type { TournamentEvent } from '@modules/events/types';
 import { useGame } from '@modules/game/useGame';
-import { Input } from '../../../components/Input'; 
+import { Input } from '@shared/components/Input';
 import { findUserByPin, findUsersByPins, findUsersReferredByPin, getDb } from '@infra/firebase'; 
 import { getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
 import { mirrorUser, mirrorPartners } from '@infra/supabase';
 import { LiveIndicator } from '../../../components/LiveIndicator'; 
-import { formatPortugueseName, maskPin } from '../../../utils/formatters'; 
-import { Toggle } from '../../../components/Toggle'; 
-import { ScoreboardIcon } from '../../../components/ScoreboardIcon'; 
+import { formatPortugueseName, maskPin } from '@shared/utils/formatters';
+import { Toggle } from '@shared/components/Toggle';
+import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 
 interface Props {
   playerQueue: QueuePlayer[];

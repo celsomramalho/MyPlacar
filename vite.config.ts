@@ -69,6 +69,9 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      '@app':      resolve(__dirname, 'src/app'),
+      '@core':     resolve(__dirname, 'src/core'),
+      '@pwa':      resolve(__dirname, 'src/pwa'),
       '@modules':  resolve(__dirname, 'src/modules'),
       '@shared':   resolve(__dirname, 'src/shared'),
       '@infra':    resolve(__dirname, 'src/infrastructure'),
@@ -109,6 +112,9 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
     alias: {
+      '@app':     resolve(__dirname, 'src/app'),
+      '@core':    resolve(__dirname, 'src/core'),
+      '@pwa':     resolve(__dirname, 'src/pwa'),
       '@modules': resolve(__dirname, 'src/modules'),
       '@shared':  resolve(__dirname, 'src/shared'),
       '@infra':   resolve(__dirname, 'src/infrastructure'),

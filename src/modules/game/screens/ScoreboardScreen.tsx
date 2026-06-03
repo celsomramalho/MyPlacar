@@ -1,27 +1,26 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw, SquareKanban, Cast, Menu } from 'lucide-react';
-import { getDeviceType } from '../../../utils/device';
+import { getDeviceType } from '@shared/utils/device';
 import { Button } from '@shared/components/Button';
-import { ScoreboardIcon } from '../../../components/ScoreboardIcon';
+import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { Input } from '@shared/components/Input';
 import { GameState, PointType, PointEvent } from '../../../types';
-import { useGeminiReferee } from '../../../hooks/useGeminiReferee';
-import { useScoreAnnouncer, unlockAudio, getSharedAudioContext, playErrorBeep } from '../../../hooks/useScoreAnnouncer';
-import { usePickleballAnnouncer } from '../../../hooks/usePickleballAnnouncer';
-import { useMatchTimer } from '../../../hooks/useMatchTimer';
-import { isTennisTieBreak } from '../../../utils/tennisEngine';
-import { getTennisServerSide } from '../../../utils/tennisEngine';
-import { isWatchDevice } from '../../../utils/device';
+import { useGeminiReferee } from '../presentation/hooks/useGeminiReferee';
+import { getSharedAudioContext, playErrorBeep, unlockAudio, useScoreAnnouncer } from '../presentation/hooks/useScoreAnnouncer';
+import { usePickleballAnnouncer } from '../presentation/hooks/usePickleballAnnouncer';
+import { useMatchTimer } from '../presentation/hooks/useMatchTimer';
+import { getTennisServerSide, isTennisTieBreak } from '@modules/game/domain/tennisEngine';
+import { isWatchDevice } from '@shared/utils/device';
 import { SPORT_LIST } from '../../../constants';
 import { getDb } from '@infra/firebase';
 import { doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { LazySportIcon } from '../../../components/LazySportIcon';
 import { LiveIndicator } from '../../../components/LiveIndicator';
-import { applyGoldenRule, maskPin } from '../../../utils/formatters';
-import { WatchBoard } from '../../../components/WatchBoard';
+import { applyGoldenRule, maskPin } from '@shared/utils/formatters';
+import { WatchBoard } from '../presentation/components/WatchBoard';
 import { useLive } from '@modules/live';
 import { useGame } from '@modules/game';
-import { ScoreboardDisplay } from '../../../components/ScoreboardDisplay';
+import { ScoreboardDisplay } from '../presentation/components/ScoreboardDisplay';
 
 interface CommandLogEntry {
   id: string;

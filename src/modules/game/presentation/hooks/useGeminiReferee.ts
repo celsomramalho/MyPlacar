@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { VoiceCommands, PointType } from '../types.ts';
+import { VoiceCommands, PointType } from '../../../../types.ts';
 
 // Declarações locais da Web Speech API — não incluídas no lib.dom.d.ts padrão do TypeScript
 interface SpeechRecognitionAlternative { readonly transcript: string; readonly confidence: number; }

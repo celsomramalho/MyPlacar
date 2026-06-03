@@ -1,8 +1,8 @@
 /**
- * Testes de regressão: src/utils/scoreEngine.ts (dispatcher)
+ * Testes de regressão: src/modules/game/domain/scoreEngine.ts (dispatcher)
  */
 import { describe, it, expect } from 'vitest';
-import { incrementScore } from '../../src/utils/scoreEngine';
+import { incrementScore } from '../../src/modules/game/domain/scoreEngine';
 import { createGameState, createPickleballState, createMatchOverState } from '../helpers/gameStateFactory';
 
 describe('scoreEngine — incrementScore', () => {

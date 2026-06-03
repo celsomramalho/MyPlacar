@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 import { getDb } from '@infra/firebase';
 import { useUI } from '@modules/ui';
-import { APP_VERSION as LOCAL_CODE_VERSION } from '../constants.ts';
+import { APP_VERSION as LOCAL_CODE_VERSION } from '../../constants.ts';
 
 /** `appUrl` remoto + verificação de nova versão PWA. */
 export function useAppConfig(authReady: boolean) {

@@ -20,6 +20,9 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
+      "@app/*":     ["src/app/*"],
+      "@core/*":    ["src/core/*"],
+      "@pwa/*":     ["src/pwa/*"],
       "@modules/*": ["src/modules/*"],
       "@shared/*":  ["src/shared/*"],
       "@infra/*":   ["src/infrastructure/*"],

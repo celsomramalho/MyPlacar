@@ -1,12 +1,12 @@
 /**
- * Testes de regressão: src/utils/pickleballEngine.ts
+ * Testes de regressão: src/modules/game/domain/pickleballEngine.ts
  */
 import { describe, it, expect } from 'vitest';
 import {
   incrementScorePickleball,
   initPickleballState,
   whoHasPickleballGamePoint,
-} from '../../src/utils/pickleballEngine';
+} from '../../src/modules/game/domain/pickleballEngine';
 import { createPickleballState } from '../helpers/gameStateFactory';
 
 describe('pickleballEngine — initPickleballState', () => {

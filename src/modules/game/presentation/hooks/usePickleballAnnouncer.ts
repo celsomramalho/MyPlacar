@@ -13,13 +13,13 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { GameState, PickleballState } from '../types.ts';
+import { GameState, PickleballState } from '../../../../types.ts';
 import {
   whoHasPickleballGamePoint,
   whoHasPickleballMatchPoint,
   shouldSwitchSidesMidGame,
   isPickleballTieBreak,
-} from '../utils/pickleballEngine.ts';
+} from '@modules/game/domain/pickleballEngine';
 import { speakSystem, speakGemini, unlockAudio, TIE_BREAK_TTS, ACE_TTS } from './useScoreAnnouncer.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 /**
- * Testes de regressão: src/utils/tennisEngine.ts
+ * Testes de regressão: src/modules/game/domain/tennisEngine.ts
  *
  * Cobertura das funções críticas:
  * - incrementScore: fluxo completo de pontuação (ponto → game → set → match)
@@ -17,7 +17,7 @@ import {
   getTennisServerSide,
   undoPoint,
   incrementScoreTennis,
-} from '../../src/utils/tennisEngine';
+} from '../../src/modules/game/domain/tennisEngine';
 import {
   createGameState,
   createDeuceState,

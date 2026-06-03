@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, Menu } from 'lucide-react';
-import { Toggle } from '../../../components/Toggle';
+import { Toggle } from '@shared/components/Toggle';
 import { MatchSettings, SportType, GameState, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../../../types';
 import type { TournamentEvent } from '@modules/events/types';
 import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
-import { ScoreboardIcon } from '../../../components/ScoreboardIcon';
+import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { DEFAULT_PICKLEBALL_SETTINGS, DEFAULT_TENNIS_SETTINGS, SPORT_GROUPS, SPORT_LIST } from '../../../constants';
-import { applyGoldenRule } from '../../../utils/formatters';
-import { isWatchDevice } from '../../../utils/device';
+import { applyGoldenRule } from '@shared/utils/formatters';
+import { isWatchDevice } from '@shared/utils/device';
 import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '../../../components/LazySportIcon';

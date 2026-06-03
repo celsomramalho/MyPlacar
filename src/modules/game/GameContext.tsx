@@ -23,11 +23,12 @@ import type { Partner } from '@modules/partners/types';
 import type { MatchHistoryItem } from '@modules/history/types';
 import { persistLocalHistory } from '@modules/history/services/persistLocalHistory';
 import { safeJsonParse } from '../../utils/safeJsonParse.ts';
-import { isWatchDevice } from '../../utils/device.ts';
+import { isWatchDevice } from '@shared/utils/device';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION } from '../../constants.ts';
 import type { GameState, MatchSettings, PointType } from '../../types.ts';
-import { incrementScore, undoPoint } from '../../utils/tennisEngine.ts';
-import { initPickleballState } from '../../utils/pickleballEngine.ts';
+import { initPickleballState } from '@modules/game/domain/pickleballEngine';
+import { getEngineForSport } from '@modules/game/domain/sportEngine';
+import { incrementScore, undoPoint } from '@modules/game/domain/tennisEngine';
 import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
 import { getDb } from '@infra/firebase/client';
@@ -39,9 +40,8 @@ import { markTournamentMatchFinished, markTournamentMatchLive } from '@modules/e
 import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { createHistoryItem } from '@modules/history/services/createHistoryItem';
 import { clearLiveOwnerPin, persistLiveOwnerPin } from '../live/liveHelpers.ts';
-import { getDeviceId, getDeviceType, resolveWatchMode } from '../../utils/device.ts';
+import { getDeviceId, getDeviceType, resolveWatchMode } from '@shared/utils/device';
 import { sanitizeForFirestore } from '../../utils/sanitize.ts';
-import { getEngineForSport } from '../../utils/sportEngine.ts';
 
 // ─── Contexto ─────────────────────────────────────────────────────────────────
 const GameContext = createContext<GameContextValue | undefined>(undefined);

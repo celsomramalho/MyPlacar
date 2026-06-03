@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@modules/ui';
-import { getUrlParams } from '../utils/appNavigation.ts';
+import { getUrlParams } from '../appNavigation.ts';
 
 /** Deep links: espectador, placar público, referral e reset de senha na URL. */
 export function useDeepLinkScreen(onForceLogout?: () => void | Promise<void>) {

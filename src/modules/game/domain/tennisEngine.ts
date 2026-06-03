@@ -1,5 +1,5 @@
 
-import { GameState, PointType, CourtSide } from '../types.ts';
+import { GameState, PointType, CourtSide } from '../../../types.ts';
 import { incrementScorePickleball } from './pickleballEngine.ts';
 
 export const incrementScore = (state: GameState, rallyWinner: 1 | 2, pointType: PointType = 'rally', source: string = 'cb'): GameState => {
@@ -22,7 +22,7 @@ export const incrementScore = (state: GameState, rallyWinner: 1 | 2, pointType: 
   }
 };
 
-// Pickleball: lógica movida para src/utils/pickleballEngine.ts
+// Pickleball: lógica movida para o domínio de jogo.
 
 export const isTennisTieBreak = (state: GameState): boolean => {
     if (state.matchConfig.sportType !== 'tennis' && state.matchConfig.sportType !== 'beach-tennis') return false;

@@ -31,7 +31,7 @@
  *   - Sem flag explícito no estado — não polui PickleballState.
  */
 
-import { GameState, PickleballState, CourtSide } from '../types.ts';
+import { GameState, PickleballState, CourtSide } from '../../../types.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers internos — resolução de nomes

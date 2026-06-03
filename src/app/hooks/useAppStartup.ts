@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { getDb, clearFirestoreCache } from '@infra/firebase';
 
-import { APP_VERSION as LOCAL_CODE_VERSION } from '../constants.ts';
-import type { Partner, MatchSettings } from '../types.ts';
+import { APP_VERSION as LOCAL_CODE_VERSION } from '../../constants.ts';
+import type { Partner, MatchSettings } from '../../types.ts';
 import type { UserProfile } from '@modules/auth';
 import type { QueuePlayer } from '@modules/partners/types';
 import type { ModalConfig } from '@modules/ui';

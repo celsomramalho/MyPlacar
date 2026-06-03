@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { GameState } from '../types';
+import { GameState } from '../../../../types';
 
 export const useMatchTimer = (gameState: GameState | null) => {
   const [displayTime, setDisplayTime] = useState(0);

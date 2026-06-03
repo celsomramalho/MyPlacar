@@ -11,7 +11,7 @@ import type { Partner, QueuePlayer } from '@modules/partners/types';
 import { MatchSettings, GameState } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
 import type { TournamentEvent } from '@modules/events/types';
-import { formatPortugueseName } from '../../../utils/formatters';
+import { formatPortugueseName } from '@shared/utils/formatters';
 import { SPORT_LIST } from '../../../constants';
 import { getDb } from '@infra/firebase/client';
 import { collection, getDocs } from 'firebase/firestore';

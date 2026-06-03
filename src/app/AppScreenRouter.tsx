@@ -27,7 +27,7 @@ import type { TournamentEvent, EventRegistration } from '@modules/events';
 import type { MatchHistoryItem } from '@modules/history/types';
 import { type AdminTab, type Tab } from '../types.ts';
 import { useAppLogger } from '../hooks/useAppLogger.ts';
-import { useInstallPwa } from '../hooks/useInstallPwa.ts';
+import { useInstallPwa } from '@pwa/installPrompt';
 import { useGameRules } from '@modules/game/hooks/useGameRules.ts';
 import { useVersionTap } from '../hooks/useVersionTap.ts';
 import { GlobalOverlays } from '../components/GlobalOverlays.tsx';

@@ -4,7 +4,7 @@ import { getDb } from '@infra/firebase';
 import { doc, onSnapshot, collection, getDocs, query, where } from 'firebase/firestore';
 import { GameState } from '../../../types';
 import { SPORT_LIST } from '../../../constants';
-import { getTennisServerSide } from '../../../utils/tennisEngine';
+import { getTennisServerSide } from '@modules/game/domain/tennisEngine';
 
 interface Props {
   matchId: string;

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { applyGoldenRule } from '../utils/formatters.ts';
+import { applyGoldenRule } from '@shared/utils/formatters';
 
 /**
  * Retorna o nome completo do dispositivo formatado pela golden rule.

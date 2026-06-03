@@ -4,22 +4,22 @@ import { UIProvider, useUI } from '@modules/ui';
 import { GameLiveProviderStack } from './app/GameLiveProviderStack.tsx';
 import { AppScreenRouter } from './app/AppScreenRouter.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
-import { getInitialScreen } from './utils/appNavigation.ts';
-import { getDeviceId } from './utils/device.ts';
+import { getInitialScreen } from '@app/appNavigation';
+import { getDeviceId } from '@shared/utils/device';
 import { useOnlineSync } from './hooks/useOnlineSync.ts';
 import { useWakeLock } from './hooks/useWakeLock.ts';
-import { useAppAuth } from './hooks/useAppAuth.ts';
-import { useAppConfig } from './hooks/useAppConfig.ts';
-import { useAppLogout } from './hooks/useAppLogout.tsx';
+import { useAppAuth } from '@app/hooks/useAppAuth';
+import { useAppConfig } from '@app/hooks/useAppConfig';
+import { useAppLogout } from '@app/hooks/useAppLogout';
 import { useCommunicationsBadge } from './hooks/useCommunicationsBadge.ts';
 import { useHistoryCloud } from './hooks/useHistoryCloud.ts';
 import { useTournamentSession } from './hooks/useTournamentSession.tsx';
-import { useDeepLinkScreen } from './hooks/useDeepLinkScreen.ts';
+import { useDeepLinkScreen } from '@app/hooks/useDeepLinkScreen';
 const LiveSyncManager = React.lazy(() => import('./app/LiveSyncManager.tsx'));
 import { useRemoteCloudMatch } from './hooks/useRemoteCloudMatch.ts';
-import { useAppOfflineMode } from './hooks/useAppOfflineMode.ts';
-import { useAppStartup } from './hooks/useAppStartup.ts';
-import { useAppDeviceName } from './hooks/useAppDeviceName.ts';
+import { useAppOfflineMode } from '@app/hooks/useAppOfflineMode';
+import { useAppStartup } from '@app/hooks/useAppStartup';
+import { useAppDeviceName } from '@app/hooks/useAppDeviceName';
 
 // ─── AppContent ────────────────────────────────────────────────────────────────
 // Orquestra side-effects e hooks com estado. Renderiza dentro de

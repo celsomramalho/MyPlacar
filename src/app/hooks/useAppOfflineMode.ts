@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
-import type { GameState, MatchSettings } from '../types.ts';
+import type { GameState, MatchSettings } from '../../types.ts';
 import type { UserProfile } from '@modules/auth';
-import { getEngineForSport } from '../utils/sportEngine.ts';
-import { initPickleballState } from '../utils/pickleballEngine.ts';
-import { isWatchDevice } from '../utils/device.ts';
+import { initPickleballState } from '@modules/game/domain/pickleballEngine';
+import { getEngineForSport } from '@modules/game/domain/sportEngine';
+import { isWatchDevice } from '@shared/utils/device';
 
 /** Modo offline local (sem histórico na nuvem). */
 export function useAppOfflineMode() {
