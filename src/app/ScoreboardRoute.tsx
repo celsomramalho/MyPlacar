@@ -148,7 +148,14 @@ export function ScoreboardRoute({
       onTogglePause={handleTogglePause}
       onBack={makeExitHandler('new-game')}
       onHome={makeExitHandler('settings')}
-      onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }}
+      onNavigateToTab={t => {
+        if (t === 'regras') {
+          setCurrentScreen('new-game');
+        } else {
+          setActiveTab(t as any);
+          setCurrentScreen('settings');
+        }
+      }}
       isSettingsInicialSaved={isSettingsInicialSaved}
       isSettingsRegrasSaved={isSettingsRegrasSaved}
       onToggleMirroring={handleToggleMirroring}

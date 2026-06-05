@@ -75,7 +75,7 @@ interface Props {
   onTogglePause?: () => void;
   onBack: () => void;
   onHome: () => void;
-  onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile') => void;
+  onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile' | 'regras') => void;
   isSettingsInicialSaved: boolean;
   isSettingsRegrasSaved: boolean;
   onToggleMirroring: (active: boolean) => void;
@@ -366,7 +366,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const [isWaitingAck, setIsWaitingAck] = useState(false);
   const [correctionMode, setCorrectionMode] = useState<'none' | 'game' | 'gameSet' | 'matchSet'>('none');
   const [correctionPlayer, setCorrectionPlayer] = useState<1 | 2 | null>(null);
-  const [voiceWasManuallyStopped, setVoiceWasManuallyStopped] = useState(false);
+  const [voiceWasManuallyStopped, setVoiceWasManuallyStopped] = useState(true);
   const longPressTimer = useRef<number | null>(null);
   const isLongPressActive = useRef(false);
   const touchStartPos = useRef({ x: 0, y: 0 });
@@ -814,7 +814,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     const now = Date.now();
     if (now - lastVoiceToggleAtRef.current < 700) return;
     lastVoiceToggleAtRef.current = now;
-    if (!effectiveGameState.matchConfig.voiceEnabled || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver) return;
+    if ((effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver) return;
     if (voiceWasManuallyStopped) {
       setVoiceWasManuallyStopped(false);
     } else {
@@ -1174,6 +1174,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           isVoiceActive={isVoiceActive}
           onToggleWatchMode={onToggleWatchMode}
           onToggleScoreboardMode={onToggleScoreboardMode}
+          onOpenRules={() => onNavigateToTab?.('regras')}
         />
       </>
     );
@@ -1606,7 +1607,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                         </div>
                       );
                     })()}
-                    <button onPointerDown={() => { setNewMenuOpen(false); onBack(); }}
+                    <button onPointerDown={() => { setNewMenuOpen(false); onNavigateToTab?.('regras'); }}
                       className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors">
                       <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl"><Settings size={18} /></div>
                       <span className="font-black text-sm">Regras</span>

@@ -55,6 +55,7 @@ interface WatchBoardProps {
   isVoiceActive?: boolean;
   onToggleWatchMode?: () => void;
   onToggleScoreboardMode?: () => void;
+  onOpenRules?: () => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -89,7 +90,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
@@ -341,7 +342,18 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           {setsPartidaT1}
           {gamesSetT1}
         </div>
-        <div className={`h-16 flex items-center justify-center rounded-2xl transition-all relative overflow-hidden ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}>
+        <div 
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            resetDimTimer();
+            // Sempre muda o status panel se clicar fora, mas se estiver ativo no mic, permite alternar o painel ou mudar o estado do mic
+            const panels: WatchStatusPanel[] = batteryStatus ? ['set', 'mic', 'battery'] : ['set', 'mic'];
+            const idx = panels.indexOf(statusPanel);
+            setStatusPanel(panels[(idx + 1) % panels.length]);
+            pauseRotationUntil.current = Date.now() + 6000;
+          }}
+          className={`h-16 flex items-center justify-center rounded-2xl transition-all relative overflow-hidden cursor-pointer ${isDimmed ? 'bg-white/20 animate-dim-pulse' : 'bg-slate-800/40'}`}
+        >
           <div className={`absolute inset-0 flex items-center justify-center gap-1 transition-opacity duration-500 ${statusPanel === 'set' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <span className="text-[56px] font-black leading-none text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">{gameState.currentSet + 1}</span>
             <div className={`flex flex-col items-center text-[11px] font-black leading-[1.1] font-bold ${isDimmed ? 'text-white/70' : 'text-slate-400'}`}>
@@ -352,7 +364,12 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           </div>
           <div 
             role="button"
-            onPointerDown={handleMicInteraction}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              resetDimTimer();
+              onVoiceToggle?.();
+              pauseRotationUntil.current = Date.now() + 6000;
+            }}
             className={`absolute inset-0 flex items-center justify-center transition-all duration-500 cursor-pointer ${statusPanel === 'mic' ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}`}
           >
             <Mic size={32} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-blue-400' : 'text-slate-400'} />
@@ -545,7 +562,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
               {/* Regras */}
               <button
-                onPointerDown={() => { setIsMenuOpen(false); onBack(); }}
+                onPointerDown={() => { setIsMenuOpen(false); onOpenRules?.(); }}
                 className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
               >
                 <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl">
