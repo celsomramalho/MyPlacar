@@ -44,7 +44,7 @@ export const LazySportIcon: React.FC<Props> = ({ sportId, defaultIcon = '🎾', 
 
       // 3. Buscar no Firestore apenas este ID específico (Lazy Loading com Lite)
       try {
-        const { getDbLite } = await import('../firebaseLite.ts');
+        const { getDbLite } = await import('../../firebaseLite.ts');
         const db = getDbLite();
         if (db) {
           const { doc, getDoc } = await import('firebase/firestore/lite');

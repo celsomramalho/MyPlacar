@@ -5,8 +5,8 @@ import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import { useScoreboardEngine } from '@modules/game/hooks/useScoreboardEngine';
 import { useVoiceControl } from '@modules/game/presentation/hooks/useVoiceControl';
-import { useLiveActions } from '../hooks/useLiveActions';
-import { useJudgeLookup } from '../hooks/useJudgeLookup';
+import { useLiveActions } from '@modules/live';
+import { useJudgeLookup } from '@modules/live/hooks/useJudgeLookup';
 import type { Tab } from '../types';
 
 interface ScoreboardRouteProps {

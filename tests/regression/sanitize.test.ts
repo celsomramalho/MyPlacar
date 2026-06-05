@@ -8,7 +8,7 @@
  * permanece intacta após a refatoração de tipos.
  */
 import { describe, it, expect } from 'vitest';
-import { sanitizeForFirestore } from '../../src/utils/sanitize';
+import { sanitizeForFirestore } from '../../src/shared/utils/sanitize';
 
 describe('sanitize — sanitizeForFirestore', () => {
   it('retorna um objeto limpo sem modificar o original', () => {

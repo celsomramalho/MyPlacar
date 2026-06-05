@@ -1,4 +1,4 @@
-import type { MatchSettings } from '../../../types';
+import type { MatchSettings } from '@game/types';
 import type { Partner } from '../types';
 
 const isVerifiedPartner = (partner: Partner): boolean => {

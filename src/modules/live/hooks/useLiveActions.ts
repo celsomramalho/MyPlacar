@@ -1,9 +1,10 @@
 import { getDb } from '@infra/firebase/client';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { assertOwnerPin, clearLiveOwnerPin } from '@modules/live/liveHelpers';
-import { sanitizeForFirestore } from '../utils/sanitize';
+import { sanitizeForFirestore } from '@shared/utils/sanitize';
 import { getDeviceType } from '@shared/utils/device';
-import type { GameState, ControllerRecord } from '../types';
+import type { GameState, ControllerRecord } from '@game/types';
+
 import type { UserProfile } from '@modules/auth/types';
 import type { ModalConfig } from '@modules/ui/types';
 

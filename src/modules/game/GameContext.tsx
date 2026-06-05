@@ -22,7 +22,7 @@ import { autoRegisterPartnerByPin } from '@modules/partners/services/autoRegiste
 import type { Partner } from '@modules/partners/types';
 import type { MatchHistoryItem } from '@modules/history/types';
 import { persistLocalHistory } from '@modules/history/services/persistLocalHistory';
-import { safeJsonParse } from '../../utils/safeJsonParse.ts';
+import { safeJsonParse } from '@shared/utils/safeJsonParse';
 import { isWatchDevice } from '@shared/utils/device';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION } from '../../constants.ts';
 import type { GameState, MatchSettings, PointType } from '../../types.ts';
@@ -41,7 +41,9 @@ import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/
 import { createHistoryItem } from '@modules/history/services/createHistoryItem';
 import { clearLiveOwnerPin, persistLiveOwnerPin } from '../live/liveHelpers.ts';
 import { getDeviceId, getDeviceType, resolveWatchMode } from '@shared/utils/device';
-import { sanitizeForFirestore } from '../../utils/sanitize.ts';
+import { sanitizeForFirestore } from '@shared/utils/sanitize';
+import { isValidGameState, isValidMatchSettings } from '@modules/game/domain/validation';
+
 
 // ─── Contexto ─────────────────────────────────────────────────────────────────
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -70,7 +72,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   // ── Passo 4.4: gameState migrado do App.tsx ──────────────────────────────
   const [gameState, setGameState] = useState<GameState | null>(() => {
-    const saved = safeJsonParse('myPlacarActiveGameState', null) as GameState | null;
+    const saved = safeJsonParse('myPlacarActiveGameState', null, {
+      validate: isValidGameState,
+      onInvalid: () => localStorage.removeItem('myPlacarActiveGameState')
+    }) as GameState | null;
     // Se o estado restaurado é pickleball mas não tem o sub-objeto pickleball
     // (salvo por versão anterior), reinicializa para evitar bugs de serverNumber.
     if (saved && saved.matchConfig?.sportType === 'pickleball' && !saved.pickleball) {
@@ -90,7 +95,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   // ── Passo 4.3: matchSettings migrado do App.tsx ─────────────────────────
   const [matchSettings, setMatchSettings] = useState<MatchSettings>(() => {
-    const s = safeJsonParse('myPlacarSettings', { ...DEFAULT_TENNIS_SETTINGS, winnersStay: false });
+    const s = safeJsonParse('myPlacarSettings', { ...DEFAULT_TENNIS_SETTINGS, winnersStay: false }, {
+      validate: isValidMatchSettings
+    });
+
     try {
       s.deviceLabel = localStorage.getItem('myPlacar_LocalDeviceLabel') || '';
       s.brightness = parseInt(localStorage.getItem('myPlacar_LocalBrightness') || '100');

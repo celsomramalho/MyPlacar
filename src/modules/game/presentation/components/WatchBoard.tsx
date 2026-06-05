@@ -2,7 +2,7 @@ import React from 'react';
 import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
-import { LiveIndicator } from '../../../../components/LiveIndicator.tsx';
+import { LiveIndicator } from '@modules/live';
 import { getTennisServerSide } from '@modules/game/domain/tennisEngine';
 
 type WatchStatusPanel = 'set' | 'mic' | 'battery';

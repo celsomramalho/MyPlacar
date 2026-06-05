@@ -5,7 +5,7 @@ import { useLive } from '@modules/live/useLive';
 import { useUI } from '@modules/ui/UIContext';
 import type { GameState, MatchSettings } from '../../../types.ts';
 import { getDeviceId } from '@shared/utils/device';
-import { sanitizeForFirestore } from '../../../utils/sanitize.ts';
+import { sanitizeForFirestore } from '@shared/utils/sanitize';
 import { useGame } from '../useGame.ts';
 import { useGameRules } from './useGameRules.ts';
 

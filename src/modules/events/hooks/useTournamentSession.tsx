@@ -9,7 +9,7 @@ import { joinTournamentEvent } from '@modules/events/services/joinTournamentEven
 import type { EventRegistration, TournamentEvent } from '@modules/events/types';
 import { useUI } from '@modules/ui/UIContext';
 import { useGame } from '@modules/game/useGame';
-import { safeJsonParse } from '../utils/safeJsonParse.ts';
+import { safeJsonParse } from '@shared/utils/safeJsonParse';
 import { getUrlParams } from '@app/appNavigation';
 
 /** Evento ativo, inscrições e join por PIN/URL. */

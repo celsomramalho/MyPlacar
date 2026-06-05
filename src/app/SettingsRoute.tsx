@@ -4,7 +4,7 @@ import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import { useGameRules } from '@modules/game/hooks/useGameRules';
-import { useMatchDeletion } from '../hooks/useMatchDeletion';
+import { useMatchDeletion } from '@modules/history/hooks/useMatchDeletion';
 import { getDb } from '@infra/firebase/client';
 import { autoRegisterPartnerByPin, addPartnerToState } from '@modules/partners';
 import type { Firestore } from 'firebase/firestore';

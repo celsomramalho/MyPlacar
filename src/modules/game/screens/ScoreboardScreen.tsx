@@ -14,8 +14,8 @@ import { isWatchDevice } from '@shared/utils/device';
 import { SPORT_LIST } from '../../../constants';
 import { getDb } from '@infra/firebase';
 import { doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
-import { LazySportIcon } from '../../../components/LazySportIcon';
-import { LiveIndicator } from '../../../components/LiveIndicator';
+import { LazySportIcon } from '@shared/components/LazySportIcon';
+import { LiveIndicator } from '@modules/live';
 import { applyGoldenRule, maskPin } from '@shared/utils/formatters';
 import { WatchBoard } from '../presentation/components/WatchBoard';
 import { useLive } from '@modules/live';
@@ -1076,7 +1076,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return makeNumericOptions(30);
   }, [correctionMode, currentSportDef, isTieBreak, effectiveGameState.matchConfig]);
   
-  const isVoiceActive = isListening && !voiceWasManuallyStopped && effectiveGameState.matchConfig.voiceEnabled && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner && !effectiveGameState.isMatchOver;
+  const isVoiceActive = !voiceWasManuallyStopped && effectiveGameState.matchConfig.voiceEnabled && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) && isCommandOwner && !effectiveGameState.isMatchOver;
   
   // isWatchMode return movido para após todos os hooks (Rules of Hooks)
 

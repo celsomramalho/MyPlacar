@@ -10,3 +10,11 @@ export {
   clearLiveOwnerPin,
   assertOwnerPin,
 } from './liveHelpers.ts';
+
+// Novos hooks e componente expostos pelo módulo
+export { useLiveFirestoreSync } from './hooks/useLiveFirestoreSync.tsx';
+export { useLiveActions } from './hooks/useLiveActions.ts';
+export { useRemoteCloudMatch } from './hooks/useRemoteCloudMatch.ts';
+export { useJudgeLookup } from './hooks/useJudgeLookup.ts';
+export { LiveIndicator } from './components/LiveIndicator.tsx';
+

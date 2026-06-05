@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLiveFirestoreSync } from '../hooks/useLiveFirestoreSync.tsx';
+import { useLiveFirestoreSync } from '@modules/live';
 
 interface LiveSyncManagerProps {
   deviceId: string;

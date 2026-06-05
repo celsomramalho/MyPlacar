@@ -3,12 +3,13 @@ import { doc, setDoc, updateDoc, onSnapshot, collection, query, where } from 'fi
 import { Trophy, WifiOff } from 'lucide-react';
 import { getDb } from '@infra/firebase';
 import { useGame } from '@modules/game';
-import { useLive } from '@modules/live';
+import { useLive } from '../useLive.ts';
 import { useUI } from '@modules/ui';
-import type { GameState } from '../types.ts';
+import type { GameState } from '@game/types';
 import { isValidGameState } from '@modules/game/domain/validation';
 import { getDeviceType, isWatchDevice } from '@shared/utils/device';
-import { sanitizeForFirestore } from '../utils/sanitize.ts';
+import { sanitizeForFirestore } from '@shared/utils/sanitize';
+
 
 export function useLiveFirestoreSync(params: {
   deviceId: string;

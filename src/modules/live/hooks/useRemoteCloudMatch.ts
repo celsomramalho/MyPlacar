@@ -3,7 +3,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { getDb } from '@infra/firebase';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
-import type { GameState } from '../types.ts';
+import type { GameState } from '../../../types.ts';
 
 /** Convite para conectar a uma partida remota já existente na nuvem. */
 export function useRemoteCloudMatch() {

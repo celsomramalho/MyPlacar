@@ -18,19 +18,19 @@ import { useLive } from '@modules/live';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
 import { LiveControlOverlay } from '@modules/live/components/LiveControlOverlay.tsx';
-import { InstallPwaModal } from '../components/InstallPwaModal.tsx';
-import { NavigationDrawer } from '../components/NavigationDrawer.tsx';
-import { LogViewer } from '../components/LogViewer.tsx';
-import { AppModal } from '../components/AppModal.tsx';
+import { InstallPwaModal } from '@app/shell/InstallPwaModal';
+import { NavigationDrawer } from '@app/shell/NavigationDrawer';
+import { LogViewer } from '@app/shell/LogViewer';
+import { AppModal } from '@app/shell/AppModal';
 import type { UserProfile } from '@modules/auth';
 import type { TournamentEvent, EventRegistration } from '@modules/events';
 import type { MatchHistoryItem } from '@modules/history/types';
 import { type AdminTab, type Tab } from '../types.ts';
-import { useAppLogger } from '../hooks/useAppLogger.ts';
+import { useAppLogger } from '@app/hooks/useAppLogger';
 import { useInstallPwa } from '@pwa/installPrompt';
 import { useGameRules } from '@modules/game/hooks/useGameRules.ts';
-import { useVersionTap } from '../hooks/useVersionTap.ts';
-import { GlobalOverlays } from '../components/GlobalOverlays.tsx';
+import { useVersionTap } from '@app/hooks/useVersionTap';
+import { GlobalOverlays } from '@app/shell/GlobalOverlays';
 
 export interface AppScreenRouterProps {
   authReady: boolean;

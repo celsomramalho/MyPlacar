@@ -1,4 +1,4 @@
-import type { PointEvent, SportType } from '../../types';
+import type { PointEvent, SportType } from '@game/types';
 
 export interface MatchHistoryItem {
   id: string;

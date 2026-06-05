@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import { Play, User, X, Clock, Trash2, Share2, Check, Bell, Menu, LogOut, Users } from 'lucide-react';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
-import { LiveIndicator } from '../../../components/LiveIndicator';
+import { LiveIndicator } from '@modules/live';
 import { isWatchDevice } from '@shared/utils/device';
 
 interface Props {

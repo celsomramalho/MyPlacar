@@ -1,5 +1,5 @@
 import type { Partner } from '@modules/partners/types';
-import type { GameState } from '../../../types';
+import type { GameState } from '@game/types';
 import type { UserProfile } from '@modules/auth/types';
 import type { MatchHistoryItem } from '../types';
 

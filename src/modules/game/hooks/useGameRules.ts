@@ -4,7 +4,7 @@ import { getDb } from '@infra/firebase';
 import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
 import { getDeviceId } from '@shared/utils/device';
-import { sanitizeForFirestore } from '../../../utils/sanitize.ts';
+import { sanitizeForFirestore } from '@shared/utils/sanitize';
 import { useGame } from '../useGame.ts';
 
 /** Regras e persistência de `matchSettings` (local + sync live). */

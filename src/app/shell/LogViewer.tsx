@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertCircle, X } from 'lucide-react';
-import type { LogEntry } from '../hooks/useAppLogger.ts';
+import type { LogEntry } from '@app/hooks/useAppLogger';
 
 export interface LogViewerProps {
   logs: LogEntry[];

@@ -20,13 +20,14 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@app/*":     ["src/app/*"],
-      "@core/*":    ["src/core/*"],
-      "@pwa/*":     ["src/pwa/*"],
-      "@modules/*": ["src/modules/*"],
-      "@shared/*":  ["src/shared/*"],
-      "@infra/*":   ["src/infrastructure/*"],
-      "@routes/*":  ["src/routes/*"]
+      "@app/*":      ["src/app/*"],
+      "@core/*":     ["src/core/*"],
+      "@pwa/*":      ["src/pwa/*"],
+      "@modules/*":  ["src/modules/*"],
+      "@shared/*":   ["src/shared/*"],
+      "@infra/*":    ["src/infrastructure/*"],
+      "@routes/*":   ["src/routes/*"],
+      "@game/types": ["src/types.ts"]
     }
   },
   "include": ["src/**/*"]

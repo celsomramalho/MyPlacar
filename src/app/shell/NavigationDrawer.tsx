@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { 
   X, Home, Trophy, Users, Bell, History, User, Settings, ShieldAlert, LogOut, Play, Menu, HelpCircle, User as UserIcon, Clock, Settings as SettingsIcon, MapPin, Ticket, Send, LayoutGrid
 } from 'lucide-react';
-import { Screen } from '../types.ts';
+import { Screen } from '@game/types';
 import { useGame } from '@modules/game';
 import { useGameRules } from '@modules/game/hooks/useGameRules';
 import { useUI } from '@modules/ui';

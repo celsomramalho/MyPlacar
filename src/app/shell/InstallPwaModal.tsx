@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Share, MoreVertical, PlusSquare, Smartphone, CheckCircle2, MonitorDown } from 'lucide-react';
-import { Toggle } from './Toggle.tsx';
-import { ScoreboardIcon } from './ScoreboardIcon.tsx';
+import { Toggle } from '@shared/components/Toggle';
+import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 
 interface Props {
   isOpen: boolean;

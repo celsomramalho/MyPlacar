@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Crown, Eye, RefreshCw, Trash2, UserCheck, X, Gamepad2, Smartphone, Tablet, Laptop, Watch } from 'lucide-react';
-import { LiveIndicator } from '../../../components/LiveIndicator.tsx';
+import { LiveIndicator } from './LiveIndicator.tsx';
 import { useLive } from '../useLive.ts';
 import type { GameState } from '../../../types.ts';
 

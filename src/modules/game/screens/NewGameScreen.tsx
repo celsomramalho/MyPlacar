@@ -11,7 +11,7 @@ import { applyGoldenRule } from '@shared/utils/formatters';
 import { isWatchDevice } from '@shared/utils/device';
 import { getDb } from '@infra/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { LazySportIcon } from '../../../components/LazySportIcon';
+import { LazySportIcon } from '@shared/components/LazySportIcon';
 import { Button } from '@shared/components/Button';
 import { SettingsTabs } from '@modules/settings';
 

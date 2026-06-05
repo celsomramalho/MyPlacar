@@ -241,6 +241,40 @@ module.exports = {
         path: '^src/App\\.tsx$',
       },
     },
+    {
+      name: 'no-legacy-directories',
+      severity: 'error',
+      comment: 'Não importar das pastas legadas src/hooks, src/utils ou src/components. Use as fontes oficiais em src/shared, src/modules ou src/app.',
+      from: {
+        path: '^src/'
+      },
+      to: {
+        path: '^src/(hooks|utils|components)/'
+      }
+    },
+    {
+      name: 'shared-no-modules-or-app-imports',
+      severity: 'error',
+      comment: 'O diretório shared não deve depender de módulos específicos ou da aplicação (src/modules ou src/app).',
+      from: {
+        path: '^src/shared/'
+      },
+      to: {
+        path: '^(src/modules|src/app|src/App\\.tsx)'
+      }
+    },
+    {
+      name: 'infrastructure-no-modules-or-app-imports',
+      severity: 'error',
+      comment: 'A camada de infraestrutura não deve depender de módulos específicos ou da aplicação (src/modules ou src/app), exceto tipos.',
+      from: {
+        path: '^src/infrastructure/'
+      },
+      to: {
+        path: '^(src/modules|src/app|src/App\\.tsx)',
+        pathNot: '(/types\\.ts|/types/)'
+      }
+    },
   ],
   options: {
     // Which modules not to follow further when encountered

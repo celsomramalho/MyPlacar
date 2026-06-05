@@ -11,8 +11,8 @@ import type { MatchHistoryItem } from '@modules/history/types';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
 import { getDb } from '@infra/firebase';
-import { sanitizeForFirestore } from '../utils/sanitize.ts';
-import { useOnlineSync } from './useOnlineSync.ts';
+import { sanitizeForFirestore } from '@shared/utils/sanitize';
+import { useOnlineSync } from '@shared/hooks/useOnlineSync';
 
 /** Sync/download/contagem do histórico na nuvem. */
 export function useHistoryCloud(authReady: boolean) {

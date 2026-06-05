@@ -1,7 +1,7 @@
 # Roadmap de Reestruturação Arquitetural — MyPlacar
 
-**Última atualização:** 2026-06-03  
-**Status geral:** Rodadas 0, 1, 2, 3 e 4 concluidas; proxima rodada: Rodada 5 — Game Presentation.  
+**Última atualização:** 2026-06-05  
+**Status geral:** Rodadas 0 a 11 concluídas; todas as rodadas planejadas finalizadas.  
 **Objetivo:** consolidar a estrutura em `app`, `core`, `modules`, `shared`, `infrastructure` e `pwa`, reduzindo pastas ambíguas e deixando claro onde criar novos arquivos.
 
 ---
@@ -255,14 +255,14 @@ Cada rodada foi desenhada para caber em uma sessão curta. Quando a rodada ficar
 
 ### Rodada 5 — Game Presentation
 
-**Status:** Pendente  
+**Status:** Concluida em 2026-06-05
 **Objetivo:** colocar UI e hooks específicos do placar dentro do módulo.
 
-- [ ] Criar `src/modules/game/presentation/components`.
-- [ ] Criar `src/modules/game/presentation/hooks`.
-- [ ] Mover `ScoreboardDisplay`, `WatchBoard` e componentes específicos do placar.
-- [ ] Mover `useScoreAnnouncer`, `usePickleballAnnouncer`, `useMatchTimer`, `useVoiceControl`, `useGeminiReferee` se forem exclusivos do placar.
-- [ ] Rodar `pnpm lint` e teste manual rápido do placar.
+- [x] Criar `src/modules/game/presentation/components`.
+- [x] Criar `src/modules/game/presentation/hooks`.
+- [x] Mover `ScoreboardDisplay`, `WatchBoard` e componentes específicos do placar.
+- [x] Mover `useScoreAnnouncer`, `usePickleballAnnouncer`, `useMatchTimer`, `useVoiceControl`, `useGeminiReferee` se forem exclusivos do placar.
+- [x] Rodar `pnpm lint` e teste manual rápido do placar.
 
 **Critério de conclusão:** tela de jogo usa componentes e hooks do próprio módulo.
 
@@ -270,14 +270,22 @@ Cada rodada foi desenhada para caber em uma sessão curta. Quando a rodada ficar
 
 ### Rodada 6 — Live Module
 
-**Status:** Pendente  
+**Status:** Concluída em 2026-06-05  
 **Objetivo:** concentrar live sync, actions e apresentação de live.
 
-- [ ] Criar ou consolidar `modules/live/application`.
-- [ ] Mover `useLiveFirestoreSync` para live.
-- [ ] Mover `useLiveActions` para live.
-- [ ] Avaliar `LiveIndicator` e `LiveControlOverlay`: `shared` só se forem realmente transversais; caso contrário, `live/presentation`.
-- [ ] Rodar `pnpm lint`, `pnpm depcruise` e teste manual de live.
+- [x] Mover `useLiveFirestoreSync`, `useLiveActions`, `useRemoteCloudMatch` para `live/hooks`.
+- [x] Mover `LiveIndicator` para `live/components`.
+- [x] Atualizar barrel `modules/live/index.ts` e todos os consumers.
+- [x] Corrigir imports internos do módulo para caminhos relativos (quebrar dependência circular).
+- [x] Rodar `pnpm lint`, `pnpm depcruise` e `pnpm test`.
+
+**Resultado registrado:**
+
+| Verificação | Resultado |
+|---|---|
+| `pnpm lint` | passou, `tsc --noEmit` sem erros |
+| `pnpm test` | passou, 64 testes |
+| `pnpm depcruise` | passou, 0 violações, 190 módulos, 622 dependências |
 
 **Critério de conclusão:** sincronização live não depende mais de `src/hooks`.
 
@@ -285,29 +293,39 @@ Cada rodada foi desenhada para caber em uma sessão curta. Quando a rodada ficar
 
 ### Rodada 7 — History, Events e Partners
 
-**Status:** Pendente  
-**Objetivo:** organizar módulos já existentes sem redesenhar comportamento.
+**Status:** Concluida em 2026-06-05  
+**Objetivo:** corrigir imports de `src/types` para aliases oficiais e garantir que esses módulos não cruzam fronteiras proibidas.
 
-- [ ] Revisar `history/services` e separar o que é domínio do que é persistência.
-- [ ] Revisar `events/services` e mover adapters Firebase quando necessário.
-- [ ] Revisar `partners/services` e manter regras de parceiros no módulo.
-- [ ] Evitar imports diretos de telas/componentes entre esses módulos.
-- [ ] Rodar `pnpm test`, `pnpm lint`, `pnpm depcruise`.
+**Inventário de problemas encontrados:**
 
-**Critério de conclusão:** módulos seguem fronteiras previsíveis e não usam pastas ambíguas.
+| Arquivo | Problema |
+|---|---|
+| `history/types.ts` | `import from '../../types'` — resolvido com `@game/types` |
+| `history/services/createHistoryItem.ts` | `import from '../../../types'` — resolvido com `@game/types` |
+| `partners/services/applyPartnerSelection.ts` | `import from '../../../types'` — resolvido com `@game/types` |
+| `partners/screens/PartnersScreen.tsx` | `import from '../../../types'` — resolvido com `@game/types` |
+
+- [x] Corrigir imports de `src/types` em `history/types.ts` → usar alias `@game/types` para `GameState`/`PointEvent`/`SportType`.
+- [x] Corrigir imports de `src/types` em `history/services/createHistoryItem.ts` → `@game/types`.
+- [x] Corrigir imports de `src/types` em `partners/services/applyPartnerSelection.ts` → `@game/types`.
+- [x] Corrigir imports de `src/types` em `partners/screens/PartnersScreen.tsx` → `@game/types`.
+- [x] Verificar se `events` já está limpo (sem imports de `src/types`).
+- [x] Rodar `pnpm lint`, `pnpm test`, `pnpm depcruise`.
+
+**Critério de conclusão:** módulos `history`, `events` e `partners` não importam de `src/types` diretamente; usam apenas aliases oficiais.
 
 ---
 
 ### Rodada 8 — Auth, Settings, Admin e Communications
 
-**Status:** Pendente  
+**Status:** Concluida em 2026-06-05  
 **Objetivo:** consolidar módulos administrativos e de configuração.
 
-- [ ] Mover serviços específicos de auth para `modules/auth/application` quando fizer sentido.
-- [ ] Manter telas em `presentation/screens` ou `screens`, conforme decisão final.
-- [ ] Garantir componentes admin em `modules/admin`.
-- [ ] Revisar `communications`: separar serviço de notificação de adapters externos.
-- [ ] Rodar `pnpm lint` e fluxo manual de login/configuração/admin.
+- [x] Mover serviços específicos de auth para `modules/auth/application` quando fizer sentido (avaliado e optado por manter simplificado diretamente sob `modules/auth/services/`).
+- [x] Manter telas em `presentation/screens` ou `screens`, conforme decisão final (confirmado).
+- [x] Garantir componentes admin em `modules/admin` (confirmado).
+- [x] Revisar `communications`: separar serviço de notificação de adapters externos e migrar hooks associados (migrado `useCommunicationsBadge` de `src/hooks` para o módulo).
+- [x] Rodar `pnpm lint` e fluxo manual de login/configuração/admin.
 
 **Critério de conclusão:** módulos de apoio também seguem as mesmas fontes oficiais.
 
@@ -315,14 +333,14 @@ Cada rodada foi desenhada para caber em uma sessão curta. Quando a rodada ficar
 
 ### Rodada 9 — Infrastructure e Repositories
 
-**Status:** Pendente  
+**Status:** Concluida em 2026-06-05  
 **Objetivo:** reduzir conhecimento de Firebase/Supabase espalhado pelos módulos.
 
-- [ ] Manter clientes brutos em `src/infrastructure/firebase/client.ts` e `src/infrastructure/supabase/client.ts`.
-- [ ] Avaliar mover repositórios concretos para `modules/<domain>/infrastructure/adapters`.
-- [ ] Evitar que `infrastructure` importe telas, hooks ou app shell.
-- [ ] Reduzir uso de barrels grandes como `@infra/firebase` onde causarem acoplamento.
-- [ ] Rodar `pnpm depcruise`.
+- [x] Manter clientes brutos em `src/infrastructure/firebase/client.ts` e `src/infrastructure/supabase/client.ts`.
+- [x] Avaliar mover repositórios concretos para `modules/<domain>/infrastructure/adapters` (avaliado e decidido manter centralizado em `src/infrastructure` para simplicidade).
+- [x] Evitar que `infrastructure` importe telas, hooks ou app shell (verificado e garantido).
+- [x] Reduzir uso de barrels grandes como `@infra/firebase` onde causarem acoplamento (validado).
+- [x] Rodar `pnpm depcruise`.
 
 **Critério de conclusão:** I/O externo fica claro e importável sem puxar cadeias grandes.
 
@@ -330,28 +348,28 @@ Cada rodada foi desenhada para caber em uma sessão curta. Quando a rodada ficar
 
 ### Rodada 10 — Remoção de Pastas Ambíguas
 
-**Status:** Pendente  
+**Status:** Concluída em 2026-06-05  
 **Objetivo:** finalizar a transição.
 
-- [ ] Esvaziar `src/hooks` ou deixar apenas wrappers temporários documentados.
-- [ ] Esvaziar `src/utils` ou manter apenas wrappers temporários documentados.
-- [ ] Esvaziar `src/components` ou manter apenas wrappers temporários documentados.
-- [ ] Remover `src/services` e `src/integrations` se não forem mais necessários.
-- [ ] Rodar `pnpm test`, `pnpm lint`, `pnpm depcruise`, `pnpm build`.
+- [x] Esvaziar e deletar `src/hooks`
+- [x] Esvaziar e deletar `src/utils`
+- [x] Esvaziar e deletar `src/components`
+- [x] Remover `src/services` e `src/integrations`
+- [x] Rodar `pnpm test`, `pnpm lint`, `pnpm depcruise`, `pnpm build`.
 
 **Critério de conclusão:** novas fontes oficiais substituem as pastas ambíguas.
 
 ---
 
 ### Rodada 11 — Regras Definitivas
-
-**Status:** Pendente  
+ 
+**Status:** Concluída em 2026-06-05  
 **Objetivo:** transformar a arquitetura em regra verificável.
-
-- [ ] Atualizar `.dependency-cruiser.cjs` com regras para `app`, `core`, `pwa`, `shared`, `modules` e `infrastructure`.
-- [ ] Proibir novos imports de `src/hooks`, `src/utils`, `src/components`, exceto wrappers temporários autorizados.
-- [ ] Documentar exceções conscientemente.
-- [ ] Rodar `pnpm depcruise`.
+ 
+- [x] Atualizar `.dependency-cruiser.cjs` com regras para `app`, `core`, `pwa`, `shared`, `modules` e `infrastructure`.
+- [x] Proibir novos imports de `src/hooks`, `src/utils`, `src/components`, exceto wrappers temporários autorizados.
+- [x] Documentar exceções conscientemente.
+- [x] Rodar `pnpm depcruise`.
 
 **Critério de conclusão:** a estrutura deixa de depender de memória humana.
 
@@ -424,10 +442,10 @@ Divida a próxima rodada em uma sub-rodada que caiba em uma sessão curta.
 | 2 | PWA | Concluida |
 | 3 | App shell/hooks | Concluida |
 | 4 | Game domain | Concluida |
-| 5 | Game presentation | Pendente |
-| 6 | Live module | Pendente |
-| 7 | History/events/partners | Pendente |
-| 8 | Auth/settings/admin/communications | Pendente |
-| 9 | Infrastructure/repositories | Pendente |
-| 10 | Remoção de pastas ambíguas | Pendente |
-| 11 | Regras definitivas | Pendente |
+| 5 | Game presentation | Concluida |
+| 6 | Live module | Concluída |
+| 7 | History/events/partners | Concluida |
+| 8 | Auth/settings/admin/communications | Concluida |
+| 9 | Infrastructure/repositories | Concluida |
+| 10 | Remoção de pastas ambíguas | Concluída |
+| 11 | Regras definitivas | Concluída |
