@@ -4,6 +4,7 @@ import { getDb } from '@infra/firebase';
 import type { ControllerRecord, GameState, LiveLogEntry, LivePapel, LiveType } from '../../types.ts';
 import type { LiveContextValue, LiveProviderProps } from './types.ts';
 import { getPersistedLiveOwnerPin } from './liveHelpers.ts';
+import { isWatchDevice } from '@shared/utils/device';
 
 // ─── Contexto ─────────────────────────────────────────────────────────────────
 // Valor padrão é undefined — o hook useLive() vai detectar se está fora do Provider.
@@ -83,6 +84,7 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
   // mas os refs refletem o valor atual no momento da saída. São intencionalmente
   // duplicados e devem permanecer sincronizados se a lógica de owner mudar.
   const isOriginalOwner = useMemo(() => {
+    if (isWatchDevice()) return false;
     if (gameState?.ownerDeviceId) return gameState.ownerDeviceId === deviceId;
     if (activeLives.some(l => l.ownerDeviceId === deviceId)) return true;
     if (!userProfile.pin) return false;
@@ -256,9 +258,10 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
 
       // Calcula isOwner via refs (não via closure) — evita stale value em devices
       // secundários do mesmo usuário que ainda não receberam o snapshot com ownerDeviceId.
+      // Exclui relógio desta definição para ele nunca fechar a live.
       const gsOwnerDeviceId = gs.ownerDeviceId;
-      const isOwnerByDeviceId = !!gsOwnerDeviceId && gsOwnerDeviceId === deviceId;
-      const isOwnerByPin = !gsOwnerDeviceId &&
+      const isOwnerByDeviceId = !isWatchDevice() && !!gsOwnerDeviceId && gsOwnerDeviceId === deviceId;
+      const isOwnerByPin = !isWatchDevice() && !gsOwnerDeviceId &&
         gs.ownerPin?.toUpperCase() === myPin &&
         !lives.some(l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin);
       const isOwnerViaRef = isOwnerByDeviceId || isOwnerByPin;
