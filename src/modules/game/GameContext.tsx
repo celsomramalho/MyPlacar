@@ -736,7 +736,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
           await updateDoc(doc(db, "live_matches", pinUpper), {
             [`controllers.${deviceId}`]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, status: initialStatus, deviceType: getDeviceType(), isOwner: joinRole === 'owner' }
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error("Firebase join error:", err);
+            localStorage.setItem('myPlacar_last_firebase_error', `join: ${err?.message || err}`);
+          });
           
           if (cloudData.matchConfig) {
             setMatchSettings(prev => ({ ...prev, ...cloudData.matchConfig }));

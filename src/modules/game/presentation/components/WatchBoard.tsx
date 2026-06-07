@@ -571,6 +571,27 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 <span className="font-black text-sm">Regras</span>
               </button>
 
+              {/* Depuração de erro Firebase */}
+              {(() => {
+                const lastErr = typeof window !== 'undefined' ? localStorage.getItem('myPlacar_last_firebase_error') : null;
+                return lastErr && (
+                  <div className="w-full px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-left text-amber-200">
+                    <div className="font-black text-[12px] uppercase tracking-wider mb-1 text-amber-400">Erro Firebase:</div>
+                    <div className="text-[12px] font-bold break-all">{lastErr}</div>
+                    <button 
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        localStorage.removeItem('myPlacar_last_firebase_error');
+                        setIsMenuOpen(false);
+                      }}
+                      className="mt-2 text-[11px] font-black text-amber-400 hover:text-amber-300 underline"
+                    >
+                      Limpar erro
+                    </button>
+                  </div>
+                );
+              })()}
+
               {/* Zerar partida — só se commandOwner */}
               {isCommandOwner && onResetMatch && (
                 <button

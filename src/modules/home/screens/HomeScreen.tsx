@@ -5,6 +5,7 @@ import { APP_VERSION } from '../../../constants';
 import { SettingsTabs } from '@modules/settings';
 import { useGame } from '@modules/game';
 import { useGameRules } from '@modules/game/hooks/useGameRules';
+import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import { isWatchDevice } from '@shared/utils/device';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
@@ -30,8 +31,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
 
   const { initGameState, matchSettings } = useGame();
+  const { cloudLiveExists } = useLive();
   const { canStartMatch, persistMatchSettings } = useGameRules();
   const { setModalConfig } = useUI();
+  const isLiveActive = !!cloudLiveExists;
 
   const handlePlayShortcut = () => {
     if (canStartMatch) {
@@ -96,7 +99,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const gridItems = [
     { label: 'Times',     icon: <Users     size={36} className="text-sky-600" />,                    colorClass: 'bg-sky-50/60 text-sky-600 border-sky-100/50 hover:bg-sky-100/50',           action: () => onNavigate('settings', 'config') },
-    { label: 'Play',      icon: <Play      size={36} className="text-emerald-500 fill-emerald-500" />, colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: handlePlayShortcut },
+    { label: 'Play',      icon: <Play      size={36} className="text-emerald-500 fill-emerald-500" />, colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: handlePlayShortcut, showLiveIndicator: isLiveActive },
     { label: 'Regras',    icon: <Settings  size={36} className="text-amber-500" />,                    colorClass: 'bg-amber-50/60 text-amber-600 border-amber-100/50 hover:bg-amber-100/50',     action: () => onNavigate('new-game') },
     { label: 'Parceiros', icon: <UserCheck size={36} className="text-teal-700" />,                     colorClass: 'bg-[#40E0D0]/10 text-teal-700 border-teal-100/30 hover:bg-[#40E0D0]/20',    action: () => onNavigate('partners') },
     { label: 'Histórico', icon: <History   size={36} className="text-emerald-500" />,                  colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: () => onNavigate('settings', 'history') },
@@ -161,8 +164,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               onClick={item.action}
               className={`flex flex-col items-center justify-center gap-2 p-4 bg-white rounded-3xl border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all aspect-[3/2] relative ${item.colorClass}`}
             >
-              <div className="p-3 bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+              <div className="relative p-3 bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                 {item.icon}
+                {item.showLiveIndicator && (
+                  <span className="absolute left-1/2 bottom-1 -translate-x-1/2 bg-[#f59e0b] rounded-[4px] px-1.5 py-0.5 text-[8px] font-black text-white tracking-tighter leading-none shadow-sm pointer-events-none">
+                    Live
+                  </span>
+                )}
               </div>
               <span className="text-[21px] font-black tracking-tight">{item.label}</span>
             </button>

@@ -628,7 +628,10 @@ export function useLiveFirestoreSync(params: {
               status: 'watcher',
               deviceType: getDeviceType(),
             },
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error("Firebase observer reg error:", err);
+            localStorage.setItem('myPlacar_last_firebase_error', `reg: ${err?.message || err}`);
+          });
         }
       }
     }
