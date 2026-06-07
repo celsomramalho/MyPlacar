@@ -409,6 +409,19 @@ export function useLiveFirestoreSync(params: {
         }
       } else {
         // E1: snap não existe = live foi deletada após encerramento.
+        // Guard: relógio não reage a doc inexistente — pode ser transição de targetListenPin
+        // (listener antigo dispara para um PIN que não existe mais). O onSnapshot do listener
+        // correto vai estabilizar o estado. Só processa se o doc realmente sumir após a live
+        // já estar confirmada localmente E o Firestore confirmar a ausência do doc.
+        if (isWatchDevice()) {
+          // No relógio, apenas limpa o cloudLiveExists se a live não estava ativa localmente.
+          // Se estava ativa, aguarda o onSnapshot correto confirmar o encerramento.
+          const prevGs = gameStateRef.current;
+          if (!prevGs?.isMirroringActive) {
+            setCloudLiveExists(false);
+          }
+          return;
+        }
         // Correção 4: limpa o estado de live SEMPRE, independente dos flags locais
         // (isMirroringActive, isLiveClosed). O estado anterior pode estar inconsistente
         // — por exemplo, quando o encerramento veio direto pelo console do Firebase
@@ -701,7 +714,10 @@ export function useLiveFirestoreSync(params: {
       setShowLiveControlOverlay(true);
     }
 
-    if (activeLives.length === 0) {
+    // Guard: relógio não reseta os refs de overlay quando activeLives fica vazio.
+    // Isso evita que o relógio chame handleObserveLive novamente a cada reconexão
+    // da collection — o onSnapshot do documento individual já gerencia o estado.
+    if (activeLives.length === 0 && !isWatchDevice()) {
       overlayShownForLiveRef.current = null;
       overlayAcceptedRef.current = null;
     }
