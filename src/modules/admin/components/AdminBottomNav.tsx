@@ -1,8 +1,9 @@
 import { Clock, Menu, Settings as SettingsIcon, User } from 'lucide-react';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
+import type { Tab } from '../../../types';
 
 interface AdminBottomNavProps {
-  onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile') => void;
+  onNavigateToTab?: (tab: Tab) => void;
   onOpenRules?: () => void;
   onOpenMenu?: () => void;
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { QueuePlayer } from '@modules/partners/types';
 import { HistorySection } from '@modules/history/components/HistorySection';
-import { GameState } from '../../../types.ts';
+import { GameState, Tab } from '../../../types.ts';
 import type { TournamentEvent } from '@modules/events/types';
 import { useGame } from '@modules/game';
 import { ProfileScreen } from './ProfileScreen';
@@ -21,8 +21,8 @@ interface Props {
   onStart: () => void; 
   onPlayShortcut: () => void;
   onOpenRules: () => void;
-  activeTab: 'config' | 'history' | 'help' | 'profile';
-  setActiveTab: (tab: 'config' | 'history' | 'help' | 'profile') => void;
+  activeTab: Tab;
+  setActiveTab: (tab: Tab) => void;
   onViewMap: (matchId: string | null) => void;
   onSaveProfile: () => Promise<void>;
   onLogout: () => void;
@@ -56,7 +56,7 @@ interface Props {
   onExitTournament: () => void;
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
-  onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile' | 'regras') => void;
+  onNavigateToTab?: (tab: Tab) => void;
   appUrl: string;
   onVersionTap?: () => void;
 }

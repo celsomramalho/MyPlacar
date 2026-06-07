@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, Menu } from 'lucide-react';
 import { Toggle } from '@shared/components/Toggle';
-import { MatchSettings, SportType, GameState, TieBreakAt, TieBreakSideSwitchMode, SportDefinition } from '../../../types';
+import { MatchSettings, SportType, GameState, TieBreakAt, TieBreakSideSwitchMode, SportDefinition, Tab } from '../../../types';
 import type { TournamentEvent } from '@modules/events/types';
 import { useGame } from '@modules/game';
 import { useLive } from '@modules/live';
@@ -21,7 +21,7 @@ interface Props {
   onBack: () => void;
   onHome: () => void;
   onGoToScoreboard: () => void;
-  onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile') => void;
+  onNavigateToTab?: (tab: Tab) => void;
   gameState: GameState | null;
   onStartMatch: () => void;
   onPlayShortcut: () => void;

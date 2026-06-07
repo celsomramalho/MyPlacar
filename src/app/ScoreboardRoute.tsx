@@ -152,7 +152,7 @@ export function ScoreboardRoute({
         if (t === 'regras') {
           setCurrentScreen('new-game');
         } else {
-          setActiveTab(t as any);
+          setActiveTab(t);
           setCurrentScreen('settings');
         }
       }}

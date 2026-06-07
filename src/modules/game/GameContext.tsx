@@ -753,10 +753,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           overlayAcceptedRef.current = pinUpper;
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
+          // Rel\u00f3gio: n\u00e3o desativa mirroring nem exibe modal quando o doc n\u00e3o existe ou isLiveClosed.
+          // O getDoc pode ter chegado antes do Firestore propagar o estado correto \u2014
+          // o onSnapshot do listener principal \u00e9 quem vai confirmar o estado real da live.
+          if (isWatchDevice()) {
+            setShowLiveControlOverlay(false);
+            return;
+          }
           if (!targetPin) setCloudLiveExists(false);
           setShowLiveControlOverlay(false);
           setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
-          setModalConfig({ title: "Atenção", message: "A partida ao vivo não foi encontrada ou já foi encerrada.", onConfirm: () => setModalConfig(null) });
+          setModalConfig({ title: "Aten\u00e7\u00e3o", message: "A partida ao vivo n\u00e3o foi encontrada ou j\u00e1 foi encerrada.", onConfirm: () => setModalConfig(null) });
         }
       } catch {}
     }

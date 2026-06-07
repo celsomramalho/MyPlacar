@@ -381,7 +381,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 className={`absolute inset-y-0 left-0 ${batteryFillClass}`}
                 style={{ width: `${batteryStatus.percent}%` }}
               />
-              <span className="relative z-10 flex items-center gap-1 text-[34px] font-black leading-none text-white tabular-nums [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">
+              <span className="relative z-10 flex items-center gap-1 text-[27px] font-black leading-none text-white tabular-nums [text-shadow:0_2px_4px_rgba(0,0,0,0.45)]">
                 {batteryStatus.charging && <BatteryCharging size={22} strokeWidth={3.5} />}
                 <span>{batteryStatus.percent}%</span>
               </span>

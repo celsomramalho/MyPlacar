@@ -1,10 +1,11 @@
 import React from 'react';
 import { HelpCircle, Settings, Cloud, MapPin, Mic, Play, Activity, Menu } from 'lucide-react';
 import type { UserProfile } from '@modules/auth/types';
+import type { Tab } from '../../../types';
 
 interface Props {
   profile: UserProfile;
-  onNavigateToTab: (tab: 'config' | 'history' | 'help' | 'profile') => void;
+  onNavigateToTab: (tab: Tab) => void;
   onOpenRules: () => void;
   onPlay?: () => void;
   canStartMatch: boolean;

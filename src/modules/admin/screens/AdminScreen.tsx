@@ -28,14 +28,14 @@ import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS,
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import type { TournamentEvent } from '@modules/events/types';
-import { VoiceCommands, ErrorSoundType } from '../../../types';
+import { VoiceCommands, ErrorSoundType, Tab } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
 import { AdminCommunicationsPanel } from '@modules/communications';
 import { playErrorBeep, unlockAudio } from '@modules/game/presentation/hooks/useScoreAnnouncer';
 
 interface Props {
   onBack: () => void;
-  onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile') => void;
+  onNavigateToTab?: (tab: Tab) => void;
   onOpenRules?: () => void;
   onExportData?: () => void;
   onImportData?: (jsonStr: string) => void;

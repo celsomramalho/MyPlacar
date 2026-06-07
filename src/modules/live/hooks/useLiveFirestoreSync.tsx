@@ -550,6 +550,12 @@ export function useLiveFirestoreSync(params: {
     // Guard extra: se este device acabou de assumir o controle (grace period de 15s),
     // não desativa — o Firebase ainda pode estar propagando o novo commandOwnerId.
     const justTookControlRecently = Date.now() - tookControlAtRef.current < 15000;
+
+    // Guard: relógio NUNCA desativa isMirroringActive por ausência de activeLives.
+    // O relógio é sempre um device secundário — deve esperar o onSnapshot do Firestore
+    // confirmar o estado, não reagir à latência da collection.
+    if (isWatchDevice()) return;
+
     if (!hasAnyLive && gameState?.isMirroringActive && !justTookControlRecently) {
       const debounceTimer = setTimeout(() => {
         // Re-verifica o grace period dentro do timeout — pode ter assumido controle nesse intervalo

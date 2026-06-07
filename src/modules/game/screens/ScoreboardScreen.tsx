@@ -4,7 +4,7 @@ import { getDeviceType } from '@shared/utils/device';
 import { Button } from '@shared/components/Button';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { Input } from '@shared/components/Input';
-import { GameState, PointType, PointEvent } from '../../../types';
+import { GameState, PointType, PointEvent, Tab } from '../../../types';
 import { useGeminiReferee } from '../presentation/hooks/useGeminiReferee';
 import { getSharedAudioContext, playErrorBeep, unlockAudio, useScoreAnnouncer } from '../presentation/hooks/useScoreAnnouncer';
 import { usePickleballAnnouncer } from '../presentation/hooks/usePickleballAnnouncer';
@@ -75,7 +75,7 @@ interface Props {
   onTogglePause?: () => void;
   onBack: () => void;
   onHome: () => void;
-  onNavigateToTab?: (tab: 'config' | 'history' | 'help' | 'profile' | 'regras') => void;
+  onNavigateToTab?: (tab: Tab) => void;
   isSettingsInicialSaved: boolean;
   isSettingsRegrasSaved: boolean;
   onToggleMirroring: (active: boolean) => void;

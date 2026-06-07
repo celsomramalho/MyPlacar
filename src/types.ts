@@ -1,6 +1,6 @@
 
 export type Screen = 'home' | 'new-game' | 'scoreboard' | 'settings' | 'location' | 'profile' | 'auth' | 'admin' | 'help' | 'spectator' | 'partners' | 'tournaments' | 'event-detail' | 'communications' | 'public-scoreboard';
-export type Tab = 'config' | 'history' | 'help' | 'profile';
+export type Tab = 'config' | 'history' | 'help' | 'profile' | 'regras';
 export type AdminTab = 'configs' | 'users' | 'icons' | 'events' | 'comms';
 export type SportGroup = 'raquetes' | 'coletivos' | 'mesa' | 'cartas' | 'outros';
 export type SportType = string;
