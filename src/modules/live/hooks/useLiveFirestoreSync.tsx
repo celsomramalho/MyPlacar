@@ -690,12 +690,13 @@ export function useLiveFirestoreSync(params: {
       // O modal só aparece se o usuário clicar voluntariamente (LiveIndicator, menu, etc).
       const isSameUserOtherDevice =
         observerLive.ownerPin?.toUpperCase() === myPin &&
-        // ownerDeviceId já propagou: confirma que é outro device
-        ((observerLive.ownerDeviceId && observerLive.ownerDeviceId !== deviceId) ||
-          // ownerDeviceId ainda não propagou: usa commandOwnerId como proxy
-          (!observerLive.ownerDeviceId &&
-            observerLive.commandOwnerId &&
-            observerLive.commandOwnerId !== deviceId));
+        // No relógio, se o PIN é o mesmo e o deviceId é diferente, entra direto (ignora latência do ownerDeviceId)
+        (isWatchDevice()
+          ? observerLive.ownerDeviceId !== deviceId
+          : ((observerLive.ownerDeviceId && observerLive.ownerDeviceId !== deviceId) ||
+             (!observerLive.ownerDeviceId &&
+               observerLive.commandOwnerId &&
+               observerLive.commandOwnerId !== deviceId)));
 
       const isNamedJudge = observerLive.judgePin?.toUpperCase() === myPin;
 
