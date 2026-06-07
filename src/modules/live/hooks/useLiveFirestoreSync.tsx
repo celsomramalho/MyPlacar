@@ -593,8 +593,9 @@ export function useLiveFirestoreSync(params: {
 
     // Fix: device secundário do mesmo usuário (mesmo PIN, deviceId diferente) não
     // polui controllers com uma entrada de 'phone' extra — ele só observa silenciosamente.
+    // Exceção: o relógio (watch device) deve se registrar e enviar batimentos normalmente.
     const myPin = userProfile.pin?.toUpperCase();
-    const isSameUserSecondaryDevice = activeLives.some(
+    const isSameUserSecondaryDevice = !isWatchDevice() && activeLives.some(
       l => l.ownerPin?.toUpperCase() === myPin && l.ownerDeviceId && l.ownerDeviceId !== deviceId,
     );
     if (isSameUserSecondaryDevice) return;
