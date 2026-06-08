@@ -508,10 +508,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Sem conexão com a internet.", onConfirm: () => setModalConfig(null) }); return; }
     if (!userProfile.pin) { setModalConfig({ title: "Erro", message: "PIN não cadastrado.", onConfirm: () => setModalConfig(null) }); return; }
     
-    // gameState.ownerPin é gravado na criação da live e nunca muda — fonte mais confiável.
-    // resolveTargetPin como fallback cobre edge cases (ex: reload sem gameState local).
-    const localOwnerPin = gameState?.ownerPin?.toUpperCase();
-    const targetPin = localOwnerPin || resolveTargetPin('close');
+    const targetPin = resolveTargetPin('close');
     if (!targetPin) { setModalConfig({ title: "Erro", message: "PIN da transmissão não encontrado.", onConfirm: () => setModalConfig(null) }); return; }
 
     isClosingLiveRef.current = true;
@@ -585,11 +582,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
     const db = getDb();
     if (db && userProfile.pin) {
-      // Observadores têm gameState.ownerPin disponível localmente após handleObserveLive,
-      // mas o LiveContext pode receber o espelho desatualizado do AppInner.
-      // Resolvemos aqui diretamente para garantir que o ownerPin canônico seja usado.
-      const localOwnerPin = gameState?.ownerPin?.toUpperCase();
-      const targetPin = localOwnerPin || resolveTargetPin('write');
+      const targetPin = resolveTargetPin('write');
       if (!targetPin) return;
       try {
         const { doc, getDoc, setDoc, updateDoc } = await import('firebase/firestore');
@@ -686,23 +679,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para observar.", onConfirm: () => setModalConfig(null) }); return; }
     const db = getDb();
     let pinToObserve = targetPin || userProfile.pin?.toUpperCase();
+    const myPin = userProfile.pin?.toUpperCase();
+    const isJudgeForLive = (live: GameState) =>
+      !!myPin && (live.judgePin?.toUpperCase() === myPin || live.judge?.pin?.toUpperCase() === myPin);
 
-    if (!targetPin && userProfile.pin) {
-      const myPin = userProfile.pin.toUpperCase();
-      const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+    if (!targetPin && myPin) {
+      const judgeMatch = activeLives.find(isJudgeForLive);
       if (judgeMatch && judgeMatch.ownerPin) {
         pinToObserve = judgeMatch.ownerPin;
       } else {
         const ownerLive = activeLives.find(l =>
-          l.ownerPin?.toUpperCase() === myPin && l.ownerDeviceId && l.ownerDeviceId !== deviceId
+          l.ownerPin?.toUpperCase() === myPin
         );
         if (ownerLive && ownerLive.ownerPin) {
           pinToObserve = ownerLive.ownerPin.toUpperCase();
-        } else {
-          const latestLive = activeLives.reduce((latest, l) =>
-            (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest
-            , activeLives[0]);
-          if (latestLive?.ownerPin) pinToObserve = latestLive.ownerPin.toUpperCase();
         }
       }
     }
@@ -714,9 +704,21 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         const snap = await getDoc(doc(db, "live_matches", pinUpper));
         if (snap.exists() && snap.data().isLiveClosed !== true) {
           const cloudData = snap.data() as GameState;
+          const isAuthorizedLive =
+            !!myPin &&
+            (cloudData.ownerPin?.toUpperCase() === myPin ||
+              cloudData.ownerDeviceId === deviceId ||
+              isJudgeForLive(cloudData));
+          if (!isAuthorizedLive) {
+            overlayAcceptedRef.current = null;
+            setCloudLiveExists(false);
+            setShowLiveControlOverlay(false);
+            setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);
+            setModalConfig({ title: "Atenção", message: "Live não encontrada ou não autorizada para o usuário logado.", onConfirm: () => setModalConfig(null) });
+            return;
+          }
           const myCommandName = currentFullDeviceName;
           const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
-          const myPin = userProfile.pin?.toUpperCase();
           const isSecondaryDevice = cloudData.ownerPin?.toUpperCase() === myPin && cloudData.ownerDeviceId && cloudData.ownerDeviceId !== deviceId;
           // joinRole: proprietário é determinado por ownerDeviceId (imutável), nunca pelo campo gravado.
           // Juiz só é reconhecido se foi formalmente convidado via judgePin — não por role gravado anteriormente.
@@ -742,27 +744,25 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           });
           
           if (cloudData.matchConfig) {
-            setMatchSettings(prev => ({ ...prev, ...cloudData.matchConfig }));
+            setMatchSettings(prev => ({
+              ...prev,
+              ...cloudData.matchConfig,
+              ...(enterAsObserver ? { isWatchMode: false, isScoreboardMode: true } : {}),
+            }));
           }
 
           const nextControllers = {
             ...(cloudData.controllers || {}),
             [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, status: initialStatus, deviceType: getDeviceType(), isOwner: joinRole === 'owner' }
           };
-          const watchModeForEntry = resolveWatchMode(matchSettings.isWatchMode ?? false);
-          const scoreboardModeForEntry = watchModeForEntry ? false : enterAsObserver;
+          const watchModeForEntry = enterAsObserver ? false : resolveWatchMode(matchSettings.isWatchMode ?? false);
+          const scoreboardModeForEntry = enterAsObserver ? true : false;
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: scoreboardModeForEntry, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           if (enterAsObserver || isWatchDevice()) setMatchSettings(prev => ({ ...prev, isScoreboardMode: scoreboardModeForEntry, isWatchMode: watchModeForEntry }));
           overlayAcceptedRef.current = pinUpper;
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
         } else {
-          // Rel\u00f3gio: n\u00e3o desativa mirroring nem exibe modal quando o doc n\u00e3o existe ou isLiveClosed.
-          // O getDoc pode ter chegado antes do Firestore propagar o estado correto \u2014
-          // o onSnapshot do listener principal \u00e9 quem vai confirmar o estado real da live.
-          if (isWatchDevice()) {
-            setShowLiveControlOverlay(false);
-            return;
-          }
+          overlayAcceptedRef.current = null;
           if (!targetPin) setCloudLiveExists(false);
           setShowLiveControlOverlay(false);
           setGameState(prev => prev ? { ...prev, isMirroringActive: false } : null);

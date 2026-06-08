@@ -40,7 +40,6 @@ export function useLiveFirestoreSync(params: {
     isClosingLiveRef,
     lastFbScoreKeyRef,
     fbSyncTimerRef,
-    hasAutoEnabledScoreboardRef,
     isOriginalOwner,
     isCommandOwner,
     resolveTargetPin,
@@ -64,6 +63,16 @@ export function useLiveFirestoreSync(params: {
   const autoJoinObserverRef = useRef<((pin: string) => void) | null>(null);
   const prevIsCommandOwner = useRef(isCommandOwner);
   const prevCommandOwnerIdWasSelf = useRef(gameState?.commandOwnerId === deviceId);
+  const observerScoreboardAppliedKeyRef = useRef<string | null>(null);
+
+  const isJudgeForLive = (live: GameState, pin?: string | null) => {
+    const normalizedPin = pin?.toUpperCase();
+    if (!normalizedPin) return false;
+    return (
+      live.judgePin?.toUpperCase() === normalizedPin ||
+      live.judge?.pin?.toUpperCase() === normalizedPin
+    );
+  };
 
   useEffect(() => {
     autoJoinObserverRef.current = handleObserveLive;
@@ -86,34 +95,26 @@ export function useLiveFirestoreSync(params: {
     if (!myPin) return null;
 
     // Judge: escuta o documento do owner da live em que é juiz
-    const judgeInLive = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+    const judgeInLive = activeLives.find(l => isJudgeForLive(l, myPin));
     if (judgeInLive?.ownerPin) return judgeInLive.ownerPin.toUpperCase();
 
-    // Owner: escuta o próprio documento — identificado por ownerDeviceId, não só por PIN.
-    // Usar apenas PIN fazia qualquer outro device do mesmo usuário ser tratado como owner,
-    // causando reassunção indevida de controle pelo celular secundário.
+    // Owner ou device secundário do mesmo usuário: só escuta live do próprio PIN logado.
     const ownerOfLive = activeLives.find(
       l =>
+        l.ownerPin?.toUpperCase() === myPin ||
         l.ownerDeviceId === deviceId ||
         // Fallback para lives antigas sem ownerDeviceId gravado
         (!l.ownerDeviceId && l.ownerPin?.toUpperCase() === myPin),
     );
-    if (ownerOfLive) return ownerOfLive.ownerPin?.toUpperCase() || myPin;
-
-    // Observer (inclui device secundário do mesmo usuário): escuta a live mais recente
-    if (activeLives.length > 0) {
-      const latest = activeLives.reduce((a, b) =>
-        (b.liveSessionCounter || 0) > (a.liveSessionCounter || 0) ? b : a,
-      );
-      if (latest.ownerPin) return latest.ownerPin.toUpperCase();
-    }
+    if (ownerOfLive?.ownerPin?.toUpperCase() === myPin || ownerOfLive?.ownerDeviceId === deviceId) return myPin;
 
     // Fallback: ownerPin já gravado no gameState local (cobre latência do onSnapshot da collection).
-    // Só usa myPin como fallback se este device é realmente o owner — evita que device
-    // secundário do mesmo usuário escute no próprio PIN e acione lógica de ownership.
+    // Só usa se for o próprio PIN logado ou live onde o usuário logado é juiz.
     const localGs = gameStateRef.current;
     if (localGs?.ownerDeviceId === deviceId) return myPin;
-    return localGs?.ownerPin?.toUpperCase() || null;
+    if (localGs?.ownerPin?.toUpperCase() === myPin) return myPin;
+    if (localGs?.ownerPin && isJudgeForLive(localGs, myPin)) return localGs.ownerPin.toUpperCase();
+    return null;
   }, [activeLives, userProfile.pin, deviceId, gameStateRef]);
 
   // ── Listener dedicado para modo placar público (viewMode=scoreboard) ──────────
@@ -336,17 +337,17 @@ export function useLiveFirestoreSync(params: {
             const lockedOwnerPin = prev?.ownerPin || cloudData.ownerPin;
             const lockedOwnerDeviceId = prev?.ownerDeviceId || cloudData.ownerDeviceId;
             // Se este device perdeu o controle (era controller, agora não é mais):
-            // volta para ScoreboardDisplay, exceto no relógio, onde WatchBoard é o padrão.
+            // volta para ScoreboardDisplay por padrão.
             const justLostControl =
               prev?.commandOwnerId === deviceId && cloudData.commandOwnerId !== deviceId;
-            const isWatchMode = baseConfig.isWatchMode;
-            const resolvedScoreboardMode = isWatchDevice()
+            const resolvedWatchMode = justLostControl ? false : baseConfig.isWatchMode;
+            const resolvedScoreboardMode = justLostControl
+              ? true
+              : isWatchDevice()
               ? false
-              : isWatchMode
+              : resolvedWatchMode
               ? baseConfig.isScoreboardMode
-              : justLostControl
-                ? true // perdeu controle → volta ao placar
-                : baseConfig.isScoreboardMode; // demais: preserva preferência local
+              : baseConfig.isScoreboardMode; // demais: preserva preferência local
             return {
               ...cloudData,
               matchDuration: Math.max(prev?.matchDuration || 0, cloudData.matchDuration || 0),
@@ -358,7 +359,7 @@ export function useLiveFirestoreSync(params: {
               isConfirmedFinished: cloudData.isConfirmedFinished,
               matchConfig: {
                 ...cloudData.matchConfig,
-                isWatchMode: baseConfig.isWatchMode,
+                isWatchMode: resolvedWatchMode,
                 isScoreboardMode: resolvedScoreboardMode,
                 brightness: baseConfig.brightness,
                 volume: baseConfig.volume,
@@ -376,12 +377,7 @@ export function useLiveFirestoreSync(params: {
             gameStateRef.current?.commandOwnerId === deviceId &&
             cloudData.commandOwnerId !== deviceId
           ) {
-            const localWatchMode = matchSettingsRef.current.isWatchMode;
-            if (isWatchDevice()) {
-              setMatchSettings(prev => ({ ...prev, isScoreboardMode: false, isWatchMode: true }));
-            } else if (!localWatchMode) {
-              setMatchSettings(prev => ({ ...prev, isScoreboardMode: true }));
-            }
+            setMatchSettings(prev => ({ ...prev, isScoreboardMode: true, isWatchMode: false }));
           }
           setIsWaitingSync(false);
         } else {
@@ -607,15 +603,15 @@ export function useLiveFirestoreSync(params: {
       if (now - lastObserverRegisterRef.current < 60000) return;
       const db = getDb();
       if (db) {
-        const observerLive = activeLives.reduce((latest, l) =>
-          (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest,
+        const observerLive = activeLives.find(l =>
+          l.ownerPin?.toUpperCase() === myPin || isJudgeForLive(l, myPin),
         );
-        const ownerPin = observerLive.ownerPin?.toUpperCase();
+        const ownerPin = observerLive?.ownerPin?.toUpperCase();
         if (ownerPin) {
           const myPinUpper = userProfile.pin?.toUpperCase();
           const myNickname =
             userProfile.nickname || userProfile.name?.split(' ')[0] || 'Observador';
-          const isJudgeDevice = activeLives.some(l => l.judgePin?.toUpperCase() === myPinUpper);
+          const isJudgeDevice = activeLives.some(l => isJudgeForLive(l, myPinUpper));
           const deviceRole: 'judge' | 'observer' = isJudgeDevice ? 'judge' : 'observer';
           lastObserverRegisterRef.current = now;
           // T4.1: field-path direto — sem getDoc, sem reescrita do objeto inteiro
@@ -664,8 +660,12 @@ export function useLiveFirestoreSync(params: {
     const justTookControl = Date.now() - tookControlAtRef.current < 15000;
     if (justTookControl) return;
 
-    if (activeLives.length > 0) {
-      const observerLive = activeLives.reduce((latest, l) =>
+    const authorizedLives = activeLives.filter(l =>
+      l.ownerPin?.toUpperCase() === myPin || isJudgeForLive(l, myPin),
+    );
+
+    if (authorizedLives.length > 0) {
+      const observerLive = authorizedLives.reduce((latest, l) =>
         (l.liveSessionCounter || 0) > (latest.liveSessionCounter || 0) ? l : latest,
       );
       const liveId = observerLive.ownerPin?.toUpperCase() || '';
@@ -702,7 +702,7 @@ export function useLiveFirestoreSync(params: {
                observerLive.commandOwnerId &&
                observerLive.commandOwnerId !== deviceId)));
 
-      const isNamedJudge = observerLive.judgePin?.toUpperCase() === myPin;
+      const isNamedJudge = isJudgeForLive(observerLive, myPin);
 
       if (isSameUserOtherDevice || isNamedJudge) {
         // Entra automaticamente como observador — sem modal.
@@ -722,9 +722,10 @@ export function useLiveFirestoreSync(params: {
     // Guard: relógio não reseta os refs de overlay quando activeLives fica vazio.
     // Isso evita que o relógio chame handleObserveLive novamente a cada reconexão
     // da collection — o onSnapshot do documento individual já gerencia o estado.
-    if (activeLives.length === 0 && !isWatchDevice()) {
+    if (authorizedLives.length === 0 && !isWatchDevice()) {
       overlayShownForLiveRef.current = null;
       overlayAcceptedRef.current = null;
+      setShowLiveControlOverlay(false);
     }
   }, [
     activeLives,
@@ -751,7 +752,7 @@ export function useLiveFirestoreSync(params: {
 
       // ── Judge heartbeat ──────────────────────────────────────────────────────
       // T4.1: usa field-path direto (sem getDoc) — zero leituras extras a cada 30s
-      const judgeMatches = activeLives.filter(l => l.judgePin?.toUpperCase() === myPin);
+      const judgeMatches = activeLives.filter(l => isJudgeForLive(l, myPin));
       for (const match of judgeMatches) {
         if (match.ownerPin) {
           const docRef = doc(db, 'live_matches', match.ownerPin.toUpperCase());
@@ -807,12 +808,15 @@ export function useLiveFirestoreSync(params: {
 
       if (isObserving) {
         const observerLivePin = gameStateRef.current?.ownerPin?.toUpperCase();
+        const observingAuthorizedLive =
+          observerLivePin === myPin ||
+          (gameStateRef.current ? isJudgeForLive(gameStateRef.current, myPin) : false);
         // Não re-envia heartbeat se já foi coberto pelo judge ou owner heartbeat acima
         const alreadyCovered =
           judgeMatches.some(m => m.ownerPin?.toUpperCase() === observerLivePin) ||
           (ownerMatch && ownerMatch.ownerPin?.toUpperCase() === observerLivePin);
 
-        if (observerLivePin && !alreadyCovered) {
+        if (observerLivePin && observingAuthorizedLive && !alreadyCovered) {
           const docRef = doc(db, 'live_matches', observerLivePin);
           const existingRole = gameStateRef.current?.controllers?.[deviceId]?.role;
           // Preserva role existente (owner/judge não devem virar observer no heartbeat)
@@ -1041,26 +1045,18 @@ export function useLiveFirestoreSync(params: {
     };
   }, [fbSyncStatus, fbSyncTimerRef, setFbSyncStatus]);
 
-  // ── Observer: ativa modo placar automaticamente ao entrar na live ────────────
-  // Guards:
-  //   1. cloudLiveExists confirmado — evita ativar durante latência do onSnapshot
-  //   2. Não é ownerDeviceId de nenhuma live — evita ativar no owner durante flutuação de livePapel
-  //   3. Não é controller ativo — evita sobrescrever isScoreboardMode:false de quem controla
-  //   4. hasAutoEnabledScoreboardRef — evita dupla ativação na mesma sessão
+  // ── Observer: entra em modo placar por padrão a cada nova live ───────────────
+  // Aplica uma vez por live/entrada para não desfazer mudança manual do usuário.
   useEffect(() => {
-    const thisDeviceIsOwnerOfAnyLive = activeLives.some(l => l.ownerDeviceId === deviceId);
-    const thisDeviceIsActiveController = activeLives.some(l => l.commandOwnerId === deviceId);
-    if (
-      !thisDeviceIsOwnerOfAnyLive &&
-      !thisDeviceIsActiveController &&
-      cloudLiveExists &&
-      !hasAutoEnabledScoreboardRef.current
-    ) {
-      hasAutoEnabledScoreboardRef.current = true;
+    const observerLiveKey = targetListenPin || gameState?.ownerPin || null;
+
+    if (livePapel === 'observer' && cloudLiveExists && observerLiveKey) {
+      if (observerScoreboardAppliedKeyRef.current === observerLiveKey) return;
+      observerScoreboardAppliedKeyRef.current = observerLiveKey;
       setMatchSettings(prev => ({
         ...prev,
-        isWatchMode: isWatchDevice() ? true : prev.isWatchMode,
-        isScoreboardMode: isWatchDevice() ? false : true,
+        isWatchMode: false,
+        isScoreboardMode: true,
       }));
       setGameState(prev => {
         if (!prev) return prev;
@@ -1068,21 +1064,22 @@ export function useLiveFirestoreSync(params: {
           ...prev,
           matchConfig: {
             ...prev.matchConfig,
-            isWatchMode: isWatchDevice() ? true : prev.matchConfig.isWatchMode,
-            isScoreboardMode: isWatchDevice() ? false : true,
+            isWatchMode: false,
+            isScoreboardMode: true,
           },
         };
       });
     }
-    // Reset do ref: só quando device passa a ser owner ou controller ativo
-    if (thisDeviceIsOwnerOfAnyLive || thisDeviceIsActiveController)
-      hasAutoEnabledScoreboardRef.current = false;
+
+    if (livePapel !== 'observer' || !cloudLiveExists) {
+      observerScoreboardAppliedKeyRef.current = null;
+    }
   }, [
     cloudLiveExists,
-    activeLives,
-    deviceId,
-    hasAutoEnabledScoreboardRef,
+    gameState?.ownerPin,
+    livePapel,
     setMatchSettings,
     setGameState,
+    targetListenPin,
   ]);
 }

@@ -192,23 +192,23 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
 
   // ── useCallback: resolveTargetPin ───────────────────────────────────────────
   // Fonte única de verdade para o PIN do owner alvo de escritas no Firestore.
-  // Ordem de prioridade (decrescente de confiabilidade):
-  //   1. judgeMatch.ownerPin  — judge sempre sabe para qual owner escrever
-  //   2. gameState.ownerPin   — gravado na criação da live, imutável
-  //   3. localStorage         — persiste entre recarregamentos
-  //   4. isOriginalOwner + myPin — apenas se confirmado por ownerDeviceId
-  //   5. qualquer activeLive com ownerPin — cobre observadores que entraram via link
+  // Ordem de prioridade:
+  //   1. judgeMatch.ownerPin — se o PIN logado é juiz designado daquela live
+  //   2. myPin — live própria do usuário logado
+  // Não usa PIN arbitrário salvo/local para evitar escritas em live_matches/{pin}
+  // de outro usuário quando não há live autorizada.
   const resolveTargetPin = useCallback((context: string): string | null => {
     const myPin = userProfile.pin?.toUpperCase();
-    const judgeMatch = activeLives.find(l => l.judgePin?.toUpperCase() === myPin);
+    const isJudgeForLive = (live: GameState) =>
+      !!myPin &&
+      (live.judgePin?.toUpperCase() === myPin || live.judge?.pin?.toUpperCase() === myPin);
+    const judgeMatch = activeLives.find(isJudgeForLive);
     if (judgeMatch?.ownerPin) return judgeMatch.ownerPin.toUpperCase();
-    if (gameState?.ownerPin) return gameState.ownerPin.toUpperCase();
+    if (gameState?.ownerPin?.toUpperCase() === myPin) return myPin;
+    if (gameState?.ownerPin && isJudgeForLive(gameState)) return gameState.ownerPin.toUpperCase();
     const persisted = getPersistedLiveOwnerPin();
-    if (persisted) return persisted;
+    if (persisted?.toUpperCase() === myPin) return myPin;
     if (isOriginalOwner && myPin) return myPin;
-    // Fallback para observadores: busca ownerPin em qualquer live ativa conhecida
-    const anyLive = activeLives.find(l => l.ownerPin);
-    if (anyLive?.ownerPin) return anyLive.ownerPin.toUpperCase();
     console.error(`[resolveTargetPin:${context}] Não foi possível determinar o ownerPin — escrita abortada.`);
     return null;
   }, [userProfile.pin, activeLives, gameState?.ownerPin, isOriginalOwner]);
@@ -254,7 +254,9 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
       if (!db) return;
       const { doc, setDoc, updateDoc, deleteField } = await import('firebase/firestore');
       const myPin = userProfile.pin?.toUpperCase();
-      const judgeMatch = lives.find(l => l.judgePin?.toUpperCase() === myPin);
+      const judgeMatch = lives.find(
+        l => l.judgePin?.toUpperCase() === myPin || l.judge?.pin?.toUpperCase() === myPin,
+      );
 
       // Calcula isOwner via refs (não via closure) — evita stale value em devices
       // secundários do mesmo usuário que ainda não receberam o snapshot com ownerDeviceId.
@@ -266,12 +268,10 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
         !lives.some(l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin);
       const isOwnerViaRef = isOwnerByDeviceId || isOwnerByPin;
 
-      // Usa isOwnerViaRef para determinar targetPin — deve vir após o cálculo acima.
-      // Fallback extra: localStorage persiste o ownerPin gravado na criação da live,
-      // cobrindo o caso em que gs.ownerPin está vazio por closure stale.
+      // Usa apenas PIN autorizado: live própria do usuário logado ou live onde ele é juiz.
       const targetPin = (judgeMatch && judgeMatch.ownerPin)
         ? judgeMatch.ownerPin.toUpperCase()
-        : (gs.ownerPin?.toUpperCase() || getPersistedLiveOwnerPin() || (isOwnerViaRef ? myPin : null));
+        : (isOwnerViaRef && myPin ? myPin : null);
       if (!targetPin) return;
 
       const isController = gs.commandOwnerId === deviceId;
