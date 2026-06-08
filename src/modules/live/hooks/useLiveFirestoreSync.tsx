@@ -340,9 +340,17 @@ export function useLiveFirestoreSync(params: {
             // volta para ScoreboardDisplay por padrão.
             const justLostControl =
               prev?.commandOwnerId === deviceId && cloudData.commandOwnerId !== deviceId;
-            const resolvedWatchMode = justLostControl ? false : baseConfig.isWatchMode;
+            const justGainedControl =
+              prev?.commandOwnerId !== deviceId && cloudData.commandOwnerId === deviceId;
+            const resolvedWatchMode = justLostControl
+              ? false
+              : justGainedControl && isWatchDevice()
+              ? true
+              : baseConfig.isWatchMode;
             const resolvedScoreboardMode = justLostControl
               ? true
+              : justGainedControl && isWatchDevice()
+              ? false
               : isWatchDevice()
               ? false
               : resolvedWatchMode
@@ -378,6 +386,13 @@ export function useLiveFirestoreSync(params: {
             cloudData.commandOwnerId !== deviceId
           ) {
             setMatchSettings(prev => ({ ...prev, isScoreboardMode: true, isWatchMode: false }));
+          }
+          if (
+            isWatchDevice() &&
+            gameStateRef.current?.commandOwnerId !== deviceId &&
+            cloudData.commandOwnerId === deviceId
+          ) {
+            setMatchSettings(prev => ({ ...prev, isScoreboardMode: false, isWatchMode: true }));
           }
           setIsWaitingSync(false);
         } else {
@@ -1049,8 +1064,10 @@ export function useLiveFirestoreSync(params: {
   // Aplica uma vez por live/entrada para não desfazer mudança manual do usuário.
   useEffect(() => {
     const observerLiveKey = targetListenPin || gameState?.ownerPin || null;
+    const thisDeviceIsController =
+      gameState?.commandOwnerId === deviceId || activeLives.some(l => l.commandOwnerId === deviceId);
 
-    if (livePapel === 'observer' && cloudLiveExists && observerLiveKey) {
+    if (livePapel === 'observer' && !thisDeviceIsController && cloudLiveExists && observerLiveKey) {
       if (observerScoreboardAppliedKeyRef.current === observerLiveKey) return;
       observerScoreboardAppliedKeyRef.current = observerLiveKey;
       setMatchSettings(prev => ({
@@ -1071,11 +1088,14 @@ export function useLiveFirestoreSync(params: {
       });
     }
 
-    if (livePapel !== 'observer' || !cloudLiveExists) {
+    if (livePapel !== 'observer' || thisDeviceIsController || !cloudLiveExists) {
       observerScoreboardAppliedKeyRef.current = null;
     }
   }, [
+    activeLives,
     cloudLiveExists,
+    deviceId,
+    gameState?.commandOwnerId,
     gameState?.ownerPin,
     livePapel,
     setMatchSettings,

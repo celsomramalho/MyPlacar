@@ -652,11 +652,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, status: 'controller', deviceType: getDeviceType() };
 
             tookControlAtRef.current = Date.now();
-            const settingsAsController = { ...syncedSettings, isScoreboardMode: false };
+            const settingsAsController = {
+              ...syncedSettings,
+              isWatchMode: isWatchDevice() ? true : syncedSettings.isWatchMode,
+              isScoreboardMode: false,
+            };
             setMatchSettings(settingsAsController); 
             try { localStorage.setItem('myPlacarSettings', JSON.stringify(settingsAsController)); } catch {}
             setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
-            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: resolveWatchMode(matchSettings.isWatchMode ?? false), isScoreboardMode: false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: isWatchDevice() ? true : resolveWatchMode(matchSettings.isWatchMode ?? false), isScoreboardMode: false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
             try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
 
             overlayAcceptedRef.current = targetPin;
