@@ -1,0 +1,26 @@
+# Tarefas: Melhorias de Papéis (Roles), Status e Interface da Live (Itens 1 a 4)
+
+- [x] Atualizar `src/types.ts`
+  - [x] Adicionar `status?: 'controller' | 'watcher'` e refinar o campo `role` em `ControllerRecord`
+- [x] Implementar mudanças de presença em `src/hooks/useLiveFirestoreSync.tsx`
+  - [x] Extrair `livePapel` de `useLive()`
+  - [x] Atualizar o batimento cardíaco (heartbeat) de registro de observador com `status: 'watcher'`
+  - [x] Atualizar o batimento do juiz com `status: judgeIsActive ? 'controller' : 'watcher'`
+  - [x] Atualizar o batimento do proprietário com `status: 'watcher'`
+  - [x] Atualizar o batimento do observador com `status: 'watcher'`
+  - [x] Atualizar o batimento/escrita do controlador ativo com mapeamento correto de role e `status: 'controller'`
+- [x] Implementar mudanças de presença em `src/modules/game/GameContext.tsx`
+  - [x] Atualizar `handleControlLive` para rebaixar o status do controlador anterior para `'watcher'` (preservando o papel de juiz/owner) e definir o novo controlador como `'controller'`
+  - [x] Atualizar `handleObserveLive` para definir o `initialStatus` correto com base no fato de o dispositivo assumir ou não o controle imediatamente ao entrar
+- [x] Implementar mudanças de presença em `src/App.tsx`
+  - [x] Incluir `status: 'controller'` e mapear o papel correto usando `livePapel` ao ativar o espelhamento inicial
+- [x] Atualizar indicadores e telas
+  - [x] Adicionar `status` opcional em `src/components/LiveIndicator.tsx` e renderizar `Gamepad2` ou `Eye` no topo do cabeçalho/card caso presente
+  - [x] Passar `status` no `LiveIndicator` central dentro de `src/components/ScoreboardDisplay.tsx`
+  - [x] Passar `status` no `LiveIndicator` central dentro de `src/components/WatchBoard.tsx`
+  - [x] Passar `status` no `LiveIndicator` central e no menu bottom sheet dentro de `src/screens/ScoreboardScreen.tsx`
+- [x] Implementar lista de dispositivos conectados no Painel da Live (Overlay)
+  - [x] Refatorar `src/modules/live/components/LiveControlOverlay.tsx` para ler `gameState.controllers` e filtrar dispositivos ativos (vistos nos últimos 60 segundos)
+  - [x] Renderizar uma lista premium estilizada com tipos de aparelhos, nicknames, emblemas de papel (Coroa/Apito) e ícones de status (Joystick/Olhos)
+- [x] Verificar se tudo compila e funciona corretamente
+  - [x] Executar a verificação de tipos TypeScript (`tsc --noEmit` / `pnpm lint`)

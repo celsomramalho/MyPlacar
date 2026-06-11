@@ -1,5 +1,7 @@
 ## Relação dos arquivos após refatoração:
 
+Get-ChildItem -Path src -Recurse -File | ForEach-Object { "{0}`t{1}" -f $_.FullName.Replace((Get-Location).Path + "\", ""), $_.Length } | Sort-Object
+
 src\App.tsx     6547
 src\app\AdminRoute.tsx  1398
 src\app\appNavigation.ts        1392
@@ -20,7 +22,7 @@ src\app\LiveSyncManager.tsx     631
 src\app\NewGameRoute.tsx        2461
 src\app\PartnersRoute.tsx       3584
 src\app\PublicScoreboardRoute.tsx       1009
-src\app\ScoreboardRoute.tsx     6412
+src\app\ScoreboardRoute.tsx     6405
 src\app\SettingsRoute.tsx       7317
 src\app\shell\AppModal.tsx      1928
 src\app\shell\ErrorBoundary.tsx 2891
@@ -52,7 +54,7 @@ src\infrastructure\supabase\index.ts    372
 src\infrastructure\supabase\matches.ts  2604
 src\infrastructure\supabase\mirror.ts   4889
 src\main.tsx    409
-src\modules\admin\components\AdminBottomNav.tsx 2089
+src\modules\admin\components\AdminBottomNav.tsx 2094
 src\modules\admin\components\AdminConfirmModals.tsx     3356
 src\modules\admin\components\AdminEventsPanel.tsx       6820
 src\modules\admin\components\AdminHeader.tsx    1937
@@ -63,7 +65,7 @@ src\modules\admin\components\AdminUsersPanel.tsx        3040
 src\modules\admin\components\AdminVoiceCommandItem.tsx  1626
 src\modules\admin\components\AdminVoiceRulesPanel.tsx   5464
 src\modules\admin\index.ts      53
-src\modules\admin\screens\AdminScreen.tsx       38172
+src\modules\admin\screens\AdminScreen.tsx       38139
 src\modules\admin\services\adminPersistence.ts  1021
 src\modules\admin\services\adminTechnicalActions.ts     125
 src\modules\admin\types.ts      161
@@ -95,19 +97,19 @@ src\modules\game\domain\scoreEngine.ts  3127
 src\modules\game\domain\sportEngine.ts  938
 src\modules\game\domain\tennisEngine.ts 7352
 src\modules\game\domain\validation.ts   1609
-src\modules\game\GameContext.tsx        68656
+src\modules\game\GameContext.tsx        68958
 src\modules\game\hooks\useGameRules.ts  2792
 src\modules\game\hooks\useScoreboardEngine.ts   8516
 src\modules\game\index.ts       815
 src\modules\game\presentation\components\ScoreboardDisplay.tsx  21591
-src\modules\game\presentation\components\WatchBoard.tsx 31078
+src\modules\game\presentation\components\WatchBoard.tsx 32189
 src\modules\game\presentation\hooks\useGeminiReferee.ts 10712
 src\modules\game\presentation\hooks\useMatchTimer.ts    1107
 src\modules\game\presentation\hooks\usePickleballAnnouncer.ts   10793
 src\modules\game\presentation\hooks\useScoreAnnouncer.ts        27055
 src\modules\game\presentation\hooks\useVoiceControl.ts  1004
-src\modules\game\screens\NewGameScreen.tsx      32978
-src\modules\game\screens\ScoreboardScreen.tsx   132434
+src\modules\game\screens\NewGameScreen.tsx      32945
+src\modules\game\screens\ScoreboardScreen.tsx   132390
 src\modules\game\types.ts       10441
 src\modules\game\useGame.ts     1159
 src\modules\history\components\HistorySection.tsx       17993
@@ -126,15 +128,15 @@ src\modules\history\services\persistLocalHistory.ts     965
 src\modules\history\services\removeHistoryMatches.ts    316
 src\modules\history\types.ts    709
 src\modules\home\index.ts       51
-src\modules\home\screens\HomeScreen.tsx 9451
+src\modules\home\screens\HomeScreen.tsx 9947
 src\modules\live\components\LiveControlOverlay.tsx      12914
 src\modules\live\components\LiveIndicator.tsx   3627
 src\modules\live\hooks\useJudgeLookup.ts        1221
 src\modules\live\hooks\useLiveActions.ts        7211
-src\modules\live\hooks\useLiveFirestoreSync.tsx 49143
+src\modules\live\hooks\useLiveFirestoreSync.tsx 50894
 src\modules\live\hooks\useRemoteCloudMatch.ts   2400
 src\modules\live\index.ts       795
-src\modules\live\LiveContext.tsx        23258
+src\modules\live\LiveContext.tsx        23215
 src\modules\live\liveHelpers.ts 1051
 src\modules\live\screens\SpectatorScreen.tsx    13055
 src\modules\live\types.ts       3500
@@ -156,9 +158,9 @@ src\modules\settings\components\SettingsHeader.tsx      5176
 src\modules\settings\components\SettingsTabs.tsx        8013
 src\modules\settings\components\TeamSection.tsx 32600
 src\modules\settings\index.ts   179
-src\modules\settings\screens\HelpScreen.tsx     3342
+src\modules\settings\screens\HelpScreen.tsx     3347
 src\modules\settings\screens\ProfileScreen.tsx  31821
-src\modules\settings\screens\SettingsScreen.tsx 10670
+src\modules\settings\screens\SettingsScreen.tsx 10550
 src\modules\settings\services\profileDevice.ts  587
 src\modules\settings\services\profilePermissions.ts     2537
 src\modules\settings\services\profileVersionUpdate.ts   826
@@ -180,8 +182,7 @@ src\shared\utils\device.ts      1325
 src\shared\utils\formatters.ts  1065
 src\shared\utils\safeJsonParse.ts       929
 src\shared\utils\sanitize.ts    1377
-src\types.ts    9852
-
+src\types.ts    9863
 
 ## relação de pastas vazias
 
