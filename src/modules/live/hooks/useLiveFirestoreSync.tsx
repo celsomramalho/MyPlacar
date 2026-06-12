@@ -425,12 +425,14 @@ export function useLiveFirestoreSync(params: {
         // correto vai estabilizar o estado. Só processa se o doc realmente sumir após a live
         // já estar confirmada localmente E o Firestore confirmar a ausência do doc.
         if (isWatchDevice()) {
-          // No relógio, apenas limpa o cloudLiveExists se a live não estava ativa localmente.
-          // Se estava ativa, aguarda o onSnapshot correto confirmar o encerramento.
-          const prevGs = gameStateRef.current;
-          if (!prevGs?.isMirroringActive) {
-            setCloudLiveExists(false);
-          }
+          // No relógio, se o documento da live sumiu do Firestore (snap.exists() === false),
+          // limpamos o estado local de espelhamento para evitar loops de heartbeat na live inexistente.
+          isClosingLiveRef.current = false;
+          setCloudLiveExists(false);
+          setGameState(prev => {
+            if (!prev) return null;
+            return { ...prev, isMirroringActive: false, isLiveClosed: true };
+          });
           return;
         }
         // Correção 4: limpa o estado de live SEMPRE, independente dos flags locais
@@ -641,7 +643,11 @@ export function useLiveFirestoreSync(params: {
             },
           }).catch((err) => {
             console.error("Firebase observer reg error:", err);
-            localStorage.setItem('myPlacar_last_firebase_error', `reg: ${err?.message || err}`);
+            // Ignora erros de "No document to update", pois significam apenas encerramento natural da live.
+            const errMsg = err?.message || String(err);
+            if (!errMsg.includes("No document to update")) {
+              localStorage.setItem('myPlacar_last_firebase_error', `reg: ${errMsg}`);
+            }
           });
         }
       }

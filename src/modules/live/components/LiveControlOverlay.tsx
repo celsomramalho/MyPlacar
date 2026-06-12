@@ -192,21 +192,21 @@ export const LiveControlOverlay: React.FC<Props> = ({
             </div>
 
             {/* Rodapé e Ações Secundárias */}
-            <div className="flex flex-col gap-2 pt-2 border-t border-slate-800">
+            <div className="flex flex-col gap-3 pt-3 border-t border-slate-800">
               <button
                 onClick={onSyncScoreboard}
-                className="w-full py-3.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-xl font-bold text-xs active:scale-98 transition-all flex items-center justify-center gap-2"
+                className="w-full py-4 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-yellow-950/10"
               >
-                <RefreshCw size={14} /> Sincronizar Placar
+                <RefreshCw size={18} /> Sincronizar Placar
               </button>
 
               {/* Encerrar Transmissão (apenas se for Owner ou o Controller ativo) */}
               {((livePapel === 'owner' && isCurrentController) || (!isOriginalOwner && isCurrentController)) && (
                 <button
                   onClick={() => setConfirmDeleteLive(true)}
-                  className="w-full py-2.5 text-red-400 hover:text-red-300 font-black text-xs active:scale-95 flex items-center justify-center gap-1.5 mt-1"
+                  className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-red-950/10 mt-1"
                 >
-                  <Trash2 size={14} /> Encerrar transmissão
+                  <Trash2 size={18} /> Encerrar transmissão
                 </button>
               )}
             </div>
