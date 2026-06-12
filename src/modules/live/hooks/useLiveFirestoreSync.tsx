@@ -389,11 +389,7 @@ export function useLiveFirestoreSync(params: {
               ? true
               : justGainedControl && isWatchDevice()
               ? false
-              : isWatchDevice()
-              ? false
-              : resolvedWatchMode
-              ? baseConfig.isScoreboardMode
-              : baseConfig.isScoreboardMode; // demais: preserva preferência local
+              : baseConfig.isScoreboardMode; // demais: preserva preferência local (inclui relógio em modo placar)
             return {
               ...cloudData,
               matchDuration: Math.max(prev?.matchDuration || 0, cloudData.matchDuration || 0),
