@@ -1290,7 +1290,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               <div className="h-[1px] flex-1 bg-slate-100" />
             </div>
 
-            {globalThis.PublicKeyCredential && (
+            {globalThis.PublicKeyCredential && !isWatchDevice() && (
               <button 
                 onClick={handlePasskeyLogin}
                 disabled={isLoading}
