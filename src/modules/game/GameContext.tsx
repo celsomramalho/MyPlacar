@@ -800,11 +800,35 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         const snap = await getDoc(doc(db, "live_matches", targetPin));
         if (snap.exists()) {
           const cloudData = snap.data() as GameState;
-          setGameState(prev => prev ? {
-            ...prev,
-            ...cloudData,
-            commandOwnerId: cloudData.commandOwnerId ?? prev.commandOwnerId,
-          } : cloudData);
+          setGameState(prev => {
+            if (!prev) return cloudData as GameState;
+            // Merge conservador: mesma lógica do onSnapshot observer.
+            // ownerPin e ownerDeviceId são imutáveis — nunca sobrescrever.
+            // Preferências locais de matchConfig são preservadas.
+            const lockedOwnerPin = prev.ownerPin || cloudData.ownerPin;
+            const lockedOwnerDeviceId = prev.ownerDeviceId || cloudData.ownerDeviceId;
+            const baseConfig = prev.matchConfig;
+            return {
+              ...cloudData,
+              matchDuration: Math.max(prev.matchDuration || 0, cloudData.matchDuration || 0),
+              ownerPin: lockedOwnerPin,
+              ownerDeviceId: lockedOwnerDeviceId,
+              isMirroringActive: true,
+              isLiveClosed: false,
+              commandOwnerId: cloudData.commandOwnerId ?? prev.commandOwnerId,
+              matchConfig: {
+                ...cloudData.matchConfig,
+                brightness: baseConfig?.brightness,
+                volume: baseConfig?.volume,
+                deviceLabel: baseConfig?.deviceLabel,
+                selectedVoiceURI: baseConfig?.selectedVoiceURI,
+                voiceEnabled: baseConfig?.voiceEnabled,
+                voiceScoring: baseConfig?.voiceScoring,
+                actionCooldown: baseConfig?.actionCooldown,
+                stateLockout: baseConfig?.stateLockout,
+              },
+            };
+          });
         }
       }
 

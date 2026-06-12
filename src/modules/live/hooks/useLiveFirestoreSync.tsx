@@ -191,7 +191,7 @@ export function useLiveFirestoreSync(params: {
   }, [currentScreen, initialSpectatorPin, setCloudLiveExists, setGameState, setIsWaitingSync]);
 
   useEffect(() => {
-    if (!navigator.onLine || !targetListenPin) return;
+    if (!targetListenPin) return;
     // Visitante público tem seu próprio listener dedicado — não usar o listener principal
     if (currentScreen === 'public-scoreboard') return;
     const db = getDb();
@@ -199,7 +199,9 @@ export function useLiveFirestoreSync(params: {
 
     const listenPin = targetListenPin;
 
-    const unsubscribe = onSnapshot(doc(db, 'live_matches', listenPin), snap => {
+    const subscribe = () => {
+      if (!navigator.onLine) return () => {};
+      return onSnapshot(doc(db, 'live_matches', listenPin), snap => {
       if (snap.exists()) {
         const cloudData = snap.data() as GameState;
 
@@ -488,8 +490,25 @@ export function useLiveFirestoreSync(params: {
           return { ...prev, isMirroringActive: false, isLiveClosed: true };
         });
       }
-    });
-    return () => unsubscribe();
+      });
+    };
+
+    let unsubscribe = subscribe();
+
+    // Reconexão de rede (ex: Bluetooth volta após desconexão):
+    // recria o listener para garantir que snapshots cheguem novamente.
+    // Sem isso, se o device ficou offline após montar o componente,
+    // targetListenPin não muda e o useEffect não reexecuta — o listener fica morto.
+    const handleOnline = () => {
+      unsubscribe();
+      unsubscribe = subscribe();
+    };
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('online', handleOnline);
+    };
     // targetListenPin é reativo (useMemo sobre activeLives) — quando o PIN alvo muda
     // (ex: judge adicionado, live nova detectada), o listener é recriado automaticamente.
     // deviceId permanece para garantir que o guard de ownership funcione corretamente.

@@ -146,10 +146,12 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
     if (activeLives.some(l => l.ownerDeviceId === deviceId)) return 'owner';
     if (liveIsActiveLocally && gameState?.ownerDeviceId === deviceId && gameState?.commandOwnerId === deviceId) return 'owner';
     const myPin = userProfile.pin?.toUpperCase();
-    if (myPin && activeLives.some(l => l.ownerPin?.toUpperCase() === myPin && !l.ownerDeviceId)) return 'owner';
+    // Legado: live sem ownerDeviceId, só identifica como owner se não for relógio
+    // (relógio tem o mesmo ownerPin do dono mas deviceId diferente — não é o owner).
+    if (myPin && !isWatchDevice() && activeLives.some(l => l.ownerPin?.toUpperCase() === myPin && !l.ownerDeviceId)) return 'owner';
     if (myPin && activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
     return 'observer';
-  }, [cloudLiveExists, userProfile.pin, activeLives, deviceId, gameState?.isMirroringActive, gameState?.isLiveClosed, gameState?.ownerDeviceId]);
+  }, [cloudLiveExists, userProfile.pin, activeLives, deviceId, gameState?.isMirroringActive, gameState?.isLiveClosed, gameState?.ownerDeviceId, gameState?.commandOwnerId]);
 
   // ── useMemo: liveStatus ─────────────────────────────────────────────────────
   const liveStatus = useMemo((): LiveType => {
