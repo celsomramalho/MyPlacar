@@ -78,6 +78,29 @@ export function useLiveFirestoreSync(params: {
     autoJoinObserverRef.current = handleObserveLive;
   }, [handleObserveLive]);
 
+  // ── Limpeza de estado stale no relógio ───────────────────────────────────────
+  // Roda uma única vez na montagem. Se o relógio restaurou do localStorage um
+  // gameState com isMirroringActive:true apontando para a live de OUTRO usuário
+  // (ownerPin ≠ PIN logado e relógio não é juiz dessa live), limpa imediatamente.
+  // Sem isso, o targetListenPin ficaria escutando um documento inexistente e o
+  // onSnapshot dispararia !snap.exists() em loop até o documento correto aparecer.
+  useEffect(() => {
+    if (!isWatchDevice()) return;
+    const myPin = userProfile.pin?.toUpperCase();
+    if (!myPin) return;
+    const currentGs = gameStateRef.current;
+    if (!currentGs?.isMirroringActive || currentGs.isLiveClosed) return;
+    const ownerPinUpper = currentGs.ownerPin?.toUpperCase();
+    const isMyLive = ownerPinUpper === myPin;
+    const isJudge = isJudgeForLive(currentGs, myPin);
+    if (!isMyLive && !isJudge) {
+      console.log('[Watch] Estado stale de outra live detectado no início — limpando.', ownerPinUpper);
+      setGameState(prev => prev ? { ...prev, isMirroringActive: false, isLiveClosed: true } : null);
+      setCloudLiveExists(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intencional: roda apenas na montagem
+
   // Ref espelho de matchSettings — permite que o callback do onSnapshot leia
   // config locais atualizadas sem precisar de matchSettings no dep array,
   // evitando o resubscribe do listener a cada mudança de setting.
@@ -114,6 +137,19 @@ export function useLiveFirestoreSync(params: {
     if (localGs?.ownerDeviceId === deviceId) return myPin;
     if (localGs?.ownerPin?.toUpperCase() === myPin) return myPin;
     if (localGs?.ownerPin && isJudgeForLive(localGs, myPin)) return localGs.ownerPin.toUpperCase();
+
+    // Fallback específico para relógio: quando activeLives ainda não carregou do Firestore
+    // mas o estado local restaurado tem uma live ativa com ownerPin do usuário logado,
+    // usa esse PIN para manter o listener ativo durante a latência inicial.
+    // Sem esse fallback, o relógio ficaria sem listener (targetListenPin = null) até o
+    // onSnapshot da collection retornar, o que abre janela para desconexões.
+    if (isWatchDevice() && localGs?.ownerPin && localGs.isMirroringActive && !localGs.isLiveClosed) {
+      const localOwnerPinUpper = localGs.ownerPin.toUpperCase();
+      if (localOwnerPinUpper === myPin || isJudgeForLive(localGs, myPin)) {
+        return localOwnerPinUpper;
+      }
+    }
+
     return null;
   }, [activeLives, userProfile.pin, deviceId, gameStateRef]);
 
@@ -420,21 +456,12 @@ export function useLiveFirestoreSync(params: {
         }
       } else {
         // E1: snap não existe = live foi deletada após encerramento.
-        // Guard: relógio não reage a doc inexistente — pode ser transição de targetListenPin
-        // (listener antigo dispara para um PIN que não existe mais). O onSnapshot do listener
-        // correto vai estabilizar o estado. Só processa se o doc realmente sumir após a live
-        // já estar confirmada localmente E o Firestore confirmar a ausência do doc.
-        if (isWatchDevice()) {
-          // No relógio, se o documento da live sumiu do Firestore (snap.exists() === false),
-          // limpamos o estado local de espelhamento para evitar loops de heartbeat na live inexistente.
-          isClosingLiveRef.current = false;
-          setCloudLiveExists(false);
-          setGameState(prev => {
-            if (!prev) return null;
-            return { ...prev, isMirroringActive: false, isLiveClosed: true };
-          });
-          return;
-        }
+        // Guard: relógio não reage a snap.exists()===false — esse evento ocorre normalmente
+        // durante reconexão de rede ou quando o targetListenPin muda e o listener antigo
+        // dispara para um PIN que não existe mais. O encerramento real da live é sempre
+        // sinalizado pelo campo isLiveClosed:true no documento, que é tratado acima.
+        // Agir aqui desativaria o relógio prematuramente por latência de rede.
+        if (isWatchDevice()) return;
         // Correção 4: limpa o estado de live SEMPRE, independente dos flags locais
         // (isMirroringActive, isLiveClosed). O estado anterior pode estar inconsistente
         // — por exemplo, quando o encerramento veio direto pelo console do Firebase

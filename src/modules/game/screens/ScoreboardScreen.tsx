@@ -1548,7 +1548,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       const isWatchMode = !!effectiveGameState.matchConfig.isWatchMode;
                       const isScoreboardMode = !!effectiveGameState.matchConfig.isScoreboardMode;
                       const currentMode = isScoreboardMode ? 'scoreboard' : (isWatchMode ? 'watch' : 'control');
-                      const show3WayToggle = !isOfflineMode && !isWatchDevice();
+                      const show3WayToggle = !isOfflineMode;
 
                       const handleModeChange = (targetMode: 'control' | 'watch' | 'scoreboard') => {
                         if (currentMode === targetMode) return;

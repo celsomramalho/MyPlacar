@@ -385,7 +385,7 @@ className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colo
   const isWatchMode = !!gameState.matchConfig.isWatchMode;
   const isScoreboardMode = !!gameState.matchConfig.isScoreboardMode;
   const currentMode = isScoreboardMode ? 'scoreboard' : (isWatchMode ? 'watch' : 'control');
-  const show3WayToggle = !isOfflineMode && !isWatchDevice();
+  const show3WayToggle = !isOfflineMode;
 
   const handleModeChange = (targetMode: 'control' | 'watch' | 'scoreboard') => {
     if (currentMode === targetMode) return;
