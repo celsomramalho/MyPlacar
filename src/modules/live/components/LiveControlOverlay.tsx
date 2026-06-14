@@ -120,10 +120,27 @@ export const LiveControlOverlay: React.FC<Props> = ({
                   Pedir Controle da Partida
                 </button>
               )}
+
+              <button
+                onClick={onSyncScoreboard}
+                className="w-full py-4 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-yellow-950/10"
+              >
+                <RefreshCw size={18} /> Sincronizar Placar
+              </button>
+
+              {/* Encerrar Transmissão (apenas se for Owner ou o Controller ativo) */}
+              {((livePapel === 'owner' && isCurrentController) || (!isOriginalOwner && isCurrentController)) && (
+                <button
+                  onClick={() => setConfirmDeleteLive(true)}
+                  className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-red-950/10"
+                >
+                  <Trash2 size={18} /> Encerrar transmissão
+                </button>
+              )}
             </div>
 
             {/* Lista de Dispositivos Conectados */}
-            <div className="flex flex-col gap-2 flex-1 overflow-y-auto max-h-[260px] pr-1">
+            <div className="flex flex-col gap-2 flex-1 overflow-y-auto max-h-[260px] pr-1 pt-3 border-t border-slate-800">
               <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
                 Dispositivos conectados ({activeDevices.length})
               </span>
@@ -189,26 +206,6 @@ export const LiveControlOverlay: React.FC<Props> = ({
                   ))
                 )}
               </div>
-            </div>
-
-            {/* Rodapé e Ações Secundárias */}
-            <div className="flex flex-col gap-3 pt-3 border-t border-slate-800">
-              <button
-                onClick={onSyncScoreboard}
-                className="w-full py-4 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-yellow-950/10"
-              >
-                <RefreshCw size={18} /> Sincronizar Placar
-              </button>
-
-              {/* Encerrar Transmissão (apenas se for Owner ou o Controller ativo) */}
-              {((livePapel === 'owner' && isCurrentController) || (!isOriginalOwner && isCurrentController)) && (
-                <button
-                  onClick={() => setConfirmDeleteLive(true)}
-                  className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-red-950/10 mt-1"
-                >
-                  <Trash2 size={18} /> Encerrar transmissão
-                </button>
-              )}
             </div>
           </>
         ) : confirmDeleteLive ? (

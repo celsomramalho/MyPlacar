@@ -164,17 +164,9 @@ export function useLiveActions({
             isConfirmedFinished: true,
             isMatchOver: true,
             matchEndedAt: Date.now(),
-            isLiveClosed: true,
-            isMirroringActive: false,
           });
-          setTimeout(() => {
-            deleteDoc(doc(db, 'live_matches', targetPin)).catch(() => {});
-          }, 4000);
         } catch {}
       }
-      setCloudLiveExists(false);
-      setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
-      try { clearLiveOwnerPin(); } catch {}
     }
 
     // Ação local — SEMPRE executa (offline ou não)
@@ -182,10 +174,7 @@ export function useLiveActions({
       ...p,
       isConfirmedFinished: true,
       isPaused: false,
-      isMirroringActive: false,
-      isLiveClosed: true,
     } : null);
-    try { localStorage.removeItem('myPlacarActiveGameState'); } catch {}
   };
 
   return { handleToggleMirroring, handleConfirmMatch };

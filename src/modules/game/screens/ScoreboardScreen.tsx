@@ -1192,7 +1192,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                </div>
                <div className="flex flex-col w-full gap-3">
                  <button onClick={() => onConfirmMatch?.()} className="w-full py-5 bg-emerald-600 text-white rounded-3xl font-black text-base shadow-xl active:scale-95 transition-all">Confirmar resultado</button>
-                 {isCommandOwner && <button onClick={handleUndoWithLog} className="w-full py-5 bg-slate-800 text-white rounded-3xl font-black text-base shadow-xl active:scale-95 transition-all">Corrigir último ponto</button>}
+                 {isCommandOwner && <button onClick={handleUndoWithLog} className="w-full py-5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/60 rounded-3xl font-black text-base shadow-md active:scale-95 transition-all">Corrigir último ponto</button>}
                </div>
             </div>
          </div>
