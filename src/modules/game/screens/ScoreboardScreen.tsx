@@ -1191,8 +1191,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                  <p className="text-sm font-bold text-slate-500">Vencedor: {p1WonSets > p2WonSets ? effectiveGameState.p1.name : effectiveGameState.p2.name}</p>
                </div>
                <div className="flex flex-col w-full gap-3">
-                 <button onClick={() => onConfirmMatch?.()} className="w-full py-5 bg-emerald-600 text-white rounded-3xl font-black text-base shadow-xl active:scale-95 transition-all">Confirmar resultado</button>
-                 {isCommandOwner && <button onClick={handleUndoWithLog} className="w-full py-5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/60 rounded-3xl font-black text-base shadow-md active:scale-95 transition-all">Corrigir último ponto</button>}
+                 <button onClick={() => onConfirmMatch?.()} className="w-full py-5 bg-emerald-600 text-white rounded-3xl font-black text-base shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"><Check size={20} strokeWidth={3} />Confirmar resultado</button>
+                 {isCommandOwner && <button onClick={handleUndoWithLog} className="w-full py-5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/60 rounded-3xl font-black text-base shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"><RotateCcw size={20} strokeWidth={3} />Corrigir último ponto</button>}
                </div>
             </div>
          </div>

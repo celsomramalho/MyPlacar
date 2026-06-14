@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Crown, Eye, RefreshCw, Trash2, UserCheck, X, Gamepad2, Smartphone, Tablet, Laptop, Watch } from 'lucide-react';
+import { Crown, Eye, RefreshCw, Trash2, UserCheck, X, Gamepad2, Smartphone, Tablet, Laptop, Watch, Radio } from 'lucide-react';
 import { LiveIndicator } from './LiveIndicator.tsx';
 import { useLive } from '../useLive.ts';
 import type { GameState } from '../../../types.ts';
@@ -220,14 +220,17 @@ export const LiveControlOverlay: React.FC<Props> = ({
             <div className="flex flex-col gap-2 pt-2">
               <button 
                 onClick={onCloseCloudLive} 
-                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-red-900/30 active:scale-95 transition-all"
+                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-red-900/30 active:scale-95 transition-all flex items-center justify-center gap-2.5"
               >
+                <Radio size={18} />
+                <div className="w-[1.5px] h-4 bg-red-400/50" />
                 Confirmar encerramento
               </button>
               <button 
                 onClick={() => setConfirmDeleteLive(false)} 
-                className="w-full py-3 text-slate-400 hover:text-white font-bold text-xs tracking-wider uppercase transition-colors"
+                className="w-full py-4 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-yellow-950/10"
               >
+                <X size={18} />
                 Cancelar
               </button>
             </div>
@@ -250,8 +253,9 @@ export const LiveControlOverlay: React.FC<Props> = ({
               </button>
               <button 
                 onClick={() => setConfirmDeleteJudge(false)} 
-                className="w-full py-3 text-slate-400 hover:text-white font-bold text-xs tracking-wider uppercase transition-colors"
+                className="w-full py-4 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-yellow-950/10"
               >
+                <X size={18} />
                 Cancelar
               </button>
             </div>
