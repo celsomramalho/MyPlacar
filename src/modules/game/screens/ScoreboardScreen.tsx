@@ -1392,14 +1392,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
             return (
               <div className={`absolute ${posClass} left-3 right-3 flex items-center z-20 pointer-events-none`} style={{ justifyContent: isServing ? 'space-between' : justifyContent }}>
                 {isServing && side === 'even' && show3Digit && (
-                  <span className="text-white/80 font-black tracking-widest text-sm bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
+                  <span className="text-white/80 font-black tracking-widest text-xl bg-black/45 px-4 py-1.5 rounded-full">{get3DigitScore()}</span>
                 )}
                 <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0"
                   style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.4)', opacity: isServing ? 1 : 0, transition: 'opacity 150ms' }}>
                   <span className={`text-sm font-black leading-none ${textColorClass}`}>{label}</span>
                 </div>
                 {isServing && side === 'odd' && show3Digit && (
-                  <span className="text-white/80 font-black tracking-widest text-sm bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
+                  <span className="text-white/80 font-black tracking-widest text-xl bg-black/45 px-4 py-1.5 rounded-full">{get3DigitScore()}</span>
                 )}
               </div>
             );

@@ -298,7 +298,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         style={{ justifyContent: isServing ? 'space-between' : justifyContent }}
       >
         {isServing && side === 'even' && show3Digit && (
-          <span className="text-white/85 font-black tracking-widest text-[11px] bg-black/45 px-2.5 py-0.5 rounded-full">{get3DigitScore()}</span>
+          <span className="text-white/85 font-black tracking-widest text-base bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
         )}
         <div
           className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0"
@@ -311,7 +311,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           <span className={`text-[11px] font-black leading-none ${textColorClass}`}>{label}</span>
         </div>
         {isServing && side === 'odd' && show3Digit && (
-          <span className="text-white/85 font-black tracking-widest text-[11px] bg-black/45 px-2.5 py-0.5 rounded-full">{get3DigitScore()}</span>
+          <span className="text-white/85 font-black tracking-widest text-base bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
         )}
       </div>
     );

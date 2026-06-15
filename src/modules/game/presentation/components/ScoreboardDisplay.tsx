@@ -155,7 +155,7 @@ document.removeEventListener('visibilitychange', handleVisibilityChange);
         style={{ justifyContent: isServing ? 'space-between' : justifyContent }}
       >
         {isServing && side === 'even' && show3Digit && (
-          <span className="text-white/80 font-black tracking-widest text-sm bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
+          <span className="text-white/80 font-black tracking-widest text-xl bg-black/45 px-4 py-1.5 rounded-full">{get3DigitScore()}</span>
         )}
         <div
           className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0"
@@ -168,7 +168,7 @@ document.removeEventListener('visibilitychange', handleVisibilityChange);
           <span className={`text-sm font-black leading-none ${textColorClass}`}>{label}</span>
         </div>
         {isServing && side === 'odd' && show3Digit && (
-          <span className="text-white/80 font-black tracking-widest text-sm bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
+          <span className="text-white/80 font-black tracking-widest text-xl bg-black/45 px-4 py-1.5 rounded-full">{get3DigitScore()}</span>
         )}
       </div>
     );
