@@ -119,47 +119,60 @@ document.removeEventListener('visibilitychange', handleVisibilityChange);
 }, []);
 
 // ── Indicador de sacador ───────────────────────────────────────────────────
-const renderServerIndicator = useCallback((team: 1 | 2) => {
-const sport = gameState.matchConfig.sportType;
-if (sport !== 'pickleball' && sport !== 'tennis' && sport !== 'beach-tennis') return null;
+  const renderServerIndicator = useCallback((team: 1 | 2) => {
+    const sport = gameState.matchConfig.sportType;
+    if (sport !== 'pickleball' && sport !== 'tennis' && sport !== 'beach-tennis') return null;
 
-const isServing = gameState.server === team;
-const isDoubles = gameState.matchConfig.isDoubles;
-const pkl = gameState.pickleball;
+    const isServing = gameState.server === team;
+    const isDoubles = gameState.matchConfig.isDoubles;
+    const pkl = gameState.pickleball;
 
-const offset = gameState.servingOrderOffset;
-const srvNum: 1 | 2 = pkl
-? pkl.server.serverNumber
-: (team === 1 ? (offset === 2 ? 2 : 1) : (offset === 3 ? 2 : 1));
-const label = isDoubles ? `S${srvNum}` : 'S';
+    const offset = gameState.servingOrderOffset;
+    const srvNum: 1 | 2 = pkl
+    ? pkl.server.serverNumber
+    : (team === 1 ? (offset === 2 ? 2 : 1) : (offset === 3 ? 2 : 1));
+    const label = isDoubles ? `S${srvNum}` : 'S';
 
-const side: CourtSide = (sport === 'pickleball' && pkl)
-? pkl.server.side
-: getTennisServerSide(gameState);
-const justifyContent = side === 'even' ? 'flex-end' : 'flex-start';
+    const side: CourtSide = (sport === 'pickleball' && pkl)
+    ? pkl.server.side
+    : getTennisServerSide(gameState);
+    const justifyContent = side === 'even' ? 'flex-end' : 'flex-start';
 
-const textColorClass = team === 1
-? TEXT_COLORS[gameState.p1.color || 'azul']
-: TEXT_COLORS[gameState.p2.color || 'vermelho'];
+    const textColorClass = team === 1
+    ? TEXT_COLORS[gameState.p1.color || 'azul']
+    : TEXT_COLORS[gameState.p2.color || 'vermelho'];
 
-return (
-<div
-className={`absolute ${team === 1 ? 'bottom-3' : 'top-3'} left-3 right-3 flex z-20 pointer-events-none`}
-style={{ justifyContent }}
->
-<div
-className="w-10 h-10 rounded-full bg-white flex items-center justify-center"
-style={{
-boxShadow: '0 1px 6px rgba(0,0,0,0.4)',
-opacity: isServing ? 1 : 0,
-transition: 'opacity 150ms',
-}}
->
-<span className={`text-sm font-black leading-none ${textColorClass}`}>{label}</span>
-</div>
-</div>
-);
-}, [gameState]);
+    const show3Digit = sport === 'pickleball' && isDoubles && gameState.matchConfig.pickleballScoringMode !== 'rally' && !!pkl;
+    const get3DigitScore = () => {
+      if (!pkl) return '';
+      if (pkl.isFirstServerActive && pkl.score.team1 === 0 && pkl.score.team2 === 0) return '0-0-2';
+      return `${pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2}-\ ${pkl.server.team === 1 ? pkl.score.team2 : pkl.score.team1}-\ ${pkl.server.serverNumber}`.replace(/- /g, '-');
+    };
+
+    return (
+      <div
+        className={`absolute ${team === 1 ? 'bottom-3' : 'top-3'} left-3 right-3 flex items-center z-20 pointer-events-none`}
+        style={{ justifyContent: isServing ? 'space-between' : justifyContent }}
+      >
+        {isServing && side === 'even' && show3Digit && (
+          <span className="text-white/80 font-black tracking-widest text-sm bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
+        )}
+        <div
+          className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0"
+          style={{
+            boxShadow: '0 1px 6px rgba(0,0,0,0.4)',
+            opacity: isServing ? 1 : 0,
+            transition: 'opacity 150ms',
+          }}
+        >
+          <span className={`text-sm font-black leading-none ${textColorClass}`}>{label}</span>
+        </div>
+        {isServing && side === 'odd' && show3Digit && (
+          <span className="text-white/80 font-black tracking-widest text-sm bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
+        )}
+      </div>
+    );
+  }, [gameState]);
 
 
 // ── Histórico de games por set ─────────────────────────────────────────────

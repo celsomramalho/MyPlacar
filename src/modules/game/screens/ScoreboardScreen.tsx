@@ -21,6 +21,7 @@ import { WatchBoard } from '../presentation/components/WatchBoard';
 import { useLive } from '@modules/live';
 import { useGame } from '@modules/game';
 import { ScoreboardDisplay } from '../presentation/components/ScoreboardDisplay';
+import { PickleballCourtView } from '../presentation/components/PickleballCourtView';
 
 interface CommandLogEntry {
   id: string;
@@ -1262,39 +1263,83 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${effectiveGameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(displayTime)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${effectiveGameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{effectiveGameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
              </div>
              
-             <div className="flex flex-col w-full mt-4">
-               {(() => {
-                 const isActive = !effectiveGameState.isConfirmedFinished && !effectiveGameState.isMatchOver && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
-                 const o = effectiveGameState.servingOrderOffset;
-                 const c1 = effectiveGameState.p1.color || 'azul';
-                 const c2 = effectiveGameState.p2.color || 'vermelho';
-                 return (
-                   <>
-                     {/* Linha 1 — Time 1 */}
-                     <div className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[c1]}`}>
-                       <div onClick={() => onSwitchServer(1, false)} className="cursor-pointer active:scale-95 transition-transform">
-                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 0 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p1.name}</span>
-                       </div>
-                       {effectiveGameState.matchConfig.isDoubles && effectiveGameState.p1.partnerName && (
-                         <div onClick={() => onSwitchServer(1, true)} className="cursor-pointer active:scale-95 transition-transform">
-                           <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 2 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p1.partnerName}</span>
-                         </div>
-                       )}
-                     </div>
-                     {/* Linha 2 — Time 2 */}
-                     <div className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[c2]}`}>
-                       <div onClick={() => onSwitchServer(2, false)} className="cursor-pointer active:scale-95 transition-transform">
-                         <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 1 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p2.name}</span>
-                       </div>
-                       {effectiveGameState.matchConfig.isDoubles && effectiveGameState.p2.partnerName && (
-                         <div onClick={() => onSwitchServer(2, true)} className="cursor-pointer active:scale-95 transition-transform">
-                           <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isActive && o === 3 ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{effectiveGameState.p2.partnerName}</span>
-                         </div>
-                       )}
-                     </div>
-                   </>
-                 );
-               })()}
+              <div className="flex flex-col w-full mt-4">
+                {(() => {
+                  const isActive = !effectiveGameState.isConfirmedFinished && !effectiveGameState.isMatchOver && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
+                  const o = effectiveGameState.servingOrderOffset;
+                  const c1 = effectiveGameState.p1.color || 'azul';
+                  const c2 = effectiveGameState.p2.color || 'vermelho';
+                  const sport = effectiveGameState.matchConfig.sportType;
+                  const isDoubles = effectiveGameState.matchConfig.isDoubles;
+                  const pkl = effectiveGameState.pickleball;
+                  // Mostra (E)/(D) apenas para pickleball side-out duplas
+                  const showSides = sport === 'pickleball' && isDoubles && effectiveGameState.matchConfig.pickleballScoringMode !== 'rally' && !!pkl;
+
+                  const renderTeamRow = (team: 1 | 2) => {
+                    const p = team === 1 ? effectiveGameState.p1 : effectiveGameState.p2;
+                    const color = team === 1 ? c1 : c2;
+                    const offsetInitial = team === 1 ? 0 : 1;
+                    const offsetPartner = team === 1 ? 2 : 3;
+
+                    // Outros esportes ou sem parceiro: layout original
+                    if (!showSides || !p.partnerName) {
+                      const isInitialActive = isActive && (sport === 'pickleball' && pkl ? (pkl.server.team === team && pkl.server.serverName === p.name) : o === offsetInitial);
+                      const isPartnerActive = isActive && (sport === 'pickleball' && pkl ? (pkl.server.team === team && pkl.server.serverName === p.partnerName) : o === offsetPartner);
+                      return (
+                        <div key={team} className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[color]}`}>
+                          <div onClick={() => onSwitchServer(team, false)} className="cursor-pointer active:scale-95 transition-transform">
+                            <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isInitialActive ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{p.name}</span>
+                          </div>
+                          {isDoubles && p.partnerName && (
+                            <div onClick={() => onSwitchServer(team, true)} className="cursor-pointer active:scale-95 transition-transform">
+                              <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isPartnerActive ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{p.partnerName}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // Pickleball side-out duplas: posiciona pela paridade do placar
+                    // Placar PAR   -> Jogador_Inicial (p.name) na DIREITA (D), Parceiro na ESQUERDA (E)
+                    // Placar IMPAR -> Jogador_Inicial (p.name) na ESQUERDA (E), Parceiro na DIREITA (D)
+                    const teamScore = team === 1 ? pkl!.score.team1 : pkl!.score.team2;
+                    const initialOnRight = teamScore % 2 === 0;
+
+                    const leftPlayer  = initialOnRight
+                      ? { name: p.partnerName!, isPartner: true }
+                      : { name: p.name,          isPartner: false };
+                    const rightPlayer = initialOnRight
+                      ? { name: p.name,          isPartner: false }
+                      : { name: p.partnerName!,  isPartner: true };
+
+                    const isLeftActive = isActive && pkl.server.team === team && pkl.server.serverName === leftPlayer.name;
+                    const isRightActive = isActive && pkl.server.team === team && pkl.server.serverName === rightPlayer.name;
+
+                    return (
+                      <div key={team} className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[color]}`}>
+                        {/* Jogador do lado ESQUERDO da quadra */}
+                        <div onClick={() => onSwitchServer(team, leftPlayer.isPartner)} className="cursor-pointer active:scale-95 transition-transform flex items-center gap-1">
+                          <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isLeftActive ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{leftPlayer.name}</span>
+                          <span className="text-xs font-bold text-white/60 leading-none">(E)</span>
+                        </div>
+                        {/* Jogador do lado DIREITO da quadra */}
+                        <div onClick={() => onSwitchServer(team, rightPlayer.isPartner)} className="cursor-pointer active:scale-95 transition-transform flex items-center gap-1">
+                          <span className="text-xs font-bold text-white/60 leading-none">(D)</span>
+                          <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isRightActive ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{rightPlayer.name}</span>
+                        </div>
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <>
+                      {renderTeamRow(1)}
+                      {renderTeamRow(2)}
+                      
+                      <PickleballCourtView gameState={effectiveGameState} />
+                    </>
+                  );
+                })()}
              </div>
            </div>
 
@@ -1336,12 +1381,26 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
             const justifyContent = side === 'even' ? 'flex-end' : 'flex-start';
             const posClass = team === 1 ? 'bottom-3' : 'top-3';
             const textColorClass = team === 1 ? TEXT_COLORS_NEW[p1Color] : TEXT_COLORS_NEW[p2Color];
+
+            const show3Digit = sport === 'pickleball' && isDoubles && effectiveGameState.matchConfig.pickleballScoringMode !== 'rally' && !!pkl;
+            const get3DigitScore = () => {
+              if (!pkl) return '';
+              if (pkl.isFirstServerActive && pkl.score.team1 === 0 && pkl.score.team2 === 0) return '0-0-2';
+              return `${pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2}-\ ${pkl.server.team === 1 ? pkl.score.team2 : pkl.score.team1}-\ ${pkl.server.serverNumber}`.replace(/- /g, '-');
+            };
+
             return (
-              <div className={`absolute ${posClass} left-3 right-3 flex z-20 pointer-events-none`} style={{ justifyContent }}>
-                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center"
+              <div className={`absolute ${posClass} left-3 right-3 flex items-center z-20 pointer-events-none`} style={{ justifyContent: isServing ? 'space-between' : justifyContent }}>
+                {isServing && side === 'even' && show3Digit && (
+                  <span className="text-white/80 font-black tracking-widest text-sm bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
+                )}
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0"
                   style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.4)', opacity: isServing ? 1 : 0, transition: 'opacity 150ms' }}>
                   <span className={`text-sm font-black leading-none ${textColorClass}`}>{label}</span>
                 </div>
+                {isServing && side === 'odd' && show3Digit && (
+                  <span className="text-white/80 font-black tracking-widest text-sm bg-black/45 px-3 py-1 rounded-full">{get3DigitScore()}</span>
+                )}
               </div>
             );
           };

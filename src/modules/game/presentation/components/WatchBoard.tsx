@@ -285,13 +285,23 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       ? TEXT_COLORS[gameState.p1.color || 'azul']
       : TEXT_COLORS[gameState.p2.color || 'vermelho'];
 
+    const show3Digit = sport === 'pickleball' && isDoubles && gameState.matchConfig.pickleballScoringMode !== 'rally' && !!pkl;
+    const get3DigitScore = () => {
+      if (!pkl) return '';
+      if (pkl.isFirstServerActive && pkl.score.team1 === 0 && pkl.score.team2 === 0) return '0-0-2';
+      return `${pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2}-${pkl.server.team === 1 ? pkl.score.team2 : pkl.score.team1}-${pkl.server.serverNumber}`;
+    };
+
     return (
       <div
-        className={`absolute ${posClass} left-3 right-3 flex z-20 pointer-events-none`}
-        style={{ justifyContent }}
+        className={`absolute ${posClass} left-3 right-3 flex items-center z-20 pointer-events-none`}
+        style={{ justifyContent: isServing ? 'space-between' : justifyContent }}
       >
+        {isServing && side === 'even' && show3Digit && (
+          <span className="text-white/85 font-black tracking-widest text-[11px] bg-black/45 px-2.5 py-0.5 rounded-full">{get3DigitScore()}</span>
+        )}
         <div
-          className="w-8 h-8 rounded-full bg-white flex items-center justify-center"
+          className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0"
           style={{
             boxShadow: '0 1px 6px rgba(0,0,0,0.4)',
             opacity: isServing ? 1 : 0,
@@ -300,6 +310,9 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
         >
           <span className={`text-[11px] font-black leading-none ${textColorClass}`}>{label}</span>
         </div>
+        {isServing && side === 'odd' && show3Digit && (
+          <span className="text-white/85 font-black tracking-widest text-[11px] bg-black/45 px-2.5 py-0.5 rounded-full">{get3DigitScore()}</span>
+        )}
       </div>
     );
   };

@@ -375,7 +375,13 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
             )}
             {settings.sportType === 'pickleball' && <Toggle disabled={isReadOnly} id="toggle-winbytwo-main" label="Diferença de 2 pontos" checked={settings.tieBreakWinByTwo} onChange={v => setSettings({...settings, tieBreakWinByTwo: v})} />}
             {settings.sportType === 'pickleball' && (
-              <Toggle disabled={isReadOnly} id="toggle-pickleball-service-mode" label="Tipo de sacador: sacador troca de lado" checked={settings.pickleballServiceMode === 'switch-side'} onChange={v => setSettings({...settings, pickleballServiceMode: v ? 'switch-side' : 'alternate-server'})} />
+              <Toggle 
+                disabled={isReadOnly || settings.pickleballScoringMode === 'side-out'} 
+                id="toggle-pickleball-service-mode" 
+                label="Tipo de sacador: sacador troca de lado" 
+                checked={settings.pickleballScoringMode === 'side-out' ? true : settings.pickleballServiceMode === 'switch-side'} 
+                onChange={v => setSettings({...settings, pickleballServiceMode: v ? 'switch-side' : 'alternate-server'})} 
+              />
             )}
             {settings.sportType !== 'pickleball' && <Toggle disabled={isReadOnly || settings.sportType === 'beach-tennis'} id="toggle-noad" label="Sem vantagem (no-ad)" checked={settings.noAd} onChange={v => setSettings({...settings, noAd: v})} />}
             {settings.sportType !== 'pickleball' && <Toggle disabled={isReadOnly} id="toggle-switchside" label="Troca de lado no ímpar" checked={settings.switchSidesOdd} onChange={v => setSettings({...settings, switchSidesOdd: v})} />}
