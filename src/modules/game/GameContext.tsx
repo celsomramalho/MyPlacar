@@ -144,7 +144,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     return (profile && profile.email) ? profile : { name: '', nickname: '', email: '', phone: '', pin: '', isProfileComplete: false, authMethod: 'pin' };
   });
 
-  const { setPlayerQueue, playerQueue, setModalConfig, setShowLiveControlOverlay, setCurrentScreen, isSettingsInicialSaved, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, overlayAcceptedRef, setIsSavingJudge, isProfileSaved, setIsProfileSaved, setVoiceLogs, setIsRecoveryFromMatchOver, setIsWaitingSync } = useUI();
+  const { currentScreen, setPlayerQueue, playerQueue, setModalConfig, setShowLiveControlOverlay, setCurrentScreen, isSettingsInicialSaved, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, overlayAcceptedRef, setIsSavingJudge, isProfileSaved, setIsProfileSaved, setVoiceLogs, setIsRecoveryFromMatchOver, setIsWaitingSync } = useUI();
   const { isOriginalOwner, resolveTargetPin, activeLives, isClosingLiveRef, setCloudLiveExists, setActiveLives, livePapel, tookControlAtRef, setLiveLogs } = useLive();
   const deviceId = getDeviceId();
 
@@ -254,6 +254,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   // 1. O observer veja as alterações de regras e nomes em tempo real na tela.
   // 2. Se o observer assumir o controle (take control), não sobrescreva a nuvem com dados obsoletos.
   useEffect(() => {
+    if (currentScreen === 'settings') {
+      return;
+    }
     if (!gameState || !gameState.isMirroringActive || !gameState.commandOwnerId || gameState.commandOwnerId === deviceId) {
       return;
     }
@@ -370,7 +373,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     gameState?.matchConfig,
     gameState?.p1,
     gameState?.p2,
-    deviceId
+    deviceId,
+    currentScreen
   ]);
 
 

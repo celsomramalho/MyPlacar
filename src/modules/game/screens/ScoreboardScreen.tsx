@@ -1332,8 +1332,18 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                           </div>
                         );
                       } else {
+                        const genderInitial = p.gender ?? 'M';
                         return (
-                          <div key={team} className={`flex items-center justify-center w-full py-2.5 ${SOLID_COLORS[color]}`}>
+                          <div key={team} className={`flex items-center justify-center w-full py-2.5 gap-2.5 ${SOLID_COLORS[color]}`}>
+                            {/* Botão gênero lado esquerdo */}
+                            <button
+                              disabled={!isActive}
+                              onClick={(e) => { e.stopPropagation(); onToggleGender?.(team, false); }}
+                              className={`shrink-0 w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all active:scale-90 ${genderInitial === 'M' ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-pink-50 text-pink-600 border-pink-200'}`}
+                              title="Trocar gênero"
+                            >
+                              {genderInitial === 'M' ? <MarsIcon size={12} /> : <VenusIcon size={12} />}
+                            </button>
                             <div onClick={() => onSwitchServer(team, false)} className="cursor-pointer active:scale-95 transition-transform">
                               <span className={`text-xl md:text-2xl font-black truncate px-2 py-0.5 rounded ${isInitialActive ? 'bg-[#bef264] text-[#1a1a1a] shadow-md' : 'text-white'}`}>{p.name}</span>
                             </div>

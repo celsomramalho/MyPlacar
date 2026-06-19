@@ -215,7 +215,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
       if (g1) setGenders(p => ({ ...p, p1: g1 }));
       if (g2) setGenders(p => ({ ...p, p1Partner: g2 }));
       setSettings(prev => {
-        if (nf1 && nf2) return { ...prev, p1Name: nf1, p1Partner: nf2, isDoubles: true, p1Verified: v1, p1PartnerVerified: v2, ...(g1 && { p1Gender: g1 }), ...(g2 && { p1PartnerGender: g2 }) };
+        if (prev.isDoubles && nf1 && nf2) return { ...prev, p1Name: nf1, p1Partner: nf2, p1Verified: v1, p1PartnerVerified: v2, ...(g1 && { p1Gender: g1 }), ...(g2 && { p1PartnerGender: g2 }) };
         return { ...prev, p1Name: nf1, p1Verified: v1, ...(g1 && { p1Gender: g1 }) };
       });
     } else {
@@ -224,7 +224,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
       if (g1) setGenders(p => ({ ...p, p2: g1 }));
       if (g2) setGenders(p => ({ ...p, p2Partner: g2 }));
       setSettings(prev => {
-        if (nf1 && nf2) return { ...prev, p2Name: nf1, p2Partner: nf2, isDoubles: true, p2Verified: v1, p2PartnerVerified: v2, ...(g1 && { p2Gender: g1 }), ...(g2 && { p2PartnerGender: g2 }) };
+        if (prev.isDoubles && nf1 && nf2) return { ...prev, p2Name: nf1, p2Partner: nf2, p2Verified: v1, p2PartnerVerified: v2, ...(g1 && { p2Gender: g1 }), ...(g2 && { p2PartnerGender: g2 }) };
         return { ...prev, p2Name: nf1, p2Verified: v1, ...(g1 && { p2Gender: g1 }) };
       });
     }
@@ -475,7 +475,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
           <div className="flex gap-1">
             <button 
               disabled={isReadOnly}
-              onClick={() => setSettings(p => ({...p, isDoubles: false}))}
+              onClick={() => setSettings(p => ({...p, isDoubles: false, p1Partner: '', p2Partner: '', p1PartnerVerified: false, p2PartnerVerified: false}))}
               className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-[1.5rem] text-sm font-black transition-all shadow-sm border-2 ${ !settings.isDoubles ? 'bg-white text-[#4B0082] border-[#4B0082] ring-2 ring-[#4B0082]/20' : 'bg-gray-100 text-slate-500 border-gray-200' } ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed' : ''}`}
             >
               <User size={18} className={!settings.isDoubles ? 'text-[#4B0082]' : ''} /> Simples

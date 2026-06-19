@@ -202,12 +202,13 @@ export function useLiveFirestoreSync(params: {
     const subscribe = () => {
       if (!navigator.onLine) return () => {};
       return onSnapshot(doc(db, 'live_matches', listenPin), snap => {
-      if (snap.exists()) {
-        const cloudData = snap.data() as GameState;
+        if (currentScreen === 'settings') return;
+        if (snap.exists()) {
+          const cloudData = snap.data() as GameState;
 
-        if (!isValidGameState(cloudData)) {
-          return;
-        }
+          if (!isValidGameState(cloudData)) {
+            return;
+          }
 
         if (cloudData.isLiveClosed) {
           // Guard: se este device é o owner ativo da live, ignora isLiveClosed: true
