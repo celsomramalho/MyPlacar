@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw, SquareKanban, Cast, Menu } from 'lucide-react';
+import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw, SquareKanban, Cast, Menu, ArrowRightLeft } from 'lucide-react';
 import { getDeviceType } from '@shared/utils/device';
 import { Button } from '@shared/components/Button';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
@@ -22,6 +22,7 @@ import { useLive } from '@modules/live';
 import { useGame } from '@modules/game';
 import { ScoreboardDisplay } from '../presentation/components/ScoreboardDisplay';
 import { PickleballCourtView } from '../presentation/components/PickleballCourtView';
+import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 
 interface CommandLogEntry {
   id: string;
@@ -73,6 +74,8 @@ interface Props {
   onScoreUpdate: (player: 1 | 2, type?: PointType, source?: string) => void;
   onUndo: () => void;
   onSwitchServer: (team: 1 | 2, isPartner: boolean) => void;
+  onSwapSides?: (team: 1 | 2) => void;
+  onToggleGender?: (team: 1 | 2, isPartner: boolean) => void;
   onTogglePause?: () => void;
   onBack: () => void;
   onHome: () => void;
@@ -297,7 +300,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { onScoreUpdate, onUndo, onSwitchServer, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode } = props;
+  const { onScoreUpdate, onUndo, onSwitchServer, onSwapSides, onToggleGender, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode } = props;
 
   // ── Contexto Game (Passo 3.2 ✅) ──────────────────────────────────────────
   // gameState lido exclusivamente do GameContext.
@@ -1285,20 +1288,60 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     if (!showSides || !p.partnerName) {
                       const isInitialActive = isActive && (sport === 'pickleball' && pkl ? (pkl.server.team === team && pkl.server.serverName === p.name) : o === offsetInitial);
                       const isPartnerActive = isActive && (sport === 'pickleball' && pkl ? (pkl.server.team === team && pkl.server.serverName === p.partnerName) : o === offsetPartner);
-                      return (
-                        <div key={team} className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[color]}`}>
-                          <div onClick={() => onSwitchServer(team, false)} className="cursor-pointer active:scale-95 transition-transform">
-                            <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isInitialActive ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{p.name}</span>
-                          </div>
-                          {isDoubles && p.partnerName && (
-                            <div onClick={() => onSwitchServer(team, true)} className="cursor-pointer active:scale-95 transition-transform">
-                              <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isPartnerActive ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{p.partnerName}</span>
+                      
+                      if (isDoubles && p.partnerName) {
+                        const genderInitial = p.gender ?? 'M';
+                        const genderPartner = p.partnerGender ?? 'M';
+                        return (
+                          <div key={team} className={`flex items-center w-full py-1.5 ${SOLID_COLORS[color]}`}>
+                            {/* Botão gênero lado esquerdo */}
+                            <button
+                              disabled={!isActive}
+                              onClick={(e) => { e.stopPropagation(); onToggleGender?.(team, false); }}
+                              className={`shrink-0 ml-2 w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all active:scale-90 ${genderInitial === 'M' ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-pink-50 text-pink-600 border-pink-200'}`}
+                              title="Trocar gênero"
+                            >
+                              {genderInitial === 'M' ? <MarsIcon size={12} /> : <VenusIcon size={12} />}
+                            </button>
+                            {/* Nome esquerdo */}
+                            <div onClick={() => onSwitchServer(team, false)} className="flex-1 cursor-pointer active:scale-95 transition-transform flex items-center justify-start pl-2">
+                              <span className={`text-xl md:text-2xl font-black truncate px-2 py-0.5 rounded ${isInitialActive ? 'bg-[#bef264] text-[#1a1a1a] shadow-md' : 'text-white'}`}>{p.name}</span>
                             </div>
-                          )}
-                        </div>
-                      );
+                            {/* Botão trocar lado */}
+                            <button
+                              disabled={!isActive}
+                              onClick={(e) => { e.stopPropagation(); onSwapSides?.(team); }}
+                              className="shrink-0 w-8 h-8 rounded-full bg-white text-gray-800 shadow-md flex items-center justify-center active:scale-90 transition-all border border-gray-200"
+                              title="Trocar lado dos jogadores"
+                            >
+                              <ArrowRightLeft size={14} />
+                            </button>
+                            {/* Nome direito */}
+                            <div onClick={() => onSwitchServer(team, true)} className="flex-1 cursor-pointer active:scale-95 transition-transform flex items-center justify-end pr-2">
+                              <span className={`text-xl md:text-2xl font-black truncate px-2 py-0.5 rounded ${isPartnerActive ? 'bg-[#bef264] text-[#1a1a1a] shadow-md' : 'text-white'}`}>{p.partnerName}</span>
+                            </div>
+                            {/* Botão gênero lado direito */}
+                            <button
+                              disabled={!isActive}
+                              onClick={(e) => { e.stopPropagation(); onToggleGender?.(team, true); }}
+                              className={`shrink-0 mr-2 w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all active:scale-90 ${genderPartner === 'M' ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-pink-50 text-pink-600 border-pink-200'}`}
+                              title="Trocar gênero"
+                            >
+                              {genderPartner === 'M' ? <MarsIcon size={12} /> : <VenusIcon size={12} />}
+                            </button>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div key={team} className={`flex items-center justify-center w-full py-2.5 ${SOLID_COLORS[color]}`}>
+                            <div onClick={() => onSwitchServer(team, false)} className="cursor-pointer active:scale-95 transition-transform">
+                              <span className={`text-xl md:text-2xl font-black truncate px-2 py-0.5 rounded ${isInitialActive ? 'bg-[#bef264] text-[#1a1a1a] shadow-md' : 'text-white'}`}>{p.name}</span>
+                            </div>
+                          </div>
+                        );
+                      }
                     }
-
+ 
                     // Pickleball side-out duplas: posições lidas do estado do motor (fonte única de verdade).
                     // t1RightPlayer / t2RightPlayer indicam quem está fisicamente na DIREITA de cada time.
                     const rightName = team === 1
@@ -1307,25 +1350,53 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     const leftName = rightName === p.name ? p.partnerName! : p.name;
                     const rightIsPartner = rightName === p.partnerName;
                     const leftIsPartner  = leftName  === p.partnerName;
-
+ 
                     const leftPlayer  = { name: leftName,  isPartner: leftIsPartner };
                     const rightPlayer = { name: rightName, isPartner: rightIsPartner };
-
+ 
                     const isLeftActive = isActive && pkl!.server.team === team && pkl!.server.serverName === leftPlayer.name;
                     const isRightActive = isActive && pkl!.server.team === team && pkl!.server.serverName === rightPlayer.name;
-
+ 
+                    // Gênero dos lados físicos (esq/dir) baseado em qual jogador está em cada posição
+                    const leftGender  = leftPlayer.isPartner  ? (p.partnerGender ?? 'M') : (p.gender ?? 'M');
+                    const rightGender = rightPlayer.isPartner ? (p.partnerGender ?? 'M') : (p.gender ?? 'M');
                     return (
-                      <div key={team} className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[color]}`}>
+                      <div key={team} className={`flex items-center w-full py-1.5 ${SOLID_COLORS[color]}`}>
+                        {/* Botão gênero lado esquerdo */}
+                        <button
+                          disabled={!isActive}
+                          onClick={(e) => { e.stopPropagation(); onToggleGender?.(team, leftPlayer.isPartner); }}
+                          className={`shrink-0 ml-2 w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all active:scale-90 ${leftGender === 'M' ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-pink-50 text-pink-600 border-pink-200'}`}
+                          title="Trocar gênero"
+                        >
+                          {leftGender === 'M' ? <MarsIcon size={12} /> : <VenusIcon size={12} />}
+                        </button>
                         {/* Jogador do lado ESQUERDO da quadra */}
-                        <div onClick={() => onSwitchServer(team, leftPlayer.isPartner)} className="cursor-pointer active:scale-95 transition-transform flex items-center gap-1">
-                          <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isLeftActive ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{leftPlayer.name}</span>
-                          <span className="text-xs font-bold text-white/60 leading-none">(E)</span>
+                        <div onClick={() => onSwitchServer(team, leftPlayer.isPartner)} className="flex-1 cursor-pointer active:scale-95 transition-transform flex items-center justify-start pl-2">
+                          <span className={`text-xl md:text-2xl font-black truncate px-2 py-0.5 rounded ${isLeftActive ? 'bg-[#bef264] text-[#1a1a1a] shadow-md' : 'text-white'}`}>{leftPlayer.name}</span>
                         </div>
+                        {/* Botão trocar lado */}
+                        <button
+                          disabled={!isActive}
+                          onClick={(e) => { e.stopPropagation(); onSwapSides?.(team); }}
+                          className="shrink-0 w-8 h-8 rounded-full bg-white text-gray-800 shadow-md flex items-center justify-center active:scale-90 transition-all border border-gray-200"
+                          title="Trocar lado dos jogadores"
+                        >
+                          <ArrowRightLeft size={14} />
+                        </button>
                         {/* Jogador do lado DIREITO da quadra */}
-                        <div onClick={() => onSwitchServer(team, rightPlayer.isPartner)} className="cursor-pointer active:scale-95 transition-transform flex items-center gap-1">
-                          <span className="text-xs font-bold text-white/60 leading-none">(D)</span>
-                          <span className={`text-xl md:text-2xl font-black truncate px-1 rounded ${isRightActive ? 'bg-[#bef264] text-[#1a1a1a]' : 'text-white'}`}>{rightPlayer.name}</span>
+                        <div onClick={() => onSwitchServer(team, rightPlayer.isPartner)} className="flex-1 cursor-pointer active:scale-95 transition-transform flex items-center justify-end pr-2">
+                          <span className={`text-xl md:text-2xl font-black truncate px-2 py-0.5 rounded ${isRightActive ? 'bg-[#bef264] text-[#1a1a1a] shadow-md' : 'text-white'}`}>{rightPlayer.name}</span>
                         </div>
+                        {/* Botão gênero lado direito */}
+                        <button
+                          disabled={!isActive}
+                          onClick={(e) => { e.stopPropagation(); onToggleGender?.(team, rightPlayer.isPartner); }}
+                          className={`shrink-0 mr-2 w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all active:scale-90 ${rightGender === 'M' ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-pink-50 text-pink-600 border-pink-200'}`}
+                          title="Trocar gênero"
+                        >
+                          {rightGender === 'M' ? <MarsIcon size={12} /> : <VenusIcon size={12} />}
+                        </button>
                       </div>
                     );
                   };

@@ -222,12 +222,13 @@ export const initPickleballState = (state: GameState): PickleballState => {
  */
 const rotateToSecondServer = (pkl: PickleballState, state: GameState): void => {
   pkl.server.serverNumber = 2;
-  // Sacador 2 é quem está na ESQUERDA (o parceiro do rightPlayer)
+  // O segundo sacador é o parceiro do sacador atual
   const team = pkl.server.team;
   const p    = team === 1 ? state.p1 : state.p2;
-  const right = getRightPlayer(pkl, team);
-  pkl.server.serverName = right === p.name ? (p.partnerName || p.name) : p.name;
-  pkl.server.side       = 'odd'; // esquerda = 'odd'
+  const currentServer = pkl.server.serverName;
+  pkl.server.serverName = currentServer === p.name ? (p.partnerName || p.name) : p.name;
+  // Ele saca do lado oposto ao que o sacador atual estava
+  pkl.server.side       = pkl.server.side === 'even' ? 'odd' : 'even';
 };
 
 /**
@@ -247,7 +248,8 @@ const performSideOut = (pkl: PickleballState, state: GameState): void => {
  */
 const rotateWithinTeamSideOut = (pkl: PickleballState, state: GameState): void => {
   swapSides(pkl, state, pkl.server.team);
-  assignServerFromRightPlayer(pkl, state);
+  // O mesmo sacador continua sacando, apenas inverte o lado do saque (even <-> odd)
+  pkl.server.side = pkl.server.side === 'even' ? 'odd' : 'even';
 };
 
 /**

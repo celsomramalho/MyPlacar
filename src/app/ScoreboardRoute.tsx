@@ -76,7 +76,7 @@ export function ScoreboardRoute({
     isRecoveryFromMatchOver,
   } = useUI();
 
-  const { handleTogglePause, handleSmartSwitchServer } = useScoreboardEngine();
+  const { handleTogglePause, handleSmartSwitchServer, handleSwapSides, handleToggleGender } = useScoreboardEngine();
   const { voiceLogs, setVoiceLogs } = useVoiceControl();
 
   useJudgeLookup({ judgePinInput, setIsSearchingJudgePin, setJudgeNicknameLookup });
@@ -145,6 +145,8 @@ export function ScoreboardRoute({
       onSelectJudgeFromPartners={() => { setIsSelectingJudge(true); setCurrentScreen('partners'); }}
       onUndo={handleUndo}
       onSwitchServer={handleSmartSwitchServer}
+      onSwapSides={handleSwapSides}
+      onToggleGender={handleToggleGender}
       onTogglePause={handleTogglePause}
       onBack={makeExitHandler('new-game')}
       onHome={makeExitHandler('settings')}

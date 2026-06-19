@@ -99,8 +99,39 @@ describe('pickleballEngine — incrementScorePickleball (side-out)', () => {
 
     expect(next.pickleball!.score.team1).toBe(1);
     expect(next.pickleball!.server.t1RightPlayer).toBe('Jogador_A2'); // swap executado
-    expect(next.pickleball!.server.serverName).toBe('Jogador_A2');    // quem está na direita saca
-    expect(next.pickleball!.server.side).toBe('even');                // direita = 'even'
+    expect(next.pickleball!.server.serverName).toBe('Jogador_A1');    // mesmo sacador continua sacando
+    expect(next.pickleball!.server.side).toBe('odd');                 // agora saca da esquerda ('odd')
+  });
+
+  it('rotaciona para o segundo sacador corretamente em side-out duplas se o primeiro sacador perder o rally', () => {
+    const state = createPickleballState();
+    state.matchConfig.isDoubles = true;
+    state.matchConfig.pickleballScoringMode = 'side-out';
+    state.matchConfig.pickleballServiceMode = 'switch-side';
+
+    state.p1.name = 'Jogador_A1';
+    state.p1.partnerName = 'Jogador_A2';
+    state.p2.name = 'Jogador_B1';
+    state.p2.partnerName = 'Jogador_B2';
+
+    // T2 está sacando; Jogador_B1 é o parceiro e está na esquerda ('odd')
+    // Jogador_B2 está na direita ('even'). O sacador atual é Jogador_B1 (E), serverNumber = 1
+    state.pickleball!.server.team = 2;
+    state.pickleball!.server.serverNumber = 1;
+    state.pickleball!.server.serverName = 'Jogador_B1';
+    state.pickleball!.server.side = 'odd';
+    state.pickleball!.server.t2RightPlayer = 'Jogador_B2'; // B2 na direita, então B1 está na esquerda
+    state.pickleball!.isFirstServerActive = false;
+
+    // T2 perde o rally (T1 pontua ou não, mas em side-out perde rally = sem ponto e rotaciona sacador)
+    // Chamamos incrementScore para o time adversário (T1) que venceu o rally
+    const next = incrementScorePickleball(state, 1);
+
+    expect(next.pickleball!.score.team2).toBe(0); // sem ponto para T2
+    expect(next.pickleball!.server.team).toBe(2); // permanece com T2
+    expect(next.pickleball!.server.serverNumber).toBe(2); // agora é sacador 2
+    expect(next.pickleball!.server.serverName).toBe('Jogador_B2'); // parceiro (Jogador_B2) assume
+    expect(next.pickleball!.server.side).toBe('even'); // parceiro está na direita ('even')
   });
 
   it('inicializa t1RightPlayer e t2RightPlayer no estado inicial de side-out duplas', () => {
