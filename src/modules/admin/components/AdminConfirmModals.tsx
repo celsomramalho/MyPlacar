@@ -1,6 +1,7 @@
 export type AdminDeleteConfirm = {
-  type: 'category' | 'sport' | 'expired_lives' | 'event';
+  type: 'category' | 'sport' | 'expired_lives' | 'event' | 'inactive_lives_config';
   id: string;
+  count?: number;
 };
 
 interface AdminConfirmModalsProps {
@@ -46,14 +47,24 @@ const AdminModalFrame = ({
 
 const getDeleteTitle = (deleteConfirm: AdminDeleteConfirm) => {
   if (deleteConfirm.type === 'expired_lives') return 'Limpar transmissões?';
+  if (deleteConfirm.type === 'inactive_lives_config') {
+    const word = (deleteConfirm.count ?? 0) === 1 ? 'transmissão inativa' : 'transmissões inativas';
+    return `Limpar ${deleteConfirm.count ?? 0} ${word}?`;
+  }
   if (deleteConfirm.type === 'event') return 'Excluir evento?';
   return 'Excluir item?';
 };
 
-const getDeleteMessage = (deleteConfirm: AdminDeleteConfirm) =>
-  deleteConfirm.type === 'expired_lives'
-    ? 'Esta ação removerá permanentemente todas as partidas ao vivo com mais de 24 horas.'
-    : 'Esta ação não pode ser desfeita e removerá o item permanentemente.';
+const getDeleteMessage = (deleteConfirm: AdminDeleteConfirm) => {
+  if (deleteConfirm.type === 'expired_lives') {
+    return 'Esta ação removerá permanentemente todas as partidas ao vivo com mais de 24 horas.';
+  }
+  if (deleteConfirm.type === 'inactive_lives_config') {
+    const hours = deleteConfirm.id;
+    return `Esta ação removerá permanentemente todas as transmissões ativas que estão sem pontuação ou interação por mais de ${hours} ${Number(hours) === 1 ? 'hora' : 'horas'}.`;
+  }
+  return 'Esta ação não pode ser desfeita e removerá o item permanentemente.';
+};
 
 export const AdminConfirmModals = ({
   showClearCache,

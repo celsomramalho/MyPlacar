@@ -93,7 +93,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isOpenCVS, setIsOpenCVS] = useState(false);
   const [isOpenCVO, setIsOpenCVO] = useState(false);
 
-  const [liveStats, setLiveStats] = useState({ total: 0, expired: 0, expiredIds: [] as string[] });
+  const [liveStats, setLiveStats] = useState({ total: 0, expired: 0, expiredIds: [] as string[], inactiveLives: 0, inactiveLivesIds: [] as string[] });
+  const [inactiveHours, setInactiveHours] = useState(2);
   const [_isCleaningLives, setIsCleaningLives] = useState(false);
   
   const [eventList, setEventList] = useState<TournamentEvent[]>([]);
@@ -129,13 +130,18 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     });
   };
 
-  const fetchLiveMatchesStats = async () => {
+  const fetchLiveMatchesStats = async (hours = inactiveHours) => {
     const db = getDb();
     if (!db) return;
     try {
-      const stats = await fetchFirebaseLiveMatchesStats(db);
+      const stats = await fetchFirebaseLiveMatchesStats(db, undefined, hours);
       setLiveStats(stats);
     } catch (e) { console.error("Erro ao buscar estatísticas de transmissões:", e); }
+  };
+
+  const handleHoursChange = (hours: number) => {
+    setInactiveHours(hours);
+    fetchLiveMatchesStats(hours);
   };
 
   const fetchEvents = async () => {
@@ -200,12 +206,34 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     }
   };
 
+  const handleDeleteInactiveLives = async () => {
+    const db = getDb();
+    if (!db || liveStats.inactiveLivesIds.length === 0) return;
+    setIsCleaningLives(true);
+    try {
+      await deleteLiveMatchesByIds(db, liveStats.inactiveLivesIds);
+      setStatus({ type: 'success', msg: `${liveStats.inactiveLives} transmissões removidas com sucesso.` });
+      fetchLiveMatchesStats();
+    } catch (_e) {
+      setStatus({ type: 'error', msg: "Erro ao remover transmissões." });
+    } finally {
+      setIsCleaningLives(false);
+      setDeleteConfirm(null);
+      setTimeout(() => setStatus(null), 3000);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteConfirm) return;
     const { type, id } = deleteConfirm;
     
     if (type === 'expired_lives') {
       handleDeleteExpiredLives();
+      return;
+    }
+
+    if (type === 'inactive_lives_config') {
+      handleDeleteInactiveLives();
       return;
     }
 
@@ -447,21 +475,41 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
         {adminTab === 'configs' && (
           <>
-            <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-400 rounded-2xl flex items-center justify-center text-white shadow-md"><Sparkles size={24} /></div>
-                  <div className="text-left"><p className="text-base font-black text-black leading-tight">Regra de ouro</p><p className="text-[11px] font-bold text-black">Sentence case global</p></div>
+            <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-5">
+              <div className="p-4 bg-slate-50 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-black">Versão do sistema</span>
                 </div>
-                <Toggle id="toggle-golden-rule" checked={goldenRule} onChange={toggleGoldenRule} />
+                <input type="text" value={remoteAppVersion} onChange={(e) => { setRemoteAppVersion(e.target.value); setIsVoiceSaved(false); }} className="w-full h-[52px] bg-white border rounded-xl px-4 font-black text-lg text-black outline-none" />
               </div>
-              <div className="pt-2 border-t border-gray-100">
-                <button 
-                  onClick={() => setShowConfirmClearCache(true)}
-                  className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] flex items-center justify-center gap-2"
-                >
-                  <RotateCw size={14} /> Limpar cache do banco de dados
-                </button>
+              <div className="p-4 bg-slate-50 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-black">Url do sistema</span>
+                </div>
+                <div className="relative">
+                  <select
+                    value={appUrl}
+                    onChange={(e) => { setAppUrl(e.target.value); setIsVoiceSaved(false); }}
+                    className="w-full h-[52px] bg-white border rounded-xl px-4 font-black text-sm text-black outline-none appearance-none"
+                  >
+                    <option value="https://myplacar.app.br/">Domínio próprio (myplacar.app.br)</option>
+                    <option value="https://my-placar.vercel.app/">Vercel (vercel.app)</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <ChevronDown size={20} />
+                  </div>
+                </div>
+              </div>
+              <div className="px-2">
+                <Button onClick={handleSaveVoiceConfigs} disabled={isSavingVoice} className={`w-full !py-4 rounded-2xl font-black text-white shadow-xl flex gap-2 ${isVoiceSaved ? '!bg-[#3b82f6]' : '!bg-amber-500'}`}>{isSavingVoice ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar alterações</Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button onClick={onExportData} className="w-full !bg-blue-600 !py-3 rounded-xl font-black flex gap-2 text-white text-xs">
+                  <Download size={16} /> Exportar
+                </Button>
+                <Button onClick={() => fileInputRefImport.current?.click()} className="w-full !bg-emerald-600 !py-3 rounded-xl font-black flex gap-2 text-white text-xs">
+                  <Upload size={16} /> Importar
+                </Button>
               </div>
             </section>
 
@@ -470,46 +518,73 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                 <Database size={20} className="text-indigo-500" />
                 <h2 className="text-sm font-black text-black">Manutenção</h2>
               </div>
-              <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-5">
-                <div className="p-4 bg-slate-50 rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black text-black">Versão do sistema</span>
-                    </div>
-                    <input type="text" value={remoteAppVersion} onChange={(e) => { setRemoteAppVersion(e.target.value); setIsVoiceSaved(false); }} className="w-full h-[52px] bg-white border rounded-xl px-4 font-black text-lg text-black outline-none" />
+
+              <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-amber-400 rounded-2xl flex items-center justify-center text-white shadow-md"><Sparkles size={24} /></div>
+                    <div className="text-left"><p className="text-base font-black text-black leading-tight">Regra de ouro</p><p className="text-[11px] font-bold text-black">Sentence case global</p></div>
+                  </div>
+                  <Toggle id="toggle-golden-rule" checked={goldenRule} onChange={toggleGoldenRule} />
                 </div>
-                <div className="p-4 bg-slate-50 rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black text-black">Url do sistema</span>
-                    </div>
-                    <div className="relative">
-                      <select 
-                        value={appUrl} 
-                        onChange={(e) => { setAppUrl(e.target.value); setIsVoiceSaved(false); }} 
-                        className="w-full h-[52px] bg-white border rounded-xl px-4 font-black text-sm text-black outline-none appearance-none"
-                      >
-                        <option value="https://myplacar.app.br/">Domínio próprio (myplacar.app.br)</option>
-                        <option value="https://my-placar.vercel.app/">Vercel (vercel.app)</option>
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                        <ChevronDown size={20} />
-                      </div>
-                    </div>
-                </div>
-                <div className="px-2">
-                  <Button onClick={handleSaveVoiceConfigs} disabled={isSavingVoice} className={`w-full !py-4 rounded-2xl font-black text-white shadow-xl flex gap-2 ${isVoiceSaved ? '!bg-[#3b82f6]' : '!bg-amber-500'}`}>{isSavingVoice ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar alterações</Button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={onExportData} className="w-full !bg-blue-600 !py-3 rounded-xl font-black flex gap-2 text-white text-xs">
-                    <Download size={16} /> Exportar
-                  </Button>
-                  <Button onClick={() => fileInputRefImport.current?.click()} className="w-full !bg-emerald-600 !py-3 rounded-xl font-black flex gap-2 text-white text-xs">
-                    <Upload size={16} /> Importar
-                  </Button>
+                <div className="pt-2 border-t border-gray-100">
+                  <button
+                    onClick={() => setShowConfirmClearCache(true)}
+                    className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] flex items-center justify-center gap-2"
+                  >
+                    <RotateCw size={14} /> Limpar cache do banco de dados
+                  </button>
                 </div>
               </section>
-            </div>
 
-            <div className="space-y-3">
+              <section className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-rose-500 rounded-2xl flex items-center justify-center text-white shadow-md"><Wifi size={24} /></div>
+                  <div>
+                    <p className="text-base font-black text-black leading-tight">Transmissões ao vivo</p>
+                    <p className="text-[11px] font-bold text-gray-500">{liveStats.total} ativas · {liveStats.expired} expiradas · {liveStats.inactiveLives} inativas</p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-gray-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-gray-600">Inativas há mais de</span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 4, 8, 24].map(h => (
+                        <button
+                          key={h}
+                          onClick={() => handleHoursChange(h)}
+                          className={`w-9 h-9 rounded-xl text-xs font-black transition-colors ${
+                            inactiveHours === h
+                              ? 'bg-rose-500 text-white shadow-md'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {h}h
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setDeleteConfirm({ type: 'inactive_lives_config', id: String(inactiveHours), count: liveStats.inactiveLives })}
+                    disabled={liveStats.inactiveLives === 0}
+                    className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl font-black text-[10px] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={14} /> Limpar {liveStats.inactiveLives} transmissão{liveStats.inactiveLives !== 1 ? 'ões' : ''} inativa{liveStats.inactiveLives !== 1 ? 's' : ''}
+                  </button>
+
+                  {liveStats.expired > 0 && (
+                    <button
+                      onClick={() => setDeleteConfirm({ type: 'expired_lives', id: 'expired', count: liveStats.expired })}
+                      className="w-full py-3 bg-orange-50 text-orange-600 rounded-xl font-black text-[10px] flex items-center justify-center gap-2"
+                    >
+                      <Trash2 size={14} /> Limpar {liveStats.expired} transmissão{liveStats.expired !== 1 ? 'ões' : ''} expirada{liveStats.expired !== 1 ? 's' : ''} (+24h)
+                    </button>
+                  )}
+                </div>
+              </section>
+
               <AdminVoiceRulesPanel
                 voiceCommands={voiceCommands}
                 isOpenCVP={isOpenCVP}

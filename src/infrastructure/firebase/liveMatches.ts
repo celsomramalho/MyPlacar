@@ -4,6 +4,8 @@ export interface FirebaseLiveMatchesStats {
   total: number;
   expired: number;
   expiredIds: string[];
+  inactiveLives: number;
+  inactiveLivesIds: string[];
 }
 
 export interface FirebaseTournamentLiveScore {
@@ -18,6 +20,7 @@ export interface FirebaseTournamentLiveScore {
 
 interface FirebaseLiveMatchData {
   startTime?: number;
+  lastActivityAt?: number;
   tournamentPin?: string;
   tournamentMatchId?: string;
   p1?: {
@@ -40,15 +43,24 @@ const countSetsWon = (ownSets: number[] = [], opponentSets: number[] = []) => {
 export const fetchLiveMatchesStats = async (
   db: Firestore,
   expirationMs = 24 * 60 * 60 * 1000,
+  inactiveHours = 2,
 ): Promise<FirebaseLiveMatchesStats> => {
   const snapshot = await getDocs(collection(db, 'live_matches'));
   const expirationLimit = Date.now() - expirationMs;
+  const inactiveLimit = Date.now() - (inactiveHours * 60 * 60 * 1000);
   const expiredIds: string[] = [];
+  const inactiveLivesIds: string[] = [];
 
   snapshot.forEach(docSnapshot => {
     const data = docSnapshot.data() as FirebaseLiveMatchData;
+    // Critério 1: Criada há mais de 24h
     if (data.startTime && data.startTime < expirationLimit) {
       expiredIds.push(docSnapshot.id);
+    }
+    // Critério 2: Sem atividade pelo tempo configurado
+    const lastActive = data.lastActivityAt || data.startTime;
+    if (lastActive && lastActive < inactiveLimit) {
+      inactiveLivesIds.push(docSnapshot.id);
     }
   });
 
@@ -56,6 +68,8 @@ export const fetchLiveMatchesStats = async (
     total: snapshot.size,
     expired: expiredIds.length,
     expiredIds,
+    inactiveLives: inactiveLivesIds.length,
+    inactiveLivesIds,
   };
 };
 
