@@ -162,6 +162,18 @@ export interface PickleballServerState {
    * Ignorado em simples e em side-out scoring.
    */
   rallyOffset: number;
+  /**
+   * Nome do jogador do Time 1 que está fisicamente na DIREITA da quadra.
+   * Usado apenas no modo side-out duplas para rastrear posições de forma
+   * explícita (substitui o cálculo de paridade par/ímpar).
+   * Undefined em simples e em rally scoring.
+   */
+  t1RightPlayer?: string;
+  /**
+   * Nome do jogador do Time 2 que está fisicamente na DIREITA da quadra.
+   * Usado apenas no modo side-out duplas (ver t1RightPlayer).
+   */
+  t2RightPlayer?: string;
 }
 
 export interface PickleballWinner {

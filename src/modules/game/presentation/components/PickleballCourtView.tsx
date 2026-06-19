@@ -21,26 +21,24 @@ export const PickleballCourtView: React.FC<PickleballCourtViewProps> = ({ gameSt
 
   // Lado do saque ativo
   const activeTeam = pkl.server.team;
-  const activeSide = pkl.server.side; // 'even' (direita) ou 'odd' (esquerda)
   const serverName = pkl.server.serverName;
 
-  // Paridade de placar para definir posições
-  // Placar PAR   -> Jogador_Inicial na DIREITA (D), Parceiro na ESQUERDA (E)
-  // Placar IMPAR -> Jogador_Inicial na ESQUERDA (E), Parceiro na DIREITA (D)
-  const t1Score = pkl.score.team1;
-  const t2Score = pkl.score.team2;
+  // Posições dos jogadores lidas diretamente do estado do motor (fonte única de verdade).
+  // t1RightPlayer / t2RightPlayer contêm o nome de quem está fisicamente na DIREITA de cada time.
+  const t1Right = pkl.server.t1RightPlayer || p1.name;
+  const t2Right = pkl.server.t2RightPlayer || p2.name;
 
-  const t1InitialOnRight = t1Score % 2 === 0;
-  const t2InitialOnRight = t2Score % 2 === 0;
+  // Time 1: lado esquerdo da quadra (visão de cima)
+  // Superior = posição E do jogador (à esquerda de quem olha para a rede)
+  // Inferior = posição D do jogador (à direita de quem olha para a rede)
+  const t1LeftPlayer  = t1Right === p1.name ? (p1.partnerName || 'Parceiro T1') : p1.name;
+  const t1RightPlayer = t1Right;
 
-  // Time 1 (Top / Superior)
-  const t1LeftPlayer = t1InitialOnRight ? p1.partnerName || 'Parceiro T1' : p1.name;
-  const t1RightPlayer = t1InitialOnRight ? p1.name : p1.partnerName || 'Parceiro T1';
-
-  // Time 2 (Bottom / Inferior)
-  // Nota: Para visualização de cima, a direita do time inferior está do lado direito da tela, a esquerda na esquerda.
-  const t2LeftPlayer = t2InitialOnRight ? p2.partnerName || 'Parceiro T2' : p2.name;
-  const t2RightPlayer = t2InitialOnRight ? p2.name : p2.partnerName || 'Parceiro T2';
+  // Time 2: lado direito da quadra (visão de cima)
+  // Superior direito = posição E do time 2 (à esquerda de quem olha para a rede vindo do lado deles)
+  // Inferior direito = posição D do time 2 (à direita de quem olha para a rede)
+  const t2LeftPlayer  = t2Right === p2.name ? (p2.partnerName || 'Parceiro T2') : p2.name;
+  const t2RightPlayer = t2Right;
 
   // Verifica se o jogador é o sacador ativo
   const isT1LeftActive = activeTeam === 1 && serverName === t1LeftPlayer;
@@ -91,21 +89,21 @@ export const PickleballCourtView: React.FC<PickleballCourtViewProps> = ({ gameSt
           <span className="text-[8px] font-bold text-white/75 mt-1 max-w-[60px] truncate">{t1RightPlayer}</span>
         </div>
 
-        {/* --- Jogadores Time 2 (Lado Direito da Tela - Bottom) --- */}
-        {/* Superior Direito (E) */}
+        {/* --- Jogadores Time 2 (Lado Direito da Tela) --- */}
+        {/* Superior Direito (D) */}
         <div className="absolute right-[6%] top-[12%] flex flex-col items-center z-20">
-          <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-[10px] font-black text-white transition-all ${isT2LeftActive ? 'bg-yellow-500 border-yellow-300 scale-110 shadow-lg shadow-yellow-500/50 animate-pulse' : 'bg-red-600 border-white/60'}`}>
-            {t2LeftPlayer.substring(0, 2).toUpperCase()}
-          </div>
-          <span className="text-[8px] font-bold text-white/75 mt-1 max-w-[60px] truncate">{t2LeftPlayer}</span>
-        </div>
-
-        {/* Inferior Direito (D) */}
-        <div className="absolute right-[6%] bottom-[12%] flex flex-col items-center z-20">
           <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-[10px] font-black text-white transition-all ${isT2RightActive ? 'bg-yellow-500 border-yellow-300 scale-110 shadow-lg shadow-yellow-500/50 animate-pulse' : 'bg-red-600 border-white/60'}`}>
             {t2RightPlayer.substring(0, 2).toUpperCase()}
           </div>
           <span className="text-[8px] font-bold text-white/75 mt-1 max-w-[60px] truncate">{t2RightPlayer}</span>
+        </div>
+
+        {/* Inferior Direito (E) */}
+        <div className="absolute right-[6%] bottom-[12%] flex flex-col items-center z-20">
+          <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-[10px] font-black text-white transition-all ${isT2LeftActive ? 'bg-yellow-500 border-yellow-300 scale-110 shadow-lg shadow-yellow-500/50 animate-pulse' : 'bg-red-600 border-white/60'}`}>
+            {t2LeftPlayer.substring(0, 2).toUpperCase()}
+          </div>
+          <span className="text-[8px] font-bold text-white/75 mt-1 max-w-[60px] truncate">{t2LeftPlayer}</span>
         </div>
 
         {/* Seta de Saque indicativa */}

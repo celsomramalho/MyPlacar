@@ -1299,21 +1299,20 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       );
                     }
 
-                    // Pickleball side-out duplas: posiciona pela paridade do placar
-                    // Placar PAR   -> Jogador_Inicial (p.name) na DIREITA (D), Parceiro na ESQUERDA (E)
-                    // Placar IMPAR -> Jogador_Inicial (p.name) na ESQUERDA (E), Parceiro na DIREITA (D)
-                    const teamScore = team === 1 ? pkl!.score.team1 : pkl!.score.team2;
-                    const initialOnRight = teamScore % 2 === 0;
+                    // Pickleball side-out duplas: posições lidas do estado do motor (fonte única de verdade).
+                    // t1RightPlayer / t2RightPlayer indicam quem está fisicamente na DIREITA de cada time.
+                    const rightName = team === 1
+                      ? (pkl!.server.t1RightPlayer || p.name)
+                      : (pkl!.server.t2RightPlayer || p.name);
+                    const leftName = rightName === p.name ? p.partnerName! : p.name;
+                    const rightIsPartner = rightName === p.partnerName;
+                    const leftIsPartner  = leftName  === p.partnerName;
 
-                    const leftPlayer  = initialOnRight
-                      ? { name: p.partnerName!, isPartner: true }
-                      : { name: p.name,          isPartner: false };
-                    const rightPlayer = initialOnRight
-                      ? { name: p.name,          isPartner: false }
-                      : { name: p.partnerName!,  isPartner: true };
+                    const leftPlayer  = { name: leftName,  isPartner: leftIsPartner };
+                    const rightPlayer = { name: rightName, isPartner: rightIsPartner };
 
-                    const isLeftActive = isActive && pkl.server.team === team && pkl.server.serverName === leftPlayer.name;
-                    const isRightActive = isActive && pkl.server.team === team && pkl.server.serverName === rightPlayer.name;
+                    const isLeftActive = isActive && pkl!.server.team === team && pkl!.server.serverName === leftPlayer.name;
+                    const isRightActive = isActive && pkl!.server.team === team && pkl!.server.serverName === rightPlayer.name;
 
                     return (
                       <div key={team} className={`flex items-center justify-between w-full px-4 py-2 ${SOLID_COLORS[color]}`}>
@@ -1330,6 +1329,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       </div>
                     );
                   };
+
 
                   return (
                     <>

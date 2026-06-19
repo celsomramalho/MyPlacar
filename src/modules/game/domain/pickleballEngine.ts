@@ -4,31 +4,32 @@
  *
  * Regras implementadas
  * ────────────────────
- * Side-out scoring (tradicional)
+ * Side-out scoring (tradicional) — Duplas
  *   - Só pontua quem está sacando.
- *   - Duplas — transições de saque:
- *       rally ganho  → pontua; serverNumber não muda; side atualiza por paridade
- *       server 1 perde rally → saque para server 2 do mesmo time (sem ponto)
- *       server 2 perde rally → side-out: saque para o time adversário
- *   - Após side-out: novo time começa sempre com serverNumber = 1
- *   - Side do sacador validado pela paridade do placar do time sacador
+ *   - Posicionamento por rastreamento explícito (t1RightPlayer / t2RightPlayer):
+ *       após side-out: quem está fisicamente na DIREITA inicia o saque.
+ *       após cada ponto conquistado pelo sacador: os dois jogadores do time trocam de lado.
+ *   - Transições de saque:
+ *       rally ganho  → pontua; troca de lado dentro do time sacador.
+ *       server 1 perde rally → saque para server 2 do mesmo time (sem ponto; sem troca de lado).
+ *       server 2 perde rally → side-out: saque para o time adversário.
+ *   - Após side-out: novo time começa com o jogador da direita (t[N]RightPlayer).
  *   - Exceção início de partida: primeiro time começa como server 2
  *     (regra "first server" — só um sacador na primeira posse).
+ *
+ * Side-out scoring (tradicional) — Simples
+ *   - Lado do sacador por paridade do placar (par='even', ímpar='odd').
  *
  * Rally scoring (WPL/APP)
  *   - Qualquer time pontua a qualquer rally.
  *   - Recebedor ganha → pontua E assume o saque.
  *   - Sacador ganha → pontua e mantém o saque.
- *   - Duplas com alternate-server: rotaciona entre os dois jogadores
- *     do time a cada ponto conquistado pelo time sacador.
+ *   - Duplas: rotação circular (switch-side) ou alternate-server.
+ *   - Lado do sacador por paridade do placar.
  *
- * Lado da quadra (CourtSide)
- *   - Placar par do sacador  → 'even' (direita).
- *   - Placar ímpar do sacador → 'odd'  (esquerda).
- *
- * First server rule (duplas)
- *   - Inferida por: currentSet === 0 && pointHistory.length === 0
- *   - Sem flag explícito no estado — não polui PickleballState.
+ * First server rule (duplas, side-out)
+ *   - Flag explícito isFirstServerActive persiste no estado.
+ *   - Desativado no primeiro side-out e no início de games subsequentes.
  */
 
 import { GameState, PickleballState, CourtSide } from '../../../types.ts';
@@ -38,46 +39,16 @@ import { GameState, PickleballState, CourtSide } from '../../../types.ts';
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Resolve o nome do sacador dado time e número do servidor.
+ * Resolve o nome do sacador para rally scoring e simples (mapeamento estático).
  *   serverNumber 1 → jogador principal do time (p1.name / p2.name)
  *   serverNumber 2 → parceiro          do time (p1.partnerName / p2.partnerName)
- */
-/**
- * Resolve o nome do sacador de forma dinâmica com base no time, número do sacador,
- * placar atual do time e se a exceção do primeiro sacador está ativa (modo side-out duplas).
+ * NÃO usado para side-out duplas (usa rastreamento posicional via t1/t2RightPlayer).
  */
 const resolveServerName = (
   state: GameState,
   team: 1 | 2,
-  serverNumber: 1 | 2,
-  teamScore: number,
-  isFirstServerActive: boolean
+  serverNumber: 1 | 2
 ): string => {
-  const isDoubles = state.matchConfig.isDoubles;
-  const isSideOut = state.matchConfig.pickleballScoringMode !== 'rally';
-
-  if (isDoubles && isSideOut) {
-    if (isFirstServerActive) {
-      // Regra do primeiro sacador (0-0-2): sempre o jogador inicial
-      return team === 1 ? state.p1.name : (state.p2.name);
-    }
-    const isEven = teamScore % 2 === 0;
-    if (team === 1) {
-      if (isEven) {
-        return serverNumber === 1 ? state.p1.name : (state.p1.partnerName || state.p1.name);
-      } else {
-        return serverNumber === 1 ? (state.p1.partnerName || state.p1.name) : state.p1.name;
-      }
-    } else {
-      if (isEven) {
-        return serverNumber === 1 ? state.p2.name : (state.p2.partnerName || state.p2.name);
-      } else {
-        return serverNumber === 1 ? (state.p2.partnerName || state.p2.name) : state.p2.name;
-      }
-    }
-  }
-
-  // Fallback para rally scoring ou simples (mapeamento estático padrão)
   if (team === 1) {
     return serverNumber === 1
       ? state.p1.name
@@ -102,42 +73,57 @@ const resolveWinnerNames = (state: GameState, team: 1 | 2): string => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers internos — lado da quadra
+// Helpers internos — lado da quadra (rally scoring e simples)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Calcula dinamicamente o lado do saque (CourtSide) onde o sacador está posicionado.
+ * Calcula o lado do saque (CourtSide) por paridade de placar.
+ * Usado em: rally scoring (qualquer configuração) e side-out SIMPLES.
+ * NÃO usado em side-out duplas (usa t1/t2RightPlayer).
  */
 const resolveServerSide = (
-  state: GameState,
-  team: 1 | 2,
-  serverNumber: 1 | 2,
-  teamScore: number,
-  isFirstServerActive: boolean
-): CourtSide => {
-  const isDoubles = state.matchConfig.isDoubles;
-  const isSideOut = state.matchConfig.pickleballScoringMode !== 'rally';
+  teamScore: number
+): CourtSide => teamScore % 2 === 0 ? 'even' : 'odd';
 
-  if (isDoubles && isSideOut) {
-    if (isFirstServerActive) {
-      return 'even'; // O saque inicial (0-0-2) sempre parte da direita (even)
-    }
-    const serverName = resolveServerName(state, team, serverNumber, teamScore, isFirstServerActive);
-    const initialName = team === 1 ? state.p1.name : state.p2.name;
-    const isInitialPlayer = serverName === initialName;
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers internos — rastreamento posicional (side-out duplas)
+// ─────────────────────────────────────────────────────────────────────────────
 
-    // Se o sacador for o jogador inicial, ele saca da direita (even) no placar par e esquerda (odd) no ímpar.
-    // Se for o parceiro, saca da esquerda (odd) no placar par e direita (even) no ímpar.
-    const isEven = teamScore % 2 === 0;
-    if (isInitialPlayer) {
-      return isEven ? 'even' : 'odd';
-    } else {
-      return isEven ? 'odd' : 'even';
-    }
-  }
+/**
+ * Retorna o nome do jogador que está na DIREITA do time informado.
+ * Lê o campo t1RightPlayer / t2RightPlayer do estado.
+ */
+const getRightPlayer = (pkl: PickleballState, team: 1 | 2): string =>
+  (team === 1 ? pkl.server.t1RightPlayer : pkl.server.t2RightPlayer) ?? '';
 
-  // Rally scoring ou simples
-  return teamScore % 2 === 0 ? 'even' : 'odd';
+/**
+ * Troca os jogadores de lado dentro do time informado (swap direita ↔ esquerda).
+ * Chamado após cada ponto conquistado pelo time sacador em side-out duplas.
+ */
+const swapSides = (pkl: PickleballState, state: GameState, team: 1 | 2): void => {
+  const p = team === 1 ? state.p1 : state.p2;
+  const right = getRightPlayer(pkl, team);
+  const newRight = right === p.name ? (p.partnerName || p.name) : p.name;
+  if (team === 1) pkl.server.t1RightPlayer = newRight;
+  else            pkl.server.t2RightPlayer = newRight;
+};
+
+/**
+ * Após side-out: define o sacador do novo time como quem está na DIREITA,
+ * atualiza serverName, serverNumber e side.
+ * Não altera as posições dos jogadores (elas permanecem como eram enquanto recebiam).
+ */
+const assignServerFromRightPlayer = (
+  pkl: PickleballState,
+  state: GameState
+): void => {
+  const team = pkl.server.team;
+  const p    = team === 1 ? state.p1 : state.p2;
+  const right = getRightPlayer(pkl, team);
+  // serverNumber 1 = quem está na direita (sempre inicia o turno)
+  pkl.server.serverNumber = 1;
+  pkl.server.serverName   = right || p.name;
+  pkl.server.side         = 'even'; // direita = 'even'
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -164,16 +150,50 @@ export const initPickleballState = (state: GameState): PickleballState => {
   const isSideOut  = matchConfig.pickleballScoringMode !== 'rally';
   const team       = (matchConfig.initialServer ?? 1) as 1 | 2;
 
-  // First server rule: duplas + side-out.
-  // Em vez de inferir pelo pointHistory.length (falha após restauração de sessão),
-  // usamos isFirstServerActive como flag explícito persistido no estado.
-  const applyFirstServer = isDoubles && isSideOut;
-  const serverNumber: 1 | 2 = applyFirstServer ? 2 : 1;
-  const serverName = resolveServerName(state, team, serverNumber, 0, applyFirstServer);
-
   // rallyOffset inicial: alinha com o team inicial
   // team=1 → offset=0 (J1), team=2 → offset=1 (J2)
   const rallyOffset = team === 1 ? 0 : 1;
+
+  if (isDoubles && isSideOut) {
+    // ── Side-out duplas: rastreamento posicional ────────────────────────────
+    // First server rule: o time sorteado começa como server 2 (só um sacador
+    // antes do primeiro side-out). O serverNumber=2 é o PARCEIRO do principal.
+    //
+    // Posições iniciais:
+    //   Time sacador (team): p.name na DIREITA → saca como serverNumber=2
+    //     (pela first-server rule o parceiro/p.name está na direita)
+    //   Time recebedor: p.name na DIREITA (posição padrão de início)
+    //
+    // Nota: serverNumber=2 com first-server rule identifica o sacador correto
+    // a partir do campo t[team]RightPlayer (que é p.name no início).
+    const p = team === 1 ? state.p1 : state.p2;
+    // Ambos os times começam com o jogador principal (p.name) à direita.
+    const t1Right = state.p1.name;
+    const t2Right = state.p2.name;
+    // O sacador inicial pela first-server rule é o jogador à direita do time sacador.
+    const serverName = p.name; // rightPlayer do team
+
+    return {
+      score: { team1: 0, team2: 0 },
+      server: {
+        team,
+        serverNumber: 2,      // first-server rule: só um sacador antes do 1º side-out
+        serverName,
+        side: 'even',         // sacador inicial está na direita (even)
+        rallyOffset,
+        t1RightPlayer: t1Right,
+        t2RightPlayer: t2Right,
+      },
+      isGameOver:          false,
+      isMatchOver:         false,
+      winner:              null,
+      isFirstServerActive: true,
+    };
+  }
+
+  // ── Rally scoring ou simples ────────────────────────────────────────────
+  const serverNumber: 1 | 2 = 1;
+  const serverName = resolveServerName(state, team, serverNumber);
 
   return {
     score: { team1: 0, team2: 0 },
@@ -181,13 +201,13 @@ export const initPickleballState = (state: GameState): PickleballState => {
       team,
       serverNumber,
       serverName,
-      side: resolveServerSide(state, team, serverNumber, 0, applyFirstServer),
+      side: resolveServerSide(0), // placar 0 → 'even'
       rallyOffset,
     },
     isGameOver:          false,
     isMatchOver:         false,
     winner:              null,
-    isFirstServerActive: applyFirstServer, // true = first server rule em vigor
+    isFirstServerActive: false,
   };
 };
 
@@ -197,43 +217,37 @@ export const initPickleballState = (state: GameState): PickleballState => {
 
 /**
  * Server 1 do time perdeu o rally → saque passa para server 2 do mesmo time.
- * Sem ponto. Side recalculado pelo placar atual do time (não mudou).
+ * Sem ponto. As posições dos jogadores NÃO mudam (só pontuando que se troca de lado).
+ * side-out duplas: o "server 2" é quem estava na ESQUERDA (o que não está na direita).
  */
 const rotateToSecondServer = (pkl: PickleballState, state: GameState): void => {
   pkl.server.serverNumber = 2;
-  const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-  pkl.server.serverName   = resolveServerName(state, pkl.server.team, 2, teamScore, pkl.isFirstServerActive);
-  pkl.server.side         = resolveServerSide(state, pkl.server.team, 2, teamScore, pkl.isFirstServerActive);
+  // Sacador 2 é quem está na ESQUERDA (o parceiro do rightPlayer)
+  const team = pkl.server.team;
+  const p    = team === 1 ? state.p1 : state.p2;
+  const right = getRightPlayer(pkl, team);
+  pkl.server.serverName = right === p.name ? (p.partnerName || p.name) : p.name;
+  pkl.server.side       = 'odd'; // esquerda = 'odd'
 };
 
 /**
  * Server 2 do time perdeu o rally → side-out.
- * Saque passa para o time adversário, que começa sempre com serverNumber = 1.
- * Side do novo sacador validado pela paridade do placar do novo time.
+ * Saque passa para o time adversário; serverNumber = 1 = quem está na DIREITA do novo time.
+ * Posições dos jogadores de ambos os times permanecem inalteradas.
  */
 const performSideOut = (pkl: PickleballState, state: GameState): void => {
   pkl.server.team         = pkl.server.team === 1 ? 2 : 1;
-  pkl.server.serverNumber = 1;
-  // Primeiro side-out desativa a first-server rule para o restante da partida
-  pkl.isFirstServerActive = false;
-
-  const newTeamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-  pkl.server.serverName   = resolveServerName(state, pkl.server.team, 1, newTeamScore, false);
-  pkl.server.side         = resolveServerSide(state, pkl.server.team, 1, newTeamScore, false);
+  pkl.isFirstServerActive = false; // desativa first-server rule no primeiro side-out
+  assignServerFromRightPlayer(pkl, state);
 };
 
 /**
- * Rotaciona entre os dois jogadores do time (alternate-server na vitória).
- * Mantém o time, alterna serverNumber 1 ↔ 2.
- * Side recalculado pelo placar do time (acabou de pontuar).
+ * Após ponto conquistado em side-out duplas:
+ * troca os jogadores de lado dentro do time sacador e atualiza serverName/side.
  */
-const rotateWithinTeam = (pkl: PickleballState, state: GameState): void => {
-  pkl.server.serverNumber = pkl.server.serverNumber === 1 ? 2 : 1;
-  const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-  pkl.server.serverName   = resolveServerName(
-    state, pkl.server.team, pkl.server.serverNumber, teamScore, pkl.isFirstServerActive
-  );
-  pkl.server.side = resolveServerSide(state, pkl.server.team, pkl.server.serverNumber, teamScore, pkl.isFirstServerActive);
+const rotateWithinTeamSideOut = (pkl: PickleballState, state: GameState): void => {
+  swapSides(pkl, state, pkl.server.team);
+  assignServerFromRightPlayer(pkl, state);
 };
 
 /**
@@ -252,8 +266,8 @@ const rotateRallyServer = (pkl: PickleballState, state: GameState): void => {
   pkl.server.team         = nextOffset % 2 === 0 ? 1 : 2;
   pkl.server.serverNumber = nextOffset < 2 ? 1 : 2;
   const newTeamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-  pkl.server.serverName   = resolveServerName(state, pkl.server.team, pkl.server.serverNumber, newTeamScore, false);
-  pkl.server.side         = resolveServerSide(state, pkl.server.team, pkl.server.serverNumber, newTeamScore, false);
+  pkl.server.serverName   = resolveServerName(state, pkl.server.team, pkl.server.serverNumber);
+  pkl.server.side         = resolveServerSide(newTeamScore);
 };
 
 /**
@@ -275,8 +289,8 @@ const assignServerByScore = (
   const serverNumber: 1 | 2 = teamScore % 2 === 0 ? 1 : 2;
   pkl.server.team         = team;
   pkl.server.serverNumber = serverNumber;
-  pkl.server.side         = resolveServerSide(state, team, serverNumber, teamScore, false);
-  pkl.server.serverName   = resolveServerName(state, team, serverNumber, teamScore, false);
+  pkl.server.side         = resolveServerSide(teamScore);
+  pkl.server.serverName   = resolveServerName(state, team, serverNumber);
   // rallyOffset: team=1 + srvNum=1→0 | team=2 + srvNum=1→1 | team=1 + srvNum=2→2 | team=2 + srvNum=2→3
   pkl.server.rallyOffset  = (team === 1 ? 0 : 1) + (serverNumber === 2 ? 2 : 0);
 };
@@ -382,17 +396,31 @@ const processGameWin = (
 
     // Sacador do próximo game: time que PERDEU (regra convencional de torneios)
     // First server rule não se aplica a games subsequentes — só ao primeiro game.
-    const nextTeam: 1 | 2       = winner === 1 ? 2 : 1;
-    pkl.server.team              = nextTeam;
-    pkl.server.serverNumber      = 1;
-    pkl.isFirstServerActive      = false;  // desativa first server rule
-    pkl.server.serverName        = resolveServerName(state, nextTeam, 1, 0, false);
-    pkl.server.side              = resolveServerSide(state, nextTeam, 1, 0, false); // placar 0 → sempre direita
+    const nextTeam: 1 | 2 = winner === 1 ? 2 : 1;
+    pkl.server.team        = nextTeam;
+    pkl.isFirstServerActive = false; // desativa first server rule em games subsequentes
     // rallyOffset: alinha com o novo time sacador (nextTeam=1→0, nextTeam=2→1)
-    pkl.server.rallyOffset       = nextTeam === 1 ? 0 : 1;
+    pkl.server.rallyOffset = nextTeam === 1 ? 0 : 1;
+
+    const isDoubles = state.matchConfig.isDoubles;
+    const isSideOut = state.matchConfig.pickleballScoringMode !== 'rally';
+
+    if (isDoubles && isSideOut) {
+      // Novo game: os jogadores voltam às posições iniciais (placar 0 = início)
+      // Ambos os times: jogador principal (p.name) à direita
+      pkl.server.t1RightPlayer = state.p1.name;
+      pkl.server.t2RightPlayer = state.p2.name;
+      // Sacador do novo game = jogador da direita do time que inicia
+      pkl.server.serverNumber  = 1;
+      pkl.server.serverName    = nextTeam === 1 ? state.p1.name : state.p2.name;
+      pkl.server.side          = 'even';
+    } else {
+      pkl.server.serverNumber = 1;
+      pkl.server.serverName   = resolveServerName(state, nextTeam, 1);
+      pkl.server.side         = resolveServerSide(0); // placar 0 → sempre direita
+    }
 
     // Sincroniza server global
-    // serverNumber sempre 1 no início do novo game → sem +2
     state.server             = nextTeam;
     state.servingOrderOffset = nextTeam === 1 ? 0 : 1;
 
@@ -428,9 +456,9 @@ const processSideOutSingles = (
     // ── Sacador ganhou ───────────────────────────────────────────────────────
     if (pkl.server.team === 1) pkl.score.team1++;
     else pkl.score.team2++;
-    // side: paridade do placar do time sacador após o ponto
+    // side: paridade do placar do time sacador após o ponto (simples = parity)
     const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-    pkl.server.side = resolveServerSide(state, pkl.server.team, pkl.server.serverNumber, teamScore, pkl.isFirstServerActive);
+    pkl.server.side = resolveServerSide(teamScore);
 
   } else {
     // ── Sacador perdeu → side-out imediato ───────────────────────────────────
@@ -463,32 +491,21 @@ const processSideOutDoubles = (
   state: GameState,
   rallyWinner: 1 | 2
 ): void => {
-  const isAlternateServer =
-    state.matchConfig.pickleballServiceMode === 'alternate-server';
-
   if (rallyWinner === pkl.server.team) {
     // ── Sacador ganhou ───────────────────────────────────────────────────────
     if (pkl.server.team === 1) pkl.score.team1++;
     else pkl.score.team2++;
-
-    if (isAlternateServer) {
-      // alternate-server na vitória: rotaciona para o parceiro
-      rotateWithinTeam(pkl, state);
-    } else {
-      // serverNumber não muda; recalcula side pelo novo placar
-      const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-      pkl.server.side = resolveServerSide(state, pkl.server.team, pkl.server.serverNumber, teamScore, pkl.isFirstServerActive);
-    }
+    // Após ponto: os dois jogadores do time sacador trocam de lado
+    rotateWithinTeamSideOut(pkl, state);
 
   } else if (pkl.server.serverNumber === 1) {
     // ── Server 1 perdeu → passa para server 2 do mesmo time ─────────────────
+    // Sem troca de lado (só muda quem saca dentro do mesmo time)
     rotateToSecondServer(pkl, state);
-    // side já atualizado dentro de rotateToSecondServer
 
   } else {
     // ── Server 2 perdeu → side-out ───────────────────────────────────────────
     performSideOut(pkl, state);
-    // side e serverName já atualizados dentro de performSideOut
   }
 };
 
@@ -551,7 +568,12 @@ const processRallyScoring = (
       }
     } else {
       // Simples: troca direta para o outro jogador
-      performSideOut(pkl, state);
+      // Em simples rally usa paridade simples (reutiliza performSideOut adaptado)
+      pkl.server.team         = pkl.server.team === 1 ? 2 : 1;
+      pkl.server.serverNumber = 1;
+      pkl.server.serverName   = resolveServerName(state, pkl.server.team, 1);
+      const ts = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
+      pkl.server.side = resolveServerSide(ts);
     }
 
   } else {
@@ -560,10 +582,13 @@ const processRallyScoring = (
     if (isSwitchSide) {
       // switch-side: mesmo jogador continua, só troca de lado pela paridade
       const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
-      pkl.server.side = resolveServerSide(state, pkl.server.team, pkl.server.serverNumber, teamScore, false);
+      pkl.server.side = resolveServerSide(teamScore);
     } else {
       // alternate-server: parceiro assume o saque, side pela paridade do novo placar
-      rotateWithinTeam(pkl, state);
+      const teamScore = pkl.server.team === 1 ? pkl.score.team1 : pkl.score.team2;
+      pkl.server.serverNumber = pkl.server.serverNumber === 1 ? 2 : 1;
+      pkl.server.serverName   = resolveServerName(state, pkl.server.team, pkl.server.serverNumber);
+      pkl.server.side         = resolveServerSide(teamScore);
     }
   }
 };
@@ -598,6 +623,16 @@ export const incrementScorePickleball = (
     state.pickleball.server.rallyOffset =
       (state.pickleball.server.team === 1 ? 0 : 1) +
       (state.pickleball.server.serverNumber === 2 ? 2 : 0);
+  }
+  // Migração: estados salvos antes do rastreamento posicional
+  // (side-out duplas): inicializa os campos ausentes com defaults seguros.
+  if (
+    state.matchConfig.isDoubles &&
+    state.matchConfig.pickleballScoringMode !== 'rally' &&
+    state.pickleball.server.t1RightPlayer === undefined
+  ) {
+    state.pickleball.server.t1RightPlayer = state.p1.name;
+    state.pickleball.server.t2RightPlayer = state.p2.name;
   }
 
   const pkl = state.pickleball;
