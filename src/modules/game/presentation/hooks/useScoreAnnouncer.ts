@@ -468,6 +468,8 @@ export const useScoreAnnouncer = (gameState: GameState) => {
   const announcedStartFor  = useRef<string | null>(null);
   const announcedFinishFor = useRef<string | null>(null);
   const lastAnnouncedText  = useRef<string>('');
+  const lastChangeTime = useRef<number>(0);
+  const debounceTimer  = useRef<NodeJS.Timeout | null>(null);
 
   const {
     voiceScoring, useGeminiVoice, geminiVoiceName, geminiPersona,
@@ -515,6 +517,13 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     announce(text);
   }, [gameState, announce]);
 
+  // Limpa o timer de debounce se o componente for desmontado
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
   // Effect unico com cascata de prioridade
   useEffect(() => {
     // Pickleball é tratado exclusivamente em usePickleballAnnouncer.ts
@@ -551,6 +560,34 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     const pointChanged  = currentPointCount !== prevPointCount.current;
     const serverChanged = gameState.server !== prevServer.current;
     if (!pointChanged && !serverChanged) return;
+
+    // Controle de anúncios em rajada (reconexão / perda de sincronismo)
+    const now = Date.now();
+    const elapsed = now - lastChangeTime.current;
+    lastChangeTime.current = now;
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+
+    const isBatchUpdate = (currentPointCount - prevPointCount.current) > 1;
+    const isRapidSequence = elapsed < 2000 && gameState.isMirroringActive;
+
+    if (isBatchUpdate || isRapidSequence) {
+      // Sincroniza referências para evitar que o próximo ponto síncrono dispare anúncios velhos
+      prevPointCount.current  = currentPointCount;
+      prevIsTB.current        = currentIsTB;
+      prevServer.current      = gameState.server;
+      prevOffset.current      = gameState.servingOrderOffset;
+      prevSet.current         = gameState.currentSet;
+
+      // Agenda o anúncio do placar final consolidado
+      debounceTimer.current = setTimeout(() => {
+        announceFullScore();
+      }, 1500);
+      return;
+    }
 
     // Fim da partida
     if (gameState.isMatchOver && announcedFinishFor.current !== gameState.matchId) {

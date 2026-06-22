@@ -171,6 +171,9 @@ export const usePickleballAnnouncer = (gameState: GameState) => {
   const announcedFinishFor = useRef<string | null>(null);
   const lastAnnouncedText  = useRef<string>('');
 
+  const lastChangeTime = useRef<number>(0);
+  const debounceTimer  = useRef<NodeJS.Timeout | null>(null);
+
   const {
     voiceScoring, useGeminiVoice, geminiVoiceName,
     geminiPersona, selectedVoiceURI, volume,
@@ -202,6 +205,13 @@ export const usePickleballAnnouncer = (gameState: GameState) => {
     announce(`Placar: ${formatScore(pkl, gameState.matchConfig.isDoubles)}.`);
   }, [gameState, announce]);
 
+  // Limpa o timer de debounce se o componente for desmontado
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
   useEffect(() => {
     // Guard: apenas pickleball — tênis usa useScoreAnnouncer
     if (gameState.matchConfig.sportType !== 'pickleball') return;
@@ -228,6 +238,31 @@ export const usePickleballAnnouncer = (gameState: GameState) => {
     const pointChanged = currentPointCount !== prevPointCount.current;
     const setChanged   = gameState.currentSet !== prevSet.current;
     if (!pointChanged && !setChanged) return;
+
+    // Controle de anúncios em rajada (reconexão / perda de sincronismo)
+    const now = Date.now();
+    const elapsed = now - lastChangeTime.current;
+    lastChangeTime.current = now;
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+
+    const isBatchUpdate = (currentPointCount - prevPointCount.current) > 1;
+    const isRapidSequence = elapsed < 2000 && gameState.isMirroringActive;
+
+    if (isBatchUpdate || isRapidSequence) {
+      // Sincroniza referências para evitar que o próximo ponto síncrono dispare anúncios velhos
+      prevPointCount.current = currentPointCount;
+      prevSet.current        = gameState.currentSet;
+
+      // Agenda o anúncio do placar final consolidado
+      debounceTimer.current = setTimeout(() => {
+        announceFullScore();
+      }, 1500);
+      return;
+    }
 
     // Fim da partida
     if (pkl.isMatchOver && announcedFinishFor.current !== gameState.matchId) {
@@ -261,6 +296,7 @@ export const usePickleballAnnouncer = (gameState: GameState) => {
     gameState.pickleball?.isMatchOver,
     gameState.matchId,
     announce,
+    announceFullScore,
   ]);
 
   return { announceFullScore, isAnnouncing };
