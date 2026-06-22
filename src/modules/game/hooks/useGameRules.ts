@@ -9,7 +9,7 @@ import { useGame } from '../useGame.ts';
 
 /** Regras e persistência de `matchSettings` (local + sync live). */
 export function useGameRules() {
-  const { matchSettings, gameState, userProfile } = useGame();
+  const { matchSettings, gameState, setGameState, userProfile } = useGame();
   const { setIsSettingsInicialSaved, setIsSettingsRegrasSaved } = useUI();
   const { resolveTargetPin } = useLive();
   const deviceId = getDeviceId();
@@ -30,6 +30,33 @@ export function useGameRules() {
       localStorage.setItem('myPlacarSettings', JSON.stringify(matchSettings));
       setIsSettingsInicialSaved(true);
       setIsSettingsRegrasSaved(true);
+
+      if (gameState && !gameState.isConfirmedFinished) {
+        setGameState(prevG => {
+          if (!prevG) return prevG;
+          return {
+            ...prevG,
+            p1: {
+              ...prevG.p1,
+              name: matchSettings.p1Name,
+              partnerName: matchSettings.p1Partner,
+              color: matchSettings.p1Color,
+            },
+            p2: {
+              ...prevG.p2,
+              name: matchSettings.p2Name,
+              partnerName: matchSettings.p2Partner,
+              color: matchSettings.p2Color,
+            },
+            matchConfig: {
+              ...matchSettings,
+              setsToWin: matchSettings.sets,
+              isWatchMode: !!matchSettings.isWatchMode,
+              isScoreboardMode: !!matchSettings.isScoreboardMode,
+            }
+          };
+        });
+      }
 
       if (
         gameState?.isMirroringActive &&
@@ -71,7 +98,7 @@ export function useGameRules() {
     } catch {
       /* localStorage / firestore best-effort */
     }
-  }, [matchSettings, gameState, userProfile.email, deviceId, resolveTargetPin, setIsSettingsInicialSaved, setIsSettingsRegrasSaved]);
+  }, [matchSettings, gameState, setGameState, userProfile.email, deviceId, resolveTargetPin, setIsSettingsInicialSaved, setIsSettingsRegrasSaved]);
 
   return { canStartMatch, persistMatchSettings };
 }

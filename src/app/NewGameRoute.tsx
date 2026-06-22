@@ -46,7 +46,7 @@ export function NewGameRoute({
       isSettingsRegrasSaved={isSettingsRegrasSaved}
       isSettingsInicialSaved={isSettingsInicialSaved}
       canStartMatch={canStartMatch}
-      onSportChange={() => {}}
+      onSportChange={persistMatchSettings}
       cloudLiveExists={cloudLiveExists}
       onOpenLiveControl={() => setShowLiveControlOverlay(true)}
       isController={isActiveController}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging } from 'lucide-react';
+import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
@@ -335,16 +335,24 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       )}
       
       {gameState.isMatchOver && !gameState.isConfirmedFinished && (
-        <div className="fixed inset-0 z-[100001] bg-black/95 backdrop-blur-md flex items-center justify-center p-2">
-          <div className="bg-slate-900 rounded-[2rem] p-4 w-full flex flex-col items-center gap-4 border border-white/10">
-            <Trophy size={32} className="text-amber-500" />
-            <div className="text-center">
-              <h3 className="text-sm font-black text-white leading-tight">Partida encerrada</h3>
-              <p className="text-[10px] font-bold text-slate-400 mt-1">Venceu: {p1WonSets > p2WonSets ? gameState.p1.name : gameState.p2.name}</p>
+        <div className="fixed inset-0 z-[100001] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-500">
+          <div className="bg-white rounded-[2.5rem] p-6 w-full flex flex-col items-center gap-5 shadow-2xl border border-white/50 animate-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shadow-inner">
+              <Trophy size={32} />
             </div>
-            <div className="flex flex-col w-full gap-2">
-              <button onPointerDown={() => onConfirmMatch?.()} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-black text-xs shadow-lg">Confirmar resultado</button>
-              {isCommandOwner && <button onPointerDown={handleUndoWithLog} className="w-full py-2 bg-slate-800 text-white rounded-xl font-black text-xs">Desfazer ponto</button>}
+            <div className="text-center space-y-1">
+              <h3 className="text-xl font-black text-black tracking-tight leading-none">Partida encerrada</h3>
+              <p className="text-xs font-bold text-slate-500">Vencedor: {p1WonSets > p2WonSets ? gameState.p1.name : gameState.p2.name}</p>
+            </div>
+            <div className="flex flex-col w-full gap-3">
+              <button onPointerDown={() => onConfirmMatch?.()} className="w-full py-4 bg-emerald-600 text-white rounded-3xl font-black text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+                <Check size={18} strokeWidth={3} />Confirmar resultado
+              </button>
+              {isCommandOwner && (
+                <button onPointerDown={handleUndoWithLog} className="w-full py-4 bg-red-50 text-red-600 border border-red-200/60 rounded-3xl font-black text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+                  <RotateCcw size={18} strokeWidth={3} />Corrigir último ponto
+                </button>
+              )}
             </div>
           </div>
         </div>
