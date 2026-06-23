@@ -172,7 +172,7 @@ export const usePickleballAnnouncer = (gameState: GameState) => {
   const lastAnnouncedText  = useRef<string>('');
 
   const lastChangeTime = useRef<number>(0);
-  const debounceTimer  = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     voiceScoring, useGeminiVoice, geminiVoiceName,
