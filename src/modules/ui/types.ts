@@ -27,6 +27,7 @@ export interface ModalConfig {
   cancelLabel?: string;
   variant?: 'info' | 'danger' | 'success';
   icon?: ReactNode;
+  pulseAlert?: boolean;
 }
 
 export interface UIContextValue {

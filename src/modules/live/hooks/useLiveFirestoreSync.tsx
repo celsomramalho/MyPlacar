@@ -5,7 +5,7 @@ import { getDb } from '@infra/firebase';
 import { useGame } from '@modules/game';
 import { useLive } from '../useLive.ts';
 import { useUI } from '@modules/ui';
-import type { GameState } from '@game/types';
+import type { ControllerRecord, GameState } from '@game/types';
 import { isValidGameState } from '@modules/game/domain/validation';
 import { getDeviceType, isWatchDevice } from '@shared/utils/device';
 import { sanitizeForFirestore } from '@shared/utils/sanitize';
@@ -64,6 +64,8 @@ export function useLiveFirestoreSync(params: {
   const prevIsCommandOwner = useRef(isCommandOwner);
   const prevCommandOwnerIdWasSelf = useRef(gameState?.commandOwnerId === deviceId);
   const observerScoreboardAppliedKeyRef = useRef<string | null>(null);
+  const lastConnectionAlertKeyRef = useRef<string | null>(null);
+  const offlineAlertShownRef = useRef(false);
 
   const isJudgeForLive = (live: GameState, pin?: string | null) => {
     const normalizedPin = pin?.toUpperCase();
@@ -801,6 +803,114 @@ export function useLiveFirestoreSync(params: {
     overlayAcceptedRef,
     setShowLiveControlOverlay,
     tookControlAtRef,
+  ]);
+
+  useEffect(() => {
+    const showOfflineAlert = () => {
+      if (offlineAlertShownRef.current) return;
+      offlineAlertShownRef.current = true;
+      setModalConfig({
+        title: 'Conexão perdida',
+        message: 'Este dispositivo ficou sem internet. A live pode parar de sincronizar até a conexão voltar.',
+        icon: <WifiOff className="text-orange-500 w-16 h-16" />,
+        variant: 'info',
+        pulseAlert: true,
+        onConfirm: () => setModalConfig(null),
+      });
+    };
+
+    const clearOfflineAlert = () => {
+      offlineAlertShownRef.current = false;
+    };
+
+    globalThis.addEventListener('offline', showOfflineAlert);
+    globalThis.addEventListener('online', clearOfflineAlert);
+    if (!navigator.onLine) showOfflineAlert();
+
+    return () => {
+      globalThis.removeEventListener('offline', showOfflineAlert);
+      globalThis.removeEventListener('online', clearOfflineAlert);
+    };
+  }, [setModalConfig]);
+
+  useEffect(() => {
+    if (!userProfile.pin || !userProfile.email) return;
+    if (!cloudLiveExists && !gameState?.isMirroringActive) {
+      lastConnectionAlertKeyRef.current = null;
+      return;
+    }
+
+    const checkRemotePresence = () => {
+      const now = Date.now();
+      const currentGs = gameStateRef.current;
+      const live =
+        activeLives.find(l => l.ownerPin?.toUpperCase() === currentGs?.ownerPin?.toUpperCase()) ||
+        activeLives.find(l => l.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase()) ||
+        currentGs;
+      if (!live?.isMirroringActive || live.isLiveClosed) {
+        lastConnectionAlertKeyRef.current = null;
+        return;
+      }
+
+      const controllers = live.controllers || {};
+      const entries = Object.entries(controllers).filter(([id, controller]) =>
+        id !== deviceId && typeof controller?.lastSeen === 'number',
+      ) as Array<[string, ControllerRecord]>;
+      const staleAfterMs = 70000;
+
+      const commandOwnerEntry = live.commandOwnerId && live.commandOwnerId !== deviceId
+        ? entries.find(([id]) => id === live.commandOwnerId)
+        : undefined;
+      const staleCommandOwner = commandOwnerEntry && now - commandOwnerEntry[1].lastSeen > staleAfterMs
+        ? commandOwnerEntry
+        : undefined;
+      const staleCounterpart = staleCommandOwner || (isWatchDevice()
+        ? entries.find(([, controller]) =>
+            (controller.isOwner || controller.role === 'owner') &&
+            now - controller.lastSeen > staleAfterMs,
+          )
+        : entries.find(([, controller]) =>
+            controller.deviceType === 'watch' &&
+            now - controller.lastSeen > staleAfterMs,
+          ));
+
+      if (!staleCounterpart) {
+        const hasExpectedCounterpart = isWatchDevice()
+          ? entries.some(([, controller]) => controller.isOwner || controller.role === 'owner')
+          : entries.some(([, controller]) => controller.deviceType === 'watch');
+        if (hasExpectedCounterpart) lastConnectionAlertKeyRef.current = null;
+        return;
+      }
+
+      const [staleDeviceId, controller] = staleCounterpart;
+      const alertKey = `${live.ownerPin || 'live'}:${staleDeviceId}:${Math.floor(controller.lastSeen / staleAfterMs)}`;
+      if (lastConnectionAlertKeyRef.current === alertKey) return;
+      lastConnectionAlertKeyRef.current = alertKey;
+
+      const deviceLabel = controller.nickname || controller.label || (isWatchDevice() ? 'celular' : 'relógio');
+      setModalConfig({
+        title: 'Conexão perdida',
+        message: `${deviceLabel} parou de responder. Aproxime os dispositivos ou confira Bluetooth/internet antes de continuar a live.`,
+        icon: <WifiOff className="text-orange-500 w-16 h-16" />,
+        variant: 'info',
+        pulseAlert: true,
+        onConfirm: () => setModalConfig(null),
+      });
+    };
+
+    checkRemotePresence();
+    const interval = setInterval(checkRemotePresence, 5000);
+    return () => clearInterval(interval);
+  }, [
+    activeLives,
+    cloudLiveExists,
+    deviceId,
+    gameState?.isMirroringActive,
+    gameState?.isLiveClosed,
+    gameStateRef,
+    setModalConfig,
+    userProfile.email,
+    userProfile.pin,
   ]);
 
   useEffect(() => {
