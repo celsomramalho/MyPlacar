@@ -66,6 +66,8 @@ export function useLiveFirestoreSync(params: {
   const observerScoreboardAppliedKeyRef = useRef<string | null>(null);
   const lastConnectionAlertKeyRef = useRef<string | null>(null);
   const offlineAlertShownRef = useRef(false);
+  const lastPointActivityAtRef = useRef(Date.now());
+  const lastControllerHeartbeatAtRef = useRef(0);
 
   const isJudgeForLive = (live: GameState, pin?: string | null) => {
     const normalizedPin = pin?.toUpperCase();
@@ -79,6 +81,10 @@ export function useLiveFirestoreSync(params: {
   useEffect(() => {
     autoJoinObserverRef.current = handleObserveLive;
   }, [handleObserveLive]);
+
+  useEffect(() => {
+    lastPointActivityAtRef.current = Date.now();
+  }, [gameState?.matchId, gameState?.pointHistory?.length]);
 
   // ── Limpeza de estado stale no relógio ───────────────────────────────────────
   // Roda uma única vez na montagem. Se o relógio restaurou do localStorage um
@@ -924,6 +930,55 @@ export function useLiveFirestoreSync(params: {
       const now = Date.now();
       const myDeviceType = getDeviceType();
 
+      const currentGs = gameStateRef.current;
+
+      // ── Controller heartbeat ─────────────────────────────────────────────────
+      // Se o controlador fica mais de 15s sem pontuar, ainda assim renova presença.
+      // Isso permite ao celular detectar que o relógio/controller segue vivo mesmo
+      // durante rallies longos ou pausas entre pontos.
+      const isControllerLive =
+        currentGs?.isMirroringActive &&
+        !currentGs.isLiveClosed &&
+        currentGs.commandOwnerId === deviceId;
+      const controllerIdleMs = now - lastPointActivityAtRef.current;
+      const canSendControllerHeartbeat =
+        isControllerLive &&
+        controllerIdleMs >= 15000 &&
+        now - lastControllerHeartbeatAtRef.current >= 15000;
+
+      if (canSendControllerHeartbeat) {
+        const targetPin = resolveTargetPin('controller-heartbeat');
+        if (targetPin) {
+          const existingRole = currentGs?.controllers?.[deviceId]?.role;
+          const controllerRole: 'owner' | 'judge' | 'observer' =
+            existingRole === 'owner' || existingRole === 'judge' || existingRole === 'observer'
+              ? existingRole
+              : livePapel === 'owner'
+              ? 'owner'
+              : livePapel === 'judge'
+              ? 'judge'
+              : 'observer';
+          try {
+            await updateDoc(doc(db, 'live_matches', targetPin), {
+              [`controllers.${deviceId}`]: {
+                label: currentFullDeviceName,
+                nickname: myNickname,
+                lastSeen: now,
+                isOwner: isOriginalOwner,
+                role: controllerRole,
+                status: 'controller',
+                deviceType: myDeviceType,
+              },
+              controllerHeartbeatAt: now,
+              controllerIdleMs,
+              lastActivityAt: now,
+            });
+            lastControllerHeartbeatAtRef.current = now;
+            lastSeenUpdateRef.current = now;
+          } catch {}
+        }
+      }
+
       // ── Judge heartbeat ──────────────────────────────────────────────────────
       // T4.1: usa field-path direto (sem getDoc) — zero leituras extras a cada 30s
       const judgeMatches = activeLives.filter(l => isJudgeForLive(l, myPin));
@@ -976,15 +1031,15 @@ export function useLiveFirestoreSync(params: {
       // scoreboard como observadores precisam renovar o lastSeen a cada 30s —
       // sem isso, o log do proprietário os remove após 60s (TTL do lastSeen).
       const isObserving =
-        gameStateRef.current?.isMirroringActive &&
-        !gameStateRef.current?.isLiveClosed &&
-        gameStateRef.current?.commandOwnerId !== deviceId; // não é controller ativo
+        currentGs?.isMirroringActive &&
+        !currentGs?.isLiveClosed &&
+        currentGs?.commandOwnerId !== deviceId; // não é controller ativo
 
       if (isObserving) {
-        const observerLivePin = gameStateRef.current?.ownerPin?.toUpperCase();
+        const observerLivePin = currentGs?.ownerPin?.toUpperCase();
         const observingAuthorizedLive =
           observerLivePin === myPin ||
-          (gameStateRef.current ? isJudgeForLive(gameStateRef.current, myPin) : false);
+          (currentGs ? isJudgeForLive(currentGs, myPin) : false);
         // Não re-envia heartbeat se já foi coberto pelo judge ou owner heartbeat acima
         const alreadyCovered =
           judgeMatches.some(m => m.ownerPin?.toUpperCase() === observerLivePin) ||
@@ -992,7 +1047,7 @@ export function useLiveFirestoreSync(params: {
 
         if (observerLivePin && observingAuthorizedLive && !alreadyCovered) {
           const docRef = doc(db, 'live_matches', observerLivePin);
-          const existingRole = gameStateRef.current?.controllers?.[deviceId]?.role;
+          const existingRole = currentGs?.controllers?.[deviceId]?.role;
           // Preserva role existente (owner/judge não devem virar observer no heartbeat)
           const heartbeatRole =
             existingRole === 'owner' || existingRole === 'judge' ? existingRole : 'observer';
@@ -1010,7 +1065,7 @@ export function useLiveFirestoreSync(params: {
           } catch {}
         }
       }
-    }, 30000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [
     activeLives,
@@ -1020,6 +1075,9 @@ export function useLiveFirestoreSync(params: {
     deviceId,
     currentFullDeviceName,
     gameStateRef,
+    isOriginalOwner,
+    livePapel,
+    resolveTargetPin,
   ]);
 
   useEffect(() => {

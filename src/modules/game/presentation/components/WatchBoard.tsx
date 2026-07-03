@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging } from 'lucide-react';
+import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, Clock } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
@@ -95,7 +95,17 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
   const [batteryStatus, setBatteryStatus] = React.useState<BatteryStatus | null>(null);
+  const [pointIdleSeconds, setPointIdleSeconds] = React.useState(0);
   const pauseRotationUntil = React.useRef(0);
+
+  React.useEffect(() => {
+    setPointIdleSeconds(0);
+    const startedAt = Date.now();
+    const interval = setInterval(() => {
+      setPointIdleSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [gameState.matchId, gameState.pointHistory?.length]);
 
   React.useEffect(() => {
     const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryManagerLike> };
@@ -472,6 +482,11 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} status={isLiveActive ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
               : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
             }
+          </div>
+
+          <div className={`absolute top-1 right-2 z-20 flex items-center gap-1 rounded-full border px-2 py-0.5 ${pointIdleSeconds >= 15 ? 'bg-orange-500/20 border-orange-300 text-orange-100 animate-pulse' : 'bg-white/10 border-white/10 text-white/60'}`}>
+            <Clock size={10} strokeWidth={3} />
+            <span className="text-[10px] font-black tabular-nums">P+{pointIdleSeconds}s</span>
           </div>
 
           {/* Falta — desabilitado para observadores em live ativa */}

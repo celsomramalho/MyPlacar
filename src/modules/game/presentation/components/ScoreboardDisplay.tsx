@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw, MonitorSmartphone, Trophy, SquareKanban, Watch, Cast } from 'lucide-react';
+import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw, MonitorSmartphone, Trophy, SquareKanban, Watch, Cast, Clock } from 'lucide-react';
 import { GameState, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
@@ -72,6 +72,16 @@ const isLandscape = forceLayoutOverride !== null ? forceLayoutOverride : physica
 const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
 
 const displayTime = useMatchTimer(gameState);
+const [pointIdleSeconds, setPointIdleSeconds] = useState(0);
+
+useEffect(() => {
+setPointIdleSeconds(0);
+const startedAt = Date.now();
+const interval = setInterval(() => {
+setPointIdleSeconds(Math.floor((Date.now() - startedAt) / 1000));
+}, 1000);
+return () => clearInterval(interval);
+}, [gameState.matchId, gameState.pointHistory?.length]);
 
 // ── Detecção de orientação ─────────────────────────────────────────────────
 useEffect(() => {
@@ -354,6 +364,12 @@ className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-tr
 
 {/* Cronômetro */}
 <span className="text-white font-black text-lg tabular-nums tracking-tight">{formatTime(displayTime)}</span>
+
+{/* Tempo desde o último ponto */}
+<div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${pointIdleSeconds >= 15 ? 'bg-orange-500/20 border-orange-400 text-orange-200 animate-pulse' : 'bg-white/10 border-white/15 text-white/70'}`}>
+<Clock size={12} strokeWidth={3} />
+<span className="text-[10px] font-black tabular-nums">P+{pointIdleSeconds}s</span>
+</div>
 
 {/* Botão rotação — alterna layout portrait/landscape manualmente */}
 <button
