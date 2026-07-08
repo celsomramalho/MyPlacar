@@ -756,11 +756,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop' };
         const isCurrentDevice = id === currentDeviceId;
         const isActiveController = effectiveGameState.commandOwnerId === id;
-        const presenceAt = isCurrentDevice
-          ? Math.max(d.lastSeen || 0, effectiveLastFirebaseAckAt || 0)
-          : isActiveController
-          ? Math.max(d.lastSeen || 0, effectiveGameState.controllerHeartbeatAt || 0)
-          : d.lastSeen || 0;
+        const presenceAt = Math.max(
+          d.lastSeen || 0,
+          isCurrentDevice ? effectiveLastFirebaseAckAt || 0 : 0,
+          isActiveController ? effectiveGameState.controllerHeartbeatAt || 0 : 0,
+        );
         const ageMs = Math.max(0, now - presenceAt);
         const ageSeconds = Math.floor(ageMs / 1000);
         const isOnline = ageMs < 300000; // 5 min — cobre dispositivos que atualizam lastSeen com menos frequência (ex: relógio)

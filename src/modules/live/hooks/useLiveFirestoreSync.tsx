@@ -486,6 +486,9 @@ export function useLiveFirestoreSync(params: {
             return {
               ...prev,
               controllers: cloudData.controllers,
+              controllerHeartbeatAt: cloudData.controllerHeartbeatAt,
+              controllerIdleMs: cloudData.controllerIdleMs,
+              liveVersion: cloudData.liveVersion,
               judgePin: cloudData.judgePin,
               judgeNickname: cloudData.judgeNickname,
               // T4.3: sincroniza sub-objeto judge se presente na cloud
@@ -1261,11 +1264,26 @@ export function useLiveFirestoreSync(params: {
                 const targetPin = resolveTargetPin('write');
                 if (!targetPin) return;
                 if (targetPin) {
-                  // T4.1 — Write 1: placar + estado da partida (sem controllers)
-                  // D1: lastActivityAt habilita TTL de 3h pelo Cloud Function scheduler
+                  const presenceRecord = shouldUpdateLastSeen
+                    ? {
+                        label: currentFullDeviceName,
+                        nickname: userProfile.nickname || userProfile.name?.split(' ')[0],
+                        lastSeen: now,
+                        isOwner: isOriginalOwner,
+                        role: controllerRole,
+                        status: 'controller' as const,
+                        deviceType: myDeviceType,
+                      }
+                    : null;
+                  // Write principal: placar + presença do controlador quando houve ponto/heartbeat.
+                  // D1: lastActivityAt habilita TTL de 3h pelo Cloud Function scheduler.
                   setDoc(
                     doc(db, 'live_matches', targetPin),
-                    { ...stateToSave, lastActivityAt: Date.now() },
+                    {
+                      ...stateToSave,
+                      ...(presenceRecord ? { controllers: { [deviceId]: presenceRecord } } : {}),
+                      lastActivityAt: Date.now(),
+                    },
                     { merge: true },
                   ).catch(() => {});
 
@@ -1296,16 +1314,7 @@ export function useLiveFirestoreSync(params: {
 
                   // T4.1 — Write 2 (presença): atualiza só o registro deste device via field-path.
                   // Não sobrescreve os registros de outros devices — elimina race condition.
-                  if (shouldUpdateLastSeen) {
-                    const presenceRecord = {
-                      label: currentFullDeviceName,
-                      nickname: userProfile.nickname || userProfile.name?.split(' ')[0],
-                      lastSeen: now,
-                      isOwner: isOriginalOwner,
-                      role: controllerRole,
-                      status: 'controller' as const,
-                      deviceType: myDeviceType,
-                    };
+                  if (presenceRecord) {
                     updateDoc(doc(db, 'live_matches', targetPin), {
                       [`controllers.${deviceId}`]: presenceRecord,
                       ...(isMatchStateChange ? { controllerHeartbeatAt: now, controllerIdleMs: 0 } : {}),
