@@ -44,9 +44,17 @@ export const LiveControlOverlay: React.FC<Props> = ({
 
   // Filtra dispositivos ativos (vistos nos últimos 60s)
   const activeDevices = Object.entries(gameState?.controllers || {})
-    .map(([id, c]) => ({ id, ...c }))
+    .map(([id, c]) => ({
+      id,
+      ...c,
+      role: gameState?.ownerDeviceId === id ? 'owner' : c.role === 'judge' ? 'judge' : 'observer',
+      status: gameState?.commandOwnerId === id ? 'controller' : 'watcher',
+      isOwner: gameState?.ownerDeviceId === id,
+    }))
     .filter(c => c.lastSeen && (Date.now() - c.lastSeen < 60000))
     .sort((a, b) => {
+      if (a.status === 'controller' && b.status !== 'controller') return -1;
+      if (a.status !== 'controller' && b.status === 'controller') return 1;
       // Ordenação: Owner primeiro, Juiz em segundo, Observadores por último
       const roleOrder = { owner: 0, judge: 1, observer: 2 };
       const orderA = roleOrder[a.role || 'observer'];

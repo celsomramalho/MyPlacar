@@ -10,6 +10,10 @@ import { isValidGameState } from '@modules/game/domain/validation';
 import { getDeviceType, isWatchDevice } from '@shared/utils/device';
 import { sanitizeForFirestore } from '@shared/utils/sanitize';
 
+const CONNECTION_LOST_TITLE = 'Conexão perdida';
+const LOCAL_CONNECTION_LOST_MESSAGE =
+  'Este dispositivo ficou sem internet. A live pode parar de sincronizar até a conexão voltar.';
+
 
 export function useLiveFirestoreSync(params: {
   deviceId: string;
@@ -220,6 +224,17 @@ export function useLiveFirestoreSync(params: {
           }
           if (!snap.metadata.hasPendingWrites && !snap.metadata.fromCache) {
             setLastFirebaseAckAt(Date.now());
+            offlineAlertShownRef.current = false;
+            setModalConfig(prev => {
+              if (
+                prev?.title === CONNECTION_LOST_TITLE &&
+                prev.pulseAlert &&
+                prev.message === LOCAL_CONNECTION_LOST_MESSAGE
+              ) {
+                return null;
+              }
+              return prev;
+            });
           }
 
         if (cloudData.isLiveClosed) {
@@ -284,6 +299,17 @@ export function useLiveFirestoreSync(params: {
         }
 
         setCloudLiveExists(true);
+        setActiveLives(prev => {
+          const liveKey = cloudData.ownerPin?.toUpperCase() || listenPin;
+          const nextLive = { ...cloudData, isMirroringActive: true, isLiveClosed: false };
+          const existingIndex = prev.findIndex(
+            live => (live.ownerPin?.toUpperCase() || '') === liveKey,
+          );
+          if (existingIndex === -1) return [...prev, nextLive];
+          const next = [...prev];
+          next[existingIndex] = nextLive;
+          return next;
+        });
         if (cloudData.commandOwnerId !== deviceId) {
           // Grace period: se este device acabou de assumir o controle (últimos 15s),
           // ignora snapshots que ainda não refletem o novo commandOwnerId — são writes
@@ -823,8 +849,8 @@ export function useLiveFirestoreSync(params: {
       if (offlineAlertShownRef.current) return;
       offlineAlertShownRef.current = true;
       setModalConfig({
-        title: 'Conexão perdida',
-        message: 'Este dispositivo ficou sem internet. A live pode parar de sincronizar até a conexão voltar.',
+        title: CONNECTION_LOST_TITLE,
+        message: LOCAL_CONNECTION_LOST_MESSAGE,
         icon: <WifiOff className="text-orange-500 w-16 h-16" />,
         variant: 'info',
         pulseAlert: true,
@@ -834,6 +860,16 @@ export function useLiveFirestoreSync(params: {
 
     const clearOfflineAlert = () => {
       offlineAlertShownRef.current = false;
+      setModalConfig(prev => {
+        if (
+          prev?.title === CONNECTION_LOST_TITLE &&
+          prev.pulseAlert &&
+          prev.message === LOCAL_CONNECTION_LOST_MESSAGE
+        ) {
+          return null;
+        }
+        return prev;
+      });
     };
 
     globalThis.addEventListener('offline', showOfflineAlert);
@@ -857,6 +893,9 @@ export function useLiveFirestoreSync(params: {
       const now = Date.now();
       const currentGs = gameStateRef.current;
       const live =
+        currentGs?.isMirroringActive && !currentGs.isLiveClosed
+          ? currentGs
+          :
         activeLives.find(l => l.ownerPin?.toUpperCase() === currentGs?.ownerPin?.toUpperCase()) ||
         activeLives.find(l => l.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase()) ||
         currentGs;
@@ -891,7 +930,19 @@ export function useLiveFirestoreSync(params: {
         const hasExpectedCounterpart = isWatchDevice()
           ? entries.some(([, controller]) => controller.isOwner || controller.role === 'owner')
           : entries.some(([, controller]) => controller.deviceType === 'watch');
-        if (hasExpectedCounterpart) lastConnectionAlertKeyRef.current = null;
+        if (hasExpectedCounterpart) {
+          lastConnectionAlertKeyRef.current = null;
+          setModalConfig(prev => {
+            if (
+              prev?.title === CONNECTION_LOST_TITLE &&
+              prev.pulseAlert &&
+              prev.message.includes('parou de responder')
+            ) {
+              return null;
+            }
+            return prev;
+          });
+        }
         return;
       }
 
@@ -902,7 +953,7 @@ export function useLiveFirestoreSync(params: {
 
       const deviceLabel = controller.nickname || controller.label || (isWatchDevice() ? 'celular' : 'relógio');
       setModalConfig({
-        title: 'Conexão perdida',
+        title: CONNECTION_LOST_TITLE,
         message: `${deviceLabel} parou de responder. Aproxime os dispositivos ou confira Bluetooth/internet antes de continuar a live.`,
         icon: <WifiOff className="text-orange-500 w-16 h-16" />,
         variant: 'info',

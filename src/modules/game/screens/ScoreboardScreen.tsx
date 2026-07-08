@@ -758,6 +758,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         const ageSeconds = Math.floor(ageMs / 1000);
         const isOnline = ageMs < 300000; // 5 min — cobre dispositivos que atualizam lastSeen com menos frequência (ex: relógio)
         const isActiveController = effectiveGameState.commandOwnerId === id;
+        const status: 'controller' | 'watcher' = isActiveController ? 'controller' : 'watcher';
         const heartbeatStatus: 'ok' | 'slow' | 'late' =
           ageMs < 30000 ? 'ok' : ageMs < 60000 ? 'slow' : 'late';
         const heartbeatProgress = Math.min(100, (ageMs / 60000) * 100);
@@ -765,7 +766,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         const isOwner = !!effectiveGameState.ownerDeviceId && id === effectiveGameState.ownerDeviceId;
         // role: proprietário nunca pode ser juiz — corrige dado inconsistente do Firebase
         const role = isOwner ? 'owner' : (d.role || 'observer');
-        return { id, label: d.label, nickname: d.nickname || '', isOnline, isOwner, role, deviceType: d.deviceType || 'phone', isActiveController, ageSeconds, heartbeatStatus, heartbeatProgress };
+        return { id, label: d.label, nickname: d.nickname || '', isOnline, isOwner, role, status, deviceType: d.deviceType || 'phone', isActiveController, ageSeconds, heartbeatStatus, heartbeatProgress };
       })
       .filter(d => d.isOnline) // exibe apenas dispositivos que ainda estão ativos
       .sort((a, b) => {
@@ -1905,7 +1906,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   <button onClick={() => setIsLiveExpanded(!isLiveExpanded)} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center active:scale-90 transition-all border border-gray-100">{isLiveExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
                </div>
                {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
-                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ id, label, nickname, isOnline, isOwner, role, deviceType, isActiveController, ageSeconds, heartbeatStatus, heartbeatProgress }) => {
+                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ id, label, nickname, isOnline, isOwner, role, status, deviceType, isActiveController, ageSeconds, heartbeatStatus, heartbeatProgress }) => {
                     // Ícone do tipo físico do dispositivo
                     const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'laptop' ? Laptop : deviceType === 'tablet' ? Monitor : Smartphone;
                     // Nome: nickname do Firebase quando disponível, senão extrai do label
@@ -1919,7 +1920,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       || (label.includes('(') && label.includes(')') ? label.slice(label.indexOf('(') + 1, label.lastIndexOf(')')) : null)
                       || label;
                     // Badge 1 — papel hierárquico (Dono / Juiz): só aparece se aplicável
-                    const isCtrlActive = isActiveController && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
+                    const isCtrlActive = status === 'controller' && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
                     // proteção dupla: role já foi corrigido acima, mas garantimos aqui também
                     const showHierarchyBadge = isOwner || (role === 'judge' && !isOwner);
                     const HierarchyIcon = isOwner ? Crown : Gavel;
@@ -1928,7 +1929,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     // Badge 2 — papel operacional (Ctrl / observador): sempre aparece
                      const OperIcon = isCtrlActive ? Gamepad2 : Eye;
                      const operColor = isCtrlActive ? 'text-orange-500' : 'text-blue-400';
-                     const operLabel = isCtrlActive ? 'Ctrl' : null;
+                     const operLabel = isCtrlActive ? 'Ctrl' : 'Obs';
                      const heartbeatColor =
                        heartbeatStatus === 'ok'
                          ? 'bg-emerald-500'
