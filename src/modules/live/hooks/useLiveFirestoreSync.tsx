@@ -323,9 +323,11 @@ export function useLiveFirestoreSync(params: {
                   : userProfile.nickname || userProfile.name?.split(' ')[0] || 'Dono',
                 [`controllers.${deviceId}`]: {
                   label: currentGs?.controllers?.[deviceId]?.label || deviceId,
+                  nickname: userProfile.nickname || userProfile.name?.split(' ')[0],
                   lastSeen: Date.now(),
                   isOwner: true,
                   role: 'owner',
+                  status: 'controller',
                   deviceType: getDeviceType(),
                 },
               }).catch(() => {});
@@ -954,22 +956,20 @@ export function useLiveFirestoreSync(params: {
       if (canSendControllerHeartbeat) {
         const targetPin = resolveTargetPin('controller-heartbeat');
         if (targetPin) {
-          const existingRole = currentGs?.controllers?.[deviceId]?.role;
+          const isFormalJudge = !!(
+            currentGs &&
+            myPin &&
+            (currentGs.judge?.pin?.toUpperCase() === myPin || currentGs.judgePin?.toUpperCase() === myPin)
+          );
           const controllerRole: 'owner' | 'judge' | 'observer' =
-            existingRole === 'owner' || existingRole === 'judge' || existingRole === 'observer'
-              ? existingRole
-              : livePapel === 'owner'
-              ? 'owner'
-              : livePapel === 'judge'
-              ? 'judge'
-              : 'observer';
+            currentGs?.ownerDeviceId === deviceId ? 'owner' : isFormalJudge ? 'judge' : 'observer';
           try {
             await updateDoc(doc(db, 'live_matches', targetPin), {
               [`controllers.${deviceId}`]: {
                 label: currentFullDeviceName,
                 nickname: myNickname,
                 lastSeen: now,
-                isOwner: isOriginalOwner,
+                isOwner: controllerRole === 'owner',
                 role: controllerRole,
                 status: 'controller',
                 deviceType: myDeviceType,
@@ -1013,7 +1013,10 @@ export function useLiveFirestoreSync(params: {
       }
 
       // ── Owner heartbeat (quando NÃO é o controller ativo) ──────────────────
-      const ownerMatch = activeLives.find(l => l.ownerPin?.toUpperCase() === myPin);
+      const ownerMatch = activeLives.find(l =>
+        l.ownerDeviceId === deviceId ||
+        (!l.ownerDeviceId && !isWatchDevice() && l.ownerPin?.toUpperCase() === myPin)
+      );
       const isOwnerControlling = ownerMatch?.commandOwnerId === deviceId;
       if (ownerMatch && !isOwnerControlling) {
         const docRef = doc(db, 'live_matches', myPin);
@@ -1052,16 +1055,19 @@ export function useLiveFirestoreSync(params: {
 
         if (observerLivePin && !alreadyCovered) {
           const docRef = doc(db, 'live_matches', observerLivePin);
-          const existingRole = currentGs?.controllers?.[deviceId]?.role;
-          // Preserva role existente (owner/judge não devem virar observer no heartbeat)
-          const heartbeatRole =
-            existingRole === 'owner' || existingRole === 'judge' ? existingRole : 'observer';
+          const isFormalJudge = !!(
+            myPin &&
+            (currentGs.judge?.pin?.toUpperCase() === myPin || currentGs.judgePin?.toUpperCase() === myPin)
+          );
+          const heartbeatRole: 'owner' | 'judge' | 'observer' =
+            currentGs.ownerDeviceId === deviceId ? 'owner' : isFormalJudge ? 'judge' : 'observer';
           try {
             await updateDoc(docRef, {
               [`controllers.${deviceId}`]: {
                 label: currentFullDeviceName,
                 nickname: myNickname,
                 lastSeen: now,
+                isOwner: heartbeatRole === 'owner',
                 role: heartbeatRole,
                 status: 'watcher',
                 deviceType: myDeviceType,

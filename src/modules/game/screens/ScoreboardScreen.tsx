@@ -687,6 +687,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     const interval = setInterval(() => setLivePresenceNow(Date.now()), 5000);
     return () => clearInterval(interval);
   }, [isLiveActive]);
+  const [firebaseAckElapsedSeconds, setFirebaseAckElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    setFirebaseAckElapsedSeconds(Math.max(0, Math.floor((Date.now() - effectiveLastFirebaseAckAt) / 1000)));
+    const interval = setInterval(() => {
+      setFirebaseAckElapsedSeconds(Math.max(0, Math.floor((Date.now() - effectiveLastFirebaseAckAt) / 1000)));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [effectiveLastFirebaseAckAt]);
 
   const resetDimTimer = useCallback(() => {
     if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
@@ -1463,6 +1472,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
             lilas: 'text-violet-600', marrom: 'text-amber-800', roxo: 'text-purple-600',
           };
           const isLiveActiveNew = !!(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) || !!effectiveCloudLiveExists;
+          const fbAckProgressNew = Math.min(100, (firebaseAckElapsedSeconds / 60) * 100);
+          const isFbAckLateNew = isLiveActiveNew && firebaseAckElapsedSeconds >= 60;
           const p1Color = effectiveGameState.p1.color || 'azul';
           const p2Color = effectiveGameState.p2.color || 'vermelho';
 
@@ -1649,7 +1660,16 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
               {renderTeamBlockNew(1)}
 
               {/* Faixa central: 4 botões idênticos ao WatchBoard */}
-              <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
+              <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 pt-2 shrink-0 z-10 relative overflow-hidden">
+                {isLiveActiveNew && (
+                  <div className="absolute top-1 left-6 right-6 h-2 z-20 pointer-events-none bg-white/20 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${isFbAckLateNew ? 'bg-white' : 'bg-white/95'}`}
+                      style={{ transform: `scaleX(${fbAckProgressNew / 100})` }}
+                    />
+                    {isFbAckLateNew && <div className="absolute inset-0 bg-[#bef264] animate-pulse" />}
+                  </div>
+                )}
                 <button
                   onPointerDown={() => { if (!isCommandOwner) return; handleUndoWithLog(); }}
                   disabled={!isCommandOwner}

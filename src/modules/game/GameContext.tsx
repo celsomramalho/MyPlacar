@@ -597,8 +597,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           const currentControllerId = cloudState.commandOwnerId;
 
           const myCommandName = currentFullDeviceName;
-          // Proprietário → 'owner'; juiz formal → 'judge'; qualquer outro → 'observer'
-          const newControllerRole: 'owner' | 'judge' | 'observer' = isOriginalOwner ? 'owner' : livePapel === 'judge' ? 'judge' : 'observer';
+          // Proprietário é sempre o ownerDeviceId imutável; PIN compartilhado com relógio não torna owner.
+          const isFormalJudge = !!(
+            userProfile.pin &&
+            (cloudState.judge?.pin?.toUpperCase() === userProfile.pin.toUpperCase() ||
+              cloudState.judgePin?.toUpperCase() === userProfile.pin.toUpperCase())
+          );
+          const newControllerRole: 'owner' | 'judge' | 'observer' =
+            cloudState.ownerDeviceId === deviceId ? 'owner' : isFormalJudge ? 'judge' : 'observer';
           const syncedSettings: MatchSettings = { 
             ...matchSettings, 
             p1Name: cloudState.p1.name, 
@@ -629,7 +635,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           if (currentControllerId && currentControllerId !== deviceId) {
             const prevEntry = (cloudState.controllers || {})[currentControllerId];
             if (prevEntry) {
-              const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : (prevEntry.role === 'judge' ? 'judge' : 'observer');
+              const demotedRole = currentControllerId === cloudState.ownerDeviceId ? 'owner' : (prevEntry.role === 'judge' ? 'judge' : 'observer');
               prevDemoteUpdate[`controllers.${currentControllerId}`] = { ...prevEntry, role: demotedRole, status: 'watcher' };
             }
           }
@@ -643,17 +649,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({
               await updateDoc(doc(db, "live_matches", targetPin), prevDemoteUpdate).catch(() => {});
             }
             await updateDoc(doc(db, "live_matches", targetPin), {
-              [`controllers.${deviceId}`]: { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, status: 'controller', deviceType: getDeviceType() }
+              [`controllers.${deviceId}`]: { label: myCommandName, nickname: userProfile.nickname || userProfile.name?.split(' ')[0], lastSeen: Date.now(), isOwner: newControllerRole === 'owner', role: newControllerRole, status: 'controller', deviceType: getDeviceType() }
             }).catch(() => {});
             const localControllers: Record<string, unknown> = { ...(cloudState.controllers || {}) };
             if (currentControllerId && currentControllerId !== deviceId) {
               const prevEntry = (cloudState.controllers || {})[currentControllerId];
               if (prevEntry) {
-                const demotedRole = prevEntry.isOwner || prevEntry.role === 'owner' ? 'owner' : (prevEntry.role === 'judge' ? 'judge' : 'observer');
+                const demotedRole = currentControllerId === cloudState.ownerDeviceId ? 'owner' : (prevEntry.role === 'judge' ? 'judge' : 'observer');
                 localControllers[currentControllerId] = { ...prevEntry, role: demotedRole, status: 'watcher' };
               }
             }
-            localControllers[deviceId] = { label: myCommandName, lastSeen: Date.now(), isOwner: isOriginalOwner, role: newControllerRole, status: 'controller', deviceType: getDeviceType() };
+            localControllers[deviceId] = { label: myCommandName, nickname: userProfile.nickname || userProfile.name?.split(' ')[0], lastSeen: Date.now(), isOwner: newControllerRole === 'owner', role: newControllerRole, status: 'controller', deviceType: getDeviceType() };
 
             tookControlAtRef.current = Date.now();
             const settingsAsController = {
@@ -737,10 +743,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             : isFormalJudge ? 'judge'
             : 'observer';
 
-          const enterAsObserver = joinRole === 'observer';
-          // Observadores preservam o commandOwnerId da cloud — não assumem controle ao entrar.
-          // Apenas o proprietário (ou juiz em dispositivo primário) se torna controller imediatamente.
-          const resolvedCommandOwnerId = (isSecondaryDevice || enterAsObserver) ? cloudData.commandOwnerId : deviceId;
+          // Entrar/observar a live nunca transfere controle. Qualquer dispositivo pode pedir controle pelo botão.
+          const resolvedCommandOwnerId = cloudData.commandOwnerId;
           const isEnteringAsController = resolvedCommandOwnerId === deviceId;
           const initialStatus: 'controller' | 'watcher' = isEnteringAsController ? 'controller' : 'watcher';
 
@@ -1203,7 +1207,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode, isScoreboardMode: isWatchDevice() ? false : !!configToUse.isScoreboardMode }, history: [], currentSet: 0, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
       isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin, ownerDeviceId: deviceId,
       liveSessionCounter: globalLiveCount, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, 
-      controllers: { [deviceId]: { label: currentFullDeviceName, lastSeen: Date.now(), isOwner: true, role: 'owner' } },
+      controllers: { [deviceId]: { label: currentFullDeviceName, nickname: userProfile.nickname || userProfile.name?.split(' ')[0], lastSeen: Date.now(), isOwner: true, role: 'owner', status: 'controller', deviceType: getDeviceType() } },
       ...tournamentMeta
     };
     
