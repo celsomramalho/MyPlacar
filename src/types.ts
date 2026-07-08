@@ -237,6 +237,10 @@ export interface GameState {
   commandOwner?: string;
   commandOwnerId?: string;
   controllers?: Record<string, ControllerRecord>;
+  /** Última atividade confirmada do controlador ativo: ponto enviado ou heartbeat. */
+  controllerHeartbeatAt?: number;
+  /** Tempo que o controlador estava sem pontuar quando enviou o último heartbeat. */
+  controllerIdleMs?: number;
   pingTimestamp?: number;
   pingConfirmed?: boolean;
   isLiveClosed?: boolean;

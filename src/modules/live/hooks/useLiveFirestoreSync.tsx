@@ -1247,6 +1247,7 @@ export function useLiveFirestoreSync(params: {
               ...gameState,
               controllers: undefined, // T4.1: presença gerenciada via field-path
               liveVersion: (gameState.liveVersion || 0) + 1, // T4.2: versionamento
+              ...(isMatchStateChange ? { controllerHeartbeatAt: now, controllerIdleMs: 0 } : {}),
               // Imutáveis: preserva os valores originais independente do estado corrente
               ownerPin: gameState.ownerPin,
               ownerDeviceId: gameState.ownerDeviceId,
@@ -1307,6 +1308,7 @@ export function useLiveFirestoreSync(params: {
                     };
                     updateDoc(doc(db, 'live_matches', targetPin), {
                       [`controllers.${deviceId}`]: presenceRecord,
+                      ...(isMatchStateChange ? { controllerHeartbeatAt: now, controllerIdleMs: 0 } : {}),
                       lastActivityAt: Date.now(), // D1: atualiza TTL a cada heartbeat
                     }).catch(() => {});
                     lastSeenUpdateRef.current = now;

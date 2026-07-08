@@ -755,13 +755,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       .map(([id, data]) => {
         const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop' };
         const isCurrentDevice = id === currentDeviceId;
+        const isActiveController = effectiveGameState.commandOwnerId === id;
         const presenceAt = isCurrentDevice
           ? Math.max(d.lastSeen || 0, effectiveLastFirebaseAckAt || 0)
+          : isActiveController
+          ? Math.max(d.lastSeen || 0, effectiveGameState.controllerHeartbeatAt || 0)
           : d.lastSeen || 0;
         const ageMs = Math.max(0, now - presenceAt);
         const ageSeconds = Math.floor(ageMs / 1000);
         const isOnline = ageMs < 300000; // 5 min — cobre dispositivos que atualizam lastSeen com menos frequência (ex: relógio)
-        const isActiveController = effectiveGameState.commandOwnerId === id;
         const status: 'controller' | 'watcher' = isActiveController ? 'controller' : 'watcher';
         const heartbeatStatus: 'ok' | 'slow' | 'late' =
           ageMs < 30000 ? 'ok' : ageMs < 60000 ? 'slow' : 'late';
@@ -781,7 +783,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         if (!a.isOwner && b.isOwner) return 1;
         return a.label.localeCompare(b.label);
       });
-  }, [currentDeviceId, effectiveGameState.controllers, effectiveGameState.commandOwnerId, effectiveGameState.ownerDeviceId, effectiveLastFirebaseAckAt, livePresenceNow]);
+  }, [currentDeviceId, effectiveGameState.controllers, effectiveGameState.commandOwnerId, effectiveGameState.controllerHeartbeatAt, effectiveGameState.ownerDeviceId, effectiveLastFirebaseAckAt, livePresenceNow]);
 
   const createCommandLog = (commandText: string, source: string = 'cb', isError = false, winner?: 1 | 2, isRemote = false) => {
     const now = Date.now();
