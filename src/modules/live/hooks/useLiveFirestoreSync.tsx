@@ -1234,7 +1234,7 @@ export function useLiveFirestoreSync(params: {
             const controllerRole: 'owner' | 'judge' | 'observer' =
               livePapel === 'owner' ? 'owner' : (livePapel === 'judge' ? 'judge' : 'observer');
             const myDeviceType = getDeviceType();
-            const shouldUpdateLastSeen = now - lastSeenUpdateRef.current > 30000;
+            const shouldUpdateLastSeen = isMatchStateChange || now - lastSeenUpdateRef.current > 30000;
 
             // T4.2: stateToSave não inclui controllers (gerenciados separadamente).
             // liveVersion é incrementado a cada write do controller ativo —
@@ -1298,6 +1298,7 @@ export function useLiveFirestoreSync(params: {
                   if (shouldUpdateLastSeen) {
                     const presenceRecord = {
                       label: currentFullDeviceName,
+                      nickname: userProfile.nickname || userProfile.name?.split(' ')[0],
                       lastSeen: now,
                       isOwner: isOriginalOwner,
                       role: controllerRole,

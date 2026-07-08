@@ -754,7 +754,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     return list
       .map(([id, data]) => {
         const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop' };
-        const ageMs = Math.max(0, now - (d.lastSeen || 0));
+        const isCurrentDevice = id === currentDeviceId;
+        const presenceAt = isCurrentDevice
+          ? Math.max(d.lastSeen || 0, effectiveLastFirebaseAckAt || 0)
+          : d.lastSeen || 0;
+        const ageMs = Math.max(0, now - presenceAt);
         const ageSeconds = Math.floor(ageMs / 1000);
         const isOnline = ageMs < 300000; // 5 min — cobre dispositivos que atualizam lastSeen com menos frequência (ex: relógio)
         const isActiveController = effectiveGameState.commandOwnerId === id;
@@ -777,7 +781,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         if (!a.isOwner && b.isOwner) return 1;
         return a.label.localeCompare(b.label);
       });
-  }, [effectiveGameState.controllers, effectiveGameState.commandOwnerId, effectiveGameState.ownerDeviceId, livePresenceNow]);
+  }, [currentDeviceId, effectiveGameState.controllers, effectiveGameState.commandOwnerId, effectiveGameState.ownerDeviceId, effectiveLastFirebaseAckAt, livePresenceNow]);
 
   const createCommandLog = (commandText: string, source: string = 'cb', isError = false, winner?: 1 | 2, isRemote = false) => {
     const now = Date.now();
