@@ -22,6 +22,8 @@ export interface LiveContextValue {
   setLiveLogs: React.Dispatch<React.SetStateAction<LiveLogEntry[]>>;
   fbSyncStatus: { team: 1 | 2; seq: number; isObserver: boolean } | null;
   setFbSyncStatus: React.Dispatch<React.SetStateAction<{ team: 1 | 2; seq: number; isObserver: boolean } | null>>;
+  lastFirebaseAckAt: number;
+  setLastFirebaseAckAt: React.Dispatch<React.SetStateAction<number>>;
 
   // ── Refs de ciclo de vida ───────────────────────────────────────────────────
   activeLivesRef: React.MutableRefObject<GameState[]>;

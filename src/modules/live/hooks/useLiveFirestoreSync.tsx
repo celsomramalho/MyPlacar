@@ -35,6 +35,7 @@ export function useLiveFirestoreSync(params: {
     setCloudLiveExists,
     fbSyncStatus,
     setFbSyncStatus,
+    setLastFirebaseAckAt,
     tookControlAtRef,
     lostControlAtRef,
     isClosingLiveRef,
@@ -209,13 +210,16 @@ export function useLiveFirestoreSync(params: {
 
     const subscribe = () => {
       if (!navigator.onLine) return () => {};
-      return onSnapshot(doc(db, 'live_matches', listenPin), snap => {
+      return onSnapshot(doc(db, 'live_matches', listenPin), { includeMetadataChanges: true }, snap => {
         if (currentScreen === 'settings') return;
         if (snap.exists()) {
           const cloudData = snap.data() as GameState;
 
           if (!isValidGameState(cloudData)) {
             return;
+          }
+          if (!snap.metadata.hasPendingWrites && !snap.metadata.fromCache) {
+            setLastFirebaseAckAt(Date.now());
           }
 
         if (cloudData.isLiveClosed) {
@@ -527,6 +531,7 @@ export function useLiveFirestoreSync(params: {
     setGameState,
     setModalConfig,
     setFbSyncStatus,
+    setLastFirebaseAckAt,
     setMatchSettings,
     setIsWaitingSync,
     setActiveLives,
@@ -1001,6 +1006,7 @@ export function useLiveFirestoreSync(params: {
               },
               // T4.3: mantém judge.isActive sincronizado
               'judge.isActive': judgeIsActive,
+              lastActivityAt: now,
             });
           } catch {}
         }
@@ -1022,6 +1028,8 @@ export function useLiveFirestoreSync(params: {
               status: 'watcher',
               deviceType: myDeviceType,
             },
+            ownerHeartbeatAt: now,
+            lastActivityAt: now,
           });
         } catch {}
       }
@@ -1037,15 +1045,12 @@ export function useLiveFirestoreSync(params: {
 
       if (isObserving) {
         const observerLivePin = currentGs?.ownerPin?.toUpperCase();
-        const observingAuthorizedLive =
-          observerLivePin === myPin ||
-          (currentGs ? isJudgeForLive(currentGs, myPin) : false);
         // Não re-envia heartbeat se já foi coberto pelo judge ou owner heartbeat acima
         const alreadyCovered =
           judgeMatches.some(m => m.ownerPin?.toUpperCase() === observerLivePin) ||
           (ownerMatch && ownerMatch.ownerPin?.toUpperCase() === observerLivePin);
 
-        if (observerLivePin && observingAuthorizedLive && !alreadyCovered) {
+        if (observerLivePin && !alreadyCovered) {
           const docRef = doc(db, 'live_matches', observerLivePin);
           const existingRole = currentGs?.controllers?.[deviceId]?.role;
           // Preserva role existente (owner/judge não devem virar observer no heartbeat)
@@ -1061,6 +1066,8 @@ export function useLiveFirestoreSync(params: {
                 status: 'watcher',
                 deviceType: myDeviceType,
               },
+              observerHeartbeatAt: now,
+              lastActivityAt: now,
             });
           } catch {}
         }

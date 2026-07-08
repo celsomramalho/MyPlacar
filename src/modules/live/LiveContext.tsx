@@ -34,6 +34,7 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
   const [cloudLiveExists, setCloudLiveExists] = useState(false);
   const [liveLogs, setLiveLogs] = useState<LiveLogEntry[]>([]);
   const [fbSyncStatus, setFbSyncStatus] = useState<{ team: 1 | 2; seq: number; isObserver: boolean } | null>(null);
+  const [lastFirebaseAckAt, setLastFirebaseAckAt] = useState(Date.now());
 
   // ── Refs de ciclo de vida ───────────────────────────────────────────────────
   // activeLivesRef: espelho síncrono de activeLives para uso em closures estáveis.
@@ -375,6 +376,7 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
     cloudLiveExists, setCloudLiveExists,
     liveLogs, setLiveLogs,
     fbSyncStatus, setFbSyncStatus,
+    lastFirebaseAckAt, setLastFirebaseAckAt,
     activeLivesRef,
     tookControlAtRef,
     lostControlAtRef,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, Clock } from 'lucide-react';
+import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
@@ -51,6 +51,7 @@ interface WatchBoardProps {
   cloudLiveExists?: boolean;
   role?: 'owner' | 'judge' | 'observer' | 'spectator';
   fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
+  lastFirebaseAckAt?: number;
   onVoiceToggle?: () => void;
   isVoiceActive?: boolean;
   onToggleWatchMode?: () => void;
@@ -90,22 +91,21 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
   const [batteryStatus, setBatteryStatus] = React.useState<BatteryStatus | null>(null);
-  const [pointIdleSeconds, setPointIdleSeconds] = React.useState(0);
+  const [fbAckElapsedSeconds, setFbAckElapsedSeconds] = React.useState(0);
   const pauseRotationUntil = React.useRef(0);
 
   React.useEffect(() => {
-    setPointIdleSeconds(0);
-    const startedAt = Date.now();
+    setFbAckElapsedSeconds(Math.max(0, Math.floor((Date.now() - lastFirebaseAckAt) / 1000)));
     const interval = setInterval(() => {
-      setPointIdleSeconds(Math.floor((Date.now() - startedAt) / 1000));
+      setFbAckElapsedSeconds(Math.max(0, Math.floor((Date.now() - lastFirebaseAckAt) / 1000)));
     }, 1000);
     return () => clearInterval(interval);
-  }, [gameState.matchId, gameState.pointHistory?.length]);
+  }, [lastFirebaseAckAt]);
 
   React.useEffect(() => {
     const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryManagerLike> };
@@ -184,6 +184,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   };
 
   const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
+  const fbAckProgress = Math.min(100, (fbAckElapsedSeconds / 60) * 100);
+  const isFbAckLate = isLiveActive && fbAckElapsedSeconds >= 60;
   const batteryFillClass = batteryStatus?.charging
     ? 'bg-emerald-500'
     : (batteryStatus?.percent ?? 100) <= 20
@@ -445,7 +447,16 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           )}
         </div>
         
-        <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 shrink-0 z-10 relative">
+        <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 pt-2 shrink-0 z-10 relative overflow-hidden">
+          {isLiveActive && (
+            <div className="absolute top-1 left-6 right-6 h-2 z-20 pointer-events-none bg-white/20 rounded-full overflow-hidden">
+              <div
+                className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${isFbAckLate ? 'bg-white' : 'bg-white/95'}`}
+                style={{ transform: `scaleX(${fbAckProgress / 100})` }}
+              />
+              {isFbAckLate && <div className="absolute inset-0 bg-[#bef264] animate-pulse" />}
+            </div>
+          )}
           {/* Undo — desabilitado para observadores em live ativa */}
           <button
             onPointerDown={() => { if (!isCommandOwner) return; resetDimTimer(); handleUndoWithLog(); }}
@@ -482,11 +493,6 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} status={isLiveActive ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
               : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
             }
-          </div>
-
-          <div className={`absolute top-1 right-2 z-20 flex items-center gap-1 rounded-full border px-2 py-0.5 ${pointIdleSeconds >= 15 ? 'bg-orange-500/20 border-orange-300 text-orange-100 animate-pulse' : 'bg-white/10 border-white/10 text-white/60'}`}>
-            <Clock size={10} strokeWidth={3} />
-            <span className="text-[10px] font-black tabular-nums">P+{pointIdleSeconds}s</span>
           </div>
 
           {/* Falta — desabilitado para observadores em live ativa */}

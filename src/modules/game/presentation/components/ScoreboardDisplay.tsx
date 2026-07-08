@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw, MonitorSmartphone, Trophy, SquareKanban, Watch, Cast, Clock } from 'lucide-react';
+import { Wifi, WifiOff, Settings, RefreshCw, Mic, RotateCcw, MonitorSmartphone, Trophy, SquareKanban, Watch, Cast } from 'lucide-react';
 import { GameState, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
@@ -19,6 +19,7 @@ role?: 'owner' | 'judge' | 'observer' | 'spectator';
 onVoiceToggle?: () => void;
 isVoiceActive?: boolean;
   fbSyncStatus?: { team: 1 | 2; seq: number; isObserver: boolean } | null;
+  lastFirebaseAckAt?: number;
   onToggleScoreboardMode?: () => void;
   onToggleWatchMode?: () => void;
 }
@@ -59,6 +60,7 @@ role,
 onVoiceToggle,
 isVoiceActive = false,
   fbSyncStatus,
+  lastFirebaseAckAt = Date.now(),
   onToggleScoreboardMode,
   onToggleWatchMode,
 }) => {
@@ -72,16 +74,15 @@ const isLandscape = forceLayoutOverride !== null ? forceLayoutOverride : physica
 const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
 
 const displayTime = useMatchTimer(gameState);
-const [pointIdleSeconds, setPointIdleSeconds] = useState(0);
+const [fbAckElapsedSeconds, setFbAckElapsedSeconds] = useState(0);
 
 useEffect(() => {
-setPointIdleSeconds(0);
-const startedAt = Date.now();
+setFbAckElapsedSeconds(Math.max(0, Math.floor((Date.now() - lastFirebaseAckAt) / 1000)));
 const interval = setInterval(() => {
-setPointIdleSeconds(Math.floor((Date.now() - startedAt) / 1000));
+setFbAckElapsedSeconds(Math.max(0, Math.floor((Date.now() - lastFirebaseAckAt) / 1000)));
 }, 1000);
 return () => clearInterval(interval);
-}, [gameState.matchId, gameState.pointHistory?.length]);
+}, [lastFirebaseAckAt]);
 
 // ── Detecção de orientação ─────────────────────────────────────────────────
 useEffect(() => {
@@ -237,6 +238,8 @@ if (!gameState?.p1?.sets || !gameState?.p2?.sets) return null;
 
 const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
 const showMic = !isPublicView && !!onVoiceToggle && gameState.matchConfig.voiceEnabled && (!isLiveActive || isCommandOwner);
+const fbAckProgress = Math.min(100, (fbAckElapsedSeconds / 60) * 100);
+const isFbAckLate = isLiveActive && fbAckElapsedSeconds >= 60;
 
 const p1Sets = gameState.p1.sets;
 const p2Sets = gameState.p2.sets;
@@ -326,7 +329,17 @@ style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}>
 
 // ── Faixa central ──────────────────────────────────────────────────────────
 const renderCenterBar = (horizontal: boolean) => (
-<div className={`bg-black flex items-center justify-center shrink-0 z-10 relative ${horizontal ? 'flex-col py-4 w-16 gap-3' : 'flex-row h-16 gap-4'}`}>
+<div className={`bg-black flex items-center justify-center shrink-0 z-10 relative overflow-hidden ${horizontal ? 'flex-col py-4 w-16 gap-3' : 'flex-row h-16 gap-4'}`}>
+
+{isLiveActive && (
+<div className={`absolute z-20 pointer-events-none ${horizontal ? 'top-2 bottom-2 left-1 w-2' : 'top-1 left-6 right-6 h-2'} bg-white/20 rounded-full overflow-hidden`}>
+<div
+className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${isFbAckLate ? 'bg-white' : 'bg-white/95'}`}
+style={{ transform: horizontal ? `scaleY(${fbAckProgress / 100})` : `scaleX(${fbAckProgress / 100})`, transformOrigin: horizontal ? 'bottom' : 'left' }}
+/>
+{isFbAckLate && <div className="absolute inset-0 bg-[#bef264] animate-pulse" />}
+</div>
+)}
 
 {/* Botão microfone — só para controller ou fora da live */}
 {showMic && (
@@ -364,12 +377,6 @@ className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-tr
 
 {/* Cronômetro */}
 <span className="text-white font-black text-lg tabular-nums tracking-tight">{formatTime(displayTime)}</span>
-
-{/* Tempo desde o último ponto */}
-<div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${pointIdleSeconds >= 15 ? 'bg-orange-500/20 border-orange-400 text-orange-200 animate-pulse' : 'bg-white/10 border-white/15 text-white/70'}`}>
-<Clock size={12} strokeWidth={3} />
-<span className="text-[10px] font-black tabular-nums">P+{pointIdleSeconds}s</span>
-</div>
 
 {/* Botão rotação — alterna layout portrait/landscape manualmente */}
 <button

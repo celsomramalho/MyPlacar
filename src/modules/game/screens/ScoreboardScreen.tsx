@@ -321,6 +321,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const effectiveIndicatorRole = liveCtx.indicatorRole;
   const effectiveIsOriginalOwner = liveCtx.isOriginalOwner;
   const effectiveFbSyncStatus = liveCtx.fbSyncStatus;
+  const effectiveLastFirebaseAckAt = liveCtx.lastFirebaseAckAt;
 
   // liveLogs e setLiveLogs: exclusivamente do contexto
   const effectiveLiveLogs = liveCtx.liveLogs;
@@ -678,6 +679,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const isLiveActive = useMemo(() => {
     return !!(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) || !!effectiveCloudLiveExists;
   }, [effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), effectiveCloudLiveExists]);
+  const [livePresenceNow, setLivePresenceNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!isLiveActive) return;
+    setLivePresenceNow(Date.now());
+    const interval = setInterval(() => setLivePresenceNow(Date.now()), 5000);
+    return () => clearInterval(interval);
+  }, [isLiveActive]);
 
   const resetDimTimer = useCallback(() => {
     if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
@@ -731,18 +740,23 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   const groupedControllers = useMemo(() => {
     const list = Object.entries(effectiveGameState.controllers || {});
-    const now = Date.now();
+    const now = livePresenceNow;
     // Considera online se visto nos últimos 2 minutos (alinhado com o TTL de limpeza)
     return list
       .map(([id, data]) => {
         const d = data as { label: string; lastSeen: number; isOwner?: boolean; nickname?: string; role?: 'owner' | 'judge' | 'observer'; deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop' };
-        const isOnline = (now - d.lastSeen) < 300000; // 5 min — cobre dispositivos que atualizam lastSeen com menos frequência (ex: relógio)
+        const ageMs = Math.max(0, now - (d.lastSeen || 0));
+        const ageSeconds = Math.floor(ageMs / 1000);
+        const isOnline = ageMs < 300000; // 5 min — cobre dispositivos que atualizam lastSeen com menos frequência (ex: relógio)
         const isActiveController = effectiveGameState.commandOwnerId === id;
+        const heartbeatStatus: 'ok' | 'slow' | 'late' =
+          ageMs < 30000 ? 'ok' : ageMs < 60000 ? 'slow' : 'late';
+        const heartbeatProgress = Math.min(100, (ageMs / 60000) * 100);
         // isOwner: fonte de verdade é ownerDeviceId no nível raiz — nunca muda durante a live
         const isOwner = !!effectiveGameState.ownerDeviceId && id === effectiveGameState.ownerDeviceId;
         // role: proprietário nunca pode ser juiz — corrige dado inconsistente do Firebase
         const role = isOwner ? 'owner' : (d.role || 'observer');
-        return { id, label: d.label, nickname: d.nickname || '', isOnline, isOwner, role, deviceType: d.deviceType || 'phone', isActiveController };
+        return { id, label: d.label, nickname: d.nickname || '', isOnline, isOwner, role, deviceType: d.deviceType || 'phone', isActiveController, ageSeconds, heartbeatStatus, heartbeatProgress };
       })
       .filter(d => d.isOnline) // exibe apenas dispositivos que ainda estão ativos
       .sort((a, b) => {
@@ -753,7 +767,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         if (!a.isOwner && b.isOwner) return 1;
         return a.label.localeCompare(b.label);
       });
-  }, [effectiveGameState.controllers, effectiveGameState.commandOwnerId, effectiveGameState.ownerDeviceId]);
+  }, [effectiveGameState.controllers, effectiveGameState.commandOwnerId, effectiveGameState.ownerDeviceId, livePresenceNow]);
 
   const createCommandLog = (commandText: string, source: string = 'cb', isError = false, winner?: 1 | 2, isRemote = false) => {
     const now = Date.now();
@@ -1151,6 +1165,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         onVoiceToggle={handleVoiceToggle}
         isVoiceActive={isVoiceActive}
         fbSyncStatus={effectiveFbSyncStatus}
+        lastFirebaseAckAt={effectiveLastFirebaseAckAt}
         onToggleScoreboardMode={onToggleScoreboardMode}
       />
     );
@@ -1174,6 +1189,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           cloudLiveExists={effectiveCloudLiveExists}
           role={effectiveIndicatorRole}
           fbSyncStatus={effectiveFbSyncStatus}
+          lastFirebaseAckAt={effectiveLastFirebaseAckAt}
           onVoiceToggle={handleVoiceToggle}
           isVoiceActive={isVoiceActive}
           onToggleWatchMode={onToggleWatchMode}
@@ -1869,7 +1885,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   <button onClick={() => setIsLiveExpanded(!isLiveExpanded)} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center active:scale-90 transition-all border border-gray-100">{isLiveExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
                </div>
                {isLiveExpanded && <div className="space-y-4 animate-in zoom-in duration-300">
-                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ id, label, nickname, isOnline, isOwner, role, deviceType, isActiveController }) => {
+                   <div className="space-y-2.5"><div className="flex items-center gap-2 px-1"><MonitorSmartphone size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Dispositivos participantes</span></div><div className="flex flex-wrap gap-2">{groupedControllers.map(({ id, label, nickname, isOnline, isOwner, role, deviceType, isActiveController, ageSeconds, heartbeatStatus, heartbeatProgress }) => {
                     // Ícone do tipo físico do dispositivo
                     const DeviceIcon = deviceType === 'watch' ? Watch : deviceType === 'laptop' ? Laptop : deviceType === 'tablet' ? Monitor : Smartphone;
                     // Nome: nickname do Firebase quando disponível, senão extrai do label
@@ -1890,25 +1906,42 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     const hierarchyColor = isOwner ? 'text-blue-600' : 'text-emerald-500';
                     const hierarchyLabel = isOwner ? 'Dono' : 'Juiz';
                     // Badge 2 — papel operacional (Ctrl / observador): sempre aparece
-                    const OperIcon = isCtrlActive ? Gamepad2 : Eye;
-                    const operColor = isCtrlActive ? 'text-orange-500' : 'text-blue-400';
-                    const operLabel = isCtrlActive ? 'Ctrl' : null;
-                    return (
-                      <div key={id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isCtrlActive ? 'bg-orange-50 border-orange-200 text-orange-700 shadow-sm ring-2 ring-orange-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'}`}>
-                        <DeviceIcon size={12} className={isCtrlActive ? 'text-orange-500' : 'text-gray-400'} />
-                        <span className="text-[10px] font-black">{shortLabel}</span>
+                     const OperIcon = isCtrlActive ? Gamepad2 : Eye;
+                     const operColor = isCtrlActive ? 'text-orange-500' : 'text-blue-400';
+                     const operLabel = isCtrlActive ? 'Ctrl' : null;
+                     const heartbeatColor =
+                       heartbeatStatus === 'ok'
+                         ? 'bg-emerald-500'
+                         : heartbeatStatus === 'slow'
+                         ? 'bg-[#bef264]'
+                         : 'bg-red-500';
+                     const heartbeatTextColor =
+                       heartbeatStatus === 'ok'
+                         ? 'text-emerald-600'
+                         : heartbeatStatus === 'slow'
+                         ? 'text-lime-600'
+                         : 'text-red-600';
+                     const heartbeatTitle = `Último sinal há ${ageSeconds}s`;
+                     return (
+                       <div key={id} title={heartbeatTitle} className={`relative overflow-hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-all duration-300 ${isCtrlActive ? 'bg-orange-50 border-orange-200 text-orange-700 shadow-sm ring-2 ring-orange-100' : isOnline ? 'bg-white border-gray-200 text-gray-600' : 'bg-white border-gray-100 text-gray-400 opacity-50'} ${heartbeatStatus === 'late' ? 'ring-2 ring-red-100' : ''}`}>
+                         <div className="absolute left-0 bottom-0 h-0.5 bg-gray-100 w-full" />
+                         <div className={`absolute left-0 bottom-0 h-0.5 ${heartbeatColor} transition-all duration-500 ${heartbeatStatus === 'late' ? 'animate-pulse' : ''}`} style={{ width: `${heartbeatProgress}%` }} />
+                         <span className={`relative z-10 w-2 h-2 rounded-full ${heartbeatColor} ${heartbeatStatus !== 'ok' ? 'animate-pulse' : ''}`} />
+                         <DeviceIcon size={12} className={isCtrlActive ? 'text-orange-500' : 'text-gray-400'} />
+                         <span className="text-[10px] font-black">{shortLabel}</span>
                         {showHierarchyBadge && (
                           <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${hierarchyColor}`}>
                             <HierarchyIcon size={11} />
                             <span className="text-[9px] font-bold">{hierarchyLabel}</span>
                           </div>
                         )}
-                        <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${operColor}`}>
-                          <OperIcon size={11} />
-                          {operLabel && <span className="text-[9px] font-bold">{operLabel}</span>}
-                        </div>
-                      </div>
-                    );
+                         <div className={`flex items-center gap-0.5 pl-1 border-l border-gray-200 ${operColor}`}>
+                           <OperIcon size={11} />
+                           {operLabel && <span className="text-[9px] font-bold">{operLabel}</span>}
+                         </div>
+                         <span className={`text-[8px] font-black tabular-nums ${heartbeatTextColor}`}>{ageSeconds}s</span>
+                       </div>
+                     );
                   })}</div></div>
                    <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex items-center gap-2.5"><CheckCircle size={16} className="text-gray-400" /><span className="text-[11px] font-bold text-gray-500">Sincronização confirmada</span></div><div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-colors ${(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? <X size={12} strokeWidth={4} /> : <Check size={12} strokeWidth={4} />}<span className="text-[10px] font-black">{(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? 'Encerrado' : 'Ativo'}</span></div></div>
                     {/* Recurso de inserir juiz - Apenas para o proprietário */}
