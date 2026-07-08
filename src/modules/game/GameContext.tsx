@@ -746,6 +746,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           // Entrar/observar a live nunca transfere controle. Qualquer dispositivo pode pedir controle pelo botão.
           const resolvedCommandOwnerId = cloudData.commandOwnerId;
           const isEnteringAsController = resolvedCommandOwnerId === deviceId;
+          const enterAsObserver = !isEnteringAsController;
           const initialStatus: 'controller' | 'watcher' = isEnteringAsController ? 'controller' : 'watcher';
 
           await updateDoc(doc(db, "live_matches", pinUpper), {
