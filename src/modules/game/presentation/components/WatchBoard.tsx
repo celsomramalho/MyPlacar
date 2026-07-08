@@ -86,6 +86,8 @@ const TEXT_COLORS: Record<string, string> = {
   roxo: 'text-purple-600',
 };
 
+const FB_ACK_MARK_SECONDS = Array.from({ length: 11 }, (_, index) => (index + 1) * 5);
+
 export const WatchBoard: React.FC<WatchBoardProps> = ({
   gameState, onScoreUpdate, onSwitchServer, onBack, onConfirmMatch,
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
@@ -454,6 +456,13 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${isFbAckLate ? 'bg-white' : 'bg-white/95'}`}
                 style={{ transform: `scaleX(${fbAckProgress / 100})` }}
               />
+              {FB_ACK_MARK_SECONDS.map(seconds => (
+                <span
+                  key={seconds}
+                  className="absolute top-0 bottom-0 w-[2px] bg-black/95"
+                  style={{ left: `${(seconds / 60) * 100}%`, transform: 'translateX(-1px)' }}
+                />
+              ))}
               {isFbAckLate && <div className="absolute inset-0 bg-[#bef264] animate-pulse" />}
             </div>
           )}

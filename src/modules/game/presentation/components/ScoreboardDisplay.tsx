@@ -47,6 +47,8 @@ marrom:  'text-amber-700',
 roxo:    'text-purple-600',
 };
 
+const FB_ACK_MARK_SECONDS = Array.from({ length: 11 }, (_, index) => (index + 1) * 5);
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export const ScoreboardDisplay: React.FC<ScoreboardDisplayProps> = ({
 gameState,
@@ -337,6 +339,15 @@ const renderCenterBar = (horizontal: boolean) => (
 className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${isFbAckLate ? 'bg-white' : 'bg-white/95'}`}
 style={{ transform: horizontal ? `scaleY(${fbAckProgress / 100})` : `scaleX(${fbAckProgress / 100})`, transformOrigin: horizontal ? 'bottom' : 'left' }}
 />
+{FB_ACK_MARK_SECONDS.map(seconds => (
+<span
+key={seconds}
+className={`absolute bg-black/95 ${horizontal ? 'left-0 right-0 h-[2px]' : 'top-0 bottom-0 w-[2px]'}`}
+style={horizontal
+? { bottom: `${(seconds / 60) * 100}%`, transform: 'translateY(1px)' }
+: { left: `${(seconds / 60) * 100}%`, transform: 'translateX(-1px)' }}
+/>
+))}
 {isFbAckLate && <div className="absolute inset-0 bg-[#bef264] animate-pulse" />}
 </div>
 )}
