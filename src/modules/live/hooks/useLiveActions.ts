@@ -109,20 +109,24 @@ export function useLiveActions({
       const myPin = userProfile.pin?.toUpperCase();
       const targetPin = resolveTargetPin('write');
       if (!targetPin) return;
+      // TRAVA DE PROPRIETÁRIO: ownerPin e ownerDeviceId são imutáveis — NUNCA
+      // sobrescrever com o deviceId de quem está ativando o mirroring (pode ser
+      // um judge ou device secundário). Preserva os valores já gravados no gameState.
+      const lockedOwnerDeviceId = gameState.ownerDeviceId || deviceId;
+
+      // Ao criar a live, livePapel ainda é 'spectator' (nenhuma live ativa no momento),
+      // então o role deve ser calculado diretamente pela identidade do device, não pelo livePapel.
+      const ownerAtCreation = deviceId === lockedOwnerDeviceId;
       const nextControllers = {
         [deviceId]: {
           label: currentFullDeviceName,
           lastSeen: Date.now(),
-          isOwner: isOriginalOwner,
-          role: livePapel === 'owner' ? 'owner' : (livePapel === 'judge' ? 'judge' : 'observer'),
+          isOwner: ownerAtCreation,
+          role: ownerAtCreation ? 'owner' : (livePapel === 'judge' ? 'judge' : 'observer'),
           status: 'controller' as const,
           deviceType: getDeviceType(),
         },
       };
-      // TRAVA DE PROPRIETÁRIO: ownerPin e ownerDeviceId são imutáveis — NUNCA
-      // sobrescrever com o deviceId de quem está ativando o mirroring (pode ser
-      // um judge ou device secundário). Preserva os valores já gravados no gameState.
-      const lockedOwnerDeviceId = gameState.ownerDeviceId || (isOriginalOwner ? deviceId : undefined);
       const lockedOwnerPin = gameState.ownerPin || userProfile.pin;
       const stateToSave = sanitizeForFirestore({
         ...gameState,

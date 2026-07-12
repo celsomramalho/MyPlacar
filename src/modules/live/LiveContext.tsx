@@ -90,13 +90,23 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
     if (activeLives.some(l => l.ownerDeviceId === deviceId)) return true;
     if (!userProfile.pin) return false;
     const myPin = userProfile.pin.toUpperCase();
+    // Fallback: se não há ownerDeviceId no gameState nem em activeLives,
+    // mas este device é o commandOwner de uma live ativa com ownerPin do usuário,
+    // considera que ele é o dono (abriu a live com o bug de ownerDeviceId não salvo).
+    if (
+      gameState?.isMirroringActive &&
+      !gameState?.isLiveClosed &&
+      gameState?.commandOwnerId === deviceId &&
+      !gameState?.ownerDeviceId &&
+      gameState?.ownerPin?.toUpperCase() === myPin
+    ) return true;
     if (activeLives.some(l => l.ownerPin?.toUpperCase() === myPin)) {
       return !activeLives.some(
         l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin
       );
     }
     return false;
-  }, [gameState?.ownerDeviceId, activeLives, deviceId, userProfile.pin]);
+  }, [gameState?.ownerDeviceId, gameState?.isMirroringActive, gameState?.isLiveClosed, gameState?.commandOwnerId, gameState?.ownerPin, activeLives, deviceId, userProfile.pin]);
 
   // ── useMemo: isCurrentController ───────────────────────────────────────────
   // "Este device é o commandOwnerId no gameState LOCAL?"
@@ -145,14 +155,24 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
     const effectivelyHasLive = cloudLiveExists || liveIsActiveLocally;
     if (!effectivelyHasLive) return 'spectator';
     if (activeLives.some(l => l.ownerDeviceId === deviceId)) return 'owner';
-    if (liveIsActiveLocally && gameState?.ownerDeviceId === deviceId && gameState?.commandOwnerId === deviceId) return 'owner';
+    // Fonte primária: ownerDeviceId no gameState local
+    if (liveIsActiveLocally && gameState?.ownerDeviceId === deviceId) return 'owner';
+    // Fallback: se não há ownerDeviceId mas este device é commandOwner e ownerPin é do usuário,
+    // ele abriu a live (caso de ownerDeviceId não salvo por bug anterior)
     const myPin = userProfile.pin?.toUpperCase();
+    if (
+      liveIsActiveLocally &&
+      !gameState?.ownerDeviceId &&
+      gameState?.commandOwnerId === deviceId &&
+      myPin &&
+      gameState?.ownerPin?.toUpperCase() === myPin
+    ) return 'owner';
     // Legado: live sem ownerDeviceId, só identifica como owner se não for relógio
     // (relógio tem o mesmo ownerPin do dono mas deviceId diferente — não é o owner).
     if (myPin && !isWatchDevice() && activeLives.some(l => l.ownerPin?.toUpperCase() === myPin && !l.ownerDeviceId)) return 'owner';
     if (myPin && activeLives.some(l => l.judgePin?.toUpperCase() === myPin)) return 'judge';
     return 'observer';
-  }, [cloudLiveExists, userProfile.pin, activeLives, deviceId, gameState?.isMirroringActive, gameState?.isLiveClosed, gameState?.ownerDeviceId, gameState?.commandOwnerId]);
+  }, [cloudLiveExists, userProfile.pin, activeLives, deviceId, gameState?.isMirroringActive, gameState?.isLiveClosed, gameState?.ownerDeviceId, gameState?.commandOwnerId, gameState?.ownerPin]);
 
   // ── useMemo: liveStatus ─────────────────────────────────────────────────────
   const liveStatus = useMemo((): LiveType => {

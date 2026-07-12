@@ -136,8 +136,8 @@ export const LiveControlOverlay: React.FC<Props> = ({
                 <RefreshCw size={18} /> Sincronizar Placar
               </button>
 
-              {/* Encerrar Transmissão (apenas se for Owner ou o Controller ativo) */}
-              {((livePapel === 'owner' && isCurrentController) || (!isOriginalOwner && isCurrentController)) && (
+              {/* Encerrar Transmissão (para o Owner em qualquer situação, ou para o controller ativo) */}
+              {(isOriginalOwner || (!isOriginalOwner && isCurrentController)) && (
                 <button
                   onClick={() => setConfirmDeleteLive(true)}
                   className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-red-950/10"
