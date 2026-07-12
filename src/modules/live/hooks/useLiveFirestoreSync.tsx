@@ -848,7 +848,10 @@ export function useLiveFirestoreSync(params: {
   ]);
 
   useEffect(() => {
+    let offlineTimeout: NodeJS.Timeout | null = null;
+
     const showOfflineAlert = () => {
+      if (!gameStateRef.current?.isMirroringActive) return;
       if (offlineAlertShownRef.current) return;
       offlineAlertShownRef.current = true;
       setModalConfig({
@@ -861,7 +864,16 @@ export function useLiveFirestoreSync(params: {
       });
     };
 
+    const handleOffline = () => {
+      if (offlineTimeout) clearTimeout(offlineTimeout);
+      offlineTimeout = setTimeout(showOfflineAlert, 60000); // 1 minuto de tolerância
+    };
+
     const clearOfflineAlert = () => {
+      if (offlineTimeout) {
+        clearTimeout(offlineTimeout);
+        offlineTimeout = null;
+      }
       offlineAlertShownRef.current = false;
       setModalConfig(prev => {
         if (
@@ -875,15 +887,16 @@ export function useLiveFirestoreSync(params: {
       });
     };
 
-    globalThis.addEventListener('offline', showOfflineAlert);
+    globalThis.addEventListener('offline', handleOffline);
     globalThis.addEventListener('online', clearOfflineAlert);
-    if (!navigator.onLine) showOfflineAlert();
+    if (!navigator.onLine) handleOffline();
 
     return () => {
-      globalThis.removeEventListener('offline', showOfflineAlert);
+      if (offlineTimeout) clearTimeout(offlineTimeout);
+      globalThis.removeEventListener('offline', handleOffline);
       globalThis.removeEventListener('online', clearOfflineAlert);
     };
-  }, [setModalConfig]);
+  }, [setModalConfig, gameStateRef]);
 
   useEffect(() => {
     if (!userProfile.pin || !userProfile.email) return;

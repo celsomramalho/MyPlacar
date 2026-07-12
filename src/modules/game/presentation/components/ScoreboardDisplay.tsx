@@ -241,7 +241,7 @@ if (!gameState?.p1?.sets || !gameState?.p2?.sets) return null;
 const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
 const showMic = !isPublicView && !!onVoiceToggle && gameState.matchConfig.voiceEnabled && (!isLiveActive || isCommandOwner);
 const fbAckProgress = Math.min(100, (fbAckElapsedSeconds / 60) * 100);
-const isFbAckLate = isLiveActive && fbAckElapsedSeconds >= 60;
+const isFbAckLate = isLiveActive && fbAckElapsedSeconds >= 30;
 
 const p1Sets = gameState.p1.sets;
 const p2Sets = gameState.p2.sets;

@@ -475,7 +475,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   }, [persistHistory, userProfile.pin, partners, setPlayerQueue, resolveTargetPin]);
 
   const handleLeaveLive = useCallback(async () => {
-    if (!gameState?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
+    if (!gameState?.isMirroringActive) return;
+
+    // Clear local state immediately to allow exiting even if offline
+    setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: false }; });
+    setCloudLiveExists(false);
+    setShowLiveControlOverlay(false);
+    try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
+
+    if (!userProfile.email || !navigator.onLine) return;
+    
     const db = getDb();
     if (!db) return;
     const targetPin = resolveTargetPin('handleLeaveLive');
@@ -504,12 +513,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       }
       await updateDoc(doc(db, "live_matches", targetPin), leaveUpdate);
     } catch {}
-  }, [gameState, userProfile.email, userProfile.pin, deviceId, isOriginalOwner, resolveTargetPin]);
+  }, [gameState, userProfile.email, userProfile.pin, deviceId, isOriginalOwner, resolveTargetPin, setGameState, setCloudLiveExists, setShowLiveControlOverlay]);
 
   const handleCloseCloudLive = useCallback(async () => {
-    const db = getDb();
-    if (!db) { setModalConfig({ title: "Erro", message: "Banco de dados não disponível.", onConfirm: () => setModalConfig(null) }); return; }
-    if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Sem conexão com a internet.", onConfirm: () => setModalConfig(null) }); return; }
     if (!userProfile.pin) { setModalConfig({ title: "Erro", message: "PIN não cadastrado.", onConfirm: () => setModalConfig(null) }); return; }
     
     const targetPin = resolveTargetPin('close');
@@ -517,14 +523,27 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
     isClosingLiveRef.current = true;
 
+    // Clear local state immediately so user is not stuck
     setGameState(prev => { if (!prev) return null; return { ...prev, isMirroringActive: false, isLiveClosed: true }; });
+    setCloudLiveExists(false);
+    setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
+    try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
+    setShowLiveControlOverlay(false);
+    setCurrentScreen('settings');
+
+    if (!navigator.onLine) {
+      isClosingLiveRef.current = false;
+      return; 
+    }
+
+    const db = getDb();
+    if (!db) { 
+      isClosingLiveRef.current = false;
+      return; 
+    }
 
     const safetyTimer = setTimeout(() => {
       isClosingLiveRef.current = false;
-      setCloudLiveExists(false);
-      setActiveLives(prev => prev.filter(l => l.ownerPin?.toUpperCase() !== targetPin));
-      try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
-      setShowLiveControlOverlay(false);
     }, 6000);
 
     try {

@@ -187,7 +187,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const isLiveActive = !!(gameState.isMirroringActive && !gameState.isLiveClosed) || !!cloudLiveExists;
   const fbAckProgress = Math.min(100, (fbAckElapsedSeconds / 60) * 100);
-  const isFbAckLate = isLiveActive && fbAckElapsedSeconds >= 60;
+  const isFbAckLate = isLiveActive && fbAckElapsedSeconds >= 30;
   const batteryFillClass = batteryStatus?.charging
     ? 'bg-emerald-500'
     : (batteryStatus?.percent ?? 100) <= 20

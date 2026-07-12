@@ -1482,7 +1482,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           };
           const isLiveActiveNew = !!(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) || !!effectiveCloudLiveExists;
           const fbAckProgressNew = Math.min(100, (firebaseAckElapsedSeconds / 60) * 100);
-          const isFbAckLateNew = isLiveActiveNew && firebaseAckElapsedSeconds >= 60;
+          const isFbAckLateNew = isLiveActiveNew && firebaseAckElapsedSeconds >= 30;
           const p1Color = effectiveGameState.p1.color || 'azul';
           const p2Color = effectiveGameState.p2.color || 'vermelho';
 
