@@ -848,7 +848,7 @@ export function useLiveFirestoreSync(params: {
   ]);
 
   useEffect(() => {
-    let offlineTimeout: NodeJS.Timeout | null = null;
+    let offlineTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const showOfflineAlert = () => {
       if (!gameStateRef.current?.isMirroringActive) return;
