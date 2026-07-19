@@ -101,7 +101,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
     try {
       s.deviceLabel = localStorage.getItem('myPlacar_LocalDeviceLabel') || '';
-      s.brightness = parseInt(localStorage.getItem('myPlacar_LocalBrightness') || '100');
+      const rawBrightness = parseInt(localStorage.getItem('myPlacar_LocalBrightness') || '100');
+      s.brightness = (!isNaN(rawBrightness) && rawBrightness >= 0 && rawBrightness <= 100) ? Math.max(10, rawBrightness) : 100;
       s.volume = parseInt(localStorage.getItem('myPlacar_LocalVolume') || '100');
       if (isWatchDevice()) {
         s.isWatchMode = true;
