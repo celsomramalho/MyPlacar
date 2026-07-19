@@ -444,8 +444,8 @@ export function useLiveFirestoreSync(params: {
                 ...cloudData.matchConfig,
                 isWatchMode: resolvedWatchMode,
                 isScoreboardMode: resolvedScoreboardMode,
-                brightness: baseConfig.brightness,
-                volume: baseConfig.volume,
+                brightness: baseConfig.brightness ?? 100,
+                volume: baseConfig.volume ?? 100,
                 deviceLabel: baseConfig.deviceLabel,
                 selectedVoiceURI: baseConfig.selectedVoiceURI,
                 voiceEnabled: baseConfig.voiceEnabled,
@@ -904,10 +904,18 @@ export function useLiveFirestoreSync(params: {
       lastConnectionAlertKeyRef.current = null;
       return;
     }
+    if (gameState?.isLiveClosed) {
+      lastConnectionAlertKeyRef.current = null;
+      return;
+    }
 
     const checkRemotePresence = () => {
       const now = Date.now();
       const currentGs = gameStateRef.current;
+      if (currentGs?.isLiveClosed) {
+        lastConnectionAlertKeyRef.current = null;
+        return;
+      }
       const live =
         currentGs?.isMirroringActive && !currentGs.isLiveClosed
           ? currentGs

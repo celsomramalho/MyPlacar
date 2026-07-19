@@ -846,8 +846,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
               commandOwnerId: cloudData.commandOwnerId ?? prev.commandOwnerId,
               matchConfig: {
                 ...cloudData.matchConfig,
-                brightness: baseConfig?.brightness,
-                volume: baseConfig?.volume,
+                brightness: baseConfig?.brightness ?? 100,
+                volume: baseConfig?.volume ?? 100,
                 deviceLabel: baseConfig?.deviceLabel,
                 selectedVoiceURI: baseConfig?.selectedVoiceURI,
                 voiceEnabled: baseConfig?.voiceEnabled,

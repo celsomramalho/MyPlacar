@@ -168,7 +168,13 @@ export function useAppStartup({
   useEffect(() => {
     const overlay = document.getElementById('brightness-overlay');
     if (overlay) {
-      overlay.style.opacity = ((100 - matchSettings.brightness) / 100).toString();
+      // Proteção contra NaN/undefined: se brightness for inválido, assume 100 (sem escurecimento).
+      // NaN ocorre quando matchConfig vindo do Firebase não tem o campo 'brightness',
+      // e no WebKit/Android, opacity:NaN é tratado como opacidade máxima (tela preta).
+      const safeBrightness = (typeof matchSettings.brightness === 'number' && !isNaN(matchSettings.brightness))
+        ? Math.max(0, Math.min(100, matchSettings.brightness))
+        : 100;
+      overlay.style.opacity = ((100 - safeBrightness) / 100).toString();
     }
   }, [matchSettings.brightness]);
 }
