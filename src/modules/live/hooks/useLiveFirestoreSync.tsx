@@ -505,12 +505,20 @@ export function useLiveFirestoreSync(params: {
         // Agir aqui desativaria o relógio prematuramente por latência de rede.
         if (isWatchDevice()) return;
         // Correção 4: limpa o estado de live SEMPRE, independente dos flags locais
-        // (isMirroringActive, isLiveClosed). O estado anterior pode estar inconsistente
-        // — por exemplo, quando o encerramento veio direto pelo console do Firebase
-        // sem passar pelo fluxo normal do app, ou quando o owner ainda tinha
-        // isMirroringActive: false localmente mas cloudLiveExists: true.
+        // (isMirroringActive, isLiveClosed). O estado anterior pode estar inconsistente.
         const prevGs = gameStateRef.current;
         const wasActiveLocally = prevGs?.isMirroringActive && !prevGs?.isLiveClosed;
+
+        // Limpa o estado local IMEDIATAMENTE antes de configurar o modal,
+        // para que o listener e futuros ciclos não vejam wasActiveLocally como true.
+        isClosingLiveRef.current = false;
+        setCloudLiveExists(false);
+        setActiveLives([]);
+        setGameState(prev => {
+          if (!prev) return null;
+          return { ...prev, isMirroringActive: false, isLiveClosed: true };
+        });
+
         // Notifica observers que ainda não receberam o isLiveClosed (só se relevante)
         if (wasActiveLocally) {
           setModalConfig({
@@ -521,14 +529,6 @@ export function useLiveFirestoreSync(params: {
             onConfirm: () => setModalConfig(null),
           });
         }
-        // Sempre limpa — independente de wasActiveLocally
-        isClosingLiveRef.current = false;
-        setCloudLiveExists(false);
-        setActiveLives([]);
-        setGameState(prev => {
-          if (!prev) return null;
-          return { ...prev, isMirroringActive: false, isLiveClosed: true };
-        });
       }
       });
     };

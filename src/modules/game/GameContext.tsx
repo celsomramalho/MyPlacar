@@ -773,7 +773,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             [`controllers.${deviceId}`]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, status: initialStatus, deviceType: getDeviceType(), isOwner: joinRole === 'owner' }
           }).catch((err) => {
             console.error("Firebase join error:", err);
-            localStorage.setItem('myPlacar_last_firebase_error', `join: ${err?.message || err}`);
+            const errMsg = err?.message || String(err);
+            if (!errMsg.includes("No document to update")) {
+              localStorage.setItem('myPlacar_last_firebase_error', `join: ${errMsg}`);
+            }
           });
           
           if (cloudData.matchConfig) {
