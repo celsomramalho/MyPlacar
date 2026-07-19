@@ -182,7 +182,12 @@ export function ScoreboardRoute({
       onOpenMenu={onOpenMenu}
       isOfflineMode={isOfflineMode}
       onExitOffline={onExitOffline}
-      onToggleWatchMode={() => setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }))}
+      onToggleWatchMode={() => {
+        setMatchSettings(prev => ({ ...prev, isWatchMode: !prev.isWatchMode }));
+        setGameState(p =>
+          p ? { ...p, matchConfig: { ...p.matchConfig, isWatchMode: !p.matchConfig.isWatchMode } } : null
+        );
+      }}
       onToggleScoreboardMode={() => {
         setMatchSettings(prev => ({ ...prev, isScoreboardMode: !prev.isScoreboardMode }));
         setGameState(p =>
