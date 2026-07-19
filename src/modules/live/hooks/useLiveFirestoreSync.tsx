@@ -973,6 +973,10 @@ export function useLiveFirestoreSync(params: {
       const [staleDeviceId, controller] = staleCounterpart;
       const alertKey = `${live.ownerPin || 'live'}:${staleDeviceId}:${Math.floor(controller.lastSeen / staleAfterMs)}`;
       if (lastConnectionAlertKeyRef.current === alertKey) return;
+
+      // Se o usuário já confirmou este alerta de desconexão específico, não reexibe
+      if (globalThis.sessionStorage.getItem(`confirmed_lost_presence_${alertKey}`)) return;
+
       lastConnectionAlertKeyRef.current = alertKey;
 
       const deviceLabel = controller.nickname || controller.label || (isWatchDevice() ? 'celular' : 'relógio');
@@ -982,7 +986,12 @@ export function useLiveFirestoreSync(params: {
         icon: <WifiOff className="text-orange-500 w-16 h-16" />,
         variant: 'info',
         pulseAlert: true,
-        onConfirm: () => setModalConfig(null),
+        onConfirm: () => {
+          try {
+            globalThis.sessionStorage.setItem(`confirmed_lost_presence_${alertKey}`, '1');
+          } catch {}
+          setModalConfig(null);
+        },
       });
     };
 
