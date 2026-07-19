@@ -1185,6 +1185,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         fbSyncStatus={effectiveFbSyncStatus}
         lastFirebaseAckAt={effectiveLastFirebaseAckAt}
         onToggleScoreboardMode={onToggleScoreboardMode}
+        onToggleWatchMode={onToggleWatchMode}
       />
     );
   }
