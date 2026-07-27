@@ -9,6 +9,7 @@ import type { FirebaseTournamentLiveScore } from '@infra/firebase';
 import { Firestore } from 'firebase/firestore';
 import { SPORT_LIST } from '../../../constants.ts';
 import { formatPortugueseName, maskPin } from '@shared/utils/formatters';
+import { copyToClipboard } from '@shared/utils/clipboard';
 import { Toggle } from '@shared/components/Toggle';
 import { Input } from '@shared/components/Input';
 
@@ -608,8 +609,13 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                       }} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all">
                         <Share2 size={18} /> WhatsApp
                       </button>
-                      <button onClick={() => {
-                        navigator.clipboard.writeText(inviteLink).then(() => setModalConfig({ title: "Sucesso", message: "Link do convite copiado com sucesso.", onConfirm: () => setModalConfig(null) }));
+                      <button onClick={async () => {
+                        const ok = await copyToClipboard(inviteLink);
+                        if (ok) {
+                          setModalConfig({ title: "Sucesso", message: "Link do convite copiado com sucesso.", onConfirm: () => setModalConfig(null) });
+                        } else {
+                          setModalConfig({ title: "Aviso", message: "Não foi possível copiar automaticamente. Copie manualmente: " + inviteLink, onConfirm: () => setModalConfig(null) });
+                        }
                       }} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all">
                         <Copy size={18} /> Copiar link de convite
                       </button>

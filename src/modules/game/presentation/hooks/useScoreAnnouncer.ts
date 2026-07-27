@@ -455,6 +455,8 @@ export const buildAnnouncementTennis = (
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
 
+const announcedStartMatchIds = new Set<string>();
+
 export const useScoreAnnouncer = (gameState: GameState) => {
   const [isAnnouncing, setIsAnnouncing] = useState(false);
 
@@ -470,6 +472,10 @@ export const useScoreAnnouncer = (gameState: GameState) => {
   const lastAnnouncedText  = useRef<string>('');
   const lastChangeTime = useRef<number>(0);
   const debounceTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // startAnnounceTimer: debounce para o anúncio de início de partida no modo live.
+  // Evita que múltiplas recriações do `announce` callback (causadas por sync de configs
+  // do Firestore) disparem o anúncio de "partida iniciada" várias vezes.
+  const startAnnounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     voiceScoring, useGeminiVoice, geminiVoiceName, geminiPersona,
@@ -494,6 +500,11 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     }
   }, [voiceScoring, useGeminiVoice, geminiVoiceName, geminiPersona, selectedVoiceURI, volume]);
 
+  // Ref sempre atualizada com o `announce` mais recente — permite que o useEffect
+  // principal chame a versão atual sem precisar listá-la como dependência.
+  const announceRef = useRef(announce);
+  useEffect(() => { announceRef.current = announce; }, [announce]);
+
   // Botao manual de anuncio do placar completo
   // Anúncio manual — apenas tênis/beach tênis.
   // Pickleball usa usePickleballAnnouncer.announceFullScore.
@@ -517,10 +528,11 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     announce(text);
   }, [gameState, announce]);
 
-  // Limpa o timer de debounce se o componente for desmontado
+  // Limpa os timers de debounce se o componente for desmontado
   useEffect(() => {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      if (startAnnounceTimer.current) clearTimeout(startAnnounceTimer.current);
     };
   }, []);
 
@@ -533,27 +545,39 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     const currentIsTB = isTennisTieBreak(gameState);
 
     // Se o gender mudou (usuário alterou na tela de nomes e clicou Play),
-    // reseta o guard para permitir re-anúncio do início com o gender correto.
-    const genderChanged = prevP1Gender.current !== gameState.p1?.gender || prevP2Gender.current !== gameState.p2?.gender;
-    if (genderChanged && currentPointCount === 0) {
+    // só reseta o guard se a partida ainda não teve seu início anunciado.
+    const genderChanged = prevP1Gender.current !== undefined &&
+      (prevP1Gender.current !== gameState.p1?.gender || prevP2Gender.current !== gameState.p2?.gender);
+    if (genderChanged && currentPointCount === 0 && !announcedStartMatchIds.has(gameState.matchId)) {
       announcedStartFor.current = null;
       lastAnnouncedText.current = '';
     }
     prevP1Gender.current = gameState.p1?.gender;
     prevP2Gender.current = gameState.p2?.gender;
 
-    // Inicio da partida
-    if (currentPointCount === 0 && announcedStartFor.current !== gameState.matchId) {
+    // Inicio da partida — anunciado no máximo UMA vez por matchId.
+    // No modo live, usa debounce de 800ms para absorver os múltiplos setGameState
+    // disparados pela inicialização do Firestore (pending write + confirmação do servidor).
+    if (currentPointCount === 0 && announcedStartFor.current !== gameState.matchId && !announcedStartMatchIds.has(gameState.matchId)) {
       announcedStartFor.current = gameState.matchId;
-      const text = buildAnnouncementTennis(gameState, {
-        prevPointCount: 0, prevSet: gameState.currentSet, prevIsTB: false, isMatchStart: true,
-      });
-      if (text) announce(text);
+      announcedStartMatchIds.add(gameState.matchId);
       prevPointCount.current = 0;
       prevSet.current = gameState.currentSet;
       prevIsTB.current = false;
       prevServer.current = gameState.server;
       prevOffset.current = gameState.servingOrderOffset;
+      // Captura snapshot do gameState para o texto (evita closure stale)
+      const capturedState = gameState;
+      const scheduleStart = () => {
+        if (startAnnounceTimer.current) clearTimeout(startAnnounceTimer.current);
+        startAnnounceTimer.current = setTimeout(() => {
+          const text = buildAnnouncementTennis(capturedState, {
+            prevPointCount: 0, prevSet: capturedState.currentSet, prevIsTB: false, isMatchStart: true,
+          });
+          if (text) announceRef.current(text);
+        }, capturedState.isMirroringActive ? 800 : 0);
+      };
+      scheduleStart();
       return;
     }
 
@@ -572,7 +596,7 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     }
 
     const isBatchUpdate = (currentPointCount - prevPointCount.current) > 1;
-    const isRapidSequence = elapsed < 2000 && gameState.isMirroringActive;
+    const isRapidSequence = elapsed < 2000 && gameState.isMirroringActive && currentPointCount > 0;
 
     if (isBatchUpdate || isRapidSequence) {
       // Sincroniza referências para evitar que o próximo ponto síncrono dispare anúncios velhos
@@ -626,12 +650,14 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     // no gameState completo capturado dentro do effect.
     // gender: incluído para re-anunciar corretamente quando o usuário muda o
     // gênero na tela de nomes e clica Play sem iniciar nova partida.
+    // NOTA: `announce` foi removido das deps intencionalmente — o announceRef
+    // garante que sempre usamos a versão mais recente sem re-executar o effect
+    // por mudanças de configuração de voz (que causavam anúncios duplicados no live).
     gameState?.pointHistory?.length,
     gameState.isMatchOver,
     gameState.matchId,
     gameState.p1?.gender,
     gameState.p2?.gender,
-    announce,
     sportType,
   ]);
 

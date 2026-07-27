@@ -18,6 +18,7 @@ import { getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'fi
 import { mirrorUser, mirrorPartners } from '@infra/supabase';
 import { LiveIndicator } from '@modules/live'; 
 import { formatPortugueseName, maskPin } from '@shared/utils/formatters';
+import { copyToClipboard } from '@shared/utils/clipboard';
 import { Toggle } from '@shared/components/Toggle';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 
@@ -195,7 +196,11 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
     const text = `Participe comigo no my placar. Clique no link para se cadastrar e me adicionar como parceiro: ${shareLink}`;
     globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
-  const handleCopyShareLink = () => navigator.clipboard.writeText(shareLink).then(() => window.alert("Link de indicação copiado com sucesso!"));
+  const handleCopyShareLink = async () => {
+    const ok = await copyToClipboard(shareLink);
+    if (ok) window.alert("Link de indicação copiado com sucesso!");
+    else window.alert("Não foi possível copiar o link automaticamente. Copie manualmente: " + shareLink);
+  };
 
   const refreshAllNicknames = async () => {
     if (isRefreshing || partners.length === 0) return;

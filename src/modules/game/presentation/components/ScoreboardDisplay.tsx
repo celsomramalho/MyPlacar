@@ -66,17 +66,38 @@ isVoiceActive = false,
   onToggleScoreboardMode,
   onToggleWatchMode,
 }) => {
-const [isMenuOpen, setIsMenuOpen] = useState(false);
-const [physicalLandscape, setPhysicalLandscape] = useState(
-() => window.innerWidth > window.innerHeight
-);
-const [forceLayoutOverride, setForceLayoutOverride] = useState<boolean | null>(null);
-// isLandscape: usa override manual se definido, senão usa a orientação física
-const isLandscape = forceLayoutOverride !== null ? forceLayoutOverride : physicalLandscape;
-const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showSetGamesInMainScore, setShowSetGamesInMainScore] = useState(false);
+  const [physicalLandscape, setPhysicalLandscape] = useState(
+    () => window.innerWidth > window.innerHeight
+  );
+  const [forceLayoutOverride, setForceLayoutOverride] = useState<boolean | null>(null);
+  // isLandscape: usa override manual se definido, senão usa a orientação física
+  const isLandscape = forceLayoutOverride !== null ? forceLayoutOverride : physicalLandscape;
+  const isPublicView = new URLSearchParams(window.location.search).get('viewMode') === 'scoreboard';
 
-const displayTime = useMatchTimer(gameState);
-const [fbAckElapsedSeconds, setFbAckElapsedSeconds] = useState(0);
+  const displayTime = useMatchTimer(gameState);
+  const [fbAckElapsedSeconds, setFbAckElapsedSeconds] = useState(0);
+
+  const p1Games = gameState?.p1?.games ?? 0;
+  const p2Games = gameState?.p2?.games ?? 0;
+  const hasFinishedGames = (p1Games + p2Games) > 0;
+  const s1 = String(gameState?.p1?.score ?? '').trim();
+  const s2 = String(gameState?.p2?.score ?? '').trim();
+  const isZeroZero = (s1 === '0' || s1 === '00' || s1 === '') && (s2 === '0' || s2 === '00' || s2 === '');
+
+  useEffect(() => {
+    if (!hasFinishedGames || !isZeroZero || gameState?.isMatchOver) {
+      setShowSetGamesInMainScore(false);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setShowSetGamesInMainScore(prev => !prev);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [hasFinishedGames, isZeroZero, gameState?.isMatchOver]);
 
 useEffect(() => {
 setFbAckElapsedSeconds(Math.max(0, Math.floor((Date.now() - lastFirebaseAckAt) / 1000)));
@@ -293,9 +314,9 @@ return (
 {/* time 1: bottom-3 + items-end ancora a base do número em bottom-3 */}
 {/* time 2: top-3  + items-start ancora o topo do número em top-3, alinhado com o indicador */}
 <div className={`absolute left-0 right-0 flex justify-center z-0 ${team === 1 ? 'bottom-3 items-end' : 'top-3 items-start'}`}>
-<span className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'}`}
+<span className={`font-black leading-none tabular-nums tracking-tighter select-none transition-all duration-300 ${isServing ? 'text-[#bef264]' : 'text-white'}`}
 style={{ fontSize: 'clamp(120px, 28vh, 260px)' }}>
-{p.score}
+{showSetGamesInMainScore ? p.games : p.score}
 </span>
 </div>
 

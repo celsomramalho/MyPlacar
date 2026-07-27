@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Mic, Undo, Settings, Pause, Play, VolumeX, User, Zap, Activity, X as CloseIcon, Trophy, Loader2, CheckCircle2, AlertCircle, X, Share2, QrCode, Copy, Globe, Edit3, Watch, RotateCcw, CheckCircle, Check, Wifi, MonitorSmartphone, ChevronDown, ChevronUp, ListTodo, ShieldCheck, Eye, WifiOff, Gavel, Trash2, Users, Smartphone, Monitor, Laptop, Crown, UserPlus, Gamepad2, RefreshCw, SquareKanban, Cast, Menu, ArrowRightLeft } from 'lucide-react';
 import { getDeviceType } from '@shared/utils/device';
+import { copyToClipboard } from '@shared/utils/clipboard';
 import { Button } from '@shared/components/Button';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { Input } from '@shared/components/Input';
@@ -865,6 +866,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   });
   const [isEditingUrl, setIsEditingUrl] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [copiedType, setCopiedType] = useState<'link' | 'watch' | null>(null);
   const mirrorLink = useMemo(() => {
     let base = customBaseUrl.trim();
     if (!base.startsWith('http')) base = 'https://' + base;
@@ -996,8 +998,26 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   };
 
   const handleSaveBaseUrl = () => { localStorage.setItem('myPlacar_CustomHost', customBaseUrl); setIsEditingUrl(false); };
-  const handleCopyLink = () => navigator.clipboard.writeText(scoreboardLink).then(() => window.alert("Link do placar copiado com sucesso."));
-  const handleCopyWatchLink = () => navigator.clipboard.writeText(watchLink).then(() => window.alert("Link para relógio copiado com sucesso."));
+  const handleCopyLink = async () => {
+    const ok = await copyToClipboard(scoreboardLink);
+    if (ok) {
+      setCopiedType('link');
+      setTimeout(() => setCopiedType(null), 2500);
+      window.alert("Link do placar copiado com sucesso.");
+    } else {
+      window.alert("Não foi possível copiar o link automaticamente. Copie manualmente: " + scoreboardLink);
+    }
+  };
+  const handleCopyWatchLink = async () => {
+    const ok = await copyToClipboard(watchLink);
+    if (ok) {
+      setCopiedType('watch');
+      setTimeout(() => setCopiedType(null), 2500);
+      window.alert("Link para relógio copiado com sucesso.");
+    } else {
+      window.alert("Não foi possível copiar o link automaticamente. Copie manualmente: " + watchLink);
+    }
+  };
   const handleShareWhatsApp = () => {
     const currentSportDef = SPORT_LIST.find(s => s.id === effectiveGameState.matchConfig.sportType) || SPORT_LIST[0];
     const text = `Acompanhe meu jogo de ${currentSportDef.name} ao vivo no my placar. 🎾\n\n${scoreboardLink}`;
@@ -1079,6 +1099,28 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       onScoreUpdate(player, 'rally', 'cb');
     }
   };
+
+  const [showSetGamesInMainScore, setShowSetGamesInMainScore] = useState(false);
+
+  const p1GamesNew = effectiveGameState?.p1?.games ?? 0;
+  const p2GamesNew = effectiveGameState?.p2?.games ?? 0;
+  const hasFinishedGamesNew = (p1GamesNew + p2GamesNew) > 0;
+  const s1New = String(effectiveGameState?.p1?.score ?? '').trim();
+  const s2New = String(effectiveGameState?.p2?.score ?? '').trim();
+  const isZeroZeroNew = (s1New === '0' || s1New === '00' || s1New === '') && (s2New === '0' || s2New === '00' || s2New === '');
+
+  useEffect(() => {
+    if (!hasFinishedGamesNew || !isZeroZeroNew || effectiveGameState?.isMatchOver) {
+      setShowSetGamesInMainScore(false);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setShowSetGamesInMainScore(prev => !prev);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [hasFinishedGamesNew, isZeroZeroNew, effectiveGameState?.isMatchOver]);
 
   const p1WonSets = useMemo(() => effectiveGameState.p1.sets.filter((s, i) => s > effectiveGameState.p2.sets[i]).length, [effectiveGameState.p1.sets, effectiveGameState.p2.sets]);
   const p2WonSets = useMemo(() => effectiveGameState.p2.sets.filter((s, i) => s > effectiveGameState.p1.sets[i]).length, [effectiveGameState.p1.sets, effectiveGameState.p2.sets]);
@@ -1616,20 +1658,20 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                 {team === 1 && (
                   <div className="absolute top-[60px] bottom-0 left-0 right-0 flex justify-center items-center z-0">
                     <span
-                      className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
+                      className={`font-black leading-none tabular-nums tracking-tighter select-none transition-all duration-300 ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
                       style={{ fontSize: 'clamp(100px, 20vh, 220px)' }}
                     >
-                      {p.score}
+                      {showSetGamesInMainScore ? p.games : p.score}
                     </span>
                   </div>
                 )}
                 {team === 2 && (
                   <div className="absolute top-0 bottom-[60px] left-0 right-0 flex justify-center items-center z-0">
                     <span
-                      className={`font-black leading-none tabular-nums tracking-tighter select-none ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
+                      className={`font-black leading-none tabular-nums tracking-tighter select-none transition-all duration-300 ${isServing ? 'text-[#bef264]' : 'text-white'} ${!isCommandOwner ? 'opacity-70' : ''}`}
                       style={{ fontSize: 'clamp(100px, 20vh, 220px)' }}
                     >
-                      {p.score}
+                      {showSetGamesInMainScore ? p.games : p.score}
                     </span>
                   </div>
                 )}
@@ -1911,7 +1953,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                {isLiveActive && isMirrorExpanded && (
                  <div className="mt-4 space-y-6 animate-in zoom-in duration-500 border-t border-white/5 pt-6">
                     {isAdmin && <div className="bg-white/5 border border-white/10 rounded-3xl p-5 space-y-3"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Globe size={14} className="text-blue-400" /><span className="text-[10px] font-black text-blue-400 tracking-tight">Endereço público do app</span></div><button onClick={() => setIsEditingUrl(!isEditingUrl)} className="text-gray-400 p-1 active:scale-90 transition-all"><Edit3 size={14} /></button></div>{isEditingUrl ? <div className="flex gap-2 animate-in slide-in-from-top-1"><input type="text" value={customBaseUrl} onChange={(e) => setCustomBaseUrl(e.target.value)} placeholder="https://seu-link-real.app/" className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-xs text-white outline-none" /><button onClick={handleSaveBaseUrl} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black">Ok</button></div> : <p className="text-[11px] font-bold text-gray-400 truncate bg-black/20 p-2 rounded-xl border border-white/5">{customBaseUrl}</p>}</div>}
-                    <div className="flex flex-col items-center gap-8 w-full"><div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeUrl} alt="QR code" className="w-full h-full object-contain" /></div><div className="w-full space-y-3"><button onClick={handleShareWhatsApp} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 shadow-lg active:scale-95 transition-all flex"><Share2 size={18} /> WhatsApp</button><button onClick={handleCopyLink} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all flex"><Copy size={18} /> Copiar link</button><button onClick={handleCopyWatchLink} className="w-full bg-indigo-600 text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 shadow-lg active:scale-95 transition-all flex"><Watch size={18} /> Link para relógio</button></div></div>
+                    <div className="flex flex-col items-center gap-8 w-full"><div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeUrl} alt="QR code" className="w-full h-full object-contain" /></div><div className="w-full space-y-3"><button onClick={handleShareWhatsApp} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 shadow-lg active:scale-95 transition-all flex"><Share2 size={18} /> WhatsApp</button><button onClick={handleCopyLink} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all flex">{copiedType === 'link' ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}{copiedType === 'link' ? 'Link copiado!' : 'Copiar link'}</button><button onClick={handleCopyWatchLink} className="w-full bg-indigo-600 text-white py-4 px-8 rounded-2xl font-black text-xs items-center justify-center gap-3 shadow-lg active:scale-95 transition-all flex">{copiedType === 'watch' ? <Check size={18} className="text-green-400" /> : <Watch size={18} />}{copiedType === 'watch' ? 'Link copiado!' : 'Link para relógio'}</button></div></div>
                  </div>
                )}
             </div>

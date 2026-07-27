@@ -48,6 +48,28 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showSetGamesInMainScore, setShowSetGamesInMainScore] = useState(false);
+
+  const p1Games = gameState?.p1?.games ?? 0;
+  const p2Games = gameState?.p2?.games ?? 0;
+  const p1Score = gameState?.p1?.score;
+  const p2Score = gameState?.p2?.score;
+  const totalGamesInSet = p1Games + p2Games;
+
+  const isZeroZero = (p1Score === 0 || p1Score === '0' || p1Score === '') &&
+                     (p2Score === 0 || p2Score === '0' || p2Score === '');
+  const shouldAlternate = totalGamesInSet > 0 && isZeroZero;
+
+  useEffect(() => {
+    if (!shouldAlternate) {
+      setShowSetGamesInMainScore(false);
+      return;
+    }
+    const timer = setInterval(() => {
+      setShowSetGamesInMainScore(prev => !prev);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [shouldAlternate]);
 
   useEffect(() => {
     const db = getDb();
@@ -75,7 +97,6 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
     if (targetPin) {
       unsubscribe = setupListener(targetPin);
     } else if (matchId) {
-      // Se tiver matchId mas não PIN, tentamos localizar qual PIN é dono desse matchId
       const q = query(collection(db, "live_matches"), where("matchId", "==", matchId));
       getDocs(q).then(snap => {
         if (!snap.empty) {
@@ -184,9 +205,11 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
                     position="bottom"
                   />
                 )}
-                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Ponto</p>
-                <span className={`text-5xl font-black tabular-nums ${gameState.server === 1 ? 'text-blue-400' : 'text-white'}`}>
-                  {gameState.p1.score}
+                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">
+                  {showSetGamesInMainScore ? 'Games' : 'Ponto'}
+                </p>
+                <span className={`text-5xl font-black tabular-nums transition-all duration-300 ${gameState.server === 1 ? 'text-blue-400' : 'text-white'}`}>
+                  {showSetGamesInMainScore ? gameState.p1.games : gameState.p1.score}
                 </span>
               </div>
             </div>
@@ -225,15 +248,17 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
                     position="top"
                   />
                 )}
-                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Ponto</p>
-                <span className={`text-5xl font-black tabular-nums ${gameState.server === 2 ? 'text-blue-400' : 'text-white'}`}>
-                  {gameState.p2.score}
+                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">
+                  {showSetGamesInMainScore ? 'Games' : 'Ponto'}
+                </p>
+                <span className={`text-5xl font-black tabular-nums transition-all duration-300 ${gameState.server === 2 ? 'text-blue-400' : 'text-white'}`}>
+                  {showSetGamesInMainScore ? gameState.p2.games : gameState.p2.score}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Histórico de sets disputados (Sugestão C) */}
+          {/* Histórico de sets disputados */}
           {gameState.p1.sets.length > 0 && (
             <div className="mt-6 pt-5 border-t border-white/5">
               <p className="text-[9px] font-black text-white/30 uppercase tracking-widest text-center mb-3">Histórico de sets</p>

@@ -96,10 +96,31 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [showSetGamesInMainScore, setShowSetGamesInMainScore] = React.useState(false);
   const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
   const [batteryStatus, setBatteryStatus] = React.useState<BatteryStatus | null>(null);
   const [fbAckElapsedSeconds, setFbAckElapsedSeconds] = React.useState(0);
   const pauseRotationUntil = React.useRef(0);
+
+  const p1Games = gameState?.p1?.games ?? 0;
+  const p2Games = gameState?.p2?.games ?? 0;
+  const hasFinishedGames = (p1Games + p2Games) > 0;
+  const s1 = String(gameState?.p1?.score ?? '').trim();
+  const s2 = String(gameState?.p2?.score ?? '').trim();
+  const isZeroZero = (s1 === '0' || s1 === '00' || s1 === '') && (s2 === '0' || s2 === '00' || s2 === '');
+
+  React.useEffect(() => {
+    if (!hasFinishedGames || !isZeroZero || gameState?.isMatchOver) {
+      setShowSetGamesInMainScore(false);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setShowSetGamesInMainScore(prev => !prev);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [hasFinishedGames, isZeroZero, gameState?.isMatchOver]);
 
   React.useEffect(() => {
     setFbAckElapsedSeconds(Math.max(0, Math.floor((Date.now() - lastFirebaseAckAt) / 1000)));
@@ -437,7 +458,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
             />
           )}
-          <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 ${gameState.server === 1 ? 'text-[#bef264]' : 'text-white'}`}>{gameState.p1.score}</span>
+          <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 transition-all duration-300 ${gameState.server === 1 ? 'text-[#bef264]' : 'text-white'}`}>{showSetGamesInMainScore ? gameState.p1.games : gameState.p1.score}</span>
           {remoteActionFeedback === 'P1_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
           {renderServerIndicator(1)}
           {/* FB Sync Badge — topo-esquerdo, compacto para display do relógio */}
@@ -666,7 +687,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
             />
           )}
-          <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 ${gameState.server === 2 ? 'text-[#bef264]' : 'text-white'}`}>{gameState.p2.score}</span>
+          <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 transition-all duration-300 ${gameState.server === 2 ? 'text-[#bef264]' : 'text-white'}`}>{showSetGamesInMainScore ? gameState.p2.games : gameState.p2.score}</span>
           {remoteActionFeedback === 'P2_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
           {renderServerIndicator(2)}
           {/* FB Sync Badge — inferior-esquerdo (topo ocupado pelo indicador de saque) */}

@@ -162,6 +162,8 @@ export const buildAnnouncementPickleball = (
 
 let hardwareInitialized = false;
 
+const announcedPickleballStartMatchIds = new Set<string>();
+
 export const usePickleballAnnouncer = (gameState: GameState) => {
   const [isAnnouncing, setIsAnnouncing] = useState(false);
 
@@ -221,9 +223,10 @@ export const usePickleballAnnouncer = (gameState: GameState) => {
 
     const currentPointCount = gameState?.pointHistory?.length ?? 0;
 
-    // Início da partida
-    if (currentPointCount === 0 && announcedStartFor.current !== gameState.matchId) {
+    // Início da partida — anunciado no máximo UMA vez por matchId
+    if (currentPointCount === 0 && announcedStartFor.current !== gameState.matchId && !announcedPickleballStartMatchIds.has(gameState.matchId)) {
       announcedStartFor.current = gameState.matchId;
+      announcedPickleballStartMatchIds.add(gameState.matchId);
       const text = buildAnnouncementPickleball(pkl, gameState, {
         prevPointCount: 0,
         prevSet: gameState.currentSet,
