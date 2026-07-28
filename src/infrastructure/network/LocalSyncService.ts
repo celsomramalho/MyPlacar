@@ -129,6 +129,19 @@ export class LocalSyncService {
       }
     };
     window.addEventListener('storage', storageHandler);
+
+    // Polling reserva no localStorage caso o evento storage nao tenha disparado na mesma janela
+    const pollInterval = setInterval(() => {
+      try {
+        const item = localStorage.getItem(`myplacar_handshake_${pin}`);
+        if (item) {
+          const msg = JSON.parse(item);
+          handleMessage(msg);
+        }
+      } catch { /* best effort */ }
+    }, 500);
+
+    setTimeout(() => clearInterval(pollInterval), 15000);
   }
 
   broadcastGameState(gameState: unknown): void {
@@ -195,6 +208,20 @@ export class LocalSyncService {
     };
     window.addEventListener('storage', storageHandler);
 
+    // Polling reserva no localStorage para o Espelho detectar a resposta de conexao
+    const pollAckInterval = setInterval(() => {
+      try {
+        const ackItem = localStorage.getItem(`myplacar_ack_${pin}`);
+        if (ackItem) {
+          handlePayload(JSON.parse(ackItem));
+        }
+        const stateItem = localStorage.getItem(`myplacar_gamestate_${pin}`);
+        if (stateItem) {
+          handlePayload(JSON.parse(stateItem));
+        }
+      } catch { /* best effort */ }
+    }, 400);
+
     // Envia handshake inicial via Broadcast + LocalStorage com retries
     const sendHandshake = () => {
       const payload: LocalSyncPayload = { type: 'handshake', pin };
@@ -207,8 +234,11 @@ export class LocalSyncService {
     sendHandshake();
     const handshakeInterval = setInterval(sendHandshake, 800);
 
-    // Para o retry após 10 segundos ou ao conectar
-    setTimeout(() => clearInterval(handshakeInterval), 10000);
+    // Para o retry após 15 segundos ou ao conectar
+    setTimeout(() => {
+      clearInterval(handshakeInterval);
+      clearInterval(pollAckInterval);
+    }, 15000);
   }
 
   private connectMirrorWebSocket(pin: string, ip: string): void {

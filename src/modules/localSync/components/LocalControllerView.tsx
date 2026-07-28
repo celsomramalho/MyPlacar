@@ -99,12 +99,17 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop }) =>
             </div>
           </div>
         )}
-        {/* Painel de Diagnóstico */}
-        <div className="bg-black/40 rounded-xl p-3 w-full max-w-xs border border-white/10 text-[10px] font-mono text-gray-400">
-          <div className="text-gray-500 font-bold mb-1 uppercase tracking-wider">Status do Rádio Local:</div>
-          <div>• PIN Ativo: {pin}</div>
-          <div>• Canal Broadcast: myplacar-mirror-{pin}</div>
-          <div>• Escutando requisições...</div>
+        {/* Painel de Diagnóstico com Instrução de IP */}
+        <div className="bg-black/40 rounded-xl p-3 w-full max-w-xs border border-white/10 text-[10px] font-mono text-gray-400 space-y-1">
+          <div className="text-orange-400 font-bold uppercase tracking-wider">Status do Rádio Local:</div>
+          <div>• PIN: <span className="text-white font-bold">{pin}</span></div>
+          <div>• Canal: myplacar-mirror-{pin}</div>
+          <div className="text-gray-300 pt-1 border-t border-white/10 mt-1">
+            💡 <span className="text-white font-bold">Conectando 2 Aparelhos Diferentes?</span>
+          </div>
+          <div className="text-gray-400 leading-normal">
+            No dispositivo Espelho, digite o PIN e também o <span className="text-cyan-300 font-bold">IP local deste celular</span> (ex: no Wi-Fi ou Hotspot).
+          </div>
         </div>
       </div>
 
