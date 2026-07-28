@@ -1875,8 +1875,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                         id="btn-scoreboard-espelhar"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setNewMenuOpen(false);
+                          e.preventDefault();
                           window.dispatchEvent(new CustomEvent('localSync:openPairing'));
+                          setTimeout(() => setNewMenuOpen(false), 50);
                         }}
                         className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${
                           localSync.syncState.role !== 'none' && localSync.syncState.status !== 'idle'

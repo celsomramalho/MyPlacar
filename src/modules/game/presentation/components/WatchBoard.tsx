@@ -650,10 +650,11 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                   id="btn-watchboard-espelhar"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsMenuOpen(false);
+                    e.preventDefault();
                     window.dispatchEvent(new CustomEvent('localSync:openPairing'));
+                    setTimeout(() => setIsMenuOpen(false), 50);
                   }}
-                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
                 >
                   <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-slate-600 rounded-xl">
                     <MonitorSmartphone size={18} />
