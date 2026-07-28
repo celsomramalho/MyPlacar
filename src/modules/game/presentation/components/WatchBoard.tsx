@@ -646,21 +646,27 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
               {/* Espelhar Placar — modo offline */}
               {isOfflineMode && (
-                <button
+                <div
                   id="btn-watchboard-espelhar"
-                  onPointerDown={(e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
                     window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                     setIsMenuOpen(false);
                   }}
-                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                  }}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer relative z-[999999] pointer-events-auto"
                 >
                   <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-slate-600 rounded-xl">
                     <MonitorSmartphone size={18} />
                   </div>
                   <span className="font-black text-sm">Espelhar Placar</span>
-                </button>
+                </div>
               )}
 
               {/* Depuração de erro Firebase (apenas se online) */}

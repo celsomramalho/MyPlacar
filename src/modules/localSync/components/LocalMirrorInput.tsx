@@ -120,24 +120,24 @@ export const LocalMirrorInput: React.FC<Props> = ({
               ))}
             </div>
 
-            {/* IP (apenas em producao nativa) */}
-            {!isWebEnvironment && (
-              <div className="w-full">
-                <label className="text-gray-400 text-xs font-semibold mb-1.5 block">
-                  IP do Controlador <span className="text-gray-600">(ex: 192.168.44.1)</span>
+            {/* Campo de IP para conectar entre aparelhos diferentes */}
+            <div className="w-full">
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-gray-400 text-xs font-semibold">
+                  IP do Controlador <span className="text-gray-500">(opcional se no mesmo PC)</span>
                 </label>
-                <input
-                  id="ip-input"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="192.168.44.1"
-                  value={ip}
-                  onChange={(e) => setIp(e.target.value)}
-                  disabled={isConnecting}
-                  className="w-full px-4 py-3 rounded-xl border border-white/20 bg-white/5 text-white text-sm outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600"
-                />
               </div>
-            )}
+              <input
+                id="ip-input"
+                type="text"
+                inputMode="decimal"
+                placeholder="Ex: 192.168.44.1"
+                value={ip}
+                onChange={(e) => setIp(e.target.value)}
+                disabled={isConnecting}
+                className="w-full px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 text-white text-xs outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600"
+              />
+            </div>
 
             {/* Erros */}
             {(error || isDisconnected) && (
@@ -153,18 +153,27 @@ export const LocalMirrorInput: React.FC<Props> = ({
             <button
               id="btn-local-connect"
               onClick={handleConnect}
-              disabled={!pinComplete || isConnecting || (!isWebEnvironment && !ip)}
+              disabled={!pinComplete || isConnecting}
               className="w-full py-4 rounded-2xl font-black text-sm tracking-wider transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 flex items-center justify-center gap-2"
             >
               {isConnecting ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
-                  <span>Conectando...</span>
+                  <span>Conectando ao PIN {pin.join('')}...</span>
                 </>
               ) : (
                 'Conectar ao Controlador'
               )}
             </button>
+
+            {/* Painel de Diagnóstico do Espelho */}
+            {isConnecting && (
+              <div className="bg-black/40 rounded-xl p-3 w-full border border-cyan-500/30 text-[10px] font-mono text-cyan-300 animate-pulse">
+                <div>📡 Buscando canal: myplacar-mirror-{pin.join('')}</div>
+                {ip && <div>🌐 Conectando WS: ws://{ip}:8080</div>}
+                <div>⏳ Aguardando confirmação do Controlador...</div>
+              </div>
+            )}
 
             {/* Nota */}
             <p className="text-gray-600 text-xs text-center leading-relaxed">

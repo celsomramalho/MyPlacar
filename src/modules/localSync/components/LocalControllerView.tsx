@@ -99,6 +99,13 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop }) =>
             </div>
           </div>
         )}
+        {/* Painel de Diagnóstico */}
+        <div className="bg-black/40 rounded-xl p-3 w-full max-w-xs border border-white/10 text-[10px] font-mono text-gray-400">
+          <div className="text-gray-500 font-bold mb-1 uppercase tracking-wider">Status do Rádio Local:</div>
+          <div>• PIN Ativo: {pin}</div>
+          <div>• Canal Broadcast: myplacar-mirror-{pin}</div>
+          <div>• Escutando requisições...</div>
+        </div>
       </div>
 
       {/* Rodape */}

@@ -1871,15 +1871,21 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     </button>
                     {/* Espelhar Placar — modo offline */}
                     {isOfflineMode && (
-                      <button
+                      <div
                         id="btn-scoreboard-espelhar"
-                        onPointerDown={(e) => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
                           window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                           setNewMenuOpen(false);
                         }}
-                        className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors cursor-pointer relative z-[999999] pointer-events-auto ${
                           localSync.syncState.role !== 'none' && localSync.syncState.status !== 'idle'
                             ? 'bg-orange-500/20 active:bg-orange-500/30 text-orange-400'
                             : 'bg-white/5 active:bg-white/10 text-white'
@@ -1900,7 +1906,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                             <span className="text-xs opacity-60">PIN {localSync.syncState.pin}</span>
                           )}
                         </div>
-                      </button>
+                      </div>
                     )}
                     {isCommandOwner && onResetMatch && (
                       <button onPointerDown={() => { setNewMenuOpen(false); onResetMatch(); }}
