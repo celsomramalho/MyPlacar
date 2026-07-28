@@ -101,16 +101,34 @@ export class LocalSyncService {
     this.broadcastChannel = new BroadcastChannel(`myplacar-mirror-${pin}`);
     this.broadcastPeerChannel = new BroadcastChannel(`myplacar-controller-${pin}`);
 
-    this.broadcastChannel.onmessage = (event: MessageEvent<LocalSyncPayload>) => {
-      const msg = event.data;
+    const handleMessage = (msg: LocalSyncPayload) => {
       if (msg.type === 'handshake' && msg.pin === pin) {
-        this.broadcastPeerChannel!.postMessage({ type: 'ack', ok: true, pin });
+        const ackPayload: LocalSyncPayload = { type: 'ack', ok: true, pin };
+        this.broadcastPeerChannel?.postMessage(ackPayload);
+        try {
+          localStorage.setItem(`myplacar_ack_${pin}`, JSON.stringify({ ...ackPayload, _t: Date.now() }));
+        } catch { /* best effort */ }
         this.emit('connected');
       }
       if (msg.type === 'ping') {
-        this.broadcastPeerChannel!.postMessage({ type: 'pong', timestamp: Date.now() });
+        this.broadcastPeerChannel?.postMessage({ type: 'pong', timestamp: Date.now() });
       }
     };
+
+    this.broadcastChannel.onmessage = (event: MessageEvent<LocalSyncPayload>) => {
+      handleMessage(event.data);
+    };
+
+    // Escuta evento de localStorage para compatibilidade cross-tab/window total
+    const storageHandler = (e: StorageEvent) => {
+      if (e.key === `myplacar_handshake_${pin}` && e.newValue) {
+        try {
+          const msg = JSON.parse(e.newValue);
+          handleMessage(msg);
+        } catch { /* best effort */ }
+      }
+    };
+    window.addEventListener('storage', storageHandler);
   }
 
   broadcastGameState(gameState: unknown): void {
@@ -122,7 +140,13 @@ export class LocalSyncService {
     };
     if (this.broadcastPeerChannel) {
       this.broadcastPeerChannel.postMessage(payload);
-    } else if (this.ws?.readyState === WebSocket.OPEN) {
+    }
+    if (this.pin) {
+      try {
+        localStorage.setItem(`myplacar_gamestate_${this.pin}`, JSON.stringify(payload));
+      } catch { /* best effort */ }
+    }
+    if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(payload));
     }
   }
@@ -146,8 +170,7 @@ export class LocalSyncService {
     this.broadcastChannel = new BroadcastChannel(`myplacar-mirror-${pin}`);
     this.broadcastPeerChannel = new BroadcastChannel(`myplacar-controller-${pin}`);
 
-    this.broadcastPeerChannel.onmessage = (event: MessageEvent<LocalSyncPayload>) => {
-      const msg = event.data;
+    const handlePayload = (msg: LocalSyncPayload) => {
       if (msg.type === 'ack' && msg.ok) {
         this.emit('connected');
         this.startPingInterval();
@@ -157,9 +180,35 @@ export class LocalSyncService {
       }
     };
 
-    setTimeout(() => {
-      this.broadcastChannel!.postMessage({ type: 'handshake', pin });
-    }, 300);
+    this.broadcastPeerChannel.onmessage = (event: MessageEvent<LocalSyncPayload>) => {
+      handlePayload(event.data);
+    };
+
+    // Escuta via LocalStorage
+    const storageHandler = (e: StorageEvent) => {
+      if ((e.key === `myplacar_ack_${pin}` || e.key === `myplacar_gamestate_${pin}`) && e.newValue) {
+        try {
+          const msg = JSON.parse(e.newValue);
+          handlePayload(msg);
+        } catch { /* best effort */ }
+      }
+    };
+    window.addEventListener('storage', storageHandler);
+
+    // Envia handshake inicial via Broadcast + LocalStorage com retries
+    const sendHandshake = () => {
+      const payload: LocalSyncPayload = { type: 'handshake', pin };
+      this.broadcastChannel?.postMessage(payload);
+      try {
+        localStorage.setItem(`myplacar_handshake_${pin}`, JSON.stringify({ ...payload, _t: Date.now() }));
+      } catch { /* best effort */ }
+    };
+
+    sendHandshake();
+    const handshakeInterval = setInterval(sendHandshake, 800);
+
+    // Para o retry após 10 segundos ou ao conectar
+    setTimeout(() => clearInterval(handshakeInterval), 10000);
   }
 
   private connectMirrorWebSocket(pin: string, ip: string): void {

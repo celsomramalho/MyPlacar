@@ -648,11 +648,11 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {isOfflineMode && (
                 <button
                   id="btn-watchboard-espelhar"
-                  onClick={(e) => {
+                  onPointerDown={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
                     window.dispatchEvent(new CustomEvent('localSync:openPairing'));
-                    setTimeout(() => setIsMenuOpen(false), 50);
+                    setIsMenuOpen(false);
                   }}
                   className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer"
                 >
