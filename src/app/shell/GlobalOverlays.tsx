@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { AlertCircle, RotateCw, Wifi, X, Loader2, ArrowLeftRight } from 'lucide-react';
+import { useLocalSync, LocalPairingModal, LocalControllerView, LocalMirrorInput } from '@modules/localSync';
 
 interface GlobalOverlaysProps {
   isWaitingSync: boolean;
@@ -10,6 +11,79 @@ interface GlobalOverlaysProps {
   activeCloudMatch: { id: string; sport: string } | null;
   handleConnectRemote: () => void;
   handleRejectRemote: () => void;
+}
+
+/** Componente interno que conecta o LocalSyncService às Overlays Globais */
+function LocalSyncGlobalOverlays() {
+  const {
+    syncState,
+    startAsController,
+    startAsMirror,
+    stopSync,
+  } = useLocalSync();
+
+  const [activeView, setActiveView] = useState<'none' | 'pairing_modal' | 'controller' | 'mirror'>('none');
+
+  // Escuta o evento customizado disparado de QUALQUER botão do app
+  useEffect(() => {
+    const handleOpenPairing = () => {
+      setActiveView('pairing_modal');
+    };
+    window.addEventListener('localSync:openPairing', handleOpenPairing);
+    return () => window.removeEventListener('localSync:openPairing', handleOpenPairing);
+  }, []);
+
+  // Quando o Espelho se conecta com sucesso, ajusta a view
+  useEffect(() => {
+    if (syncState.status === 'connected' && syncState.role === 'mirror') {
+      setActiveView('mirror');
+    }
+  }, [syncState.status, syncState.role]);
+
+  const handleChooseController = useCallback(() => {
+    startAsController();
+    setActiveView('controller');
+  }, [startAsController]);
+
+  const handleChooseMirror = useCallback(() => {
+    setActiveView('mirror');
+  }, []);
+
+  const handleMirrorConnect = useCallback((pin: string, ip?: string) => {
+    startAsMirror(pin, ip);
+  }, [startAsMirror]);
+
+  const handleStopSync = useCallback(() => {
+    stopSync();
+    setActiveView('none');
+  }, [stopSync]);
+
+  return (
+    <>
+      <LocalPairingModal
+        isOpen={activeView === 'pairing_modal'}
+        onClose={() => setActiveView('none')}
+        onChooseController={handleChooseController}
+        onChooseMirror={handleChooseMirror}
+      />
+      {activeView === 'controller' && syncState.pin && (
+        <LocalControllerView
+          pin={syncState.pin}
+          status={syncState.status}
+          onStop={handleStopSync}
+        />
+      )}
+      {activeView === 'mirror' && (
+        <LocalMirrorInput
+          status={syncState.status}
+          error={syncState.error}
+          onConnect={handleMirrorConnect}
+          onStop={handleStopSync}
+          isWebEnvironment={typeof (window as any).Capacitor === 'undefined' || !(window as any).Capacitor?.isNativePlatform?.()}
+        />
+      )}
+    </>
+  );
 }
 
 export function GlobalOverlays({
@@ -58,15 +132,21 @@ export function GlobalOverlays({
       {activeCloudMatch && (
         <div className="fixed top-20 left-4 right-4 z-[999] bg-blue-600 text-white rounded-[2rem] p-5 shadow-2xl animate-in slide-in-from-top-10 flex flex-col gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><Wifi size={24} className="animate-pulse" /></div>
-            <div><p className="text-[10px] font-black tracking-tight opacity-80">Partida ativa detectada</p><p className="text-sm font-black">Conectar relógio como controle?</p></div>
+            <Wifi size={24} className="animate-pulse text-blue-200" />
+            <div className="flex-1">
+              <h4 className="font-black text-sm">Partida ao vivo disponível!</h4>
+              <p className="text-xs font-bold text-blue-100">Deseja sincronizar com a partida {activeCloudMatch.sport}?</p>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button onClick={handleConnectRemote} className="flex-1 bg-white text-blue-600 py-3 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95">Conectar</button>
-            <button onClick={handleRejectRemote} className="px-4 py-3 bg-white/10 rounded-xl"><X size={18} /></button>
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleRejectRemote} className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-black text-xs transition-colors">Ignorar</button>
+            <button onClick={handleConnectRemote} className="flex-1 py-3 bg-white text-blue-600 rounded-xl font-black text-xs shadow-md transition-all active:scale-95">Sincronizar</button>
           </div>
         </div>
       )}
+
+      {/* ── Overlays Globais do Modo Lite Offline ─────────────────────── */}
+      <LocalSyncGlobalOverlays />
 
       {isUpdatingVersion && (
         <div className="fixed inset-0 z-[20000] bg-blue-600 flex flex-col items-center justify-center p-8 text-center animate-in fade-in">

@@ -1,11 +1,12 @@
 import React from 'react';
 import { 
-  X, Home, Trophy, Users, Bell, History, User, Settings, ShieldAlert, LogOut, Play, Menu, HelpCircle, User as UserIcon, Clock, Settings as SettingsIcon, MapPin, Ticket, Send, LayoutGrid
+  X, Home, Trophy, Users, Bell, History, User, Settings, ShieldAlert, LogOut, Play, Menu, HelpCircle, User as UserIcon, Clock, Settings as SettingsIcon, MapPin, Ticket, Send, LayoutGrid, MonitorSmartphone
 } from 'lucide-react';
 import { Screen } from '@game/types';
 import { useGame } from '@modules/game';
 import { useGameRules } from '@modules/game/hooks/useGameRules';
 import { useUI } from '@modules/ui';
+import { useLocalSync } from '@modules/localSync';
 
 interface Props {
   isOpen: boolean;
@@ -35,6 +36,8 @@ export const NavigationDrawer: React.FC<Props> = ({
   const { userProfile, initGameState } = useGame();
   const { canStartMatch, persistMatchSettings } = useGameRules();
   const { setModalConfig } = useUI();
+  const { syncState } = useLocalSync();
+  const isSyncActive = syncState.role !== 'none' && syncState.status !== 'idle';
 
   if (!isOpen) return null;
 
@@ -180,6 +183,25 @@ export const NavigationDrawer: React.FC<Props> = ({
               >
                 <Play size={20} className="text-emerald-500 fill-emerald-500" />
                 <span className="text-sm font-bold text-black">Placar</span>
+              </button>
+
+              {/* Botao Espelhar Placar (modo offline - sempre visivel) */}
+              <button
+                id="btn-drawer-espelhar"
+                onClick={() => {
+                  onClose();
+                  window.dispatchEvent(new CustomEvent('localSync:openPairing'));
+                }}
+                className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all active:scale-[0.98] ${
+                  isSyncActive
+                    ? 'bg-orange-50 text-orange-600'
+                    : 'hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <MonitorSmartphone size={20} className={isSyncActive ? 'text-orange-500' : 'text-slate-500'} />
+                <span className="text-sm font-bold">
+                  {isSyncActive ? `Espelhando • PIN ${syncState.pin}` : 'Espelhar Placar'}
+                </span>
               </button>
             </div>
 

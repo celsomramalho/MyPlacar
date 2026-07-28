@@ -5,6 +5,7 @@ import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
 import { getTennisServerSide } from '@modules/game/domain/tennisEngine';
 import { useMatchTimer } from '../hooks/useMatchTimer.ts';
+import { useLocalSync } from '@modules/localSync';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface ScoreboardDisplayProps {
@@ -67,6 +68,8 @@ isVoiceActive = false,
   onToggleWatchMode,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { syncState } = useLocalSync();
+  const isSyncActive = syncState.role !== 'none' && syncState.status !== 'idle';
   const [showSetGamesInMainScore, setShowSetGamesInMainScore] = useState(false);
   const [physicalLandscape, setPhysicalLandscape] = useState(
     () => window.innerWidth > window.innerHeight
@@ -521,6 +524,36 @@ className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 activ
 </div>
 <span className="font-black text-sm">Regras</span>
 </button>
+
+{/* Espelhar Placar (modo offline) */}
+{isOfflineMode && (
+<button
+  id="btn-display-espelhar"
+  onPointerDown={() => {
+    setIsMenuOpen(false);
+    window.dispatchEvent(new CustomEvent('localSync:openPairing'));
+  }}
+  className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${
+    isSyncActive
+      ? 'bg-orange-500/20 active:bg-orange-500/30 text-orange-400'
+      : 'bg-white/5 active:bg-white/10 text-white'
+  }`}
+>
+  <div className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-xl ${
+    isSyncActive ? 'bg-orange-500/30' : 'bg-slate-600'
+  }`}>
+    <MonitorSmartphone size={18} />
+  </div>
+  <div className="flex flex-col items-start">
+    <span className="font-black text-sm">
+      {isSyncActive ? 'Espelhando...' : 'Espelhar Placar'}
+    </span>
+    {isSyncActive && syncState.pin && (
+      <span className="text-xs opacity-60">PIN {syncState.pin}</span>
+    )}
+  </div>
+</button>
+)}
 
 {/* Zerar partida */}
 {isCommandOwner && onResetMatch && (

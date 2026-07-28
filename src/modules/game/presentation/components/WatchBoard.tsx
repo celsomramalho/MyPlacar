@@ -1,9 +1,10 @@
 import React from 'react';
-import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging } from 'lucide-react';
+import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, MonitorSmartphone } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
 import { getTennisServerSide } from '@modules/game/domain/tennisEngine';
+import { useLocalSync } from '@modules/localSync';
 
 type WatchStatusPanel = 'set' | 'mic' | 'battery';
 type BatteryStatus = { percent: number; charging: boolean };
@@ -642,6 +643,23 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 </div>
                 <span className="font-black text-sm">Regras</span>
               </button>
+
+              {/* Espelhar Placar — modo offline */}
+              {isOfflineMode && (
+                <button
+                  id="btn-watchboard-espelhar"
+                  onPointerDown={() => {
+                    setIsMenuOpen(false);
+                    window.dispatchEvent(new CustomEvent('localSync:openPairing'));
+                  }}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
+                >
+                  <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-slate-600 rounded-xl">
+                    <MonitorSmartphone size={18} />
+                  </div>
+                  <span className="font-black text-sm">Espelhar Placar</span>
+                </button>
+              )}
 
               {/* Depuração de erro Firebase */}
               {(() => {

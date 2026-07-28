@@ -24,6 +24,7 @@ import { useGame } from '@modules/game';
 import { ScoreboardDisplay } from '../presentation/components/ScoreboardDisplay';
 import { PickleballCourtView } from '../presentation/components/PickleballCourtView';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
+import { useLocalSyncIntegration, LocalPairingModal, LocalControllerView, LocalMirrorInput, LocalSyncBadge } from '@modules/localSync';
 
 interface CommandLogEntry {
   id: string;
@@ -333,6 +334,17 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const effectiveSetVoiceLogs = setVoiceLogs || (() => {});
 
   const displayTime = useMatchTimer(effectiveGameState);
+
+  // ─── Modo Lite Offline (sincronismo local sem internet) ───────────────────
+  const localSync = useLocalSyncIntegration(effectiveGameState);
+
+  // Escuta evento customizado disparado pelo NavigationDrawer e ScoreboardDisplay
+  // para abrir o modal de pareamento sem precisar de prop drilling.
+  useEffect(() => {
+    const handler = () => localSync.openPairingModal();
+    window.addEventListener('localSync:openPairing', handler);
+    return () => window.removeEventListener('localSync:openPairing', handler);
+  }, [localSync.openPairingModal]);
 
   // ─── Wake Lock gerenciado no App.tsx — estável independente de remounts ───
 
@@ -1280,6 +1292,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
        )}
        {isAudioLocked && <div onClick={async () => { await unlockAudio(); announceFullScore(); setIsAudioLocked(false); }} className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl bg-orange-600 text-white flex items-center gap-3 animate-bounce cursor-pointer"><VolumeX size={20} /><span className="text-sm font-bold">Ativar som</span></div>}
        {correctionPickerModal}
+
        <header className="px-4 py-3 flex items-center justify-between bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <button 
@@ -1316,6 +1329,15 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         </div>
         <div className="flex items-center gap-2">
           {!isLiveActive && isWatchConnected && <div className="p-2 bg-sky-100 text-sky-600 rounded-xl animate-pulse flex items-center gap-2 px-3 border border-sky-200" title="Relógio conectado"><Watch size={18} /><span className="text-[9px] font-black tracking-tight hidden md:inline">Relógio conectado</span></div>}
+          {/* Badge Modo Lite Offline — sempre visível quando espelhamento está ativo */}
+          {localSync.showSyncBadge && (
+            <LocalSyncBadge
+              role={localSync.syncState.role}
+              status={localSync.syncState.status}
+              pin={localSync.syncState.pin}
+              onClick={localSync.openPairingModal}
+            />
+          )}
           <div className="w-10" />
         </div>
       </header>
@@ -1847,6 +1869,37 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl"><Settings size={18} /></div>
                       <span className="font-black text-sm">Regras</span>
                     </button>
+                    {/* Espelhar Placar — modo offline */}
+                    {isOfflineMode && (
+                      <button
+                        id="btn-scoreboard-espelhar"
+                        onPointerDown={() => {
+                          setNewMenuOpen(false);
+                          localSync.openPairingModal();
+                        }}
+                        className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${
+                          localSync.syncState.role !== 'none' && localSync.syncState.status !== 'idle'
+                            ? 'bg-orange-500/20 active:bg-orange-500/30 text-orange-400'
+                            : 'bg-white/5 active:bg-white/10 text-white'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-xl ${
+                          localSync.syncState.role !== 'none' && localSync.syncState.status !== 'idle'
+                            ? 'bg-orange-500/30'
+                            : 'bg-slate-600'
+                        }`}>
+                          <MonitorSmartphone size={18} />
+                        </div>
+                        <div className="flex flex-col items-start">
+                          <span className="font-black text-sm">
+                            {localSync.syncState.status === 'connected' ? 'Espelhando...' : 'Espelhar Placar'}
+                          </span>
+                          {localSync.syncState.pin && localSync.syncState.status !== 'idle' && (
+                            <span className="text-xs opacity-60">PIN {localSync.syncState.pin}</span>
+                          )}
+                        </div>
+                      </button>
+                    )}
                     {isCommandOwner && onResetMatch && (
                       <button onPointerDown={() => { setNewMenuOpen(false); onResetMatch(); }}
                         className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-red-500/20 active:bg-red-500/30 text-red-400 transition-colors">
@@ -1854,6 +1907,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                         <span className="font-black text-sm">Zerar partida</span>
                       </button>
                     )}
+
                   </div>
                 </div>
               )}

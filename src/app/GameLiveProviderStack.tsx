@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { UserProfile } from '@modules/auth';
 import { GameProvider, useGame } from '@modules/game';
 import { LiveProvider } from '@modules/live';
+import { LocalSyncProvider } from '@modules/localSync';
 import type { GameState } from '../types.ts';
 import { getDeviceId } from '@shared/utils/device';
 
@@ -50,17 +51,19 @@ export const GameLiveProviderStack: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <LiveProvider
-      deviceId={deviceId}
-      userProfile={feed.userProfile}
-      gameState={feed.gameState}
-      gameStateRef={feed.gameStateRef}
-    >
-      <GameProvider>
-        <GameLivePropsSync onFeed={onFeed} />
-        {children}
-      </GameProvider>
-    </LiveProvider>
+    <LocalSyncProvider>
+      <LiveProvider
+        deviceId={deviceId}
+        userProfile={feed.userProfile}
+        gameState={feed.gameState}
+        gameStateRef={feed.gameStateRef}
+      >
+        <GameProvider>
+          <GameLivePropsSync onFeed={onFeed} />
+          {children}
+        </GameProvider>
+      </LiveProvider>
+    </LocalSyncProvider>
   );
 };
 
