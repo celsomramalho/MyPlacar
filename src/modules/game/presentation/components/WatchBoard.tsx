@@ -648,7 +648,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {isOfflineMode && (
                 <button
                   id="btn-watchboard-espelhar"
-                  onPointerDown={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setIsMenuOpen(false);
                     window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                   }}
@@ -661,8 +662,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 </button>
               )}
 
-              {/* Depuração de erro Firebase */}
-              {(() => {
+              {/* Depuração de erro Firebase (apenas se online) */}
+              {!isOfflineMode && (() => {
                 const lastErr = typeof window !== 'undefined' ? localStorage.getItem('myPlacar_last_firebase_error') : null;
                 return lastErr && (
                   <div className="w-full px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-left text-amber-200">

@@ -1873,9 +1873,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     {isOfflineMode && (
                       <button
                         id="btn-scoreboard-espelhar"
-                        onPointerDown={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setNewMenuOpen(false);
-                          localSync.openPairingModal();
+                          window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                         }}
                         className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors ${
                           localSync.syncState.role !== 'none' && localSync.syncState.status !== 'idle'
