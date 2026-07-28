@@ -56,8 +56,8 @@ export const SpectatorScreen: React.FC<Props> = ({ matchId, spectatorPin, onExit
   const p2Score = gameState?.p2?.score;
   const totalGamesInSet = p1Games + p2Games;
 
-  const isZeroZero = (p1Score === 0 || p1Score === '0' || p1Score === '') &&
-                     (p2Score === 0 || p2Score === '0' || p2Score === '');
+  const isZeroZero = (String(p1Score) === '0' || p1Score === '') &&
+                     (String(p2Score) === '0' || p2Score === '');
   const shouldAlternate = totalGamesInSet > 0 && isZeroZero;
 
   useEffect(() => {
