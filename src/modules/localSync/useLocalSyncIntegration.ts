@@ -65,16 +65,17 @@ export function useLocalSyncIntegration(gameState: GameState | null): LocalSyncI
     }
   }, [gameState, role, isConnected, broadcastGameState]);
 
-  // Quando o Espelho se conecta, muda a view para 'mirror'
+  // Espelho: atualiza o GameContext com o mirroredGameState recebido via WebSocket local
   useEffect(() => {
-    if (syncState.status === 'connected' && syncState.role === 'controller') {
-      // Controlador conectado: continua mostrando a tela do controlador
-      if (localSyncView === 'controller') return;
+    if (isMirrorMode && mirroredGameState) {
+      // Importa dinamicamente ou passa callback se necessário.
+      // Como useLocalSyncIntegration roda dentro do ScoreboardScreen/GameProvider, emitimos evento global ou callback.
+      window.dispatchEvent(new CustomEvent('localSync:updateGameState', { detail: mirroredGameState }));
     }
-    if (syncState.status === 'connected' && syncState.role === 'mirror') {
-      setLocalSyncView('mirror');
-    }
-  }, [syncState.status, syncState.role, localSyncView]);
+  }, [isMirrorMode, mirroredGameState]);
+
+  // Nota: o fechamento de modais ao conectar é gerenciado pelo GlobalOverlays.
+  // O useLocalSyncIntegration não deve alterar a view ao conectar para evitar conflito.
 
   const openPairingModal = useCallback(() => setLocalSyncView('pairing_modal'), []);
   const closePairingModal = useCallback(() => setLocalSyncView('none'), []);

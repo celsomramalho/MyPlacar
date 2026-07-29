@@ -1,10 +1,11 @@
 import React from 'react';
-import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, MonitorSmartphone } from 'lucide-react';
+import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, MonitorSmartphone, Gamepad2, Eye } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
 import { getTennisServerSide } from '@modules/game/domain/tennisEngine';
 import { useLocalSync } from '@modules/localSync';
+import { useMatchTimer } from '../hooks/useMatchTimer.ts';
 
 type WatchStatusPanel = 'set' | 'mic' | 'battery';
 type BatteryStatus = { percent: number; charging: boolean };
@@ -97,6 +98,16 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const { syncState } = useLocalSync();
+  const displayTimeSeconds = useMatchTimer(gameState);
+  const formatTimer = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+  const matchTimeString = formatTimer(displayTimeSeconds);
+  const isMirror = syncState.role === 'mirror';
   const [showSetGamesInMainScore, setShowSetGamesInMainScore] = React.useState(false);
   const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
   const [batteryStatus, setBatteryStatus] = React.useState<BatteryStatus | null>(null);
@@ -197,8 +208,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
     return (
       <div 
-        onPointerDown={(e) => { e.stopPropagation(); onSwitchServer(team, isPartner); }}
-        className={`flex items-center justify-center min-w-[48px] h-[48px] rounded-2xl font-black text-2xl transition-all active:scale-90 ${
+        onPointerDown={(e) => { if (syncState.role === 'mirror') return; e.stopPropagation(); onSwitchServer(team, isPartner); }}
+        className={`flex items-center justify-center min-w-[48px] h-[48px] rounded-2xl font-black text-2xl transition-all ${syncState.role === 'mirror' ? 'cursor-default' : 'active:scale-90'} ${
           isServingNow ? `bg-white ${teamColorText} shadow-lg` : 'text-white border-2 border-white/20'
         }`}
       >
@@ -220,10 +231,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const gamesSetT1 = (
     <div
-      onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 1)}
-      onPointerMove={handlePointerMove}
-      onPointerUp={() => handleScoreCardPointerUp('gameSet', 1)}
-      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p1.color || 'azul']}`}
+      onPointerDown={(e) => { if (syncState.role === 'mirror') return; handleScoreCardPointerDown(e, 'gameSet', 1); }}
+      onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }}
+      onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('gameSet', 1); }}
+      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p1.color || 'azul']} ${syncState.role === 'mirror' ? 'cursor-default' : ''}`}
     >
       {scorePressProgress?.player === 1 && scorePressProgress?.type === 'gameSet' && (
         <div
@@ -237,10 +248,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const setsPartidaT1 = (
     <div
-      onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 1)}
-      onPointerMove={handlePointerMove}
-      onPointerUp={() => handleScoreCardPointerUp('matchSet', 1)}
-      className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
+      onPointerDown={(e) => { if (syncState.role === 'mirror') return; handleScoreCardPointerDown(e, 'matchSet', 1); }}
+      onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }}
+      onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('matchSet', 1); }}
+      className={`flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${syncState.role === 'mirror' ? 'cursor-default' : ''}`}
     >
       {scorePressProgress?.player === 1 && scorePressProgress?.type === 'matchSet' && (
         <div
@@ -254,10 +265,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const gamesSetT2 = (
     <div
-      onPointerDown={(e) => handleScoreCardPointerDown(e, 'gameSet', 2)}
-      onPointerMove={handlePointerMove}
-      onPointerUp={() => handleScoreCardPointerUp('gameSet', 2)}
-      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p2.color || 'vermelho']}`}
+      onPointerDown={(e) => { if (syncState.role === 'mirror') return; handleScoreCardPointerDown(e, 'gameSet', 2); }}
+      onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }}
+      onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('gameSet', 2); }}
+      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p2.color || 'vermelho']} ${syncState.role === 'mirror' ? 'cursor-default' : ''}`}
     >
       {scorePressProgress?.player === 2 && scorePressProgress?.type === 'gameSet' && (
         <div
@@ -271,10 +282,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const setsPartidaT2 = (
     <div
-      onPointerDown={(e) => handleScoreCardPointerDown(e, 'matchSet', 2)}
-      onPointerMove={handlePointerMove}
-      onPointerUp={() => handleScoreCardPointerUp('matchSet', 2)}
-      className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
+      onPointerDown={(e) => { if (syncState.role === 'mirror') return; handleScoreCardPointerDown(e, 'matchSet', 2); }}
+      onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }}
+      onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('matchSet', 2); }}
+      className={`flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${syncState.role === 'mirror' ? 'cursor-default' : ''}`}
     >
       {scorePressProgress?.player === 2 && scorePressProgress?.type === 'matchSet' && (
         <div
@@ -452,7 +463,21 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 1); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 1)} className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner ? 'opacity-70' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} >
+        <div 
+          onPointerDown={(e) => {
+            if (syncState.role === 'mirror') return;
+            resetDimTimer(); handleScoreCardPointerDown(e, 'game', 1); 
+          }} 
+          onPointerMove={(e) => {
+            if (syncState.role === 'mirror') return;
+            handlePointerMove(e);
+          }} 
+          onPointerUp={() => {
+            if (syncState.role === 'mirror') return;
+            handleScoreCardPointerUp('game', 1);
+          }} 
+          className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner || syncState.role === 'mirror' ? 'opacity-90' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} 
+        >
           {scorePressProgress?.player === 1 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
@@ -488,54 +513,117 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {isFbAckLate && <div className="absolute inset-0 bg-[#bef264] animate-pulse" />}
             </div>
           )}
-          {/* Undo — desabilitado para observadores em live ativa */}
-          <button
-            onPointerDown={() => { if (!isCommandOwner) return; resetDimTimer(); handleUndoWithLog(); }}
-            disabled={!isCommandOwner}
-            className={`w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white border border-white/5 transition-all ${
-              !isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'
-            }`}
-          >
-            <RotateCcw size={34} strokeWidth={4} />
-          </button>
 
-          {/* Ace — desabilitado para observadores em live ativa */}
-          <button
-            disabled={!isCommandOwner}
-            onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(gameState.server, 'ace', 'cb'); }}
-            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
-              SOLID_COLORS[gameState.server === 1 ? (gameState.p1.color || 'azul') : (gameState.p2.color || 'vermelho')]
-            } ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
-          >
-            <Zap size={30} fill="currentColor" />
-          </button>
+          {/* No modo espelho / observador: oculta os botões de ação desabilitados e exibe o tempo da partida no lado esquerdo */}
+          {(!isCommandOwner || isMirror) ? (
+            <>
+              {/* Lado esquerdo: Contador do tempo da partida */}
+              <div className="flex items-center justify-start flex-1 pl-4">
+                <span className="text-white font-black text-2xl tracking-wider tabular-nums [text-shadow:0_2px_4px_rgba(0,0,0,0.5)]">
+                  {matchTimeString}
+                </span>
+              </div>
 
-          {/* Botão Live/Modal — sempre ativo */}
-          <div
-            role="button"
-            onPointerDown={() => { resetDimTimer(); setIsMenuOpen(true); }}
-            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${
-              isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
-              isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
-              'border-white bg-emerald-500 text-white'
-            }`}
-          >
-            {isLiveActive
-              ? <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} status={isLiveActive ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
-              : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
-            }
-          </div>
+              {/* Botão central: Apenas o botão do modal com o ícone do olho */}
+              <div
+                role="button"
+                onPointerDown={() => { resetDimTimer(); setIsMenuOpen(true); }}
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${
+                  isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
+                  syncState.role !== 'none' && syncState.status !== 'idle' ?
+                    (syncState.role === 'controller' ? 'border-orange-400 bg-[#1a1a2e] text-orange-400' : 'border-sky-400 bg-[#1a1a2e] text-sky-400') :
+                  isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
+                  'border-white bg-emerald-500 text-white'
+                }`}
+              >
+                {isLiveActive ? (
+                  <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} status={isLiveActive ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
+                ) : syncState.role !== 'none' && syncState.status !== 'idle' ? (
+                  <div className="relative flex items-center justify-center w-14 h-7">
+                    <svg width="32" height="20" viewBox="0 0 24 18" fill="none" className="absolute">
+                      <path d="M4 4C2.5 6 2.5 12 4 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                      <path d="M20 4C21.5 6 21.5 12 20 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                      <path d="M7 6.5C6.5 7.5 6.5 10.5 7 11.5" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                      <path d="M17 6.5C17.5 7.5 17.5 10.5 17 11.5" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                    </svg>
+                    {syncState.role === 'controller'
+                      ? <Gamepad2 size={22} className="text-orange-500 relative z-10" strokeWidth={2.5} />
+                      : <Eye size={22} className="text-slate-300 relative z-10" strokeWidth={3} />}
+                  </div>
+                ) : isOfflineMode ? (
+                  <WifiOff size={30} className="relative z-10" />
+                ) : (
+                  <Wifi size={30} className="relative z-10" />
+                )}
+              </div>
 
-          {/* Falta — desabilitado para observadores em live ativa */}
-          <button
-            disabled={!isCommandOwner}
-            onPointerDown={() => { if (!isCommandOwner) return; onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb'); }}
-            className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
-              SOLID_COLORS[gameState.server === 1 ? (gameState.p2.color || 'vermelho') : (gameState.p1.color || 'azul')]
-            } ${!isCommandOwner ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
-          >
-            <X size={34} strokeWidth={5} />
-          </button>
+              {/* Lado direito: espaço reservado flex-1 para manter o botão centralizado */}
+              <div className="flex-1" />
+            </>
+          ) : (
+            <>
+              {/* Undo */}
+              <button
+                onPointerDown={() => { resetDimTimer(); handleUndoWithLog(); }}
+                className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white border border-white/5 transition-all active:scale-90"
+              >
+                <RotateCcw size={34} strokeWidth={4} />
+              </button>
+
+              {/* Ace */}
+              <button
+                onPointerDown={() => onScoreUpdate(gameState.server, 'ace', 'cb')}
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
+                  SOLID_COLORS[gameState.server === 1 ? (gameState.p1.color || 'azul') : (gameState.p2.color || 'vermelho')]
+                } active:scale-90`}
+              >
+                <Zap size={30} fill="currentColor" />
+              </button>
+
+              {/* Botão Live/Modal — sempre ativo */}
+              <div
+                role="button"
+                onPointerDown={() => { resetDimTimer(); setIsMenuOpen(true); }}
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${
+                  isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
+                  syncState.role !== 'none' && syncState.status !== 'idle' ?
+                    (syncState.role === 'controller' ? 'border-orange-400 bg-[#1a1a2e] text-orange-400' : 'border-sky-400 bg-[#1a1a2e] text-sky-400') :
+                  isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
+                  'border-white bg-emerald-500 text-white'
+                }`}
+              >
+                {isLiveActive ? (
+                  <LiveIndicator role={role || (isCommandOwner ? 'owner' : 'observer')} status={isLiveActive ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
+                ) : syncState.role !== 'none' && syncState.status !== 'idle' ? (
+                  <div className="relative flex items-center justify-center w-14 h-7">
+                    <svg width="32" height="20" viewBox="0 0 24 18" fill="none" className="absolute">
+                      <path d="M4 4C2.5 6 2.5 12 4 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                      <path d="M20 4C21.5 6 21.5 12 20 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                      <path d="M7 6.5C6.5 7.5 6.5 10.5 7 11.5" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                      <path d="M17 6.5C17.5 7.5 17.5 10.5 17 11.5" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                    </svg>
+                    {syncState.role === 'controller'
+                      ? <Gamepad2 size={22} className="text-orange-500 relative z-10" strokeWidth={2.5} />
+                      : <Eye size={22} className="text-slate-300 relative z-10" strokeWidth={3} />}
+                  </div>
+                ) : isOfflineMode ? (
+                  <WifiOff size={30} className="relative z-10" />
+                ) : (
+                  <Wifi size={30} className="relative z-10" />
+                )}
+              </div>
+
+              {/* Falta */}
+              <button
+                onPointerDown={() => onScoreUpdate(gameState.server === 1 ? 2 : 1, 'fault', 'cb')}
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
+                  SOLID_COLORS[gameState.server === 1 ? (gameState.p2.color || 'vermelho') : (gameState.p1.color || 'azul')]
+                } active:scale-90`}
+              >
+                <X size={34} strokeWidth={5} />
+              </button>
+            </>
+          )}
 
           {dimProgress > 0 && !isDimmed && (
             <div className="absolute bottom-0 left-0 right-0 h-2 bg-white/20 pointer-events-none">
@@ -635,7 +723,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
               {/* Regras */}
               <button
-                onPointerDown={() => { setIsMenuOpen(false); onOpenRules?.(); }}
+                onClick={() => { setIsMenuOpen(false); onOpenRules?.(); }}
                 className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
               >
                 <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl">
@@ -646,27 +734,20 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
               {/* Espelhar Placar — modo offline */}
               {isOfflineMode && (
-                <div
+                <button
                   id="btn-watchboard-espelhar"
                   onClick={(e) => {
                     e.stopPropagation();
-                    e.preventDefault();
                     window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                     setIsMenuOpen(false);
                   }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                  }}
-                  onTouchStart={(e) => {
-                    e.stopPropagation();
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer relative z-[999999] pointer-events-auto"
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer text-left"
                 >
                   <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-slate-600 rounded-xl">
                     <MonitorSmartphone size={18} />
                   </div>
                   <span className="font-black text-sm">Espelhar Placar</span>
-                </div>
+                </button>
               )}
 
               {/* Depuração de erro Firebase (apenas se online) */}
@@ -706,7 +787,12 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           </div>
         )}
 
-        <div onPointerDown={(e) => { resetDimTimer(); handleScoreCardPointerDown(e, 'game', 2); }} onPointerMove={handlePointerMove} onPointerUp={() => handleScoreCardPointerUp('game', 2)} className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner ? 'opacity-70' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} >
+        <div 
+          onPointerDown={(e) => { if (syncState.role === 'mirror') return; resetDimTimer(); handleScoreCardPointerDown(e, 'game', 2); }} 
+          onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }} 
+          onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('game', 2); }} 
+          className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner || syncState.role === 'mirror' ? 'opacity-90' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} 
+        >
           {scorePressProgress?.player === 2 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 

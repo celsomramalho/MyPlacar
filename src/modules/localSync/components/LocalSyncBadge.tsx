@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React from 'react';
-import { Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { Gamepad2, Eye, WifiOff, Loader2 } from 'lucide-react';
 import type { LocalSyncStatus, LocalSyncRole } from '@infra/network/LocalSyncService';
 
 interface Props {
@@ -36,12 +36,14 @@ export const LocalSyncBadge: React.FC<Props> = ({ role, status, pin, onClick }) 
           : 'border-orange-500/40 bg-orange-500/10 text-orange-400'
       }`}
     >
-      {isConnected ? (
-        <Wifi size={12} />
-      ) : isError ? (
+      {isError ? (
         <WifiOff size={12} />
-      ) : (
+      ) : isWaiting ? (
         <Loader2 size={12} className="animate-spin" />
+      ) : role === 'controller' ? (
+        <Gamepad2 size={12} />
+      ) : (
+        <Eye size={12} />
       )}
       <span>{roleLabel}</span>
       {isWaiting && pin && <span className="opacity-70">#{pin}</span>}

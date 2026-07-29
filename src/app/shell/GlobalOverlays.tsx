@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { AlertCircle, RotateCw, Wifi, X, Loader2, ArrowLeftRight } from 'lucide-react';
 import { useLocalSync, LocalPairingModal, LocalControllerView, LocalMirrorInput } from '@modules/localSync';
+import { useUI } from '@modules/ui';
 
 interface GlobalOverlaysProps {
   isWaitingSync: boolean;
@@ -22,6 +23,8 @@ function LocalSyncGlobalOverlays() {
     stopSync,
   } = useLocalSync();
 
+  const { setCurrentScreen } = useUI();
+
   const [activeView, setActiveView] = useState<'none' | 'pairing_modal' | 'controller' | 'mirror'>('none');
 
   // Escuta o evento customizado disparado de QUALQUER botão do app
@@ -33,12 +36,18 @@ function LocalSyncGlobalOverlays() {
     return () => window.removeEventListener('localSync:openPairing', handleOpenPairing);
   }, []);
 
-  // Quando o Espelho se conecta com sucesso, ajusta a view
+  // Quando conecta com sucesso → navega para o placar e fecha o modal
   useEffect(() => {
-    if (syncState.status === 'connected' && syncState.role === 'mirror') {
-      setActiveView('mirror');
+    if (syncState.status === 'connected') {
+      // Garante que ambos os lados (controlador e espelho) estejam na tela do placar
+      setCurrentScreen('scoreboard');
+      // Dispara evento para que o ScoreboardScreen feche qualquer bottom sheet aberto
+      window.dispatchEvent(new CustomEvent('localSync:connected'));
+      // Delay para o usuário ver "Conectado!" antes de fechar o modal
+      const t = setTimeout(() => setActiveView('none'), 1800);
+      return () => clearTimeout(t);
     }
-  }, [syncState.status, syncState.role]);
+  }, [syncState.status, setCurrentScreen]);
 
   const handleChooseController = useCallback(() => {
     startAsController();

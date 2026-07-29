@@ -22,7 +22,7 @@ export const LocalPairingModal: React.FC<Props> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-xl flex items-end justify-center p-4 animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[1000000] bg-black/80 backdrop-blur-xl flex items-end justify-center p-4 animate-in fade-in duration-300">
       <div className="bg-[#0f172a] rounded-3xl w-full max-w-sm shadow-2xl border border-white/10 overflow-hidden animate-in slide-in-from-bottom duration-400">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4">

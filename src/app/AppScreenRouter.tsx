@@ -142,7 +142,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   const [initialConfirmDeleteJudge, setInitialConfirmDeleteJudge] = useState(false);
 
   const isAdmin = userProfile.isAdmin === true;
-  const offlineAllowedScreens = currentScreen === 'scoreboard' || currentScreen === 'new-game';
+  const offlineAllowedScreens = currentScreen === 'scoreboard' || currentScreen === 'new-game' || currentScreen === 'settings';
 
   useEffect(() => {
     if (isOfflineMode && gameState && !offlineAllowedScreens) {
@@ -151,7 +151,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   }, [isOfflineMode, gameState, offlineAllowedScreens, setCurrentScreen]);
 
   const handleDrawerNavigate = (screen: Parameters<typeof setCurrentScreen>[0], tab?: string) => {
-    if (isOfflineMode && screen !== 'scoreboard' && screen !== 'new-game') {
+    if (isOfflineMode && screen !== 'scoreboard' && screen !== 'new-game' && screen !== 'settings') {
       setCurrentScreen('scoreboard');
       return;
     }

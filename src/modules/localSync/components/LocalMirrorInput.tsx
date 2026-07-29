@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useRef } from 'react';
-import { Loader2, X, Wifi, AlertCircle, Check } from 'lucide-react';
+import { Loader2, X, Eye, AlertCircle, Check } from 'lucide-react';
 import type { LocalSyncStatus } from '@infra/network/LocalSyncService';
 
 interface Props {
@@ -56,7 +56,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
   const pinComplete = pin.every(d => d !== '');
 
   return (
-    <div className="fixed inset-0 z-[99998] bg-[#0a0f1e]/95 backdrop-blur-xl flex flex-col items-center justify-between p-6 animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[1000000] bg-[#0a0f1e]/95 backdrop-blur-xl flex flex-col items-center justify-between p-6 animate-in fade-in duration-300">
       {/* Header */}
       <div className="w-full flex items-center justify-between pt-2">
         <div>
@@ -84,7 +84,16 @@ export const LocalMirrorInput: React.FC<Props> = ({
             <div className="text-green-300 font-black text-xl">Conectado!</div>
             <div className="bg-green-500/10 rounded-2xl p-4 border border-green-500/20 text-center">
               <div className="flex items-center gap-2 justify-center">
-                <Wifi size={16} className="text-green-400" />
+                {/* Eye + ondas = ícone do Espelho */}
+                <div className="relative flex items-center justify-center w-14 h-7">
+                  <svg width="32" height="20" viewBox="0 0 24 18" fill="none" className="absolute">
+                    <path d="M4 4C2.5 6 2.5 12 4 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                    <path d="M20 4C21.5 6 21.5 12 20 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                    <path d="M7 6.5C6.5 7.5 6.5 10.5 7 11.5" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                    <path d="M17 6.5C17.5 7.5 17.5 10.5 17 11.5" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                  </svg>
+                  <Eye size={18} className="text-slate-400 relative z-10" strokeWidth={3} />
+                </div>
                 <p className="text-green-300 text-xs font-semibold">Espelhamento ativo</p>
               </div>
               <p className="text-gray-400 text-xs mt-1">O placar sera atualizado automaticamente</p>
@@ -124,18 +133,20 @@ export const LocalMirrorInput: React.FC<Props> = ({
             <div className="w-full">
               <div className="flex justify-between items-center mb-1">
                 <label className="text-gray-400 text-xs font-semibold">
-                  IP do Controlador <span className="text-gray-500">(opcional se no mesmo PC)</span>
+                  IP do Controlador <span className="text-gray-500">(ex: 192.168.44.1)</span>
                 </label>
               </div>
               <input
                 id="ip-input"
                 type="text"
-                inputMode="decimal"
+                inputMode="url"
+                autoCapitalize="off"
+                autoCorrect="off"
                 placeholder="Ex: 192.168.44.1"
                 value={ip}
                 onChange={(e) => setIp(e.target.value)}
                 disabled={isConnecting}
-                className="w-full px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 text-white text-xs outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600"
+                className="w-full px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 text-white text-xs outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
               />
             </div>
 
@@ -170,7 +181,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
             {isConnecting && (
               <div className="bg-black/40 rounded-xl p-3 w-full border border-cyan-500/30 text-[10px] font-mono text-cyan-300 animate-pulse">
                 <div>📡 Buscando canal: myplacar-mirror-{pin.join('')}</div>
-                {ip && <div>🌐 Conectando WS: ws://{ip}:8080</div>}
+                {ip && <div>🌐 Conectando ao IP: {ip}</div>}
                 <div>⏳ Aguardando confirmação do Controlador...</div>
               </div>
             )}

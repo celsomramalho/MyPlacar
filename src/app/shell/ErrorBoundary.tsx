@@ -26,13 +26,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private handleRetry = () => {
     this.setState({ hasError: false, error: null });
+    window.location.reload();
   };
 
   private handleReset = () => {
     try {
       localStorage.removeItem('myPlacarActiveGameState');
-    } catch (e) {}
+      localStorage.removeItem('myPlacarSettings');
+    } catch { /* best effort */ }
     this.setState({ hasError: false, error: null });
+    window.location.href = window.location.origin;
   };
 
   public render() {

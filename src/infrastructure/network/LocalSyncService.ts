@@ -172,10 +172,10 @@ export class LocalSyncService {
     this.controllerIp = controllerIp ?? null;
     this.emit('connecting');
 
-    if (this.isWebEnvironment() || !controllerIp) {
-      this.connectMirrorBroadcast(pin);
+    if (controllerIp && controllerIp.trim() !== '') {
+      this.connectMirrorWebSocket(pin, controllerIp.trim());
     } else {
-      this.connectMirrorWebSocket(pin, controllerIp);
+      this.connectMirrorBroadcast(pin);
     }
   }
 

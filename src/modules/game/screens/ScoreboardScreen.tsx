@@ -338,13 +338,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   // ─── Modo Lite Offline (sincronismo local sem internet) ───────────────────
   const localSync = useLocalSyncIntegration(effectiveGameState);
 
-  // Escuta evento customizado disparado pelo NavigationDrawer e ScoreboardDisplay
-  // para abrir o modal de pareamento sem precisar de prop drilling.
-  useEffect(() => {
-    const handler = () => localSync.openPairingModal();
-    window.addEventListener('localSync:openPairing', handler);
-    return () => window.removeEventListener('localSync:openPairing', handler);
-  }, [localSync.openPairingModal]);
+
 
   // ─── Wake Lock gerenciado no App.tsx — estável independente de remounts ───
 
@@ -878,6 +872,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   });
   const [isEditingUrl, setIsEditingUrl] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+
+  // Fecha o bottom-sheet quando o sincronismo local conectar
+  // (evita navegação acidental para Regras por pointer event leak)
+  useEffect(() => {
+    const handleConnected = () => setNewMenuOpen(false);
+    window.addEventListener('localSync:connected', handleConnected);
+    return () => window.removeEventListener('localSync:connected', handleConnected);
+  }, []);
   const [copiedType, setCopiedType] = useState<'link' | 'watch' | null>(null);
   const mirrorLink = useMemo(() => {
     let base = customBaseUrl.trim();
@@ -1769,12 +1771,38 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                   role={isPublicView ? undefined : "button"}
                   onPointerDown={isPublicView ? undefined : () => setNewMenuOpen(true)}
                   style={isPublicView ? { pointerEvents: 'none', cursor: 'default' } : undefined}
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${isLiveActiveNew ? 'border-emerald-400 bg-white/5 text-emerald-400' : isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' : 'border-white bg-emerald-500 text-white'}`}
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${
+                    isLiveActiveNew
+                      ? 'border-emerald-400 bg-white/5 text-emerald-400'
+                      : localSync.syncState.role !== 'none' && localSync.syncState.status !== 'idle'
+                        ? localSync.syncState.role === 'controller'
+                          ? 'border-orange-400 bg-[#1a1a2e] text-orange-400'
+                          : 'border-sky-400 bg-[#1a1a2e] text-sky-400'
+                        : isOfflineMode
+                          ? 'border-yellow-400 bg-yellow-500 text-black'
+                          : 'border-white bg-emerald-500 text-white'
+                  }`}
                 >
-                  {isLiveActiveNew
-                    ? <LiveIndicator role={effectiveIndicatorRole} status={isLiveActiveNew ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
-                    : isOfflineMode ? <WifiOff size={30} className="relative z-10" /> : <Wifi size={30} className="relative z-10" />
-                  }
+                  {isLiveActiveNew ? (
+                    <LiveIndicator role={effectiveIndicatorRole} status={isLiveActiveNew ? (isCommandOwner ? 'controller' : 'watcher') : undefined} variant="header" className="w-full h-full pointer-events-none" />
+                  ) : localSync.syncState.role !== 'none' && localSync.syncState.status !== 'idle' ? (
+                    // Espelhamento local ativo — mostra ícone do papel (igual ao LiveIndicator)
+                    <div className="relative flex items-center justify-center w-14 h-7">
+                      <svg width="32" height="20" viewBox="0 0 24 18" fill="none" className="absolute">
+                        <path d="M4 4C2.5 6 2.5 12 4 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                        <path d="M20 4C21.5 6 21.5 12 20 14" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                        <path d="M7 6.5C6.5 7.5 6.5 10.5 7 11.5" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                        <path d="M17 6.5C17.5 7.5 17.5 10.5 17 11.5" stroke="#7dd3fc" strokeWidth="2.5" strokeLinecap="round"/>
+                      </svg>
+                      {localSync.syncState.role === 'controller'
+                        ? <Gamepad2 size={22} className="text-orange-500 relative z-10" strokeWidth={2.5} />
+                        : <Eye size={22} className="text-slate-300 relative z-10" strokeWidth={3} />}
+                    </div>
+                  ) : isOfflineMode ? (
+                    <WifiOff size={30} className="relative z-10" />
+                  ) : (
+                    <Wifi size={30} className="relative z-10" />
+                  )}
                 </div>
                 <button
                   disabled={!isCommandOwner}
@@ -1871,21 +1899,14 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                     </button>
                     {/* Espelhar Placar — modo offline */}
                     {isOfflineMode && (
-                      <div
+                      <button
                         id="btn-scoreboard-espelhar"
                         onClick={(e) => {
                           e.stopPropagation();
-                          e.preventDefault();
                           window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                           setNewMenuOpen(false);
                         }}
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                        }}
-                        onTouchStart={(e) => {
-                          e.stopPropagation();
-                        }}
-                        className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors cursor-pointer relative z-[999999] pointer-events-auto ${
+                        className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-colors cursor-pointer text-left ${
                           localSync.syncState.role !== 'none' && localSync.syncState.status !== 'idle'
                             ? 'bg-orange-500/20 active:bg-orange-500/30 text-orange-400'
                             : 'bg-white/5 active:bg-white/10 text-white'
@@ -1906,7 +1927,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                             <span className="text-xs opacity-60">PIN {localSync.syncState.pin}</span>
                           )}
                         </div>
-                      </div>
+                      </button>
                     )}
                     {isCommandOwner && onResetMatch && (
                       <button onPointerDown={() => { setNewMenuOpen(false); onResetMatch(); }}
