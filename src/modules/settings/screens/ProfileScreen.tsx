@@ -528,10 +528,13 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
                          <span className="text-[10px] font-black uppercase">Inat.</span>
                       </div>
                     ) : status === 'denied' ? (
-                      <div className="flex items-center gap-1 text-red-500">
-                         <AlertCircle size={20} />
-                         <span className="text-[10px] font-black uppercase">Negado</span>
-                      </div>
+                      <button
+                        onClick={() => requestPermission(item.id as 'mic' | 'loc' | 'cam')}
+                        disabled={requesting === item.id}
+                        className="text-[10px] font-black text-white px-3 py-2 bg-red-500 rounded-xl active:scale-95 shadow-sm transition-all"
+                      >
+                        {requesting === item.id ? <Loader2 size={12} className="animate-spin" /> : 'Tentar'}
+                      </button>
                     ) : (
                       <button 
                         onClick={() => requestPermission(item.id as 'mic' | 'loc' | 'cam')} 

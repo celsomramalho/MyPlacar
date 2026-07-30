@@ -4,13 +4,28 @@ export type RequestableProfilePermission = 'mic' | 'loc' | 'cam';
 export type ProfilePermissionStates = Record<RequestableProfilePermission, ProfilePermissionStatus>;
 
 const checkMediaPermission = async (constraints: MediaStreamConstraints): Promise<ProfilePermissionStatus> => {
+  // Do not call getUserMedia just to inspect the permission. On Android this
+  // opens a native permission request while the profile is mounting and can
+  // make a WebView-backed Capacitor app close unexpectedly. The explicit
+  // buttons below are responsible for requesting access.
   if (!navigator.mediaDevices?.getUserMedia) return 'unavailable';
 
-  const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(() => null);
-  if (!stream) return 'prompt';
+  try {
+    if ('permissions' in navigator && navigator.permissions?.query) {
+      const permission = await navigator.permissions.query({
+        name: constraints.audio ? 'microphone' : 'camera',
+      } as unknown as PermissionDescriptor);
+      // In Android WebView, `denied` can be returned by the Permissions API
+      // before getUserMedia has actually shown the native permission dialog.
+      // Only a successful grant is definitive; the explicit action must still
+      // be available so Capacitor can request the native permission.
+      return permission.state === 'granted' ? 'granted' : 'prompt';
+    }
+  } catch {
+    // Some Android WebViews do not implement the Permissions API for media.
+  }
 
-  stream.getTracks().forEach(track => track.stop());
-  return 'granted';
+  return 'prompt';
 };
 
 const checkLocationPermission = async (): Promise<ProfilePermissionStatus> => {
@@ -42,13 +57,13 @@ export const checkProfilePermissions = async (): Promise<ProfilePermissionStates
 };
 
 export const requestProfilePermission = async (type: RequestableProfilePermission) => {
-  if (type === 'mic' && navigator.mediaDevices) {
+  if (type === 'mic' && navigator.mediaDevices?.getUserMedia) {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach(track => track.stop());
     return;
   }
 
-  if (type === 'cam' && navigator.mediaDevices) {
+  if (type === 'cam' && navigator.mediaDevices?.getUserMedia) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     stream.getTracks().forEach(track => track.stop());
     return;

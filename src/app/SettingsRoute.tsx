@@ -91,7 +91,7 @@ export function SettingsRoute({
   useEffect(() => {
     if (userProfile.email && !installPromptShownSession) {
       const isStandalone =
-        globalThis.matchMedia('(display-mode: standalone)').matches ||
+        (typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(display-mode: standalone)').matches) ||
         (globalThis.navigator as Navigator & { standalone?: boolean }).standalone === true;
       try {
         const isHidden = localStorage.getItem('myPlacarHideInstallPrompt') === 'true';

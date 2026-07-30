@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint, Wifi } from 'lucide-react';
+import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint, Wifi, Download } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { Input } from '@shared/components/Input';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, onOfflineMode, initialReferralPin = '', appUrl }) => {
+  const isNativeApp = Capacitor.isNativePlatform();
   const [showSplash, setShowSplash] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
@@ -1417,6 +1419,16 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             >
               <WifiOff size={20} /> Placar off-line
             </Button>
+
+            {!isNativeApp && (
+              <a
+                href="/MyPlacar.apk"
+                download="MyPlacar.apk"
+                className="w-full py-4 rounded-4xl font-black border-2 border-red-200 text-red-500 text-lg gap-3 flex items-center justify-center active:scale-95 transition-transform"
+              >
+                <Download size={20} /> Instalar app Android
+              </a>
+            )}
           </div>
         ) : (mode !== 'verifying' && mode !== 'recovery_sent' && mode !== 'watch_login') ? (
           <Button 
