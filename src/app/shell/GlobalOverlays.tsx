@@ -81,6 +81,7 @@ function LocalSyncGlobalOverlays() {
           pin={syncState.pin}
           status={syncState.status}
           error={syncState.error}
+          logs={syncState.logs}
           onStop={handleStopSync}
           onConnectToPhone={connectControllerToPhone}
           phoneIp={syncState.controllerIp}
@@ -90,6 +91,7 @@ function LocalSyncGlobalOverlays() {
         <LocalMirrorInput
           status={syncState.status}
           error={syncState.error}
+          logs={syncState.logs}
           onConnect={handleMirrorConnect}
           onStop={handleStopSync}
           isWebEnvironment={typeof (window as any).Capacitor === 'undefined' || !(window as any).Capacitor?.isNativePlatform?.()}

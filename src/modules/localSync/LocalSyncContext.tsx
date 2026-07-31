@@ -48,6 +48,7 @@ export const LocalSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     pin: null,
     controllerIp: null,
     error: null,
+    logs: [],
   });
   const [mirroredGameState, setMirroredGameState] = useState<GameState | null>(null);
 

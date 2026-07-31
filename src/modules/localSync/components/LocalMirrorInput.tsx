@@ -9,6 +9,7 @@ import type { LocalSyncStatus } from '@infra/network/LocalSyncService';
 interface Props {
   status: LocalSyncStatus;
   error: string | null;
+  logs?: string[];
   onConnect: (pin: string, ip?: string) => void;
   onStop: () => void;
   isWebEnvironment?: boolean;
@@ -18,6 +19,7 @@ interface Props {
 export const LocalMirrorInput: React.FC<Props> = ({
   status,
   error,
+  logs = [],
   onConnect,
   onStop,
   isWebEnvironment = true,
@@ -114,17 +116,23 @@ export const LocalMirrorInput: React.FC<Props> = ({
               <p className="text-cyan-300 text-xs font-black tracking-widest">PIN {pin.join('')}</p>
               <p className="text-gray-500 text-[10px]">Aguardando conexão do relógio...</p>
             </div>
+            {logs.length > 0 && (
+              <div className="bg-black/60 rounded-xl p-3 w-full border border-cyan-500/20 text-[10px] font-mono text-cyan-200 space-y-1 text-left max-h-32 overflow-y-auto">
+                <div className="text-cyan-400 font-bold uppercase tracking-wider">Log do servidor:</div>
+                {logs.map((log, index) => <div key={`${log}-${index}`} className="break-words">• {log}</div>)}
+              </div>
+            )}
           </div>
         ) : (
           <>
-            <div className="text-gray-300 text-sm font-semibold text-center">
+            <div className="text-gray-200 text-lg font-semibold text-center">
               Digite o PIN exibido no <span className="text-cyan-400">Controlador</span>
             </div>
 
             {/* PIN Inputs */}
             {isWebEnvironment && (
               <div className="w-full">
-                <label htmlFor="local-mirror-ip" className="block text-gray-400 text-xs font-bold mb-2">
+                <label htmlFor="local-mirror-ip" className="block text-gray-300 text-sm font-bold mb-2">
                   IP do celular servidor (opcional para duas abas)
                 </label>
                 <input
@@ -135,7 +143,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
                   onChange={(e) => setIp(e.target.value.replace(/[^0-9.]/g, ''))}
                   placeholder="Ex.: 192.168.1.25"
                   disabled={isConnecting}
-                  className="w-full h-12 px-4 rounded-xl border-2 border-white/20 bg-white/5 text-white font-mono outline-none focus:border-cyan-400"
+                  className="w-full h-12 px-4 rounded-xl border-2 border-white/20 bg-white/5 text-white text-xl font-mono outline-none focus:border-cyan-400"
                 />
               </div>
             )}
@@ -195,6 +203,13 @@ export const LocalMirrorInput: React.FC<Props> = ({
               <div className="bg-black/40 rounded-xl p-3 w-full border border-cyan-500/30 text-[10px] font-mono text-cyan-300 animate-pulse">
                 <div>{ip ? `📡 Conectando a ws://${ip}:8080` : `📡 Buscando canal: myplacar-mirror-${pin.join('')}`}</div>
                 <div>⏳ Aguardando confirmação do Controlador...</div>
+              </div>
+            )}
+
+            {logs.length > 0 && (
+              <div className="bg-black/60 rounded-xl p-3 w-full border border-cyan-500/20 text-[10px] font-mono text-cyan-200 space-y-1 text-left max-h-28 overflow-y-auto">
+                <div className="text-cyan-400 font-bold uppercase tracking-wider">Log da conexão:</div>
+                {logs.map((log, index) => <div key={`${log}-${index}`} className="break-words">• {log}</div>)}
               </div>
             )}
 

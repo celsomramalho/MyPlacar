@@ -37,6 +37,7 @@ export interface LocalSyncState {
   pin: string | null;
   controllerIp: string | null;
   error: string | null;
+  logs: string[];
 }
 
 export interface LocalSyncPayload {
@@ -65,6 +66,8 @@ export class LocalSyncService {
   private broadcastChannel: BroadcastChannel | null = null;
   private broadcastPeerChannel: BroadcastChannel | null = null;
   private nativeServerListeners: PluginListenerHandle[] = [];
+  private logs: string[] = [];
+  private currentStatus: LocalSyncStatus = 'idle';
 
   constructor(
     onStateChange: (state: LocalSyncState) => void,
@@ -75,14 +78,22 @@ export class LocalSyncService {
   }
 
   private emit(status: LocalSyncStatus, extra?: Partial<LocalSyncState>) {
+    this.currentStatus = status;
     this.onStateChange({
       role: this.role,
       status,
       pin: this.pin,
       controllerIp: this.controllerIp,
       error: extra?.error ?? null,
+      logs: this.logs,
       ...extra,
     });
+  }
+
+  private log(message: string) {
+    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    this.logs = [...this.logs, `${time}  ${message}`].slice(-8);
+    this.emit(this.currentStatus);
   }
 
   private isWebEnvironment(): boolean {
@@ -95,9 +106,11 @@ export class LocalSyncService {
   // ─── MODO CONTROLADOR ─────────────────────────────────────────────────────────
 
   startAsController(pin: string): void {
+    this.logs = [];
     this.role = 'controller';
     this.pin = pin;
     this.emit('waiting_mirror');
+    this.log(`Controlador iniciado. PIN ${pin}`);
     this.startControllerBroadcast(pin);
   }
 
@@ -107,6 +120,7 @@ export class LocalSyncService {
     const ip = phoneIp.trim().replace(/^ws:\/\//, '').replace(/:\d+\/?$/, '');
     if (!ip) return;
     this.controllerIp = ip;
+    this.log(`Tentando conectar ao celular em ${ip}:8080`);
     this.closeBroadcastChannels();
     this.connectControllerWebSocket(this.pin, ip);
   }
@@ -117,20 +131,25 @@ export class LocalSyncService {
       this.ws?.close();
       this.ws = new WebSocket(url);
       this.ws.onopen = () => {
+        this.log('Conexão aberta. Enviando PIN ao celular...');
         this.ws?.send(JSON.stringify({ type: 'handshake', pin }));
       };
       this.ws.onmessage = (event: MessageEvent) => {
         try {
           const msg = JSON.parse(event.data) as LocalSyncPayload;
           if (msg.type === 'ack' && msg.ok) {
+            this.log('Celular confirmou o PIN. Espelhamento conectado.');
             this.emit('connected');
             this.startPingInterval();
           }
         } catch { /* ignora mensagens malformadas */ }
       };
-      this.ws.onerror = () => this.emit('error', {
-        error: `Não foi possível conectar ao celular em ${url}. Verifique o IP e a rede local.`,
-      });
+      this.ws.onerror = () => {
+        this.log(`Falha ao conectar em ${url}.`);
+        this.emit('error', {
+          error: `Não foi possível conectar ao celular em ${url}. Verifique o IP e a rede local.`,
+        });
+      };
       this.ws.onclose = () => {
         if (this.role === 'controller') this.emit('disconnected');
       };
@@ -209,10 +228,12 @@ export class LocalSyncService {
   // ─── MODO ESPELHO ─────────────────────────────────────────────────────────────
 
   startAsMirror(pin: string, controllerIp?: string): void {
+    this.logs = [];
     this.role = 'mirror';
     this.pin = pin;
     this.controllerIp = controllerIp ?? null;
     this.emit('connecting');
+    this.log(`Espelho iniciado. PIN ${pin}`);
 
     if (!this.isWebEnvironment()) {
       this.startNativeMirrorServer(pin);
@@ -229,15 +250,16 @@ export class LocalSyncService {
   private async startNativeMirrorServer(pin: string): Promise<void> {
     try {
       this.nativeServerListeners = await Promise.all([
-        localWebSocketServer.addListener('status', event => {
-          if (event.status === 'waiting') this.emit('waiting_mirror');
-          if (event.status === 'connected') this.emit('connected');
-          if (event.status === 'disconnected') this.emit('disconnected');
-          if (event.status === 'error') this.emit('error', { error: event.error || 'Erro no servidor local.' });
+      localWebSocketServer.addListener('status', event => {
+          if (event.status === 'waiting') { this.log('Servidor local ativo. Aguardando o relógio...'); this.emit('waiting_mirror'); }
+          if (event.status === 'connected') { this.log('Relógio conectado ao servidor local.'); this.emit('connected'); }
+          if (event.status === 'disconnected') { this.log('Relógio desconectado.'); this.emit('disconnected'); }
+          if (event.status === 'error') { this.log(`Erro no servidor: ${event.error || 'desconhecido'}`); this.emit('error', { error: event.error || 'Erro no servidor local.' }); }
         }),
         localWebSocketServer.addListener('message', event => {
           try {
             const msg = JSON.parse(event.message) as LocalSyncPayload;
+            if (msg.type === 'handshake') this.log('PIN recebido do relógio. Validando...');
             if (msg.type === 'game_state' && msg.gameState) this.onGameStateReceived(msg.gameState);
             if (msg.type === 'ping') void localWebSocketServer.send({ message: JSON.stringify({ type: 'pong', timestamp: Date.now() }) });
           } catch { /* ignora mensagens malformadas */ }
@@ -245,6 +267,7 @@ export class LocalSyncService {
       ]);
       const result = await localWebSocketServer.start({ pin });
       this.controllerIp = result.ip;
+      this.log(`Servidor pronto em ${result.ip}:8080`);
       this.emit('waiting_mirror');
     } catch (error) {
       this.emit('error', { error: error instanceof Error ? error.message : 'Não foi possível iniciar o servidor local.' });
@@ -319,6 +342,7 @@ export class LocalSyncService {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        this.log(`Conexão aberta em ${url}. Enviando PIN...`);
         this.ws!.send(JSON.stringify({ type: 'handshake', pin }));
       };
 
@@ -326,6 +350,7 @@ export class LocalSyncService {
         try {
           const msg: LocalSyncPayload = JSON.parse(event.data);
           if (msg.type === 'ack' && msg.ok) {
+            this.log('Controlador confirmou o PIN. Espelhamento conectado.');
             this.emit('connected');
             this.startPingInterval();
           }
@@ -338,6 +363,7 @@ export class LocalSyncService {
       };
 
       this.ws.onerror = () => {
+        this.log(`Falha ao conectar em ${url}.`);
         this.emit('error', {
           error: `Nao foi possivel conectar em ${url}. Verifique o IP e o PIN.`,
         });

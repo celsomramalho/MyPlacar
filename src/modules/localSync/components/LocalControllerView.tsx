@@ -10,12 +10,13 @@ interface Props {
   pin: string;
   status: LocalSyncStatus;
   error?: string | null;
+  logs?: string[];
   onStop: () => void;
   onConnectToPhone?: (ip: string) => void;
   phoneIp?: string | null;
 }
 
-export const LocalControllerView: React.FC<Props> = ({ pin, status, error, onStop, onConnectToPhone, phoneIp }) => {
+export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs = [], onStop, onConnectToPhone, phoneIp }) => {
   const [ip, setIp] = useState(phoneIp || '');
   const isWaiting = status === 'waiting_mirror' || status === 'error' || status === 'disconnected';
   const isConnected = status === 'connected';
@@ -56,7 +57,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, onSto
 
         {isWaiting && onConnectToPhone && (
           <div className="w-full max-w-xs space-y-2">
-            <label className="block text-gray-400 text-xs font-semibold text-center">
+            <label className="block text-gray-300 text-sm font-semibold text-center">
               IP do celular espelho (sem porta)
             </label>
             <input
@@ -68,13 +69,13 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, onSto
               pattern="[0-9.]*"
               autoCapitalize="off"
               autoCorrect="off"
-              className="w-full px-4 py-3 rounded-xl border border-white/20 bg-white/5 text-white text-sm outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
+              className="w-full px-4 py-3 rounded-xl border border-white/20 bg-white/5 text-white text-xl outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
             />
             <p className="text-[10px] text-gray-500 text-center">A porta :8080 será adicionada automaticamente</p>
             <button
               onClick={() => onConnectToPhone(ip)}
               disabled={!ip.trim()}
-              className="w-full py-3 rounded-xl bg-cyan-600 text-white font-black text-xs disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-cyan-600 text-white font-black text-sm disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               <Wifi size={16} /> Conectar ao celular
             </button>
@@ -83,7 +84,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, onSto
 
         {/* PIN Display */}
       <div className="flex flex-col items-center gap-6 flex-1 justify-center">
-        <div className="text-gray-400 text-sm font-semibold uppercase tracking-widest">PIN de Pareamento</div>
+        <div className="text-gray-300 text-lg font-semibold uppercase tracking-widest">PIN de Pareamento</div>
 
         {/* PIN grande */}
         <div className="relative">
@@ -162,6 +163,12 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, onSto
             No dispositivo Espelho, digite o PIN e também o <span className="text-cyan-300 font-bold">IP local deste celular</span> (ex: no Wi-Fi ou Hotspot).
           </div>
         </div>
+        {logs.length > 0 && (
+          <div className="bg-black/60 rounded-xl p-3 w-full max-w-xs border border-cyan-500/20 text-[10px] font-mono text-cyan-200 space-y-1 text-left max-h-28 overflow-y-auto">
+            <div className="text-cyan-400 font-bold uppercase tracking-wider">Log da conexão:</div>
+            {logs.map((log, index) => <div key={`${log}-${index}`} className="break-words">• {log}</div>)}
+          </div>
+        )}
       </div>
 
       {/* Rodape */}
