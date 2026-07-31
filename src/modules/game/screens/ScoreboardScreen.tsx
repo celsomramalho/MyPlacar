@@ -1902,6 +1902,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                       <button
                         id="btn-scoreboard-espelhar"
                         onClick={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                           setNewMenuOpen(false);

@@ -24,6 +24,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
   localIp,
 }) => {
   const [pin, setPin] = useState(['', '', '', '']);
+  const [ip, setIp] = useState('');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null, null]);
 
   const isConnecting = status === 'connecting';
@@ -52,7 +53,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
   const handleConnect = () => {
     const pinStr = pin.join('');
     if (pinStr.length !== 4) return;
-    onConnect(pinStr);
+    onConnect(pinStr, isWebEnvironment ? ip : undefined);
   };
 
   const pinComplete = pin.every(d => d !== '');
@@ -121,6 +122,24 @@ export const LocalMirrorInput: React.FC<Props> = ({
             </div>
 
             {/* PIN Inputs */}
+            {isWebEnvironment && (
+              <div className="w-full">
+                <label htmlFor="local-mirror-ip" className="block text-gray-400 text-xs font-bold mb-2">
+                  IP do celular servidor (opcional para duas abas)
+                </label>
+                <input
+                  id="local-mirror-ip"
+                  type="text"
+                  inputMode="decimal"
+                  value={ip}
+                  onChange={(e) => setIp(e.target.value.replace(/[^0-9.]/g, ''))}
+                  placeholder="Ex.: 192.168.1.25"
+                  disabled={isConnecting}
+                  className="w-full h-12 px-4 rounded-xl border-2 border-white/20 bg-white/5 text-white font-mono outline-none focus:border-cyan-400"
+                />
+              </div>
+            )}
+
             <div className="flex gap-3">
               {pin.map((digit, i) => (
                 <input
@@ -174,7 +193,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
             {/* Painel de Diagnóstico do Espelho */}
             {isConnecting && (
               <div className="bg-black/40 rounded-xl p-3 w-full border border-cyan-500/30 text-[10px] font-mono text-cyan-300 animate-pulse">
-                <div>📡 Buscando canal: myplacar-mirror-{pin.join('')}</div>
+                <div>{ip ? `📡 Conectando a ws://${ip}:8080` : `📡 Buscando canal: myplacar-mirror-${pin.join('')}`}</div>
                 <div>⏳ Aguardando confirmação do Controlador...</div>
               </div>
             )}
@@ -182,7 +201,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
             {/* Nota */}
             <p className="text-gray-600 text-xs text-center leading-relaxed">
               {isWebEnvironment
-                ? 'Para testar: abra outra aba com o app e escolha "Controlar Placar"'
+                ? 'No celular servidor, informe o IP mostrado na tela dele. Deixe vazio apenas para testar em duas abas.'
                 : 'Certifique-se de que a ancoragem Bluetooth esta ativa no celular controlador'}
             </p>
           </>

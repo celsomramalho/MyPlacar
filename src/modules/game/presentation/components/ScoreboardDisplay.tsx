@@ -393,9 +393,10 @@ className={`w-10 h-10 rounded-full flex items-center justify-center active:scale
 )}
 
 {/* Ícone de conexão — também é o botão do modal */}
-<div
-role={isPublicView ? undefined : "button"}
-onPointerDown={() => { if (!isPublicView) setIsMenuOpen(true); }}
+<button
+type="button"
+disabled={isPublicView}
+onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!isPublicView) { setIsMenuOpen(true); } }}
 className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-transform border-2 shadow-lg ${isPublicView ? 'cursor-default' : 'active:scale-95 cursor-pointer'} ${
          isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
          isOfflineMode ? 'border-yellow-400 bg-yellow-500 text-black' :
@@ -408,7 +409,7 @@ className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-tr
 ? <WifiOff size={20} className="relative z-10" />
 : <Wifi size={20} className="relative z-10" />
 }
-</div>
+</button>
 
 {/* Cronômetro */}
 <span className="text-white font-black text-lg tabular-nums tracking-tight">{formatTime(displayTime)}</span>
@@ -529,7 +530,8 @@ className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 activ
 {isOfflineMode && (
 <button
   id="btn-display-espelhar"
-  onPointerDown={(e) => {
+  onClick={(e) => {
+    e.preventDefault();
     e.stopPropagation();
     setIsMenuOpen(false);
     window.dispatchEvent(new CustomEvent('localSync:openPairing'));

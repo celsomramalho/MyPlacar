@@ -80,6 +80,7 @@ function LocalSyncGlobalOverlays() {
         <LocalControllerView
           pin={syncState.pin}
           status={syncState.status}
+          error={syncState.error}
           onStop={handleStopSync}
           onConnectToPhone={connectControllerToPhone}
           phoneIp={syncState.controllerIp}

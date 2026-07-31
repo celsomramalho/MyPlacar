@@ -525,9 +525,9 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               </div>
 
               {/* Botão central: Apenas o botão do modal com o ícone do olho */}
-              <div
-                role="button"
-                onPointerDown={() => { resetDimTimer(); setIsMenuOpen(true); }}
+              <button
+                type="button"
+                onClick={(event) => { event.preventDefault(); event.stopPropagation(); resetDimTimer(); setIsMenuOpen(true); }}
                 className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${
                   isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
                   syncState.role !== 'none' && syncState.status !== 'idle' ?
@@ -555,7 +555,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 ) : (
                   <Wifi size={30} className="relative z-10" />
                 )}
-              </div>
+              </button>
 
               {/* Lado direito: espaço reservado flex-1 para manter o botão centralizado */}
               <div className="flex-1" />
@@ -581,9 +581,9 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               </button>
 
               {/* Botão Live/Modal — sempre ativo */}
-              <div
-                role="button"
-                onPointerDown={() => { resetDimTimer(); setIsMenuOpen(true); }}
+              <button
+                type="button"
+                onClick={(event) => { event.preventDefault(); event.stopPropagation(); resetDimTimer(); setIsMenuOpen(true); }}
                 className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform border-2 relative overflow-hidden cursor-pointer ${
                   isLiveActive ? 'border-emerald-400 bg-white/5 text-emerald-400' :
                   syncState.role !== 'none' && syncState.status !== 'idle' ?
@@ -611,7 +611,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 ) : (
                   <Wifi size={30} className="relative z-10" />
                 )}
-              </div>
+              </button>
 
               {/* Falta */}
               <button
@@ -736,7 +736,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {isOfflineMode && (
                 <button
                   id="btn-watchboard-espelhar"
-                  onPointerDown={(e) => {
+                  onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                     setIsMenuOpen(false);
@@ -758,7 +759,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                     <div className="font-black text-[12px] uppercase tracking-wider mb-1 text-amber-400">Erro Firebase:</div>
                     <div className="text-[12px] font-bold break-all">{lastErr}</div>
                     <button 
-                      onPointerDown={(e) => {
+                      onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         localStorage.removeItem('myPlacar_last_firebase_error');
                         setIsMenuOpen(false);

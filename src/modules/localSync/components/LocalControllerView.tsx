@@ -9,14 +9,15 @@ import type { LocalSyncStatus } from '@infra/network/LocalSyncService';
 interface Props {
   pin: string;
   status: LocalSyncStatus;
+  error?: string | null;
   onStop: () => void;
   onConnectToPhone?: (ip: string) => void;
   phoneIp?: string | null;
 }
 
-export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop, onConnectToPhone, phoneIp }) => {
+export const LocalControllerView: React.FC<Props> = ({ pin, status, error, onStop, onConnectToPhone, phoneIp }) => {
   const [ip, setIp] = useState(phoneIp || '');
-  const isWaiting = status === 'waiting_mirror';
+  const isWaiting = status === 'waiting_mirror' || status === 'error' || status === 'disconnected';
   const isConnected = status === 'connected';
 
   // Formata PIN com espaco central: "12 34"
@@ -121,6 +122,12 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop, onCo
             </>
           )}
         </div>
+
+        {error && (
+          <div className="w-full max-w-xs rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-center text-xs text-red-300">
+            {error}
+          </div>
+        )}
 
         {/* Instrucoes */}
         {isWaiting && (
