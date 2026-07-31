@@ -79,6 +79,12 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
             >
               <Wifi size={16} /> Conectar ao celular
             </button>
+            {logs.length > 0 && (
+              <div className="bg-black/60 rounded-xl p-3 w-full border border-cyan-500/20 text-[10px] font-mono text-cyan-200 space-y-1 text-left max-h-28 overflow-y-auto">
+                <div className="text-cyan-400 font-bold uppercase tracking-wider">Log da conexão:</div>
+                {logs.map((log, index) => <div key={`${log}-${index}`} className="break-words">• {log}</div>)}
+              </div>
+            )}
           </div>
         )}
 
@@ -163,12 +169,6 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
             No dispositivo Espelho, digite o PIN e também o <span className="text-cyan-300 font-bold">IP local deste celular</span> (ex: no Wi-Fi ou Hotspot).
           </div>
         </div>
-        {logs.length > 0 && (
-          <div className="bg-black/60 rounded-xl p-3 w-full max-w-xs border border-cyan-500/20 text-[10px] font-mono text-cyan-200 space-y-1 text-left max-h-28 overflow-y-auto">
-            <div className="text-cyan-400 font-bold uppercase tracking-wider">Log da conexão:</div>
-            {logs.map((log, index) => <div key={`${log}-${index}`} className="break-words">• {log}</div>)}
-          </div>
-        )}
       </div>
 
       {/* Rodape */}
