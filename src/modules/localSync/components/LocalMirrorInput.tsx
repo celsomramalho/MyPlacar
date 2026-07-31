@@ -24,7 +24,6 @@ export const LocalMirrorInput: React.FC<Props> = ({
   localIp,
 }) => {
   const [pin, setPin] = useState(['', '', '', '']);
-  const [ip, setIp] = useState('');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null, null]);
 
   const isConnecting = status === 'connecting';
@@ -53,7 +52,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
   const handleConnect = () => {
     const pinStr = pin.join('');
     if (pinStr.length !== 4) return;
-    onConnect(pinStr, isWebEnvironment ? undefined : ip);
+    onConnect(pinStr);
   };
 
   const pinComplete = pin.every(d => d !== '');
@@ -145,27 +144,6 @@ export const LocalMirrorInput: React.FC<Props> = ({
               ))}
             </div>
 
-            {/* No APK do celular, o próprio aparelho hospeda o servidor local. */}
-            {!isWebEnvironment && <div className="w-full">
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-gray-400 text-xs font-semibold">
-                  IP do Controlador <span className="text-gray-500">(ex: 192.168.44.1)</span>
-                </label>
-              </div>
-              <input
-                id="ip-input"
-                type="text"
-                inputMode="url"
-                autoCapitalize="off"
-                autoCorrect="off"
-                placeholder="Ex: 192.168.44.1"
-                value={ip}
-                onChange={(e) => setIp(e.target.value)}
-                disabled={isConnecting}
-                className="w-full px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 text-white text-xs outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
-              />
-            </div>}
-
             {/* Erros */}
             {(error || isDisconnected) && (
               <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-xl p-3 w-full">
@@ -197,7 +175,6 @@ export const LocalMirrorInput: React.FC<Props> = ({
             {isConnecting && (
               <div className="bg-black/40 rounded-xl p-3 w-full border border-cyan-500/30 text-[10px] font-mono text-cyan-300 animate-pulse">
                 <div>📡 Buscando canal: myplacar-mirror-{pin.join('')}</div>
-                {ip && <div>🌐 Conectando ao IP: {ip}</div>}
                 <div>⏳ Aguardando confirmação do Controlador...</div>
               </div>
             )}

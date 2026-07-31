@@ -529,7 +529,8 @@ className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 activ
 {isOfflineMode && (
 <button
   id="btn-display-espelhar"
-  onPointerDown={() => {
+  onPointerDown={(e) => {
+    e.stopPropagation();
     setIsMenuOpen(false);
     window.dispatchEvent(new CustomEvent('localSync:openPairing'));
   }}

@@ -736,7 +736,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {isOfflineMode && (
                 <button
                   id="btn-watchboard-espelhar"
-                  onClick={(e) => {
+                  onPointerDown={(e) => {
                     e.stopPropagation();
                     window.dispatchEvent(new CustomEvent('localSync:openPairing'));
                     setIsMenuOpen(false);
