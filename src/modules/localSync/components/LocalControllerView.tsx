@@ -56,7 +56,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop, onCo
         {isWaiting && onConnectToPhone && (
           <div className="w-full max-w-xs space-y-2">
             <label className="block text-gray-400 text-xs font-semibold text-center">
-              IP do celular espelho
+              IP do celular espelho (sem porta)
             </label>
             <input
               value={ip}
@@ -69,6 +69,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop, onCo
               autoCorrect="off"
               className="w-full px-4 py-3 rounded-xl border border-white/20 bg-white/5 text-white text-sm outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
             />
+            <p className="text-[10px] text-gray-500 text-center">A porta :8080 será adicionada automaticamente</p>
             <button
               onClick={() => onConnectToPhone(ip)}
               disabled={!ip.trim()}
