@@ -7,6 +7,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   enableVoice?: boolean;
   enableCamera?: boolean;
   onVoiceComplexResult?: (p1: string, p2: string) => void;
+  onQrCodeResult?: (decodedText: string) => void;
   partnerTerms?: string[];
 }
 
@@ -26,7 +27,7 @@ const loadHtml5Qrcode = (): Promise<any> => {
   });
 };
 
-export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVoice, enableCamera, className = '', onChange, value, onVoiceComplexResult, partnerTerms = ['mais', 'com'], ...props }, ref) => {
+export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVoice, enableCamera, className = '', onChange, value, onVoiceComplexResult, onQrCodeResult, partnerTerms = ['mais', 'com'], ...props }, ref) => {
   const [isListening, setIsListening] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
@@ -70,6 +71,11 @@ export const Input = forwardRef<any, InputProps>(({ label, rightAction, enableVo
   };
 
   const processDecodedText = (decodedText: string) => {
+    if (onQrCodeResult) {
+      onQrCodeResult(decodedText);
+      stopScanner();
+      return;
+    }
     let extractedPin = "";
     let extractedNick = "";
 

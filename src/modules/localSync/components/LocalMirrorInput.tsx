@@ -2,8 +2,9 @@
 // Tela do Espelho: input do PIN para conectar ao Controlador.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState, useRef } from 'react';
-import { Loader2, X, Eye, AlertCircle, Check } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Loader2, X, Eye, AlertCircle, Check, Copy } from 'lucide-react';
+import QRCode from 'qrcode';
 import type { LocalSyncStatus } from '@infra/network/LocalSyncService';
 
 interface Props {
@@ -15,6 +16,46 @@ interface Props {
   isWebEnvironment?: boolean;
   localIp?: string | null;
 }
+
+const LocalWebAppQr: React.FC<{ url: string }> = ({ url }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    void QRCode.toCanvas(canvasRef.current, url, {
+      width: 170,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#0a0f1e', light: '#ffffff' },
+    });
+  }, [url]);
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-2 mt-2">
+      <canvas ref={canvasRef} className="rounded-xl bg-white p-2" aria-label={`QR Code para ${url}`} />
+      <p className="text-gray-400 text-xs">Escaneie para abrir no relógio</p>
+      <button
+        type="button"
+        onClick={copyUrl}
+        className="flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-200 active:scale-95"
+      >
+        <Copy size={14} />
+        {copied ? 'Endereço copiado!' : 'Copiar endereço completo'}
+      </button>
+    </div>
+  );
+};
 
 export const LocalMirrorInput: React.FC<Props> = ({
   status,
@@ -116,6 +157,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
               <p className="text-gray-300 text-sm">No relógio, abra este endereço para carregar o PWA local:</p>
               {localIp && <p className="text-white text-lg font-black font-mono break-all">http://{localIp}:8081</p>}
               {localIp && <p className="text-gray-400 text-xs font-mono">Sincronização: {localIp}:8080</p>}
+              {localIp && <LocalWebAppQr url={`http://${localIp}:8081`} />}
               <p className="text-cyan-300 text-xs font-black tracking-widest">PIN {pin.join('')}</p>
               <p className="text-gray-300 text-sm">Aguardando conexão do relógio...</p>
             </div>
@@ -137,6 +179,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
                 <p className="text-gray-300 text-sm">No relógio, abra primeiro:</p>
                 <p className="text-white text-base font-black font-mono break-all">http://{localIp}:8081</p>
                 <p className="text-gray-400 text-xs mt-1">Depois escolha Controlar Placar e informe o PIN aqui.</p>
+                <LocalWebAppQr url={`http://${localIp}:8081`} />
               </div>
             )}
 

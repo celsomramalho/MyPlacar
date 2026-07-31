@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { X, Loader2, Check, Gamepad2, Wifi } from 'lucide-react';
 import type { LocalSyncStatus } from '@infra/network/LocalSyncService';
+import { Input } from '@shared/components/Input';
 
 interface Props {
   pin: string;
@@ -23,6 +24,20 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
   });
   const isWaiting = status === 'waiting_mirror' || status === 'error' || status === 'disconnected';
   const isConnected = status === 'connected';
+
+  const handleQrCodeResult = (decodedText: string) => {
+    const value = decodedText.trim();
+    try {
+      const parsed = new URL(value.includes('://') ? value : `http://${value}`);
+      if (parsed.hostname) {
+        setIp(parsed.hostname);
+        return;
+      }
+    } catch { /* tenta extrair um IP simples abaixo */ }
+
+    const ipMatch = value.match(/(?:\d{1,3}\.){3}\d{1,3}/);
+    if (ipMatch) setIp(ipMatch[0]);
+  };
 
   // Ícone central igual ao LiveIndicator (Gamepad2 = controlador)
   const RoleIcon = () => (
@@ -61,9 +76,11 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
             <label className="block text-gray-300 text-sm font-semibold text-center">
               IP do celular espelho (sem porta)
             </label>
-            <input
+            <Input
               value={ip}
-              onChange={event => setIp(event.target.value.replace(/[^0-9.]/g, ''))}
+              onChange={event => setIp(String(event.target.value).replace(/[^0-9.]/g, ''))}
+              onQrCodeResult={handleQrCodeResult}
+              enableCamera
               placeholder="Ex: 192.168.44.1"
               type="text"
               inputMode="decimal"
