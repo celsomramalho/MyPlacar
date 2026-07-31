@@ -18,6 +18,9 @@
 //   6. Toda mudanca no gameState e enviada ao Espelho via broadcast/WS
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { localWebSocketServer } from './LocalWebSocketServer';
+import type { PluginListenerHandle } from '@capacitor/core';
+
 export type LocalSyncRole = 'controller' | 'mirror' | 'none';
 
 export type LocalSyncStatus =
@@ -61,6 +64,7 @@ export class LocalSyncService {
   private controllerIp: string | null = null;
   private broadcastChannel: BroadcastChannel | null = null;
   private broadcastPeerChannel: BroadcastChannel | null = null;
+  private nativeServerListeners: PluginListenerHandle[] = [];
 
   constructor(
     onStateChange: (state: LocalSyncState) => void,
@@ -95,6 +99,44 @@ export class LocalSyncService {
     this.pin = pin;
     this.emit('waiting_mirror');
     this.startControllerBroadcast(pin);
+  }
+
+  /** Conecta o controlador (relógio/PWA) ao servidor do celular espelho. */
+  connectControllerToPhone(phoneIp: string): void {
+    if (this.role !== 'controller' || !this.pin) return;
+    const ip = phoneIp.trim().replace(/^ws:\/\//, '').replace(/:\d+\/?$/, '');
+    if (!ip) return;
+    this.controllerIp = ip;
+    this.closeBroadcastChannels();
+    this.connectControllerWebSocket(this.pin, ip);
+  }
+
+  private connectControllerWebSocket(pin: string, ip: string): void {
+    const url = `ws://${ip}:8080`;
+    try {
+      this.ws?.close();
+      this.ws = new WebSocket(url);
+      this.ws.onopen = () => {
+        this.ws?.send(JSON.stringify({ type: 'handshake', pin }));
+      };
+      this.ws.onmessage = (event: MessageEvent) => {
+        try {
+          const msg = JSON.parse(event.data) as LocalSyncPayload;
+          if (msg.type === 'ack' && msg.ok) {
+            this.emit('connected');
+            this.startPingInterval();
+          }
+        } catch { /* ignora mensagens malformadas */ }
+      };
+      this.ws.onerror = () => this.emit('error', {
+        error: `Não foi possível conectar ao celular em ${url}. Verifique o IP e a rede local.`,
+      });
+      this.ws.onclose = () => {
+        if (this.role === 'controller') this.emit('disconnected');
+      };
+    } catch {
+      this.emit('error', { error: 'Endereço local inválido.' });
+    }
   }
 
   private startControllerBroadcast(pin: string): void {
@@ -172,10 +214,40 @@ export class LocalSyncService {
     this.controllerIp = controllerIp ?? null;
     this.emit('connecting');
 
+    if (!this.isWebEnvironment()) {
+      this.startNativeMirrorServer(pin);
+      return;
+    }
+
     if (controllerIp && controllerIp.trim() !== '') {
       this.connectMirrorWebSocket(pin, controllerIp.trim());
     } else {
       this.connectMirrorBroadcast(pin);
+    }
+  }
+
+  private async startNativeMirrorServer(pin: string): Promise<void> {
+    try {
+      this.nativeServerListeners = await Promise.all([
+        localWebSocketServer.addListener('status', event => {
+          if (event.status === 'waiting') this.emit('waiting_mirror');
+          if (event.status === 'connected') this.emit('connected');
+          if (event.status === 'disconnected') this.emit('disconnected');
+          if (event.status === 'error') this.emit('error', { error: event.error || 'Erro no servidor local.' });
+        }),
+        localWebSocketServer.addListener('message', event => {
+          try {
+            const msg = JSON.parse(event.message) as LocalSyncPayload;
+            if (msg.type === 'game_state' && msg.gameState) this.onGameStateReceived(msg.gameState);
+            if (msg.type === 'ping') void localWebSocketServer.send({ message: JSON.stringify({ type: 'pong', timestamp: Date.now() }) });
+          } catch { /* ignora mensagens malformadas */ }
+        }),
+      ]);
+      const result = await localWebSocketServer.start({ pin });
+      this.controllerIp = result.ip;
+      this.emit('waiting_mirror');
+    } catch (error) {
+      this.emit('error', { error: error instanceof Error ? error.message : 'Não foi possível iniciar o servidor local.' });
     }
   }
 
@@ -315,7 +387,15 @@ export class LocalSyncService {
     if (this.ws) { this.ws.close(); this.ws = null; }
     if (this.broadcastChannel) { this.broadcastChannel.close(); this.broadcastChannel = null; }
     if (this.broadcastPeerChannel) { this.broadcastPeerChannel.close(); this.broadcastPeerChannel = null; }
+    this.nativeServerListeners.forEach(listener => listener.remove());
+    this.nativeServerListeners = [];
+    if (!this.isWebEnvironment()) void localWebSocketServer.stop();
 
     this.emit('idle');
+  }
+
+  private closeBroadcastChannels(): void {
+    if (this.broadcastChannel) { this.broadcastChannel.close(); this.broadcastChannel = null; }
+    if (this.broadcastPeerChannel) { this.broadcastPeerChannel.close(); this.broadcastPeerChannel = null; }
   }
 }

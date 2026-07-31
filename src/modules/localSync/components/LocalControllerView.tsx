@@ -2,17 +2,20 @@
 // Tela do Controlador: exibe PIN gerado e status de conexao com o Espelho.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React from 'react';
-import { X, Loader2, Check, Gamepad2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Loader2, Check, Gamepad2, Wifi } from 'lucide-react';
 import type { LocalSyncStatus } from '@infra/network/LocalSyncService';
 
 interface Props {
   pin: string;
   status: LocalSyncStatus;
   onStop: () => void;
+  onConnectToPhone?: (ip: string) => void;
+  phoneIp?: string | null;
 }
 
-export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop }) => {
+export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop, onConnectToPhone, phoneIp }) => {
+  const [ip, setIp] = useState(phoneIp || '');
   const isWaiting = status === 'waiting_mirror';
   const isConnected = status === 'connected';
 
@@ -100,6 +103,30 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop }) =>
               <span className="text-white font-semibold"> "Espelhar Placar"</span> e
               digite o PIN acima
             </p>
+          </div>
+        )}
+
+        {isWaiting && onConnectToPhone && (
+          <div className="w-full max-w-xs space-y-2">
+            <label className="block text-gray-400 text-xs font-semibold text-center">
+              IP do celular espelho
+            </label>
+            <input
+              value={ip}
+              onChange={event => setIp(event.target.value)}
+              placeholder="Ex: 192.168.44.1"
+              inputMode="url"
+              autoCapitalize="off"
+              autoCorrect="off"
+              className="w-full px-4 py-3 rounded-xl border border-white/20 bg-white/5 text-white text-sm outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
+            />
+            <button
+              onClick={() => onConnectToPhone(ip)}
+              disabled={!ip.trim()}
+              className="w-full py-3 rounded-xl bg-cyan-600 text-white font-black text-xs disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <Wifi size={16} /> Conectar ao celular
+            </button>
           </div>
         )}
 

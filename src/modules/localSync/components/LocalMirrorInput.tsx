@@ -12,6 +12,7 @@ interface Props {
   onConnect: (pin: string, ip?: string) => void;
   onStop: () => void;
   isWebEnvironment?: boolean;
+  localIp?: string | null;
 }
 
 export const LocalMirrorInput: React.FC<Props> = ({
@@ -20,6 +21,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
   onConnect,
   onStop,
   isWebEnvironment = true,
+  localIp,
 }) => {
   const [pin, setPin] = useState(['', '', '', '']);
   const [ip, setIp] = useState('');
@@ -27,6 +29,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
 
   const isConnecting = status === 'connecting';
   const isConnected = status === 'connected';
+  const isWaiting = status === 'waiting_mirror';
   const isDisconnected = status === 'disconnected';
 
   const handlePinChange = (index: number, value: string) => {
@@ -99,6 +102,19 @@ export const LocalMirrorInput: React.FC<Props> = ({
               <p className="text-gray-400 text-xs mt-1">O placar sera atualizado automaticamente</p>
             </div>
           </div>
+        ) : isWaiting ? (
+          <div className="flex flex-col items-center gap-5 text-center max-w-xs">
+            <div className="w-20 h-20 rounded-full bg-cyan-500/10 border-2 border-cyan-500/40 flex items-center justify-center">
+              <Loader2 size={36} className="text-cyan-300 animate-spin" />
+            </div>
+            <div className="text-cyan-200 font-black text-xl">Servidor local ativo</div>
+            <div className="bg-cyan-500/10 rounded-2xl p-4 border border-cyan-500/20 text-center space-y-2">
+              <p className="text-gray-300 text-xs">No relógio controlador, informe o IP abaixo e use o PIN:</p>
+              {localIp && <p className="text-white text-lg font-black font-mono">{localIp}:8080</p>}
+              <p className="text-cyan-300 text-xs font-black tracking-widest">PIN {pin.join('')}</p>
+              <p className="text-gray-500 text-[10px]">Aguardando conexão do relógio...</p>
+            </div>
+          </div>
         ) : (
           <>
             <div className="text-gray-300 text-sm font-semibold text-center">
@@ -129,8 +145,8 @@ export const LocalMirrorInput: React.FC<Props> = ({
               ))}
             </div>
 
-            {/* Campo de IP para conectar entre aparelhos diferentes */}
-            <div className="w-full">
+            {/* No APK do celular, o próprio aparelho hospeda o servidor local. */}
+            {!isWebEnvironment && <div className="w-full">
               <div className="flex justify-between items-center mb-1">
                 <label className="text-gray-400 text-xs font-semibold">
                   IP do Controlador <span className="text-gray-500">(ex: 192.168.44.1)</span>
@@ -148,7 +164,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
                 disabled={isConnecting}
                 className="w-full px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 text-white text-xs outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
               />
-            </div>
+            </div>}
 
             {/* Erros */}
             {(error || isDisconnected) && (

@@ -19,6 +19,7 @@ function LocalSyncGlobalOverlays() {
   const {
     syncState,
     startAsController,
+    connectControllerToPhone,
     startAsMirror,
     stopSync,
   } = useLocalSync();
@@ -80,6 +81,8 @@ function LocalSyncGlobalOverlays() {
           pin={syncState.pin}
           status={syncState.status}
           onStop={handleStopSync}
+          onConnectToPhone={connectControllerToPhone}
+          phoneIp={syncState.controllerIp}
         />
       )}
       {activeView === 'mirror' && (
@@ -89,6 +92,7 @@ function LocalSyncGlobalOverlays() {
           onConnect={handleMirrorConnect}
           onStop={handleStopSync}
           isWebEnvironment={typeof (window as any).Capacitor === 'undefined' || !(window as any).Capacitor?.isNativePlatform?.()}
+          localIp={syncState.controllerIp}
         />
       )}
     </>
