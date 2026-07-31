@@ -130,6 +130,14 @@ export const LocalMirrorInput: React.FC<Props> = ({
               Digite o PIN exibido no <span className="text-cyan-400">Controlador</span>
             </div>
 
+            {!isWebEnvironment && localIp && (
+              <div className="w-full rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-center">
+                <p className="text-gray-300 text-sm">No relógio, abra primeiro:</p>
+                <p className="text-white text-base font-black font-mono break-all">http://{localIp}:8081</p>
+                <p className="text-gray-400 text-xs mt-1">Depois escolha Controlar Placar e informe o PIN aqui.</p>
+              </div>
+            )}
+
             {/* PIN Inputs */}
             {isWebEnvironment && (
               <div className="w-full">

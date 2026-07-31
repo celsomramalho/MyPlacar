@@ -129,6 +129,20 @@ export class LocalSyncService {
     this.connectControllerWebSocket(this.pin, ip);
   }
 
+  prepareLocalWebApp(): void {
+    if (this.isWebEnvironment()) return;
+    void localWebSocketServer.startWebApp()
+      .then(result => {
+        this.controllerIp = result.ip;
+        this.log(`PWA local disponível em ${result.webUrl}`);
+        this.emit('connecting');
+      })
+      .catch(error => {
+        this.log(`Falha ao iniciar o PWA local: ${error instanceof Error ? error.message : 'erro desconhecido'}`);
+        this.emit('error', { error: 'Não foi possível iniciar o endereço local do PWA.' });
+      });
+  }
+
   private connectControllerWebSocket(pin: string, ip: string): void {
     const url = `ws://${ip}:8080`;
     try {

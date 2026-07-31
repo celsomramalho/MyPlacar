@@ -1,6 +1,7 @@
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 export interface LocalWebSocketServerPlugin {
+  startWebApp(): Promise<{ ip: string; webPort: number; webUrl: string }>;
   start(options: { pin: string }): Promise<{ ip: string; port: number; webPort?: number; webUrl?: string }>;
   send(options: { message: string }): Promise<void>;
   stop(): Promise<void>;

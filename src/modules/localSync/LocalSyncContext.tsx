@@ -29,6 +29,8 @@ export interface LocalSyncContextValue {
   connectControllerToPhone: (phoneIp: string) => void;
   /** Inicia este dispositivo como Espelho com o PIN e IP fornecidos */
   startAsMirror: (pin: string, controllerIp?: string) => void;
+  /** Prepara o endereço HTTP local antes do pareamento do PIN. */
+  prepareLocalWebApp: () => void;
   /** Envia o estado atual do jogo para o Espelho (apenas o Controlador chama) */
   broadcastGameState: (gameState: GameState) => void;
   /** Encerra a sessao local */
@@ -83,6 +85,10 @@ export const LocalSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setMirroredGameState(null);
   }, [getService]);
 
+  const prepareLocalWebApp = useCallback(() => {
+    getService().prepareLocalWebApp();
+  }, [getService]);
+
   const connectControllerToPhone = useCallback((phoneIp: string) => {
     getService().connectControllerToPhone(phoneIp);
   }, [getService]);
@@ -108,6 +114,7 @@ export const LocalSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     startAsController,
     connectControllerToPhone,
     startAsMirror,
+    prepareLocalWebApp,
     broadcastGameState,
     stopSync,
   };

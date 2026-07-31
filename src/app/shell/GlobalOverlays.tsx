@@ -21,6 +21,7 @@ function LocalSyncGlobalOverlays() {
     startAsController,
     connectControllerToPhone,
     startAsMirror,
+    prepareLocalWebApp,
     stopSync,
   } = useLocalSync();
 
@@ -56,8 +57,9 @@ function LocalSyncGlobalOverlays() {
   }, [startAsController]);
 
   const handleChooseMirror = useCallback(() => {
+    prepareLocalWebApp();
     setActiveView('mirror');
-  }, []);
+  }, [prepareLocalWebApp]);
 
   const handleMirrorConnect = useCallback((pin: string, ip?: string) => {
     startAsMirror(pin, ip);
