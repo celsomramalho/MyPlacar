@@ -145,13 +145,19 @@ export class LocalSyncService {
         } catch { /* ignora mensagens malformadas */ }
       };
       this.ws.onerror = () => {
-        this.log(`Falha ao conectar em ${url}.`);
+        const httpsWarning = typeof window !== 'undefined' && window.location.protocol === 'https:'
+          ? ' O PWA está em HTTPS e o navegador pode bloquear ws:// local.'
+          : '';
+        this.log(`Falha ao conectar em ${url}.${httpsWarning}`);
         this.emit('error', {
-          error: `Não foi possível conectar ao celular em ${url}. Verifique o IP e a rede local.`,
+          error: `Não foi possível conectar ao celular em ${url}. Verifique o IP, a rede local e se o PWA HTTPS bloqueou ws://.`,
         });
       };
       this.ws.onclose = () => {
-        if (this.role === 'controller') this.emit('disconnected');
+        if (this.role === 'controller') {
+          this.log('Conexão encerrada pelo navegador ou pelo celular.');
+          if (this.currentStatus !== 'error') this.emit('disconnected');
+        }
       };
     } catch {
       this.emit('error', { error: 'Endereço local inválido.' });

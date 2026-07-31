@@ -21,9 +21,6 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
   const isWaiting = status === 'waiting_mirror' || status === 'error' || status === 'disconnected';
   const isConnected = status === 'connected';
 
-  // Formata PIN com espaco central: "12 34"
-  const pinFormatted = pin.slice(0, 2) + ' ' + pin.slice(2);
-
   // Ícone central igual ao LiveIndicator (Gamepad2 = controlador)
   const RoleIcon = () => (
     <div className="relative flex items-center justify-center w-14 h-7">
@@ -39,7 +36,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
   );
 
   return (
-    <div className="fixed inset-0 z-[1000000] bg-[#0a0f1e]/95 backdrop-blur-xl flex flex-col items-center justify-between p-6 animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[1000000] bg-[#0a0f1e]/95 backdrop-blur-xl flex flex-col items-center overflow-hidden p-6 animate-in fade-in duration-300">
       {/* Header */}
       <div className="w-full flex items-center justify-between pt-2">
         <div>
@@ -55,6 +52,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
         </button>
       </div>
 
+      <div className="w-full flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col items-center gap-4 py-2">
         {isWaiting && onConnectToPhone && (
           <div className="w-full max-w-xs space-y-2">
             <label className="block text-gray-300 text-sm font-semibold text-center">
@@ -89,25 +87,18 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
         )}
 
         {/* PIN Display */}
-      <div className="flex flex-col items-center gap-6 flex-1 justify-center">
+      <div className="flex flex-col items-center gap-6 w-full">
         <div className="text-gray-300 text-lg font-semibold uppercase tracking-widest">PIN de Pareamento</div>
 
-        {/* PIN grande */}
+        {/* PIN compacto e legível no relógio */}
         <div className="relative">
           <div className="absolute -inset-4 bg-orange-500/10 rounded-3xl blur-xl" />
-          <div className="relative flex gap-3">
-            {pin.split('').map((digit, i) => (
-              <div
-                key={i}
-                className={`w-16 h-20 flex items-center justify-center rounded-2xl border-2 font-black text-5xl transition-all duration-300 ${
-                  isConnected
-                    ? 'border-green-500/60 bg-green-500/10 text-green-300'
-                    : 'border-orange-500/50 bg-orange-500/10 text-orange-300'
-                }`}
-              >
-                {digit}
-              </div>
-            ))}
+          <div className={`relative px-5 py-2 rounded-2xl border-2 font-black text-4xl tracking-[0.25em] text-center transition-all duration-300 ${
+            isConnected
+              ? 'border-green-500/60 bg-green-500/10 text-green-300'
+              : 'border-orange-500/50 bg-orange-500/10 text-orange-300'
+          }`}>
+            {pin}
           </div>
         </div>
 
@@ -170,16 +161,8 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
           </div>
         </div>
       </div>
-
-      {/* Rodape */}
-      <div className="w-full">
-        <div className="flex items-center gap-2 justify-center mb-3">
-          <RoleIcon />
-          <span className="text-gray-500 text-xs">
-            {isConnected ? 'Sincronismo ativo — jogando normalmente' : 'Sem conexão de internet necessária'}
-          </span>
-        </div>
       </div>
+
     </div>
   );
 };
