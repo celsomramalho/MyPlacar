@@ -17,7 +17,10 @@ interface Props {
 }
 
 export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs = [], onStop, onConnectToPhone, phoneIp }) => {
-  const [ip, setIp] = useState(phoneIp || '');
+  const [ip, setIp] = useState(() => {
+    if (phoneIp) return phoneIp;
+    try { return localStorage.getItem('myplacar_last_phone_ip') || ''; } catch { return ''; }
+  });
   const isWaiting = status === 'waiting_mirror' || status === 'error' || status === 'disconnected';
   const isConnected = status === 'connected';
 
@@ -71,7 +74,10 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
             />
             <p className="text-[10px] text-gray-500 text-center">A porta :8080 será adicionada automaticamente</p>
             <button
-              onClick={() => onConnectToPhone(ip)}
+              onClick={() => {
+                try { localStorage.setItem('myplacar_last_phone_ip', ip.trim()); } catch { /* best effort */ }
+                onConnectToPhone(ip);
+              }}
               disabled={!ip.trim()}
               className="w-full py-3 rounded-xl bg-cyan-600 text-white font-black text-sm disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
             >

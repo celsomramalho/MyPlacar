@@ -118,7 +118,11 @@ export class LocalSyncService {
   connectControllerToPhone(phoneIp: string): void {
     if (this.role !== 'controller' || !this.pin) return;
     const ip = phoneIp.trim().replace(/^ws:\/\//, '').replace(/:\d+\/?$/, '');
-    if (!ip) return;
+    if (!ip) {
+      this.log('IP vazio. Digite o IP do celular antes de conectar.');
+      this.emit('error', { error: 'Digite o IP do celular para iniciar a conexão.' });
+      return;
+    }
     this.controllerIp = ip;
     this.log(`Tentando conectar ao celular em ${ip}:8080`);
     this.closeBroadcastChannels();
@@ -160,7 +164,11 @@ export class LocalSyncService {
         }
       };
     } catch {
-      this.emit('error', { error: 'Endereço local inválido.' });
+      const httpsWarning = typeof window !== 'undefined' && window.location.protocol === 'https:'
+        ? ' O Chrome pode bloquear ws:// quando o PWA está em HTTPS.'
+        : '';
+      this.log(`O navegador não conseguiu abrir ${url}.${httpsWarning}`);
+      this.emit('error', { error: `Não foi possível abrir a conexão local em ${url}.${httpsWarning}` });
     }
   }
 
