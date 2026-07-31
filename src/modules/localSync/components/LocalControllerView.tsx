@@ -53,7 +53,33 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop, onCo
         </button>
       </div>
 
-      {/* PIN Display */}
+        {isWaiting && onConnectToPhone && (
+          <div className="w-full max-w-xs space-y-2">
+            <label className="block text-gray-400 text-xs font-semibold text-center">
+              IP do celular espelho
+            </label>
+            <input
+              value={ip}
+              onChange={event => setIp(event.target.value.replace(/[^0-9.]/g, ''))}
+              placeholder="Ex: 192.168.44.1"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9.]*"
+              autoCapitalize="off"
+              autoCorrect="off"
+              className="w-full px-4 py-3 rounded-xl border border-white/20 bg-white/5 text-white text-sm outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
+            />
+            <button
+              onClick={() => onConnectToPhone(ip)}
+              disabled={!ip.trim()}
+              className="w-full py-3 rounded-xl bg-cyan-600 text-white font-black text-xs disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <Wifi size={16} /> Conectar ao celular
+            </button>
+          </div>
+        )}
+
+        {/* PIN Display */}
       <div className="flex flex-col items-center gap-6 flex-1 justify-center">
         <div className="text-gray-400 text-sm font-semibold uppercase tracking-widest">PIN de Pareamento</div>
 
@@ -103,30 +129,6 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, onStop, onCo
               <span className="text-white font-semibold"> "Espelhar Placar"</span> e
               digite o PIN acima
             </p>
-          </div>
-        )}
-
-        {isWaiting && onConnectToPhone && (
-          <div className="w-full max-w-xs space-y-2">
-            <label className="block text-gray-400 text-xs font-semibold text-center">
-              IP do celular espelho
-            </label>
-            <input
-              value={ip}
-              onChange={event => setIp(event.target.value)}
-              placeholder="Ex: 192.168.44.1"
-              inputMode="url"
-              autoCapitalize="off"
-              autoCorrect="off"
-              className="w-full px-4 py-3 rounded-xl border border-white/20 bg-white/5 text-white text-sm outline-none focus:border-cyan-400 transition-all placeholder:text-gray-600 font-mono"
-            />
-            <button
-              onClick={() => onConnectToPhone(ip)}
-              disabled={!ip.trim()}
-              className="w-full py-3 rounded-xl bg-cyan-600 text-white font-black text-xs disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              <Wifi size={16} /> Conectar ao celular
-            </button>
           </div>
         )}
 
