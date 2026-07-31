@@ -111,13 +111,14 @@ export const LocalMirrorInput: React.FC<Props> = ({
             </div>
             <div className="text-cyan-200 font-black text-xl">Servidor local ativo</div>
             <div className="bg-cyan-500/10 rounded-2xl p-4 border border-cyan-500/20 text-center space-y-2">
-              <p className="text-gray-300 text-xs">No relógio controlador, informe o IP abaixo e use o PIN:</p>
-              {localIp && <p className="text-white text-lg font-black font-mono">{localIp}:8080</p>}
+              <p className="text-gray-300 text-sm">No relógio, abra este endereço para carregar o PWA local:</p>
+              {localIp && <p className="text-white text-lg font-black font-mono break-all">http://{localIp}:8081</p>}
+              {localIp && <p className="text-gray-400 text-xs font-mono">Sincronização: {localIp}:8080</p>}
               <p className="text-cyan-300 text-xs font-black tracking-widest">PIN {pin.join('')}</p>
-              <p className="text-gray-500 text-[10px]">Aguardando conexão do relógio...</p>
+              <p className="text-gray-300 text-sm">Aguardando conexão do relógio...</p>
             </div>
             {logs.length > 0 && (
-              <div className="bg-black/60 rounded-xl p-3 w-full border border-cyan-500/20 text-[10px] font-mono text-cyan-200 space-y-1 text-left max-h-32 overflow-y-auto">
+              <div className="bg-black/60 rounded-xl p-3 w-full border border-cyan-500/20 text-sm font-mono text-cyan-200 space-y-1 text-left max-h-40 overflow-y-auto">
                 <div className="text-cyan-400 font-bold uppercase tracking-wider">Log do servidor:</div>
                 {logs.map((log, index) => <div key={`${log}-${index}`} className="break-words">• {log}</div>)}
               </div>
@@ -173,7 +174,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
 
             {/* Erros */}
             {(error || isDisconnected) && (
-              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-xl p-3 w-full">
+              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-xl p-3 w-full text-sm">
                 <AlertCircle size={16} className="text-red-400 mt-0.5 shrink-0" />
                 <p className="text-red-300 text-xs">
                   {error || 'Conexao perdida. Tentando reconectar...'}
@@ -200,7 +201,7 @@ export const LocalMirrorInput: React.FC<Props> = ({
 
             {/* Painel de Diagnóstico do Espelho */}
             {isConnecting && (
-              <div className="bg-black/40 rounded-xl p-3 w-full border border-cyan-500/30 text-[10px] font-mono text-cyan-300 animate-pulse">
+              <div className="bg-black/40 rounded-xl p-3 w-full border border-cyan-500/30 text-sm font-mono text-cyan-300 animate-pulse">
                 <div>{ip ? `📡 Conectando a ws://${ip}:8080` : `📡 Buscando canal: myplacar-mirror-${pin.join('')}`}</div>
                 <div>⏳ Aguardando confirmação do Controlador...</div>
               </div>

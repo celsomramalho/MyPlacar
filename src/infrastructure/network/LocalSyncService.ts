@@ -154,7 +154,7 @@ export class LocalSyncService {
           : '';
         this.log(`Falha ao conectar em ${url}.${httpsWarning}`);
         this.emit('error', {
-          error: `Não foi possível conectar ao celular em ${url}. Verifique o IP, a rede local e se o PWA HTTPS bloqueou ws://.`,
+          error: `O Chrome bloqueou ou não conseguiu abrir ${url}. Para testar na rede local, abra o PWA por HTTP; em produção será necessário usar wss://.`,
         });
       };
       this.ws.onclose = () => {
@@ -168,7 +168,7 @@ export class LocalSyncService {
         ? ' O Chrome pode bloquear ws:// quando o PWA está em HTTPS.'
         : '';
       this.log(`O navegador não conseguiu abrir ${url}.${httpsWarning}`);
-      this.emit('error', { error: `Não foi possível abrir a conexão local em ${url}.${httpsWarning}` });
+      this.emit('error', { error: `Não foi possível abrir ${url}.${httpsWarning} Para testar, abra o PWA por HTTP; em produção será necessário usar wss://.` });
     }
   }
 
@@ -281,6 +281,7 @@ export class LocalSyncService {
       ]);
       const result = await localWebSocketServer.start({ pin });
       this.controllerIp = result.ip;
+      if (result.webUrl) this.log(`Abra no relógio: ${result.webUrl}`);
       this.log(`Servidor pronto em ${result.ip}:8080`);
       this.emit('waiting_mirror');
     } catch (error) {

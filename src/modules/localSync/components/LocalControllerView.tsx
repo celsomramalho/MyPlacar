@@ -57,7 +57,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
 
       <div className="w-full flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col items-center gap-4 py-2">
         {isWaiting && onConnectToPhone && (
-          <div className="w-full max-w-xs space-y-2">
+          <div className="order-2 w-full max-w-xs space-y-2">
             <label className="block text-gray-300 text-sm font-semibold text-center">
               IP do celular espelho (sem porta)
             </label>
@@ -84,7 +84,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
               <Wifi size={16} /> Conectar ao celular
             </button>
             {logs.length > 0 && (
-              <div className="bg-black/60 rounded-xl p-3 w-full border border-cyan-500/20 text-[10px] font-mono text-cyan-200 space-y-1 text-left max-h-28 overflow-y-auto">
+              <div className="bg-black/60 rounded-xl p-3 w-full border border-cyan-500/20 text-sm font-mono text-cyan-200 space-y-1 text-left max-h-36 overflow-y-auto">
                 <div className="text-cyan-400 font-bold uppercase tracking-wider">Log da conexão:</div>
                 {logs.map((log, index) => <div key={`${log}-${index}`} className="break-words">• {log}</div>)}
               </div>
@@ -93,7 +93,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
         )}
 
         {/* PIN Display */}
-      <div className="flex flex-col items-center gap-6 w-full">
+      <div className="order-1 flex flex-col items-center gap-6 w-full">
         <div className="text-gray-300 text-lg font-semibold uppercase tracking-widest">PIN de Pareamento</div>
 
         {/* PIN compacto e legível no relógio */}
@@ -128,7 +128,7 @@ export const LocalControllerView: React.FC<Props> = ({ pin, status, error, logs 
         </div>
 
         {error && (
-          <div className="w-full max-w-xs rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-center text-xs text-red-300">
+          <div className="w-full max-w-xs rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-300">
             {error}
           </div>
         )}
