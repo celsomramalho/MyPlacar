@@ -29,7 +29,9 @@ export const LocalMirrorInput: React.FC<Props> = ({
   const [ip, setIp] = useState('');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null, null]);
 
-  const isConnecting = status === 'connecting';
+  // O servidor HTTP local pode estar sendo preparado antes do PIN ser digitado.
+  // Só bloqueia os campos depois que o PIN estiver completo e a conexão começar.
+  const isConnecting = status === 'connecting' && pin.every(d => d !== '');
   const isConnected = status === 'connected';
   const isWaiting = status === 'waiting_mirror';
   const isDisconnected = status === 'disconnected';
