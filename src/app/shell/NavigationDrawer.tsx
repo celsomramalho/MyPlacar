@@ -151,6 +151,13 @@ export const NavigationDrawer: React.FC<Props> = ({
               >
                 <Play size={22} className="fill-emerald-500" />
               </button>
+              <button
+                onClick={() => handleNavigate('new-game')}
+                className="p-2 text-amber-500 hover:bg-amber-100/40 rounded-full transition-colors"
+                title="Regras e configurações"
+              >
+                <Settings size={22} />
+              </button>
               {onExitOffline && (
                 <button
                   onClick={() => { onExitOffline(); onClose(); }}
@@ -185,6 +192,16 @@ export const NavigationDrawer: React.FC<Props> = ({
             </div>
 
             <div className="h-[2px] bg-slate-200 mx-4 my-2" />
+
+            <button
+              onClick={() => handleNavigate('new-game')}
+              className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all active:scale-[0.98] ${
+                currentScreen === 'new-game' ? 'bg-amber-50' : 'hover:bg-slate-50'
+              }`}
+            >
+              <Settings size={20} className="text-amber-500" />
+              <span className="text-sm font-bold text-black">Regras e configurações</span>
+            </button>
 
             {onExitOffline && (
               <button

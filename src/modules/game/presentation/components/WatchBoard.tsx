@@ -1,9 +1,10 @@
 import React from 'react';
-import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, Gamepad2, Eye } from 'lucide-react';
+import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, Gamepad2, Eye, User, Users } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
 import { getTennisServerSide } from '@modules/game/domain/tennisEngine';
+import { useGame } from '@modules/game';
 import { useMatchTimer } from '../hooks/useMatchTimer.ts';
 
 type WatchStatusPanel = 'set' | 'mic' | 'battery';
@@ -97,6 +98,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const { setMatchSettings } = useGame();
   const syncState: { role: string; status: string } = { role: 'none', status: 'idle' };
   const displayTimeSeconds = useMatchTimer(gameState);
   const formatTimer = (seconds: number) => {
@@ -656,6 +658,51 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                   <span className="font-black text-sm">Live / Controle</span>
                 </div>
               )}
+
+              {/* Times — disponível no modo offline */}
+              {isOfflineMode && (() => {
+                const isDoubles = !!gameState.matchConfig.isDoubles;
+
+                const handleTeamModeChange = (nextIsDoubles: boolean) => {
+                  if (nextIsDoubles === isDoubles) return;
+                  setMatchSettings(prev => ({
+                    ...prev,
+                    isDoubles: nextIsDoubles,
+                    p1Name: 'Jogador 1',
+                    p2Name: 'Jogador 2',
+                    p1Partner: nextIsDoubles ? 'Jogador 3' : '',
+                    p2Partner: nextIsDoubles ? 'Jogador 4' : '',
+                    p1PartnerVerified: false,
+                    p2PartnerVerified: false,
+                  }));
+                };
+
+                return (
+                  <div className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 text-white">
+                    <span className="font-black text-sm shrink-0">Times</span>
+                    <div className="flex-1 flex bg-slate-800/80 rounded-xl p-0.5 border border-white/5 gap-1.5">
+                      <button
+                        onPointerDown={() => handleTeamModeChange(false)}
+                        className={`flex-1 h-10 rounded-lg flex items-center justify-center transition-all ${
+                          !isDoubles ? 'bg-emerald-500 text-white shadow-md scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                        }`}
+                        title="Simples"
+                      >
+                        <User size={16} />
+                      </button>
+                      <button
+                        onPointerDown={() => handleTeamModeChange(true)}
+                        className={`flex-1 h-10 rounded-lg flex items-center justify-center transition-all ${
+                          isDoubles ? 'bg-emerald-500 text-white shadow-md scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                        }`}
+                        title="Duplas"
+                      >
+                        <Users size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Modo relógio */}
               {(() => {

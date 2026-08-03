@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
 import type { GameState, MatchSettings } from '../../types.ts';
-import type { UserProfile } from '@modules/auth';
 import { initPickleballState } from '@modules/game/domain/pickleballEngine';
 import { getEngineForSport } from '@modules/game/domain/sportEngine';
 import { isWatchDevice } from '@shared/utils/device';
@@ -18,19 +17,8 @@ export function useAppOfflineMode() {
     setIsRecoveryFromMatchOver(false);
     setIsWaitingSync(false);
 
-    let p1Name = 'Jogador 1';
-    let p2Name = 'Jogador 2';
-    try {
-      const savedProfile = localStorage.getItem('myPlacarUserProfile');
-      if (savedProfile) {
-        const profile = JSON.parse(savedProfile) as UserProfile;
-        if (profile?.nickname || profile?.name) {
-          p1Name = profile.nickname || profile.name.split(' ')[0];
-        }
-      }
-    } catch {
-      /* best-effort */
-    }
+    const p1Name = 'Jogador 1';
+    const p2Name = 'Jogador 2';
 
     const offlineSettings: MatchSettings = {
       ...matchSettings,
