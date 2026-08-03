@@ -899,13 +899,28 @@ export function useLiveFirestoreSync(params: {
   }, [setModalConfig, gameStateRef]);
 
   useEffect(() => {
+    const clearConnectionAlert = () => {
+      setModalConfig(prev => {
+        if (
+          prev?.title === CONNECTION_LOST_TITLE &&
+          prev.pulseAlert &&
+          prev.message.includes('parou de responder')
+        ) {
+          return null;
+        }
+        return prev;
+      });
+    };
+
     if (!userProfile.pin || !userProfile.email) return;
     if (!cloudLiveExists && !gameState?.isMirroringActive) {
       lastConnectionAlertKeyRef.current = null;
+      clearConnectionAlert();
       return;
     }
     if (gameState?.isLiveClosed) {
       lastConnectionAlertKeyRef.current = null;
+      clearConnectionAlert();
       return;
     }
 
@@ -914,17 +929,31 @@ export function useLiveFirestoreSync(params: {
       const currentGs = gameStateRef.current;
       if (currentGs?.isLiveClosed) {
         lastConnectionAlertKeyRef.current = null;
+        clearConnectionAlert();
         return;
       }
+
+      // O estado local pode permanecer marcado como espelhado por alguns
+      // instantes após a live ser encerrada. Sem uma live ativa confirmada no
+      // Firestore, não existe contraparte remota para gerar este alerta.
+      const activeLiveEntries = activeLives.filter(liveEntry =>
+        liveEntry.isMirroringActive && !liveEntry.isLiveClosed,
+      );
+      if (activeLiveEntries.length === 0) {
+        lastConnectionAlertKeyRef.current = null;
+        clearConnectionAlert();
+        return;
+      }
+
       const live =
-        currentGs?.isMirroringActive && !currentGs.isLiveClosed
+        currentGs?.isMirroringActive && !currentGs.isLiveClosed &&
+        activeLiveEntries.some(liveEntry => liveEntry.ownerPin?.toUpperCase() === currentGs.ownerPin?.toUpperCase())
           ? currentGs
-          :
-        activeLives.find(l => l.ownerPin?.toUpperCase() === currentGs?.ownerPin?.toUpperCase()) ||
-        activeLives.find(l => l.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase()) ||
-        currentGs;
+          : activeLiveEntries.find(l => l.ownerPin?.toUpperCase() === currentGs?.ownerPin?.toUpperCase()) ||
+          activeLiveEntries.find(l => l.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase());
       if (!live?.isMirroringActive || live.isLiveClosed) {
         lastConnectionAlertKeyRef.current = null;
+        clearConnectionAlert();
         return;
       }
 
@@ -951,22 +980,8 @@ export function useLiveFirestoreSync(params: {
           ));
 
       if (!staleCounterpart) {
-        const hasExpectedCounterpart = isWatchDevice()
-          ? entries.some(([, controller]) => controller.isOwner || controller.role === 'owner')
-          : entries.some(([, controller]) => controller.deviceType === 'watch');
-        if (hasExpectedCounterpart) {
-          lastConnectionAlertKeyRef.current = null;
-          setModalConfig(prev => {
-            if (
-              prev?.title === CONNECTION_LOST_TITLE &&
-              prev.pulseAlert &&
-              prev.message.includes('parou de responder')
-            ) {
-              return null;
-            }
-            return prev;
-          });
-        }
+        lastConnectionAlertKeyRef.current = null;
+        clearConnectionAlert();
         return;
       }
 
