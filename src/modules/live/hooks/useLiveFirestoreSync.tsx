@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { doc, setDoc, updateDoc, onSnapshot, collection, query, where } from 'firebase/firestore';
-import { Trophy, WifiOff } from 'lucide-react';
+import { Laptop, Smartphone, Tablet, Trophy, Watch, WifiOff } from 'lucide-react';
 import { getDb } from '@infra/firebase';
 import { useGame } from '@modules/game';
 import { useLive } from '../useLive.ts';
@@ -13,6 +13,20 @@ import { sanitizeForFirestore } from '@shared/utils/sanitize';
 const CONNECTION_LOST_TITLE = 'Conexão perdida';
 const LOCAL_CONNECTION_LOST_MESSAGE =
   'Este dispositivo ficou sem internet. A live pode parar de sincronizar até a conexão voltar.';
+
+const renderDeviceIcon = (deviceType?: 'watch' | 'phone' | 'tablet' | 'laptop') => {
+  switch (deviceType) {
+    case 'watch':
+      return <Watch size={22} />;
+    case 'tablet':
+      return <Tablet size={22} />;
+    case 'laptop':
+      return <Laptop size={22} />;
+    case 'phone':
+    default:
+      return <Smartphone size={22} />;
+  }
+};
 
 
 export function useLiveFirestoreSync(params: {
@@ -904,7 +918,7 @@ export function useLiveFirestoreSync(params: {
         if (
           prev?.title === CONNECTION_LOST_TITLE &&
           prev.pulseAlert &&
-          prev.message.includes('parou de responder')
+            typeof prev.message === 'string' && prev.message.includes('parou de responder')
         ) {
           return null;
         }
@@ -997,7 +1011,17 @@ export function useLiveFirestoreSync(params: {
       const deviceLabel = controller.nickname || controller.label || (isWatchDevice() ? 'celular' : 'relógio');
       setModalConfig({
         title: CONNECTION_LOST_TITLE,
-        message: `${deviceLabel} parou de responder. Aproxime os dispositivos ou confira Bluetooth/internet antes de continuar a live.`,
+        message: (
+          <span className="flex flex-wrap items-center justify-center gap-2">
+            <span
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700 text-slate-100 shadow-sm"
+              title={controller.deviceType || 'phone'}
+            >
+              {renderDeviceIcon(controller.deviceType)}
+            </span>
+            <span>{deviceLabel} parou de responder. Aproxime os dispositivos ou confira Bluetooth/internet antes de continuar a live.</span>
+          </span>
+        ),
         icon: <WifiOff className="text-orange-500 w-16 h-16" />,
         variant: 'info',
         pulseAlert: true,

@@ -12,6 +12,7 @@ import { formatPortugueseName, maskPin } from '@shared/utils/formatters';
 import { copyToClipboard } from '@shared/utils/clipboard';
 import { Toggle } from '@shared/components/Toggle';
 import { Input } from '@shared/components/Input';
+import type { ModalConfig } from '@modules/ui/types';
 
 interface Props {
   event: TournamentEvent;
@@ -21,15 +22,7 @@ interface Props {
   onAddPartner: (pin: string, nickname: string, gender: 'M' | 'F', name?: string) => void;
   partners: Partner[];
   onStartTournamentMatch: (match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent) => void;
-  setModalConfig: React.Dispatch<React.SetStateAction<{
-    title: string;
-    message: string;
-    onConfirm: () => void;
-    onCancel?: () => void;
-    confirmLabel?: string;
-    variant?: 'info' | 'danger' | 'success';
-    icon?: React.ReactNode;
-  } | null>>;
+  setModalConfig: React.Dispatch<React.SetStateAction<ModalConfig | null>>;
   appUrl: string;
 }
 

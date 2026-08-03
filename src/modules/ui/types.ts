@@ -20,7 +20,7 @@ export interface VoiceLog {
 
 export interface ModalConfig {
   title: string;
-  message: string;
+  message: ReactNode;
   onConfirm: () => void;
   onCancel?: () => void;
   confirmLabel?: string;

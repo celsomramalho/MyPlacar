@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint, Wifi, Download } from 'lucide-react';
+import { Mail, Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, UserPlus, LogIn, MailCheck, ExternalLink, ShieldCheck, Eye, EyeOff, Send, SearchCheck, KeyRound, Sparkles, Ticket, RotateCw, ArrowLeft, Hash, User as UserIcon, Check as CheckIcon, Trophy, WifiOff, Fingerprint, Wifi, Download, Smartphone } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Input } from '@shared/components/Input';
 import { Button } from '@shared/components/Button';
@@ -7,7 +7,7 @@ import { Toggle } from '@shared/components/Toggle';
 import { UserProfile } from '../types';
 import { createWatchLoginToken, deleteWatchLoginToken, fetchEventByPin, fetchUserProfile, fetchUserProfileFromServer, findUserByPin, findUserProfileByPasskeyCredentialId, getAuthInstance, getDb, saveNewUserProfile, subscribeWatchLoginToken } from '@infra/firebase';
 import { mirrorUser } from '@infra/supabase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { emailService } from '@infra/email';
 import { formatPortugueseName, applyGoldenRule } from '@shared/utils/formatters';
@@ -136,6 +136,60 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     };
     initialCheck();
   }, [onCheckUpdate, isOnline]);
+
+  // Em relógios e outros navegadores compactos, popups podem ser bloqueados.
+  // Finaliza aqui o login iniciado por redirecionamento do Google.
+  useEffect(() => {
+    let cancelled = false;
+
+    const completeGoogleRedirect = async () => {
+      const auth = getAuthInstance();
+      if (!auth) return;
+
+      try {
+        const result = await getRedirectResult(auth);
+        if (cancelled || !result?.user?.email) return;
+
+        const db = getDb();
+        if (!db) throw new Error('Erro de conexão.');
+
+        const user = result.user;
+        const userEmail = user.email;
+        if (!userEmail) return;
+        const cleanEmail = userEmail.toLowerCase().trim();
+        let userData = await fetchUserProfileFromServer(db, cleanEmail).catch(() => fetchUserProfile(db, cleanEmail));
+
+        if (userData) {
+          const enriched = { ...userData, isAdmin: userData.isAdmin === true };
+          onAuthSuccess(enriched as UserProfile, rememberMe);
+          return;
+        }
+
+        const finalPin = generateUserPin();
+        const newProfile: UserProfile = {
+          name: formatPortugueseName(user.displayName || 'Jogador'),
+          nickname: (user.displayName || 'Jogador').split(' ')[0],
+          email: cleanEmail,
+          phone: '',
+          pin: finalPin,
+          authMethod: 'password',
+          isProfileComplete: true,
+          emailVerified: true,
+          referredByPin: referralPin.toUpperCase().trim(),
+        };
+
+        await saveNewUserProfile(db, cleanEmail, newProfile);
+        mirrorUser(newProfile as unknown as UserProfile);
+        onAuthSuccess(newProfile, rememberMe);
+      } catch (e) {
+        console.error('Google redirect login error:', e);
+        if (!cancelled) setError('Erro ao autenticar com google.');
+      }
+    };
+
+    completeGoogleRedirect();
+    return () => { cancelled = true; };
+  }, [onAuthSuccess, referralPin, rememberMe]);
 
   useEffect(() => {
     const { email: resetEmail, isResetPassword, oobCode: codeParam } = getPasswordResetParams();
@@ -392,7 +446,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         try {
           const cleanPassword = password.trim();
           await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
-          const userData = await fetchUserProfileFromServer(db, cleanEmail);
+          const userData = await fetchUserProfileFromServer(db, cleanEmail)
+            .catch(() => fetchUserProfile(db, cleanEmail));
           if (!userData) {
             setError("Login autenticado, mas o perfil não foi encontrado. Recarregue e tente novamente.");
             return;
@@ -851,12 +906,17 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (!auth || !db) throw new Error("Erro de conexão.");
       
       const provider = new GoogleAuthProvider();
+      if (isWatchDevice()) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       
       if (user && user.email) {
         const cleanEmail = user.email.toLowerCase().trim();
-        const userData = await fetchUserProfileFromServer(db, cleanEmail);
+        const userData = await fetchUserProfileFromServer(db, cleanEmail)
+          .catch(() => fetchUserProfile(db, cleanEmail));
         
         if (userData) {
           const enriched = { ...userData, isAdmin: userData.isAdmin === true };
@@ -1421,13 +1481,23 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             </Button>
 
             {!isNativeApp && (
-              <a
-                href="/MyPlacar.apk"
-                download="MyPlacar.apk"
-                className="w-full py-4 rounded-4xl font-black border-2 border-red-200 text-red-500 text-lg gap-3 flex items-center justify-center active:scale-95 transition-transform"
-              >
-                <Download size={20} /> Instalar app Android
-              </a>
+              <>
+                <a
+                  href="/MyPlacar.apk"
+                  download="MyPlacar.apk"
+                  className="w-full py-4 rounded-4xl font-black border-2 border-red-200 text-red-500 text-lg gap-3 flex items-center justify-center active:scale-95 transition-transform"
+                >
+                  <Download size={20} /> Instalar app Android
+                </a>
+                <a
+                  href={appUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-4 rounded-4xl font-black border-2 border-sky-200 text-sky-600 text-lg gap-3 flex items-center justify-center active:scale-95 transition-transform"
+                >
+                  <Smartphone size={20} /> Abrir MyPlacar no Safari
+                </a>
+              </>
             )}
           </div>
         ) : (mode !== 'verifying' && mode !== 'recovery_sent' && mode !== 'watch_login') ? (
