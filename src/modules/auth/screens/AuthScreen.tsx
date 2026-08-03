@@ -76,6 +76,9 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [isLoading, setIsLoading] = useState(false);
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loginQrCodeUrl, setLoginQrCodeUrl] = useState('');
+  const [loginQrIsReferral, setLoginQrIsReferral] = useState(false);
+  const [isCheckingLoginQr, setIsCheckingLoginQr] = useState(false);
   const [isAutoConfirming, setIsAutoConfirming] = useState(false);
   const [showRecoveryInfoModal, setShowRecoveryInfoModal] = useState(false);
   const [recoveryInfo, setRecoveryInfo] = useState<{ 
@@ -136,6 +139,45 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     };
     initialCheck();
   }, [onCheckUpdate, isOnline]);
+
+  // O qr code da tela de login começa apontando para o aplicativo. Se o
+  // e-mail preenchido já estiver cadastrado, ele é substituído pelo convite
+  // do usuário, mesmo antes da autenticação.
+  useEffect(() => {
+    const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+    const appQrLink = `https://quickchart.io/qr?text=${encodeURIComponent(appBaseUrl)}&size=400&margin=1&ecLevel=H&dark=0f172a`;
+    setLoginQrCodeUrl(appQrLink);
+    setLoginQrIsReferral(false);
+
+    const cleanEmail = email.toLowerCase().trim();
+    if (!cleanEmail || !isOnline) {
+      setIsCheckingLoginQr(false);
+      return;
+    }
+
+    setIsCheckingLoginQr(true);
+    const timer = setTimeout(async () => {
+      try {
+        const db = getDb();
+        if (!db) return;
+
+        const profile = await fetchUserProfileFromServer(db, cleanEmail)
+          .catch(() => fetchUserProfile(db, cleanEmail));
+        if (!profile?.pin) return;
+
+        const nickname = profile.nickname || profile.name?.split(' ')[0] || 'Eu';
+        const shareLink = `${appBaseUrl}/?ref=${encodeURIComponent(nickname)}&pin_ref=${encodeURIComponent(profile.pin.toUpperCase())}`;
+        setLoginQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(shareLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`);
+        setLoginQrIsReferral(true);
+      } catch {
+        // Mantém o qr code do aplicativo quando o e-mail não puder ser consultado.
+      } finally {
+        setIsCheckingLoginQr(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [appUrl, email, isOnline]);
 
   // Em relógios e outros navegadores compactos, popups podem ser bloqueados.
   // Finaliza aqui o login iniciado por redirecionamento do Google.
@@ -1497,6 +1539,22 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 >
                   <Smartphone size={20} /> Abrir MyPlacar no Safari
                 </a>
+                <div className="w-full rounded-[2rem] bg-[#0f172a] p-5 shadow-xl border border-white/10 flex flex-col items-center gap-3">
+                  <div className="flex items-center gap-2 text-amber-400">
+                    <span className="text-sm font-black">{loginQrIsReferral ? 'Indique e ganhe' : 'Compartilhe o MyPlacar'}</span>
+                    {isCheckingLoginQr && <Loader2 size={14} className="animate-spin" />}
+                  </div>
+                  {loginQrCodeUrl && (
+                    <div className="bg-white p-3 rounded-3xl shadow-2xl w-44 h-44 flex items-center justify-center border-4 border-sky-500/20">
+                      <img src={loginQrCodeUrl} alt="Qr code do MyPlacar" className="w-full h-full object-contain" />
+                    </div>
+                  )}
+                  <p className="text-[10px] font-bold text-slate-400 text-center leading-tight">
+                    {loginQrIsReferral
+                      ? 'Convide seus amigos para usar o my placar.'
+                      : 'Aponte a câmera para abrir o MyPlacar.'}
+                  </p>
+                </div>
               </>
             )}
           </div>
