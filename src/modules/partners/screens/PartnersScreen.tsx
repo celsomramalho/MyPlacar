@@ -727,7 +727,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
                    <div className="flex flex-col items-center gap-8 w-full">
                       <div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeShareUrl} alt="Meu convite" className="w-full h-full object-contain" /></div>
                       <div className="flex-1 space-y-5 w-full text-center">
-                        <p className="text-[11px] font-bold text-slate-400 leading-tight">Convide seus amigos para usar o my placar. Ao se cadastrarem pelo seu link, eles viram seus parceiros automaticamente.</p>
+                        <p className="text-[11px] font-bold text-slate-400 leading-tight">Convide seus amigos para usar o MyPlacar. Ao se cadastrarem pelo seu link, eles viram seus parceiros automaticamente.</p>
                         <div className="space-y-3 w-full"><button onClick={handleShareWhatsApp} className="w-full bg-[#25D366] text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Share2 size={18} /> WhatsApp</button><button onClick={handleCopyShareLink} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all"><Copy size={18} /> Copiar link de convite</button></div>
                       </div>
                    </div>

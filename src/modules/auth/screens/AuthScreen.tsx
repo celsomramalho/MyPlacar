@@ -1551,7 +1551,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                   )}
                   <p className="text-[10px] font-bold text-slate-400 text-center leading-tight">
                     {loginQrIsReferral
-                      ? 'Convide seus amigos para usar o my placar.'
+                      ? 'Convide seus amigos para usar o MyPlacar.'
                       : 'Aponte a câmera para abrir o MyPlacar.'}
                   </p>
                 </div>
