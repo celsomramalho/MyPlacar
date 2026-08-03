@@ -7,10 +7,17 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
+backups
+backups/*.apk
+android
+dev-dist
 dist
 dist-ssr
+node_modules
+novos_arquivos
+scripts
 *.local
+
 
 # Editor directories and files
 .vscode/*

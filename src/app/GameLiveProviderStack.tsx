@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { UserProfile } from '@modules/auth';
 import { GameProvider, useGame } from '@modules/game';
 import { LiveProvider } from '@modules/live';
-import { LocalSyncProvider } from '@modules/localSync';
 import type { GameState } from '../types.ts';
 import { getDeviceId } from '@shared/utils/device';
 
@@ -51,7 +50,6 @@ export const GameLiveProviderStack: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <LocalSyncProvider>
       <LiveProvider
         deviceId={deviceId}
         userProfile={feed.userProfile}
@@ -63,7 +61,6 @@ export const GameLiveProviderStack: React.FC<{ children: React.ReactNode }> = ({
           {children}
         </GameProvider>
       </LiveProvider>
-    </LocalSyncProvider>
   );
 };
 

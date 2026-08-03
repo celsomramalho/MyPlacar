@@ -89,17 +89,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   const gameStateRef = useRef(gameState);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
-  // Escuta atualizações de placar do modo Lite Offline (dispositivo Espelho)
-  useEffect(() => {
-    const handleLocalSyncUpdate = (e: CustomEvent<GameState>) => {
-      if (e.detail) {
-        setGameState(e.detail);
-      }
-    };
-    window.addEventListener('localSync:updateGameState', handleLocalSyncUpdate as EventListener);
-    return () => window.removeEventListener('localSync:updateGameState', handleLocalSyncUpdate as EventListener);
-  }, []);
-
   const [historyStack, setHistoryStack] = useState<GameState[]>([]);
   const historyStackRef = useRef<GameState[]>([]);
   useEffect(() => { historyStackRef.current = historyStack; }, [historyStack]);

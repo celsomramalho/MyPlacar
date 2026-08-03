@@ -1,10 +1,9 @@
 import React from 'react';
-import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, MonitorSmartphone, Gamepad2, Eye } from 'lucide-react';
+import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, Gamepad2, Eye } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
 import { getTennisServerSide } from '@modules/game/domain/tennisEngine';
-import { useLocalSync } from '@modules/localSync';
 import { useMatchTimer } from '../hooks/useMatchTimer.ts';
 
 type WatchStatusPanel = 'set' | 'mic' | 'battery';
@@ -98,7 +97,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { syncState } = useLocalSync();
+  const syncState: { role: string; status: string } = { role: 'none', status: 'idle' };
   const displayTimeSeconds = useMatchTimer(gameState);
   const formatTimer = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -107,7 +106,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   const matchTimeString = formatTimer(displayTimeSeconds);
-  const isMirror = syncState.role === 'mirror';
+  const isMirror = false;
   const [showSetGamesInMainScore, setShowSetGamesInMainScore] = React.useState(false);
   const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
   const [batteryStatus, setBatteryStatus] = React.useState<BatteryStatus | null>(null);
@@ -208,8 +207,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
     return (
       <div 
-        onPointerDown={(e) => { if (syncState.role === 'mirror') return; e.stopPropagation(); onSwitchServer(team, isPartner); }}
-        className={`flex items-center justify-center min-w-[48px] h-[48px] rounded-2xl font-black text-2xl transition-all ${syncState.role === 'mirror' ? 'cursor-default' : 'active:scale-90'} ${
+        onPointerDown={(e) => { e.stopPropagation(); onSwitchServer(team, isPartner); }}
+        className={`flex items-center justify-center min-w-[48px] h-[48px] rounded-2xl font-black text-2xl transition-all active:scale-90 ${
           isServingNow ? `bg-white ${teamColorText} shadow-lg` : 'text-white border-2 border-white/20'
         }`}
       >
@@ -231,10 +230,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const gamesSetT1 = (
     <div
-      onPointerDown={(e) => { if (syncState.role === 'mirror') return; handleScoreCardPointerDown(e, 'gameSet', 1); }}
-      onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }}
-      onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('gameSet', 1); }}
-      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p1.color || 'azul']} ${syncState.role === 'mirror' ? 'cursor-default' : ''}`}
+      onPointerDown={(e) => { handleScoreCardPointerDown(e, 'gameSet', 1); }}
+      onPointerMove={(e) => { handlePointerMove(e); }}
+      onPointerUp={() => { handleScoreCardPointerUp('gameSet', 1); }}
+      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p1.color || 'azul']}`}
     >
       {scorePressProgress?.player === 1 && scorePressProgress?.type === 'gameSet' && (
         <div
@@ -248,10 +247,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const setsPartidaT1 = (
     <div
-      onPointerDown={(e) => { if (syncState.role === 'mirror') return; handleScoreCardPointerDown(e, 'matchSet', 1); }}
-      onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }}
-      onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('matchSet', 1); }}
-      className={`flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${syncState.role === 'mirror' ? 'cursor-default' : ''}`}
+      onPointerDown={(e) => { handleScoreCardPointerDown(e, 'matchSet', 1); }}
+      onPointerMove={(e) => { handlePointerMove(e); }}
+      onPointerUp={() => { handleScoreCardPointerUp('matchSet', 1); }}
+      className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
     >
       {scorePressProgress?.player === 1 && scorePressProgress?.type === 'matchSet' && (
         <div
@@ -265,10 +264,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const gamesSetT2 = (
     <div
-      onPointerDown={(e) => { if (syncState.role === 'mirror') return; handleScoreCardPointerDown(e, 'gameSet', 2); }}
-      onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }}
-      onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('gameSet', 2); }}
-      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p2.color || 'vermelho']} ${syncState.role === 'mirror' ? 'cursor-default' : ''}`}
+      onPointerDown={(e) => { handleScoreCardPointerDown(e, 'gameSet', 2); }}
+      onPointerMove={(e) => { handlePointerMove(e); }}
+      onPointerUp={() => { handleScoreCardPointerUp('gameSet', 2); }}
+      className={`flex-1 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${SOLID_COLORS[gameState.p2.color || 'vermelho']}`}
     >
       {scorePressProgress?.player === 2 && scorePressProgress?.type === 'gameSet' && (
         <div
@@ -282,10 +281,10 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
 
   const setsPartidaT2 = (
     <div
-      onPointerDown={(e) => { if (syncState.role === 'mirror') return; handleScoreCardPointerDown(e, 'matchSet', 2); }}
-      onPointerMove={(e) => { if (syncState.role === 'mirror') return; handlePointerMove(e); }}
-      onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('matchSet', 2); }}
-      className={`flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden ${syncState.role === 'mirror' ? 'cursor-default' : ''}`}
+      onPointerDown={(e) => { handleScoreCardPointerDown(e, 'matchSet', 2); }}
+      onPointerMove={(e) => { handlePointerMove(e); }}
+      onPointerUp={() => { handleScoreCardPointerUp('matchSet', 2); }}
+      className="flex-1 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
     >
       {scorePressProgress?.player === 2 && scorePressProgress?.type === 'matchSet' && (
         <div
@@ -731,25 +730,6 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 </div>
                 <span className="font-black text-sm">Regras</span>
               </button>
-
-              {/* Espelhar Placar — modo offline */}
-              {isOfflineMode && (
-                <button
-                  id="btn-watchboard-espelhar"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.dispatchEvent(new CustomEvent('localSync:openPairing'));
-                    setIsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors cursor-pointer text-left"
-                >
-                  <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-slate-600 rounded-xl">
-                    <MonitorSmartphone size={18} />
-                  </div>
-                  <span className="font-black text-sm">Espelhar Placar</span>
-                </button>
-              )}
 
               {/* Depuração de erro Firebase (apenas se online) */}
               {!isOfflineMode && (() => {

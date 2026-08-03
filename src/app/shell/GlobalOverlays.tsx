@@ -1,7 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React from 'react';
 import { AlertCircle, RotateCw, Wifi, X, Loader2, ArrowLeftRight } from 'lucide-react';
-import { useLocalSync, LocalPairingModal, LocalControllerView, LocalMirrorInput } from '@modules/localSync';
-import { useUI } from '@modules/ui';
 
 interface GlobalOverlaysProps {
   isWaitingSync: boolean;
@@ -12,96 +10,6 @@ interface GlobalOverlaysProps {
   activeCloudMatch: { id: string; sport: string } | null;
   handleConnectRemote: () => void;
   handleRejectRemote: () => void;
-}
-
-/** Componente interno que conecta o LocalSyncService às Overlays Globais */
-function LocalSyncGlobalOverlays() {
-  const {
-    syncState,
-    startAsController,
-    connectControllerToPhone,
-    startAsMirror,
-    prepareLocalWebApp,
-    stopSync,
-  } = useLocalSync();
-
-  const { setCurrentScreen } = useUI();
-
-  const [activeView, setActiveView] = useState<'none' | 'pairing_modal' | 'controller' | 'mirror'>('none');
-
-  // Escuta o evento customizado disparado de QUALQUER botão do app
-  useEffect(() => {
-    const handleOpenPairing = () => {
-      setActiveView('pairing_modal');
-    };
-    window.addEventListener('localSync:openPairing', handleOpenPairing);
-    return () => window.removeEventListener('localSync:openPairing', handleOpenPairing);
-  }, []);
-
-  // Quando conecta com sucesso → navega para o placar e fecha o modal
-  useEffect(() => {
-    if (syncState.status === 'connected') {
-      // Garante que ambos os lados (controlador e espelho) estejam na tela do placar
-      setCurrentScreen('scoreboard');
-      // Dispara evento para que o ScoreboardScreen feche qualquer bottom sheet aberto
-      window.dispatchEvent(new CustomEvent('localSync:connected'));
-      // Delay para o usuário ver "Conectado!" antes de fechar o modal
-      const t = setTimeout(() => setActiveView('none'), 1800);
-      return () => clearTimeout(t);
-    }
-  }, [syncState.status, setCurrentScreen]);
-
-  const handleChooseController = useCallback(() => {
-    startAsController();
-    setActiveView('controller');
-  }, [startAsController]);
-
-  const handleChooseMirror = useCallback(() => {
-    prepareLocalWebApp();
-    setActiveView('mirror');
-  }, [prepareLocalWebApp]);
-
-  const handleMirrorConnect = useCallback((pin: string, ip?: string) => {
-    startAsMirror(pin, ip);
-  }, [startAsMirror]);
-
-  const handleStopSync = useCallback(() => {
-    stopSync();
-    setActiveView('none');
-  }, [stopSync]);
-
-  return (
-    <>
-      <LocalPairingModal
-        isOpen={activeView === 'pairing_modal'}
-        onClose={() => setActiveView('none')}
-        onChooseController={handleChooseController}
-        onChooseMirror={handleChooseMirror}
-      />
-      {activeView === 'controller' && syncState.pin && (
-        <LocalControllerView
-          pin={syncState.pin}
-          status={syncState.status}
-          error={syncState.error}
-          logs={syncState.logs}
-          onStop={handleStopSync}
-          onConnectToPhone={connectControllerToPhone}
-          phoneIp={syncState.controllerIp}
-        />
-      )}
-      {activeView === 'mirror' && (
-        <LocalMirrorInput
-          status={syncState.status}
-          error={syncState.error}
-          logs={syncState.logs}
-          onConnect={handleMirrorConnect}
-          onStop={handleStopSync}
-          isWebEnvironment={typeof (window as any).Capacitor === 'undefined' || !(window as any).Capacitor?.isNativePlatform?.()}
-          localIp={syncState.controllerIp}
-        />
-      )}
-    </>
-  );
 }
 
 export function GlobalOverlays({
@@ -162,9 +70,6 @@ export function GlobalOverlays({
           </div>
         </div>
       )}
-
-      {/* ── Overlays Globais do Modo Lite Offline ─────────────────────── */}
-      <LocalSyncGlobalOverlays />
 
       {isUpdatingVersion && (
         <div className="fixed inset-0 z-[20000] bg-blue-600 flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
