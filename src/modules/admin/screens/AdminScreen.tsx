@@ -434,6 +434,21 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     }
   };
 
+  const handleSaveDashboardEvent = async (updatedEvent: TournamentEvent) => {
+    if (!updatedEvent.pin) return;
+    const db = getDb();
+    if (!db) return;
+    try {
+      await saveAdminEvent(db, updatedEvent);
+      setEventList((prev) => prev.map((ev) => (ev.pin === updatedEvent.pin ? updatedEvent : ev)));
+      setStatus({ type: 'success', msg: "Dados do evento atualizados!" });
+    } catch (_e) {
+      setStatus({ type: 'error', msg: "Erro ao atualizar dados do evento." });
+    } finally {
+      setTimeout(() => setStatus(null), 2000);
+    }
+  };
+
   const handleEventBannerLoaded = (bannerUrl: string) => {
     if (!editingEvent) return;
     setEditingEvent({ ...editingEvent, bannerUrl });
@@ -760,9 +775,11 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             isLoadingEvents={isLoadingEvents}
             isSavingEvent={isSavingEvent}
             bannerInputRef={bannerInputRef}
-            onCreateEvent={() => setEditingEvent({ pin: '', name: '', active: true, createdAt: Date.now() })}
+            activeSports={sports.filter(s => s.isActive !== false)}
+            onCreateEvent={() => setEditingEvent({ pin: '', name: '', active: true, eventStatus: 'Em configuração', createdAt: Date.now() })}
             onChangeEditingEvent={setEditingEvent}
             onSaveEvent={handleSaveEvent}
+            onSaveDashboardEvent={handleSaveDashboardEvent}
             onDeleteEvent={(pin) => setDeleteConfirm({ type: 'event', id: pin })}
           />
         )}
