@@ -4,11 +4,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
   query,
   setDoc,
   updateDoc,
-  writeBatch,
   type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -28,6 +28,16 @@ interface FirebaseTournamentEntry {
   joinedAt: number;
   gender?: 'M' | 'F';
   checkedIn?: boolean;
+  categoryIds?: string[];
+  dueAmount?: number;
+  paidAmount?: number;
+  paymentStatus?: 'Pendente' | 'Pago' | 'Isento';
+  payments?: Array<{ id: string; amount: number; date: number; receiptUrl?: string; receiptName?: string }>;
+  phone: string;
+  shirtSize: 'P' | 'M' | 'G';
+  partnerName?: string;
+  partnerEmail?: string;
+  information?: string;
 }
 
 interface FirebaseTournamentMatch {
@@ -51,6 +61,9 @@ interface FirebaseTournamentEvent {
   pairs?: unknown[];
   matches?: FirebaseTournamentMatch[];
   coAdminPins?: string[];
+  regulationUrl?: string;
+  regulationFileName?: string;
+  information?: string;
 }
 
 export const fetchEventByPin = async (db: Firestore, pin: string): Promise<FirebaseTournamentEvent | null> => {
@@ -69,11 +82,23 @@ export const subscribeEventByPin = (
   });
 };
 
+export const subscribeEventEntries = (
+  db: Firestore,
+  eventPin: string,
+  onEntries: (entries: FirebaseTournamentEntry[]) => void,
+): Unsubscribe => {
+  return onSnapshot(collection(db, 'events', eventPin, 'entries'), (snap) => {
+    const list: FirebaseTournamentEntry[] = [];
+    snap.forEach((docSnap) => {
+      list.push(docSnap.data() as FirebaseTournamentEntry);
+    });
+    onEntries(list);
+  });
+};
+
 export const fetchEventEntries = async (db: Firestore, eventPin: string): Promise<FirebaseTournamentEntry[]> => {
-  const snap = await getDocs(query(collection(db, 'events', eventPin, 'entries')));
+  const snap = await getDocsFromServer(query(collection(db, 'events', eventPin, 'entries')));
   const entries: FirebaseTournamentEntry[] = [];
-  const batchToRemove = writeBatch(db);
-  let ghostCount = 0;
 
   for (const entryDoc of snap.docs) {
     const entryData = entryDoc.data() as FirebaseTournamentEntry;
@@ -84,16 +109,15 @@ export const fetchEventEntries = async (db: Firestore, eventPin: string): Promis
       const userData = userSnap.data();
       entries.push({
         ...entryData,
-        name: userData.name,
-        nickname: userData.nickname,
+        name: userData.name || entryData.name,
+        nickname: userData.nickname || entryData.nickname,
       });
     } else {
-      batchToRemove.delete(entryDoc.ref);
-      ghostCount++;
+      // Usuário não existe em 'users' (inscrição manual ou temporária) — manter a entrada com seus próprios dados
+      entries.push(entryData);
     }
   }
 
-  if (ghostCount > 0) await batchToRemove.commit();
   return entries;
 };
 
@@ -122,6 +146,38 @@ export const saveEventEntry = (
   eventPin: string,
   entry: FirebaseTournamentEntry,
 ) => setDoc(doc(db, 'events', eventPin, 'entries', entry.email.toLowerCase().trim()), entry);
+
+/**
+ * Salva uma inscrição feita pelo painel administrativo. Em instalações onde
+ * a sessão Firebase ainda não recebeu o claim de administrador, usa o mesmo
+ * fallback server-side do salvamento do evento.
+ */
+export const saveAdminEventEntry = async (
+  db: Firestore,
+  eventPin: string,
+  entry: FirebaseTournamentEntry,
+  adminEmail?: string,
+) => {
+  try {
+    await saveEventEntry(db, eventPin, entry);
+    return;
+  } catch (err: unknown) {
+    const firebaseErr = err as { code?: string; message?: string };
+    const isPermissionError = firebaseErr?.code === 'permission-denied' || firebaseErr?.message?.includes('Missing or insufficient permissions');
+    if (!isPermissionError || !adminEmail) throw err;
+
+    const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
+    const response = await fetch(`${baseUrl}/api/admin-save-entry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventPin, entry, adminEmail }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || 'Não foi possível salvar a inscrição no servidor.');
+    }
+  }
+};
 
 export const saveUserEventRegistration = (
   db: Firestore,

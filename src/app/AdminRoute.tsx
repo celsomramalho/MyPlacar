@@ -20,7 +20,7 @@ export function AdminRoute({
   onOpenMenu,
 }: AdminRouteProps) {
   const { setCurrentScreen, setModalConfig } = useUI();
-  const { handleExportData } = useGame();
+  const { handleExportData, userProfile } = useGame();
 
   return (
     <AdminScreen
@@ -41,6 +41,7 @@ export function AdminRoute({
       }
       initialTab={adminTab}
       onOpenMenu={onOpenMenu}
+      userProfile={userProfile}
     />
   );
 }

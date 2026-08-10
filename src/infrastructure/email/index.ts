@@ -176,13 +176,10 @@ export const emailService = {
         content = buildAnnouncementEmail(params as TemplateParams['announcement']);
       }
 
-      // IMPORTANTE: Chamamos a nossa própria API interna da Vercel
-      // Se estiver em dev, apontamos para a URL de produção ou localhost conforme o caso
-      const apiBase = (import.meta.env.DEV) 
-        ? 'https://myplacar.app.br' // Ajuste para sua URL de produção para testar em dev
-        : '';
-
-      const response = await fetch(`${apiBase}/api/enviar-email`, {
+      // A API deve ser chamada na mesma origem. Em desenvolvimento, o Vite
+      // encaminha `/api` para a API de produção; isso evita CORS/preflight e
+      // redirects do domínio canônico no navegador.
+      const response = await fetch('/api/enviar-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

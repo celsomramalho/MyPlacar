@@ -88,8 +88,13 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    proxy: {
+      '/api': {
+        target: 'https://myplacar.app.br',
+        changeOrigin: true,
+        secure: true,
+        followRedirects: true,
+      },
     },
   },
   preview: {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Trophy, ShieldAlert } from 'lucide-react';
+import { Users, Trophy } from 'lucide-react';
 import type { TournamentEvent } from '@modules/events/types';
 
 interface Props {
@@ -14,7 +14,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event }) => {
       <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
         <h2 className="text-xl font-black text-slate-800 tracking-tight">Times Formados</h2>
         <p className="text-xs text-slate-400 font-bold mt-0.5">
-          Duplas e equipes confirmadas no evento ({pairs.length} duplas no total).
+          Duplas e equipes confirmadas no evento ({pairs.length} times no total).
         </p>
       </div>
 
@@ -35,8 +35,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event }) => {
                 className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between gap-4"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-black text-xs">
-                    #{index + 1}
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black text-[10px]">
+                    {pair.teamCode || `${String(pair.teamNumber || index + 1).padStart(3, '0')}`}
                   </div>
                   <div>
                     <p className="font-black text-xs text-slate-800">
@@ -44,7 +44,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event }) => {
                       {pair.p2?.name || pair.p2?.nickname || 'Jogador 2'}
                     </p>
                     <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                      PINs: {pair.p1?.pin || '-'} / {pair.p2?.pin || '-'}
+                      {pair.categoryId ? (event.categories || []).find((category) => category.id === pair.categoryId)?.name || 'Categoria' : 'Categoria não vinculada'} · PINs: {pair.p1?.pin || '-'} / {pair.p2?.pin || '-'}
                     </p>
                   </div>
                 </div>

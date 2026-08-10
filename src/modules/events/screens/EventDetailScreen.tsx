@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Partner } from '@modules/partners/types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
-import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle } from 'lucide-react';
-import type { TournamentEvent, TournamentEntry, TournamentPair, TournamentMatch, TournamentConfig } from '../types';
+import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, DollarSign, Eye } from 'lucide-react';
+import type { TournamentEvent, TournamentEntry, TournamentPair, TournamentMatch, TournamentConfig, PaymentItem, EventCategory } from '../types';
 import type { UserProfile } from '@modules/auth/types';
-import { deleteEventEntry, deleteUserEventRegistration, fetchEventEntries, findUserByPin, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
+import { deleteEventEntry, deleteUserEventRegistration, fetchEventEntries, findUserByPin, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeEventEntries, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
 import type { FirebaseTournamentLiveScore } from '@infra/firebase';
 import { Firestore } from 'firebase/firestore';
 import { SPORT_LIST } from '../../../constants.ts';
@@ -13,6 +13,7 @@ import { copyToClipboard } from '@shared/utils/clipboard';
 import { Toggle } from '@shared/components/Toggle';
 import { Input } from '@shared/components/Input';
 import type { ModalConfig } from '@modules/ui/types';
+import { EventRegistrationForm } from '../components/EventRegistrationForm';
 
 interface Props {
   event: TournamentEvent;
@@ -39,6 +40,472 @@ const DesfazerTimeIcon: React.FC<DesfazerTimeIconProps> = ({ size = 16 }) => (
 
 const idxToLetter = (idx: number) => String.fromCharCode(65 + idx);
 
+const formatPhone = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (!digits) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+/* ─── Sub-componente: formulário editável completo de inscrição ─── */
+interface EntryExpandedFormProps {
+  entry: TournamentEntry;
+  event: TournamentEvent;
+  canEdit: boolean;
+  onSave: (updated: TournamentEntry) => Promise<void>;
+}
+
+const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, canEdit, onSave }) => {
+  const isManual = entry.pin?.startsWith('TEMP') || !entry.email || entry.email.endsWith('@myplacar.app');
+  const [email, setEmail] = useState(entry.email || '');
+  const [phone, setPhone] = useState(entry.phone || '');
+  const [shirtSize, setShirtSize] = useState<'P' | 'M' | 'G'>(entry.shirtSize || 'M');
+  const [partnerName, setPartnerName] = useState(entry.partnerName || '');
+  const [partnerEmail, setPartnerEmail] = useState(entry.partnerEmail || '');
+  const [nickname, setNickname] = useState(entry.nickname);
+  const [gender, setGender] = useState<'M' | 'F'>(entry.gender || 'M');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(entry.categoryIds || []);
+  const [payments, setPayments] = useState<PaymentItem[]>(entry.payments || []);
+  const [newAmount, setNewAmount] = useState('');
+  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newReceipt, setNewReceipt] = useState<{ url?: string; name: string } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const baseFee = event.registrationFee ?? 0;
+  const extraFee = event.extraCategoryFee ?? 0;
+  const computedDue = selectedCategoryIds.length === 0 ? baseFee : baseFee + (selectedCategoryIds.length - 1) * extraFee;
+  const dueAmount = entry.dueAmount ?? computedDue;
+  const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
+  const pendingAmount = Math.max(0, dueAmount - totalPaid);
+  const paymentStatus = entry.paymentStatus || 'Pendente';
+
+  const availableCategories: EventCategory[] = (event.categories || []).filter((cat) => {
+    if (cat.gender1 && cat.gender1 !== gender) {
+      if (!cat.gender2 || cat.gender2 !== gender) return false;
+    }
+    return true;
+  });
+
+  const toggleCategory = (id: string) => {
+    if (!canEdit) return;
+    setSelectedCategoryIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  };
+
+  const buildUpdatedEntry = (nextPayments: PaymentItem[] = payments): TournamentEntry => {
+    const newPaid = nextPayments.reduce((acc, p) => acc + p.amount, 0);
+    const newStatus: 'Pendente' | 'Pago' | 'Isento' = paymentStatus === 'Isento' ? 'Isento' : 'Pendente';
+
+    return {
+      ...entry,
+      email: email.trim().toLowerCase() || entry.email,
+      nickname: nickname.trim() || entry.nickname,
+      gender,
+      phone: phone.replace(/\D/g, ''),
+      shirtSize,
+      partnerName: partnerName.trim() || undefined,
+      partnerEmail: partnerEmail.trim() || undefined,
+      categoryIds: selectedCategoryIds,
+      payments: nextPayments,
+      paidAmount: newPaid,
+      paymentStatus: newStatus,
+      dueAmount,
+    };
+  };
+
+  const persistEntry = async (nextPayments: PaymentItem[] = payments) => {
+    await onSave(buildUpdatedEntry(nextPayments));
+  };
+
+  const handleAddPayment = async () => {
+    const val = parseFloat(newAmount.replace(',', '.'));
+    if (isNaN(val) || val <= 0) return;
+    let dateTs = Date.now();
+    if (newDate) { const d = new Date(newDate + 'T12:00:00'); if (!isNaN(d.getTime())) dateTs = d.getTime(); }
+
+    const receiptName = newReceipt ? newReceipt.name : undefined;
+    const receiptUrl = newReceipt?.url;
+    const paymentData: PaymentItem = { id: editingId || `pay_${Date.now()}`, amount: val, date: dateTs };
+    if (receiptName) paymentData.receiptFileName = receiptName;
+    if (receiptUrl) paymentData.receiptUrl = receiptUrl;
+
+    const nextPayments = editingId
+      ? payments.map(p => p.id === editingId ? { ...p, ...paymentData, receiptFileName: receiptName || p.receiptFileName, receiptUrl: receiptUrl || p.receiptUrl } : p)
+      : [...payments, paymentData];
+
+    setIsSaving(true);
+    if (editingId) {
+      setEditingId(null);
+    }
+    try {
+      setPayments(nextPayments);
+      await persistEntry(nextPayments);
+      setNewAmount('');
+      setNewDate(new Date().toISOString().split('T')[0]);
+      setNewReceipt(null);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditPayment = (p: PaymentItem) => {
+    setEditingId(p.id);
+    setNewAmount(p.amount.toFixed(2));
+    const d = new Date(p.date);
+    setNewDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    if (p.receiptFileName || p.receiptUrl) {
+      setNewReceipt({ name: p.receiptFileName || 'Comprovante' } as any);
+    } else {
+      setNewReceipt(null);
+    }
+  };
+
+  const handleRemovePayment = async (id: string) => {
+    const nextPayments = payments.filter(p => p.id !== id);
+    setIsSaving(true);
+    try {
+      setPayments(nextPayments);
+      await persistEntry(nextPayments);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setNewReceipt({
+          url: event.target.result as string,
+          name: file.name,
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if (isManual && !email.trim()) {
+      alert('E-mail é obrigatório para inscrições manuais.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await persistEntry();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+      <div className="mt-4 pt-4 border-t border-slate-100 space-y-4 animate-in slide-in-from-top-2 text-left" onClick={(e) => e.stopPropagation()}>
+      {(event.information || event.regulationUrl) && <div className="space-y-2">
+        {event.information && <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 space-y-1"><p className="text-[10px] font-black tracking-wider text-sky-600">Informações do evento</p><p className="text-xs font-bold leading-relaxed whitespace-pre-wrap text-slate-700">{event.information}</p></div>}
+        {event.regulationUrl && <a href={event.regulationUrl} target="_blank" rel="noopener noreferrer" className="w-full h-11 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 font-black text-xs flex items-center justify-center">Regulamento</a>}
+      </div>}
+      {/* Cabeçalho com título e botão de deletar inscrição (Imagem 3) */}
+      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <Users className="text-emerald-500" size={18} />
+          <h4 className="text-sm font-black text-slate-800 tracking-tight">
+            {canEdit ? 'Editar Inscrição' : 'Informações de Inscrição'}
+          </h4>
+        </div>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm(`Deseja realmente excluir a inscrição de ${entry.nickname}?`)) {
+                // acionar salvamento ou deleção
+                onSave({ ...entry, _deleteRequested: true } as any);
+              }
+            }}
+            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+            title="Excluir inscrição"
+          >
+            <Trash2 size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Nome, PIN e Email */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Nome do usuário</label>
+          <div className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 flex items-center text-xs font-bold text-slate-700">{entry.name}</div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Pin do usuário</label>
+          <div className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 flex items-center text-xs font-bold text-slate-700">{entry.pin}</div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">E-mail {isManual && <span className="text-red-500">*</span>}</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => canEdit && isManual && setEmail(e.target.value)}
+            readOnly={!canEdit || !isManual}
+            placeholder="usuario@email.com"
+            className={`w-full h-11 border rounded-xl px-3 text-xs font-bold outline-none transition-colors ${
+              canEdit && isManual ? 'bg-white border-slate-200 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-500'
+            }`}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-[10px] font-black text-slate-400 ml-1">Telefone <span className="text-red-500">*</span></label>
+        <input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => canEdit && setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} readOnly={!canEdit} placeholder="(11) 91234-9988" pattern="[(][0-9]{2}[)] [0-9]{4,5}-[0-9]{4}" className={`w-full h-11 border rounded-xl px-3 text-xs font-bold outline-none ${canEdit ? 'bg-white border-slate-200 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-500'}`} />
+      </div>
+      <div className="space-y-1">
+        <label className="text-[10px] font-black text-slate-400 ml-1">Tamanho camiseta <span className="text-red-500">*</span></label>
+        <select required disabled={!canEdit} value={shirtSize} onChange={(e) => setShirtSize(e.target.value as 'P' | 'M' | 'G')} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-bold outline-none"><option value="P">P</option><option value="M">M</option><option value="G">G</option></select>
+      </div>
+
+      {/* Apelido + gênero */}
+      <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Como quer ser chamado</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={nickname}
+            onChange={(e) => canEdit && setNickname(formatPortugueseName(e.target.value))}
+            readOnly={!canEdit}
+            className={`flex-1 h-11 border rounded-xl px-3 text-xs font-bold outline-none transition-colors ${
+              canEdit ? 'bg-white border-slate-200 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-500'
+            }`}
+          />
+          <button
+            type="button"
+            onClick={() => canEdit && setGender(g => g === 'M' ? 'F' : 'M')}
+            disabled={!canEdit}
+            className={`p-2.5 rounded-xl border transition-all ${
+              gender === 'F' ? 'bg-pink-50 text-pink-500 border-pink-200' : 'bg-sky-50 text-sky-500 border-sky-200'
+            } ${!canEdit ? 'opacity-60 cursor-default' : 'hover:brightness-95 active:scale-90'}`}
+          >
+            {gender === 'F' ? <VenusIcon /> : <MarsIcon />}
+          </button>
+        </div>
+        <p className="text-[10px] font-black ml-1" style={{ color: gender === 'F' ? '#ec4899' : '#0ea5e9' }}>
+          Gênero: {gender === 'F' ? 'Feminino (F)' : 'Masculino (M)'}
+        </p>
+      </div>
+
+      {/* Financeiro */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Valor devido</label>
+          <div className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 flex items-center text-xs font-bold text-slate-700">R$ {dueAmount.toFixed(2)}</div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Valor pendente</label>
+          <div className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 flex items-center">
+            <span className="text-xs font-black text-amber-600">R$ {pendingAmount.toFixed(2)}</span>
+          </div>
+        </div>
+        <div className="space-y-1 col-span-2">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Status do pagamento</label>
+          <div className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 flex items-center">
+            <span className={`text-xs font-black ${
+              paymentStatus === 'Pago' ? 'text-emerald-600' : paymentStatus === 'Isento' ? 'text-blue-600' : 'text-amber-600'
+            }`}>{paymentStatus}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Categorias */}
+      {availableCategories.length > 0 && (
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 ml-1 flex items-center gap-1">
+            <span>🏷</span> Categorias vinculadas
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {availableCategories.map((cat) => {
+              const isSelected = selectedCategoryIds.includes(cat.id);
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => toggleCategory(cat.id)}
+                  disabled={!canEdit}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all ${
+                    isSelected
+                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm'
+                      : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300'
+                  } ${!canEdit ? 'opacity-70 cursor-default' : 'active:scale-95'}`}
+                >
+                  {cat.name} ({cat.abbreviation})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedCategoryIds.some((id) => event.categories?.find((cat) => cat.id === id)?.format === 'Duplas') && <div className="space-y-2">
+        <label className="text-[10px] font-black text-slate-400 ml-1">Informe seu parceiro</label>
+        <input type="text" value={partnerName} onChange={(e) => canEdit && setPartnerName(e.target.value)} readOnly={!canEdit} placeholder="Nome do parceiro" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-bold outline-none" />
+        <input type="email" value={partnerEmail} onChange={(e) => canEdit && setPartnerEmail(e.target.value)} readOnly={!canEdit} placeholder="E-mail do parceiro (opcional)" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-bold outline-none" />
+      </div>}
+
+      {/* Pagamentos */}
+      <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black text-slate-700">Pagamentos</span>
+          <span className="text-xs font-black text-emerald-600">Total pago: R$ {totalPaid.toFixed(2)}</span>
+        </div>
+
+        {canEdit && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black text-slate-500 tracking-wider">
+                {editingId ? 'Editar pagamento' : 'Novo pagamento'}
+              </span>
+              <div className="flex items-center gap-2">
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingId(null); setNewAmount(''); setNewDate(new Date().toISOString().split('T')[0]); setNewReceipt(null); }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-all"
+                  >Cancelar edição</button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleAddPayment}
+                  disabled={isSaving || !newAmount || parseFloat(newAmount.replace(',', '.')) <= 0}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                >
+                  {editingId ? <CheckCircle2 size={14} /> : <DollarSign size={14} />}
+                  {editingId ? 'Salvar pagamento' : 'Adicionar pagamento'}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 ml-1">Valor do pagamento (R$)</label>
+                <input
+                  type="number" step="0.01" placeholder="0,00"
+                  value={newAmount}
+                  onChange={(e) => setNewAmount(e.target.value)}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 ml-1">Data do pagamento</label>
+                <input
+                  type="date" value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 ml-1">Comprovante</label>
+                <div className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 flex items-center justify-between text-xs text-slate-600 font-bold">
+                  <div className="flex items-center gap-2 truncate">
+                    <DollarSign size={16} className="text-slate-400 shrink-0" />
+                    <span className="truncate">{newReceipt ? newReceipt.name : 'Anexar comprovante...'}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {newReceipt?.url && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const w = window.open();
+                          if (w) { w.document.write(`<iframe src="${newReceipt.url}" style="width:100%;height:100%;border:none;"></iframe>`); }
+                        }}
+                        className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-black"
+                        title="Ver comprovante"
+                      >
+                        <Eye size={14} />
+                      </button>
+                    )}
+                    <label className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-slate-300 transition-colors">
+                      Buscar
+                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {payments.length > 0 && (
+          <div className="space-y-2">
+            <span className="text-[10px] font-black text-slate-400 ml-1">Histórico de pagamentos {canEdit && '(clique para editar)'}</span>
+            <div className="space-y-2">
+              {payments.map((pay) => {
+                const fileName = pay.receiptFileName || (pay as any).receiptName || (pay.receiptUrl ? 'Comprovante' : null);
+                return (
+                  <div
+                    key={pay.id}
+                    onClick={() => canEdit && handleEditPayment(pay)}
+                    className={`bg-white border rounded-xl p-3 flex items-center justify-between text-xs font-bold transition-all ${
+                      editingId === pay.id ? 'border-emerald-500 ring-2 ring-emerald-100 bg-emerald-50/30' : 'border-slate-200'
+                    } ${canEdit ? 'cursor-pointer hover:border-emerald-400' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-400 text-[10px]">{new Date(pay.date).toLocaleDateString('pt-BR')}</span>
+                      <span className="font-black text-slate-800">R$ {pay.amount.toFixed(2)}</span>
+                      {fileName && (
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded truncate max-w-[120px]" title={fileName}>
+                          {fileName}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {pay.receiptUrl && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const w = window.open();
+                            if (w) { w.document.write(`<iframe src="${pay.receiptUrl}" style="width:100%;height:100%;border:none;"></iframe>`); }
+                          }}
+                          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-black"
+                          title="Ver comprovante anexado"
+                        >
+                          <Eye size={14} />
+                        </button>
+                      )}
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); if (window.confirm('Deseja realmente excluir este pagamento?')) handleRemovePayment(pay.id); }}
+                          className="p-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-all active:scale-90"
+                          title="Excluir pagamento"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Botão Salvar */}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving}
+          className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all disabled:opacity-50"
+        >
+          {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          Salvar alterações
+        </button>
+      )}
+    </div>
+  );
+};
+
 export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack, userProfile, onExitTournament, onAddPartner, partners, onStartTournamentMatch, setModalConfig, appUrl }) => {
   const [event, setEvent] = useState<TournamentEvent>(initialEvent);
   const [entries, setEntries] = useState<TournamentEntry[]>([]);
@@ -59,6 +526,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set());
 
   const [editingEmail, setEditingEmail] = useState<string | null>(null);
+  const [expandedEntryEmail, setExpandedEntryEmail] = useState<string | null>(null);
   const [tempNickname, setTempNickname] = useState('');
   const [isSavingNickname, setIsSavingNickname] = useState(false);
 
@@ -142,7 +610,14 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   useEffect(() => {
-    fetchEntries();
+    const db = getDb();
+    if (!db) return;
+    const unsubscribe = subscribeEventEntries(db as Firestore, event.pin, (liveEntries) => {
+      // O snapshot em tempo real é a fonte de verdade dos participantes.
+      // Aplicar também listas vazias evita manter check-ins removidos na tela.
+      setEntries(liveEntries as TournamentEntry[]);
+    });
+    return () => unsubscribe();
   }, [event.pin]);
 
   const getAthleteStatus = (email: string) => {
@@ -166,7 +641,12 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   }, [event.matches]);
 
   const sortedEntries = useMemo(() => {
+    const currentUserEmail = userProfile.email.toLowerCase().trim();
     return [...entries].sort((a, b) => {
+      const aIsCurrentUser = a.email.toLowerCase().trim() === currentUserEmail;
+      const bIsCurrentUser = b.email.toLowerCase().trim() === currentUserEmail;
+      if (aIsCurrentUser !== bIsCurrentUser) return aIsCurrentUser ? -1 : 1;
+
       const stA = getAthleteStatus(a.email);
       const stB = getAthleteStatus(b.email);
       const gameA = stA?.matchNumber ?? 9999;
@@ -178,7 +658,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       if (a.gender !== b.gender) return a.gender === 'F' ? -1 : 1;
       return 0;
     });
-  }, [entries, event.pairs, event.matches]);
+  }, [entries, event.pairs, event.matches, userProfile.email]);
 
   const handleToggleGender = async (entryEmail: string, currentGender?: 'M' | 'F') => {
     if (!isAdmin && entryEmail !== userProfile.email) return;
@@ -290,6 +770,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           await deleteUserEventRegistration(db as Firestore, entryEmail, event.pin);
           setEntries(prev => prev.filter(e => e.email !== entryEmail));
           if (isSelf) {
+            setModalConfig(null);
             onExitTournament();
           } else {
             setModalConfig({ title: "Sucesso", message: "Participante removido do evento.", onConfirm: () => setModalConfig(null) });
@@ -388,7 +869,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     try {
        const cleanEmail = email.toLowerCase().trim();
        const tempPin = `TEMP${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-       const entryData: TournamentEntry = { name, nickname, email: cleanEmail, pin: tempPin, gender, joinedAt: Date.now(), checkedIn: true };
+       const entryData: TournamentEntry = { name, nickname, email: cleanEmail, pin: tempPin, gender, joinedAt: Date.now(), checkedIn: true, phone: '', shirtSize: 'M' };
        await saveEventEntry(db as Firestore, event.pin, entryData);
        await saveUserEventRegistration(db as Firestore, cleanEmail, event.pin, { pin: event.pin, name: event.name, joinedAt: entryData.joinedAt, bannerUrl: event.bannerUrl || null });
        setManualEntry({ name: '', nickname: '', email: '', gender: 'M' });
@@ -494,95 +975,6 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
         )}
 
         <div className="p-5 space-y-8">
-          {isAdmin && (
-            <div className="space-y-4">
-               <div className="flex items-center gap-2 px-1 text-slate-500 font-black">
-                 <Settings size={18} />
-                 <h3 className="text-sm font-black text-black tracking-tight">Configurações do torneio</h3>
-               </div>
-               <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 space-y-5">
-                  <div className="flex items-center justify-between">
-                     <span className="text-xs font-black text-gray-700">Travar regras para as partidas</span>
-                     <Toggle id="lock-rules" checked={event.config?.isLocked || false} onChange={v => handleSaveConfig({ isLocked: v })} />
-                  </div>
-                  
-                  <div className={`grid grid-cols-1 gap-4 transition-all ${event.config?.isLocked ? 'opacity-50 pointer-none' : ''}`}>
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
-                        <select 
-                          value={event.config?.sportType || 'beach-tennis'} 
-                          onChange={e => handleSaveConfig({ sportType: e.target.value })}
-                          className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-4 font-black text-sm outline-none"
-                        >
-                          {SPORT_LIST.filter(s => s.group === 'raquetes').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                     </div>
-                     <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black text-slate-400 ml-1">Sets</label>
-                           <select value={event.config?.sets || 1} onChange={e => handleSaveConfig({ sets: Number(e.target.value) as any })} className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-4 font-black text-sm outline-none"><option value={1}>Set único</option><option value={3}>Melhor de 3</option></select>
-                        </div>
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black text-slate-400 ml-1">Games por set</label>
-                           <select value={event.config?.gamesPerSet || 6} onChange={e => handleSaveConfig({ gamesPerSet: Number(e.target.value) })} className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-4 font-black text-sm outline-none"><option value={4}>4 games</option><option value={6}>6 games</option></select>
-                        </div>
-                     </div>
-                     <Toggle id="config-noad" label="Sistema sem vantagem (No-ad)" checked={event.config?.noAd ?? true} onChange={v => handleSaveConfig({ noAd: v })} />
-                  </div>
-
-                  <div className="pt-4 border-t border-gray-50 space-y-4">
-                     <div className="flex items-center gap-2 text-indigo-500 font-black">
-                        <ShieldCheck size={18} />
-                        <h3 className="text-[11px] font-black text-black tracking-tight">Administradores do evento</h3>
-                     </div>
-                     
-                     <div className="flex items-center gap-2">
-                        <div className="relative w-20 shrink-0">
-                           <input 
-                              type="text" 
-                              placeholder="PIN"
-                              value={coAdminPin}
-                              onChange={e => setCoAdminPin(e.target.value.toUpperCase().trim())}
-                              maxLength={5}
-                              className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-3 font-black text-sm text-center outline-none focus:ring-2 focus:ring-indigo-100"
-                           />
-                           {isSearchingCoAdminPin && <Loader2 size={12} className="absolute right-1 top-1/2 -translate-y-1/2 animate-spin text-indigo-500" />}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0 flex items-center justify-center">
-                          {coAdminLookupName && (
-                            <div className="animate-in slide-in-from-left-1 text-center">
-                               <span className={`text-[10px] font-black uppercase truncate block ${coAdminLookupName === "Usuário não localizado" ? 'text-red-500' : 'text-slate-500'}`}>
-                                  {coAdminLookupName}
-                               </span>
-                            </div>
-                          )}
-                        </div>
-
-                        <button 
-                           onClick={handleAddCoAdmin}
-                           disabled={isSavingCoAdmin || coAdminPin.length < 5 || (coAdminLookupName === "Usuário não localizado")}
-                           className="bg-indigo-600 text-white px-4 py-3 rounded-xl font-black text-[10px] active:scale-95 shadow-md flex items-center justify-center shrink-0"
-                        >
-                           {isSavingCoAdmin ? <Loader2 size={14} className="animate-spin" /> : 'Adicionar'}
-                        </button>
-                     </div>
-
-                     <div className="flex flex-wrap gap-2 pt-2">
-                        {event.coAdminPins?.map(pin => (
-                           <div key={pin} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100 animate-in zoom-in">
-                              <span className="text-[10px] font-black">{getNicknameByPin(pin)} - {maskPin(pin)}</span>
-                              <button onClick={() => handleRemoveCoAdmin(pin)} className="text-indigo-400 hover:text-red-500 transition-colors">
-                                 <X size={14} strokeWidth={3} />
-                              </button>
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-               </div>
-            </div>
-          )}
-
           <div className="space-y-4">
             <div className="flex items-center gap-2 px-1 text-blue-500 font-black">
               <Share2 size={18} />
@@ -612,63 +1004,11 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                       }} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all">
                         <Copy size={18} /> Copiar link de convite
                       </button>
+                      {event.regulationUrl ? <a href={event.regulationUrl} target="_blank" rel="noopener noreferrer" className="w-full bg-amber-500 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><Eye size={18} /> Regulamento</a> : <button onClick={() => setModalConfig({ title: 'Regulamento', message: 'O regulamento ainda não foi disponibilizado pelo administrador.', onConfirm: () => setModalConfig(null) })} className="w-full bg-white/10 text-white py-4 px-8 rounded-2xl font-black text-xs flex items-center justify-center gap-3 border border-white/20 active:scale-95 transition-all"><Eye size={18} /> Regulamento</button>}
                     </div>
                   </div>
                </div>
             </div>
-          </div>
-
-          <div className="space-y-4">
-             <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2 text-indigo-500 font-black">
-                   <UserPlus size={18} />
-                   <h3 className="text-sm font-black text-black tracking-tight">Inscrição manual de atleta</h3>
-                </div>
-                <button onClick={() => setShowManualEntry(!showManualEntry)} className={`p-2 rounded-xl transition-all ${showManualEntry ? 'bg-indigo-50 text-indigo-500' : 'text-slate-400 active:bg-indigo-50'}`}>
-                   {showManualEntry ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
-                </button>
-             </div>
-             {showManualEntry && (
-                <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 space-y-5 animate-in slide-in-from-top-4">
-                   <Input 
-                      label="Nome completo" 
-                      enableVoice
-                      value={manualEntry.name} 
-                      onChange={e => setManualEntry({...manualEntry, name: formatPortugueseName(e.target.value)})} 
-                   />
-                   <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                         <Input 
-                            label="Apelido do atleta" 
-                            enableVoice
-                            value={manualEntry.nickname} 
-                            onChange={e => setManualEntry({...manualEntry, nickname: formatPortugueseName(e.target.value)})} 
-                         />
-                      </div>
-                      <button 
-                        onClick={() => setManualEntry({...manualEntry, gender: manualEntry.gender === 'M' ? 'F' : 'M'})}
-                        className={`w-[42px] h-[44px] rounded-2xl border-2 flex items-center justify-center shrink-0 transition-all active:scale-90 ${manualEntry.gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}
-                      >
-                         {manualEntry.gender === 'F' ? <VenusIcon /> : <MarsIcon />}
-                      </button>
-                   </div>
-                   <Input 
-                      label="E-mail para convite" 
-                      enableVoice
-                      type="email" 
-                      value={manualEntry.email} 
-                      onChange={e => setManualEntry({...manualEntry, email: e.target.value})} 
-                   />
-                   <button 
-                      onClick={handleSaveManualEntry} 
-                      disabled={isSavingManual}
-                      className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
-                   >
-                      {isSavingManual ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                      Adicionar participante
-                   </button>
-                </div>
-             )}
           </div>
 
           {isAdmin && (event.pairs?.length || 0) > 0 && (
@@ -840,6 +1180,8 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                   const st = getAthleteStatus(entry.email);
                   const isSelected = selectedEntries.has(entry.email);
                   const isPairedOrMatched = event.pairs?.some(p => (p.p1.email === entry.email || p.p2.email === entry.email));
+                  const isCurrentUserEntry = entry.email.toLowerCase().trim() === userProfile.email.toLowerCase().trim();
+                  const canManageEntry = isAdmin || isCurrentUserEntry;
                   // Participante indisponível para seleção visualmente e logicamente se não fez check-in
                   const isUnavailable = !entry.checkedIn;
                   
@@ -847,7 +1189,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                     <div 
                       key={entry.email} 
                       onClick={() => isAdmin && toggleEntrySelection(entry.email)}
-                      className={`bg-white p-5 rounded-3xl shadow-sm border transition-all duration-300 relative overflow-hidden ${isSelected ? 'border-cyan-500 ring-4 ring-cyan-50 bg-cyan-50/20' : entry.checkedIn ? 'border-emerald-100 ring-2 ring-emerald-50' : 'border-gray-100 opacity-40 grayscale pointer-events-none'} ${st || isPairedOrMatched ? 'border-slate-200 opacity-60 grayscale cursor-default' : (isAdmin && !isUnavailable ? 'cursor-pointer' : '')}`}
+                      className={`bg-white p-5 rounded-3xl shadow-sm border transition-all duration-300 relative overflow-hidden ${isSelected ? 'border-cyan-500 ring-4 ring-cyan-50 bg-cyan-50/20' : entry.checkedIn ? 'border-emerald-100 ring-2 ring-emerald-50' : 'border-gray-100'} ${st || isPairedOrMatched ? 'border-slate-200 cursor-default' : (isAdmin && !isUnavailable ? 'cursor-pointer' : '')}`}
                     >
                       {st && (
                          <div className={`absolute top-0 right-0 px-5 py-2 rounded-bl-3xl font-black text-[10px] text-white shadow-sm flex flex-col items-center leading-none ${st.pairLetter === 'A' ? 'bg-blue-600' : st.pairLetter === 'B' ? 'bg-red-600' : 'bg-slate-800'}`}>
@@ -857,8 +1199,8 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                       )}
                       <div className="flex items-center justify-between">
                          <div className="flex items-center gap-4 flex-1 min-w-0">
-                           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${entry.checkedIn ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                             <User size={24} />
+                           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isCurrentUserEntry ? 'bg-[#4B0082] text-white shadow-lg' : (entry.checkedIn ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600')}`}>
+                             <User size={24} fill={isCurrentUserEntry ? 'currentColor' : 'none'} />
                            </div>
                            <div className="text-left flex-1 min-w-0 pr-2">
                              <div className="flex items-center gap-2">
@@ -888,51 +1230,83 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                                   </div>
                                ) : (
                                   <div className="flex items-center gap-2">
-                                    <p className="text-sm font-black text-gray-900 truncate">{entry.name || entry.nickname}</p>
-                                    {isAdmin && (
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); setEditingEmail(entry.email); setTempNickname(entry.nickname); }}
-                                        className="p-1 text-slate-300 hover:text-blue-500 active:scale-75 transition-colors"
-                                        title="Editar apelido"
-                                      >
-                                        <Edit3 size={14} />
-                                      </button>
-                                    )}
+                                    <p className="text-sm font-black text-gray-900 truncate">
+                                      {entry.name || entry.nickname}
+                                      {isCurrentUserEntry && <span className="text-[10px] opacity-40 ml-1">(você)</span>}
+                                    </p>
                                   </div>
-                               )}
-                             </div>
-                             <p className="text-[10px] font-bold text-gray-400 uppercase">{entry.nickname} - {maskPin(entry.pin)}</p>
-                           </div>
-                         </div>
-                         <div className="flex items-center gap-2 shrink-0">
-                           {(isAdmin || entry.email === userProfile.email) && (
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleToggleCheckIn(entry.email, entry.checkedIn); }}
-                                className={`p-2 rounded-xl transition-all active:scale-90 border ${entry.checkedIn ? 'bg-emerald-500 text-white border-emerald-600 shadow-md pointer-events-auto' : 'bg-gray-50 text-gray-400 border-gray-200 pointer-events-auto'}`}
-                                title={entry.checkedIn ? "Confirmar ausência" : "Confirmar presença"}
+                                )}
+                              </div>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase">{entry.nickname} - {maskPin(entry.pin)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {canManageEntry && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedEntryEmail(prev => prev === entry.email ? null : entry.email);
+                                }}
+                                className="p-2 bg-gray-100 hover:bg-gray-200 text-slate-500 rounded-xl transition-colors pointer-events-auto"
+                                title="Expandir cadastro de inscrição"
                               >
-                                <Check size={18} strokeWidth={3} />
+                                {expandedEntryEmail === entry.email ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                               </button>
-                           )}
-                           {(isAdmin || entry.email === userProfile.email) && (
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry.email, entry.nickname); }}
-                                className="p-2 bg-red-50 text-red-500 rounded-xl active:scale-90 border border-red-100 pointer-events-auto"
-                                title="Excluir participante"
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                           )}
-                           <button 
-                             onClick={(e) => { e.stopPropagation(); handleToggleGender(entry.email, entry.gender); }}
-                             disabled={!(isAdmin || entry.email === userProfile.email)}
-                             className={`p-2 rounded-xl transition-all active:scale-90 border ${entry.gender === 'F' ? 'bg-pink-50 text-pink-500 border-pink-100' : 'bg-sky-50 text-sky-500 border-sky-100'} ${!(isAdmin || entry.email === userProfile.email) ? 'cursor-default' : 'hover:brightness-95 pointer-events-auto'}`}
-                             title={(isAdmin || entry.email === userProfile.email) ? "Alterar gênero do participante" : ""}
-                           >
-                             {entry.gender === 'F' ? <VenusIcon /> : <MarsIcon />}
-                           </button>
-                         </div>
-                      </div>
+                            )}
+
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleToggleGender(entry.email, entry.gender); }}
+                              disabled={!canManageEntry}
+                              className={`p-2 rounded-xl transition-all border ${
+                                !canManageEntry
+                                  ? (entry.gender === 'F' ? 'bg-pink-50 text-pink-400 border-pink-100 cursor-default opacity-80' : 'bg-sky-50 text-sky-400 border-sky-100 cursor-default opacity-80')
+                                  : (entry.gender === 'F' ? 'bg-pink-50 text-pink-500 border-pink-100 hover:brightness-95 active:scale-90 pointer-events-auto' : 'bg-sky-50 text-sky-500 border-sky-100 hover:brightness-95 active:scale-90 pointer-events-auto')
+                              }`}
+                              title={canManageEntry ? "Alterar gênero do participante" : ""}
+                            >
+                              {entry.gender === 'F' ? <VenusIcon /> : <MarsIcon />}
+                            </button>
+
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (canManageEntry) {
+                                  handleToggleCheckIn(entry.email, entry.checkedIn);
+                                }
+                              }}
+                              disabled={!canManageEntry}
+                              className={`p-2 rounded-xl transition-all border ${
+                                entry.checkedIn
+                                  ? `bg-emerald-500 text-white border-emerald-600 shadow-md ${canManageEntry ? 'active:scale-90 pointer-events-auto' : 'cursor-default opacity-90'}`
+                                  : `bg-gray-50 text-gray-400 border-gray-200 ${canManageEntry ? 'active:scale-90 pointer-events-auto' : 'cursor-default opacity-70'}`
+                              }`}
+                              title={canManageEntry ? (entry.checkedIn ? "Confirmar ausência" : "Confirmar presença") : ""}
+                            >
+                              <Check size={18} strokeWidth={3} />
+                            </button>
+                          </div>
+                       </div>
+
+                       {expandedEntryEmail === entry.email && (
+                         <EventRegistrationForm
+                           key={entry.email}
+                           entry={entry}
+                           event={event}
+                           mode="user"
+                           onDelete={() => handleDeleteEntry(entry.email, entry.nickname)}
+                           onSave={async (updated) => {
+                             const db = getDb();
+                             if (!db) return;
+                             if ((updated as any)._deleteRequested) {
+                               handleDeleteEntry(entry.email, entry.nickname);
+                               setExpandedEntryEmail(null);
+                               return;
+                             }
+                             await saveEventEntry(db as Firestore, event.pin, updated);
+                             fetchEntries();
+                           }}
+                         />
+                       )}
                     </div>
                   );
                 })}

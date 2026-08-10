@@ -2,6 +2,10 @@ export interface TournamentPair {
   id: string;
   p1: TournamentEntry;
   p2: TournamentEntry;
+  /** Category and event-wide display number assigned when the team is formed. */
+  categoryId?: string;
+  teamNumber?: number;
+  teamCode?: string;
 }
 
 export interface TournamentMatch {
@@ -71,11 +75,24 @@ export interface TournamentEvent {
   eventDateText?: string;
   startDate?: string;
   endDate?: string;
+  location?: string;
   courtsCount?: number;
+  courtNames?: string[];
   registrationFee?: number;
   extraCategoryFee?: number;
   eventStatus?: EventStatusOption;
   categories?: EventCategory[];
+  regulationUrl?: string;
+  regulationFileName?: string;
+  information?: string;
+}
+
+export interface PaymentItem {
+  id: string;
+  date: number;
+  amount: number;
+  receiptUrl?: string;
+  receiptFileName?: string;
 }
 
 export interface TournamentEntry {
@@ -89,7 +106,12 @@ export interface TournamentEntry {
   dueAmount?: number;
   paymentStatus?: 'Pendente' | 'Pago' | 'Isento';
   paidAmount?: number;
+  payments?: PaymentItem[];
   categoryIds?: string[];
+  phone: string;
+  shirtSize: 'P' | 'M' | 'G';
+  partnerName?: string;
+  partnerEmail?: string;
 }
 
 export interface EventRegistration {

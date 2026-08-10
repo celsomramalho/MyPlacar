@@ -12,7 +12,6 @@ import { linkLegacyMatchesToOwnerEmail } from '@infra/firebase/matches';
 import { fetchSystemConfig, saveSystemConfigPatch } from '@infra/firebase/systemConfig';
 import { searchUserProfilesByEmailPrefix } from '@infra/firebase/users';
 import { migrateFirebaseAdminDataToSupabase } from '@infra/supabase/adminMigration';
-import { AdminBottomNav } from '@modules/admin/components/AdminBottomNav';
 import { AdminConfirmModals, type AdminDeleteConfirm } from '@modules/admin/components/AdminConfirmModals';
 import { AdminEventsPanel } from '@modules/admin/components/AdminEventsPanel';
 import { AdminHeader } from '@modules/admin/components/AdminHeader';
@@ -420,17 +419,29 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!editingEvent?.pin || !editingEvent?.name) return;
     setIsSavingEvent(true);
     const db = getDb();
-    if (!db) return;
+    if (!db) {
+      setIsSavingEvent(false);
+      setStatus({ type: 'error', msg: 'Erro: banco de dados indisponível.' });
+      setTimeout(() => setStatus(null), 2000);
+      return;
+    }
     try {
-      await saveAdminEvent(db, editingEvent);
-      setStatus({ type: 'success', msg: "Evento salvo com sucesso!" });
-      fetchEvents();
+      await saveAdminEvent(db, editingEvent, userProfile?.email);
+      setEventList((prev) => {
+        const exists = prev.some((ev) => ev.pin === editingEvent.pin);
+        if (exists) {
+          return prev.map((ev) => (ev.pin === editingEvent.pin ? editingEvent : ev));
+        }
+        return [editingEvent, ...prev];
+      });
+      setStatus({ type: 'success', msg: 'Evento salvo com sucesso!' });
       setEditingEvent(null);
-    } catch (_e) {
-      setStatus({ type: 'error', msg: "Erro ao salvar evento." });
+    } catch (e) {
+      console.error('Erro ao salvar evento:', e);
+      setStatus({ type: 'error', msg: `Erro ao salvar evento: ${e instanceof Error ? e.message : String(e)}` });
     } finally {
       setIsSavingEvent(false);
-      setTimeout(() => setStatus(null), 2000);
+      setTimeout(() => setStatus(null), 3000);
     }
   };
 
@@ -439,13 +450,14 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const db = getDb();
     if (!db) return;
     try {
-      await saveAdminEvent(db, updatedEvent);
-      setEventList((prev) => prev.map((ev) => (ev.pin === updatedEvent.pin ? updatedEvent : ev)));
-      setStatus({ type: 'success', msg: "Dados do evento atualizados!" });
-    } catch (_e) {
-      setStatus({ type: 'error', msg: "Erro ao atualizar dados do evento." });
-    } finally {
-      setTimeout(() => setStatus(null), 2000);
+      await saveAdminEvent(db, updatedEvent, userProfile?.email);
+      // Update eventList without entries to keep the list clean
+      const { entries: _entries, ...eventWithoutEntries } = updatedEvent;
+      setEventList((prev) => prev.map((ev) => (ev.pin === updatedEvent.pin ? { ...eventWithoutEntries } : ev)));
+    } catch (e) {
+      console.error('Erro ao atualizar dados do evento:', e);
+      setStatus({ type: 'error', msg: `Erro ao salvar: ${e instanceof Error ? e.message : String(e)}` });
+      setTimeout(() => setStatus(null), 3000);
     }
   };
 
@@ -776,6 +788,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             isSavingEvent={isSavingEvent}
             bannerInputRef={bannerInputRef}
             activeSports={sports.filter(s => s.isActive !== false)}
+            adminEmail={userProfile?.email}
             onCreateEvent={() => setEditingEvent({ pin: '', name: '', active: true, eventStatus: 'Em configuração', createdAt: Date.now() })}
             onChangeEditingEvent={setEditingEvent}
             onSaveEvent={handleSaveEvent}
@@ -800,11 +813,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         onEventBannerLoaded={handleEventBannerLoaded}
       />
 
-      <AdminBottomNav
-        onNavigateToTab={onNavigateToTab}
-        onOpenRules={onOpenRules}
-        onOpenMenu={onOpenMenu}
-      />
     </div>
   );
 };

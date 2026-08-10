@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy } from 'lucide-react';
-import type { EventCategory, TournamentEvent } from '@modules/events/types';
+import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ArrowUpDown, UserCheck, UserPlus } from 'lucide-react';
+import type { EventCategory, TournamentEntry, TournamentEvent, TournamentPair } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 
@@ -8,12 +8,14 @@ interface Props {
   event: TournamentEvent;
   activeSports: FirebaseAdminSportIcon[];
   onUpdateCategories: (categories: EventCategory[]) => void;
+  onUpdateEvent: (event: TournamentEvent) => void;
 }
 
 export const EventCategoriesManager: React.FC<Props> = ({
   event,
   activeSports,
   onUpdateCategories,
+  onUpdateEvent,
 }) => {
   const categories = event.categories || [];
   const entries = event.entries || [];
@@ -21,6 +23,9 @@ export const EventCategoriesManager: React.FC<Props> = ({
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<'name' | 'team'>('team');
 
   // Form State
   const [name, setName] = useState('');
@@ -113,6 +118,90 @@ export const EventCategoriesManager: React.FC<Props> = ({
     const updatedList = categories.filter((cat) => cat.id !== id);
     onUpdateCategories(updatedList);
     resetForm();
+  };
+
+  const selectedCategory = categories.find((cat) => cat.id === selectedCategoryId) || null;
+  const categoryEntries = selectedCategory
+    ? entries.filter((entry) => entry.categoryIds?.includes(selectedCategory.id))
+    : [];
+  const categoryPairs = selectedCategory
+    ? pairs.filter((pair) => pair.categoryId === selectedCategory.id || (!pair.categoryId && (pair.p1.categoryIds?.includes(selectedCategory.id) || pair.p2.categoryIds?.includes(selectedCategory.id))))
+    : [];
+  const pairForEntry = (entry: TournamentEntry) => categoryPairs.find((pair) => pair.p1.email === entry.email || pair.p2.email === entry.email);
+  const sortedCategoryEntries = [...categoryEntries].sort((a, b) => {
+    if (sortBy === 'team') return (pairForEntry(a)?.teamNumber ?? 999999) - (pairForEntry(b)?.teamNumber ?? 999999) || a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name);
+  });
+
+  const toggleEntrySelection = (entry: TournamentEntry) => {
+    if (pairForEntry(entry)) return;
+    const next = new Set(selectedEntries);
+    if (next.has(entry.email)) next.delete(entry.email);
+    else if (next.size < 2) next.add(entry.email);
+    setSelectedEntries(next);
+  };
+
+  const handleFormTeam = () => {
+    if (!selectedCategory || selectedEntries.size !== 2) return;
+    const selected = Array.from(selectedEntries).map((email) => categoryEntries.find((entry) => entry.email === email)).filter(Boolean) as TournamentEntry[];
+    if (selected.length !== 2) return;
+    const teamNumber = Math.max(
+      0,
+      ...pairs.map((pair, index) => pair.teamNumber || Number(pair.teamCode?.match(/^\d{3}/)?.[0]) || index + 1)
+    ) + 1;
+    const teamCode = `${String(teamNumber).padStart(3, '0')} - ${selectedCategory.abbreviation}`;
+    const newPair: TournamentPair = {
+      id: `pair_${Date.now()}`,
+      p1: selected[0],
+      p2: selected[1],
+      categoryId: selectedCategory.id,
+      teamNumber,
+      teamCode,
+    };
+    onUpdateEvent({ ...event, pairs: [...pairs, newPair] });
+    setSelectedEntries(new Set());
+  };
+
+  const renderCategoryRoster = () => {
+    if (!selectedCategory) return null;
+    return (
+      <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-black text-slate-800">Inscritos ({selectedCategory.name})</h3>
+            <p className="text-xs text-slate-400 font-bold mt-0.5">Selecione dois jogadores e clique no botão Formar time.</p>
+          </div>
+          <button type="button" onClick={handleFormTeam} disabled={selectedEntries.size !== 2} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-black transition-all disabled:bg-slate-100 disabled:text-slate-300 bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95">
+            <UserPlus size={16} /> Formar time
+          </button>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
+          <span className="text-[10px] font-black text-slate-400">Classificar por</span>
+          <button type="button" onClick={() => setSortBy(sortBy === 'team' ? 'name' : 'team')} className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg">
+            {sortBy === 'team' ? 'Time' : 'Participante'} <ArrowUpDown size={12} />
+          </button>
+        </div>
+        {sortedCategoryEntries.length === 0 ? <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum inscrito nesta categoria.</div> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead><tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase tracking-wider font-black text-slate-400"><th className="py-3 px-4">Participante</th><th className="py-3 px-4">Gênero</th><th className="py-3 px-4">Time</th><th className="py-3 px-4 text-right">Selecionar</th></tr></thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-bold">
+                {sortedCategoryEntries.map((entry) => {
+                  const pair = pairForEntry(entry);
+                  const isSelected = selectedEntries.has(entry.email);
+                  return <tr key={entry.email} onClick={() => toggleEntrySelection(entry)} className={`transition-colors ${pair ? 'bg-slate-50 text-slate-400' : isSelected ? 'bg-cyan-50' : 'hover:bg-slate-50 cursor-pointer'}`}>
+                    <td className="py-4 px-4"><p className="font-black text-slate-800">{entry.name}</p><p className="text-[10px] text-amber-500 font-black">PIN: {entry.pin}</p></td>
+                    <td className={`py-4 px-4 ${entry.gender === 'F' ? 'text-pink-600' : 'text-sky-600'}`}>{entry.gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</td>
+                    <td className="py-4 px-4">{pair ? <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-black"><Trophy size={11} /> {pair.teamCode || `Time ${pair.teamNumber || ''}`}</span> : <span className="text-slate-300 text-[10px]">A formar</span>}</td>
+                    <td className="py-4 px-4 text-right">{pair ? <UserCheck size={18} className="ml-auto text-emerald-500" /> : <span className={`inline-flex w-5 h-5 rounded-full border-2 ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300'}`}>{isSelected && <Check size={14} className="text-white m-auto" />}</span>}</td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    );
   };
 
   return (
@@ -321,7 +410,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
           <p className="text-xs text-slate-300">Clique em &ldquo;+ Categoria&rdquo; para cadastrar a primeira disputa.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-3">
           {categories.map((cat) => {
             const inscritosCount = entries.filter((e) =>
               e.categoryIds?.includes(cat.id)
@@ -332,28 +421,40 @@ export const EventCategoriesManager: React.FC<Props> = ({
             const isEditing = editingId === cat.id && isAdding;
 
             return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => handleStartEdit(cat)}
-                className={`p-4 rounded-2xl border text-left transition-all space-y-3 w-full active:scale-95 ${
+              <React.Fragment key={cat.id}>
+              <div
+                onClick={() => { setSelectedCategoryId(cat.id); setSelectedEntries(new Set()); }}
+                className={`p-4 rounded-2xl border text-left transition-all space-y-3 w-full cursor-pointer ${
                   isEditing
-                    ? 'border-emerald-500 bg-emerald-50 shadow-md scale-[1.02]'
+                    ? 'border-emerald-500 bg-emerald-50 shadow-md scale-[1.01]'
+                    : selectedCategoryId === cat.id
+                    ? 'border-blue-400 bg-blue-50/30 shadow-sm'
                     : 'bg-white border-slate-100 hover:border-emerald-300 hover:shadow-sm shadow-sm'
                 }`}
               >
-                {/* Header: priority badge + format badge */}
+                {/* Header: priority badge + format badge + Chevron edit button */}
                 <div className="flex items-center justify-between gap-2">
-                  <span className="w-6 h-6 inline-flex items-center justify-center bg-slate-100 rounded-lg text-slate-600 font-black text-[10px]">
-                    {cat.priority}
-                  </span>
-                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                    cat.format === 'Duplas'
-                      ? 'bg-emerald-100 text-emerald-600'
-                      : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    {cat.format}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 inline-flex items-center justify-center bg-slate-100 rounded-lg text-slate-600 font-black text-[10px]">
+                      {cat.priority}
+                    </span>
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                      cat.format === 'Duplas'
+                        ? 'bg-emerald-100 text-emerald-600'
+                        : 'bg-blue-100 text-blue-600'
+                    }`}>
+                      {cat.format}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleStartEdit(cat); }}
+                    className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 rounded-xl active:scale-90 transition-all"
+                    title="Abrir cadastro da categoria"
+                  >
+                    <ChevronDown size={18} />
+                  </button>
                 </div>
 
                 {/* Category name */}
@@ -396,10 +497,60 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     <span>{timesCount} times</span>
                   </div>
                 </div>
-              </button>
+              </div>
+              {selectedCategoryId === cat.id && renderCategoryRoster()}
+              </React.Fragment>
             );
           })}
         </div>
+      )}
+
+      {false && selectedCategory && (
+        <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-slate-800">Inscritos ({selectedCategory?.name})</h3>
+              <p className="text-xs text-slate-400 font-bold mt-0.5">Selecione dois jogadores e clique no botão Formar time.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleFormTeam}
+              disabled={selectedEntries.size !== 2}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-black transition-all disabled:bg-slate-100 disabled:text-slate-300 bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95"
+            >
+              <UserPlus size={16} /> Formar time
+            </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
+            <span className="text-[10px] font-black text-slate-400">Classificar por</span>
+            <button type="button" onClick={() => setSortBy(sortBy === 'team' ? 'name' : 'team')} className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg">
+              {sortBy === 'team' ? 'Time' : 'Participante'} <ArrowUpDown size={12} />
+            </button>
+          </div>
+
+          {sortedCategoryEntries.length === 0 ? (
+            <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum inscrito nesta categoria.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead><tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase tracking-wider font-black text-slate-400"><th className="py-3 px-4">Participante</th><th className="py-3 px-4">Gênero</th><th className="py-3 px-4">Time</th><th className="py-3 px-4 text-right">Selecionar</th></tr></thead>
+                <tbody className="divide-y divide-slate-100 text-xs font-bold">
+                  {sortedCategoryEntries.map((entry) => {
+                    const pair = pairForEntry(entry);
+                    const isSelected = selectedEntries.has(entry.email);
+                    return <tr key={entry.email} onClick={() => toggleEntrySelection(entry)} className={`transition-colors ${pair ? 'bg-slate-50 text-slate-400' : isSelected ? 'bg-cyan-50' : 'hover:bg-slate-50 cursor-pointer'}`}>
+                      <td className="py-4 px-4"><p className="font-black text-slate-800">{entry.name}</p><p className="text-[10px] text-amber-500 font-black">PIN: {entry.pin}</p></td>
+                      <td className="py-4 px-4">{entry.gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</td>
+                      <td className="py-4 px-4">{pair ? <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-black"><Trophy size={11} /> {pair.teamCode || `Time ${pair.teamNumber || ''}`}</span> : <span className="text-slate-300 text-[10px]">A formar</span>}</td>
+                      <td className="py-4 px-4 text-right">{pair ? <UserCheck size={18} className="ml-auto text-emerald-500" /> : <span className={`inline-flex w-5 h-5 rounded-full border-2 ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300'}`}>{isSelected && <Check size={14} className="text-white m-auto" />}</span>}</td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

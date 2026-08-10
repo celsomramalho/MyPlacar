@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Edit3, Image as ImageIcon, Loader2, Plus, Save, Ticket, Trash2, X, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Edit3, Image as ImageIcon, Loader2, Plus, Save, Ticket, Trash2, X, ChevronRight, ArrowLeft, FileText } from 'lucide-react';
 import type { RefObject } from 'react';
 import { EVENT_STATUS_OPTIONS, type EventStatusOption, type TournamentEntry, type TournamentEvent } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb } from '@infra/firebase';
-import { fetchEventEntries } from '@infra/firebase/events';
+import { fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { EventDashboardView } from './EventDashboardView';
@@ -16,6 +16,7 @@ interface AdminEventsPanelProps {
   isSavingEvent: boolean;
   bannerInputRef: RefObject<HTMLInputElement>;
   activeSports?: FirebaseAdminSportIcon[];
+  adminEmail?: string;
   onCreateEvent: () => void;
   onChangeEditingEvent: (event: TournamentEvent | null) => void;
   onSaveEvent: () => void;
@@ -30,6 +31,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   isSavingEvent,
   bannerInputRef,
   activeSports = [],
+  adminEmail,
   onCreateEvent,
   onChangeEditingEvent,
   onSaveEvent,
@@ -38,6 +40,39 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
 }) => {
   const [selectedDashboardEvent, setSelectedDashboardEvent] = useState<TournamentEvent | null>(null);
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
+  const regulationInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Sync selectedDashboardEvent with updated eventList only for fields that
+  // don't exist in local state (like active, name, eventStatus, etc.)
+  // We preserve categories and entries which are managed locally.
+  React.useEffect(() => {
+    if (selectedDashboardEvent) {
+      const updatedInList = eventList.find((e) => e.pin === selectedDashboardEvent.pin);
+      if (updatedInList) {
+        setSelectedDashboardEvent((prev) =>
+          prev
+            ? {
+                ...updatedInList,          // Base: latest from list (has name, status, etc.)
+                categories: prev.categories ?? updatedInList.categories, // Prefer local categories
+                entries: prev.entries,     // Always keep locally loaded entries
+              }
+            : null
+        );
+      }
+    }
+  }, [eventList]);
+
+  const handleSaveEventAndSyncDashboard = () => {
+    if (editingEvent) {
+      if (selectedDashboardEvent && selectedDashboardEvent.pin === editingEvent.pin) {
+        setSelectedDashboardEvent({
+          ...selectedDashboardEvent,
+          ...editingEvent,
+        });
+      }
+    }
+    onSaveEvent();
+  };
 
   // Always prefer local selectedDashboardEvent (updated synchronously) over eventList
   // to avoid race condition: eventList only updates after async Firebase save
@@ -45,6 +80,8 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
 
   const handleSelectDashboardEvent = async (event: TournamentEvent) => {
     setIsLoadingEntries(true);
+    // Find freshest event from eventList props to ensure categories and eventStatus aren't lost
+    const freshestEvent = eventList.find((e) => e.pin === event.pin) || event;
     try {
       const db = getDb();
       if (db) {
@@ -58,17 +95,53 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           joinedAt: fe.joinedAt,
           gender: fe.gender,
           checkedIn: fe.checkedIn,
+          phone: fe.phone || '',
+          shirtSize: fe.shirtSize || 'M',
+          categoryIds: fe.categoryIds || [],
+          dueAmount: fe.dueAmount,
+          paidAmount: fe.paidAmount,
+          paymentStatus: fe.paymentStatus,
+          payments: fe.payments,
+          partnerName: fe.partnerName,
+          partnerEmail: fe.partnerEmail,
         }));
-        setSelectedDashboardEvent({ ...event, entries });
+        setSelectedDashboardEvent({ ...freshestEvent, entries });
       } else {
-        setSelectedDashboardEvent(event);
+        setSelectedDashboardEvent(freshestEvent);
       }
     } catch {
-      setSelectedDashboardEvent(event);
+      setSelectedDashboardEvent(freshestEvent);
     } finally {
       setIsLoadingEntries(false);
     }
   };
+
+  React.useEffect(() => {
+    if (!selectedDashboardEvent) return;
+    const db = getDb();
+    if (!db) return;
+    return subscribeEventEntries(db, selectedDashboardEvent.pin, (freshEntries) => {
+      const entries: TournamentEntry[] = freshEntries.map((fe) => ({
+        email: fe.email,
+        name: fe.name,
+        nickname: fe.nickname,
+        pin: fe.pin,
+        joinedAt: fe.joinedAt,
+        gender: fe.gender,
+        checkedIn: fe.checkedIn,
+        categoryIds: fe.categoryIds || [],
+        phone: fe.phone || '',
+        shirtSize: fe.shirtSize || 'M',
+        dueAmount: fe.dueAmount,
+        paidAmount: fe.paidAmount,
+        paymentStatus: fe.paymentStatus,
+        payments: fe.payments,
+        partnerName: fe.partnerName,
+        partnerEmail: fe.partnerEmail,
+      }));
+      setSelectedDashboardEvent((current) => current ? { ...current, entries } : current);
+    });
+  }, [selectedDashboardEvent?.pin]);
 
   const handleUpdateDashboardEvent = (updated: TournamentEvent) => {
     setSelectedDashboardEvent(updated);
@@ -100,6 +173,39 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         </div>
 
         <div className="space-y-4">
+          <div className="flex items-center justify-between px-1 pb-1 border-b border-slate-200">
+            <span className="text-[10px] font-black text-slate-400">Ativo</span>
+            <Toggle
+              id="sw-event-active"
+              checked={editingEvent.active}
+              onChange={(active) => onChangeEditingEvent({ ...editingEvent, active })}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Nome do evento</label>
+            <input
+              type="text"
+              value={editingEvent.name}
+              onChange={(event) => onChangeEditingEvent({ ...editingEvent, name: event.target.value })}
+              placeholder="Nome visível"
+              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Regulamento (PDF)</label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => regulationInputRef.current?.click()} className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-500"><FileText size={16} /> {editingEvent.regulationFileName || 'Carregar regulamento'}</button>
+              <input ref={regulationInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => onChangeEditingEvent({ ...editingEvent, regulationUrl: String(reader.result), regulationFileName: file.name }); reader.readAsDataURL(file); }} />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Informações do evento</label>
+            <textarea rows={5} value={editingEvent.information || ''} onChange={(event) => onChangeEditingEvent({ ...editingEvent, information: event.target.value })} placeholder="Orientações e informações para os participantes" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-xs outline-none resize-y" />
+          </div>
+
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 ml-1">Pin exclusivo (ex: CarmoFev26)</label>
             <input
@@ -112,12 +218,12 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Nome do evento</label>
+            <label className="text-[10px] font-black text-slate-400 ml-1">Local (Clube / Cidade)</label>
             <input
               type="text"
-              value={editingEvent.name}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, name: event.target.value })}
-              placeholder="Nome visível"
+              value={editingEvent.location || ''}
+              onChange={(event) => onChangeEditingEvent({ ...editingEvent, location: event.target.value })}
+              placeholder="ex: Clube Carmo - Belo Horizonte"
               className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
             />
           </div>
@@ -152,18 +258,6 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                 className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
               />
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Quantidade de quadras</label>
-            <input
-              type="number"
-              min={0}
-              value={editingEvent.courtsCount ?? ''}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, courtsCount: event.target.value ? Number(event.target.value) : undefined })}
-              placeholder="ex: 4"
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
-            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -225,17 +319,74 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between px-1 pt-1">
-            <span className="text-[10px] font-black text-slate-400">Ativo</span>
-            <Toggle
-              id="sw-event-active"
-              checked={editingEvent.active}
-              onChange={(active) => onChangeEditingEvent({ ...editingEvent, active })}
+
+
+          {/* Quantidade de quadras movida para o final */}
+          <div className="space-y-1 pt-2 border-t border-slate-200">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Quantidade de quadras</label>
+            <input
+              type="number"
+              min={0}
+              value={editingEvent.courtsCount ?? ''}
+              onChange={(e) => {
+                const count = e.target.value ? Math.max(0, Number(e.target.value)) : undefined;
+                const currentNames = editingEvent.courtNames || [];
+                let newNames: string[] = [];
+                if (count && count > 0) {
+                  newNames = Array.from({ length: count }, (_, i) => currentNames[i] || `Quadra ${i + 1}`);
+                }
+                onChangeEditingEvent({
+                  ...editingEvent,
+                  courtsCount: count,
+                  courtNames: newNames,
+                });
+              }}
+              placeholder="ex: 4"
+              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
             />
           </div>
+
+          {/* Campos dinâmicos para o nome de cada quadra */}
+          {editingEvent.courtsCount && editingEvent.courtsCount > 0 ? (
+            <div className="space-y-2 bg-slate-100 p-3 rounded-2xl border border-slate-200">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block ml-1">
+                Nomes das Quadras
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {Array.from({ length: editingEvent.courtsCount }).map((_, index) => {
+                  const currentNames = editingEvent.courtNames || [];
+                  const val = currentNames[index] !== undefined ? currentNames[index] : `Quadra ${index + 1}`;
+                  return (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="text-[11px] font-black text-slate-400 w-16 text-right shrink-0">
+                        Quadra {index + 1}:
+                      </span>
+                      <input
+                        type="text"
+                        value={val}
+                        onChange={(e) => {
+                          const updatedNames = Array.from(
+                            { length: editingEvent.courtsCount || 0 },
+                            (_, i) => currentNames[i] || `Quadra ${i + 1}`
+                          );
+                          updatedNames[index] = e.target.value;
+                          onChangeEditingEvent({
+                            ...editingEvent,
+                            courtNames: updatedNames,
+                          });
+                        }}
+                        placeholder={`Nome da Quadra ${index + 1}`}
+                        className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        <Button onClick={onSaveEvent} disabled={isSavingEvent} className="w-full !bg-amber-500 !py-4 rounded-xl font-black flex gap-2 text-white">
+        <Button onClick={handleSaveEventAndSyncDashboard} disabled={isSavingEvent} className="w-full !bg-amber-500 !py-4 rounded-xl font-black flex gap-2 text-white">
           {isSavingEvent ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar evento
         </Button>
       </div>
@@ -251,6 +402,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         onBackToEvents={() => setSelectedDashboardEvent(null)}
         onEditEventConfig={() => onChangeEditingEvent(currentDashboardEvent)}
         onUpdateEvent={handleUpdateDashboardEvent}
+        adminEmail={adminEmail}
       />
     );
   }
@@ -305,14 +457,10 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                     <p className={`text-[8px] font-black uppercase ${event.active ? 'text-green-500' : 'text-red-500'}`}>
                       {event.active ? 'Ativo' : 'Inativo'}
                     </p>
-                    {event.eventStatus && (
-                      <>
-                        <span className="text-[8px] font-black text-slate-300">•</span>
-                        <p className="text-[8px] font-black uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-                          {event.eventStatus}
-                        </p>
-                      </>
-                    )}
+                    <span className="text-[8px] font-black text-slate-300">•</span>
+                    <p className="text-[8px] font-bold capitalize text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                      {event.eventStatus || 'Em configuração'}
+                    </p>
                   </div>
                 </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export interface LogEntry {
   type: 'log' | 'error' | 'warn';
@@ -8,8 +8,10 @@ export interface LogEntry {
 
 export function useAppLogger() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const mountedRef = useRef(false);
 
   useEffect(() => {
+    mountedRef.current = true;
     const originalLog = console.log;
     const originalError = console.error;
     const originalWarn = console.warn;
@@ -20,7 +22,13 @@ export function useAppLogger() {
         return typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg);
       }).join(' ');
       const time = new Date().toLocaleTimeString();
-      setLogs(prev => [{ type, msg, time }, ...prev].slice(0, 100));
+      // Console warnings can be emitted while React is rendering. Defer the
+      // state update so the logger itself cannot trigger React's setState-during-render warning.
+      queueMicrotask(() => {
+        if (mountedRef.current) {
+          setLogs(prev => [{ type, msg, time }, ...prev].slice(0, 100));
+        }
+      });
     };
 
     console.log = (...args) => { addLog('log', args); originalLog(...args); };
@@ -28,6 +36,7 @@ export function useAppLogger() {
     console.warn = (...args) => { addLog('warn', args); originalWarn(...args); };
 
     return () => {
+      mountedRef.current = false;
       console.log = originalLog;
       console.error = originalError;
       console.warn = originalWarn;
