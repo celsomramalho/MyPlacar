@@ -37,6 +37,8 @@ interface FirebaseTournamentEntry {
   shirtSize: 'P' | 'M' | 'G';
   partnerName?: string;
   partnerEmail?: string;
+  partnerPhone?: string;
+  categoryPartners?: Record<string, { name: string; email: string; phone: string }>;
   information?: string;
 }
 

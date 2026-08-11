@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ArrowUpDown, UserCheck, UserPlus } from 'lucide-react';
+import { Plus, Layers, Check, Trash2, Tag, Users, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2 } from 'lucide-react';
 import type { EventCategory, TournamentEntry, TournamentEvent, TournamentPair } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
@@ -17,6 +17,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
   onUpdateCategories,
   onUpdateEvent,
 }) => {
+  type CategoryPanelView = 'entries' | 'teams' | 'brackets';
+
   const categories = event.categories || [];
   const entries = event.entries || [];
   const pairs = event.pairs || [];
@@ -24,6 +26,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [categoryPanelView, setCategoryPanelView] = useState<CategoryPanelView>('entries');
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'name' | 'team'>('team');
 
@@ -128,13 +131,30 @@ export const EventCategoriesManager: React.FC<Props> = ({
     ? pairs.filter((pair) => pair.categoryId === selectedCategory.id || (!pair.categoryId && (pair.p1.categoryIds?.includes(selectedCategory.id) || pair.p2.categoryIds?.includes(selectedCategory.id))))
     : [];
   const pairForEntry = (entry: TournamentEntry) => categoryPairs.find((pair) => pair.p1.email === entry.email || pair.p2.email === entry.email);
+  const selectedPair = selectedEntries.size === 2
+    ? categoryPairs.find((pair) => selectedEntries.has(pair.p1.email) && selectedEntries.has(pair.p2.email))
+    : undefined;
+  const sortedCategoryPairs = [...categoryPairs].sort((a, b) =>
+    (a.teamNumber ?? 999999) - (b.teamNumber ?? 999999) || (a.teamCode || '').localeCompare(b.teamCode || '')
+  );
   const sortedCategoryEntries = [...categoryEntries].sort((a, b) => {
     if (sortBy === 'team') return (pairForEntry(a)?.teamNumber ?? 999999) - (pairForEntry(b)?.teamNumber ?? 999999) || a.name.localeCompare(b.name);
     return a.name.localeCompare(b.name);
   });
 
+  const openCategoryPanel = (categoryId: string, view: CategoryPanelView) => {
+    setSelectedCategoryId(categoryId);
+    setCategoryPanelView(view);
+    setSelectedEntries(new Set());
+  };
+
   const toggleEntrySelection = (entry: TournamentEntry) => {
-    if (pairForEntry(entry)) return;
+    const pair = pairForEntry(entry);
+    if (pair) {
+      const bothSelected = selectedEntries.has(pair.p1.email) && selectedEntries.has(pair.p2.email);
+      setSelectedEntries(bothSelected ? new Set() : new Set([pair.p1.email, pair.p2.email]));
+      return;
+    }
     const next = new Set(selectedEntries);
     if (next.has(entry.email)) next.delete(entry.email);
     else if (next.size < 2) next.add(entry.email);
@@ -142,6 +162,13 @@ export const EventCategoriesManager: React.FC<Props> = ({
   };
 
   const handleFormTeam = () => {
+    if (selectedPair) {
+      if (window.confirm(`Desfazer o time ${selectedPair.teamCode || ''}?`)) {
+        onUpdateEvent({ ...event, pairs: pairs.filter((pair) => pair.id !== selectedPair.id) });
+        setSelectedEntries(new Set());
+      }
+      return;
+    }
     if (!selectedCategory || selectedEntries.size !== 2) return;
     const selected = Array.from(selectedEntries).map((email) => categoryEntries.find((entry) => entry.email === email)).filter(Boolean) as TournamentEntry[];
     if (selected.length !== 2) return;
@@ -162,8 +189,89 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setSelectedEntries(new Set());
   };
 
-  const renderCategoryRoster = () => {
+  const handleUpdateTeamBracket = (pairId: string, bracket: 1 | 2) => {
+    onUpdateEvent({
+      ...event,
+      pairs: pairs.map((pair) => (pair.id === pairId ? { ...pair, bracket } : pair)),
+    });
+  };
+
+  const handleToggleTeamBracket = (pair: TournamentPair) => {
+    handleUpdateTeamBracket(pair.id, (pair.bracket ?? 1) === 1 ? 2 : 1);
+  };
+
+  const renderTeamCard = (pair: TournamentPair, showBracketToggle = false) => (
+    <div key={pair.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[15px] font-black text-slate-800 leading-tight truncate">{pair.p1.nickname || pair.p1.name} & {pair.p2.nickname || pair.p2.name}</p>
+          <p className="mt-1 text-xs font-bold text-slate-400 truncate">{pair.teamCode || `Time ${pair.teamNumber || ''}`}</p>
+        </div>
+        {showBracketToggle && (
+          <button
+            type="button"
+            onClick={() => handleToggleTeamBracket(pair)}
+            className={`shrink-0 rounded-full px-2.5 py-1.5 text-[9px] font-black transition-all active:scale-95 ${((pair.bracket ?? 1) === 1) ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+            title="Alternar chave"
+          >
+            Chave {pair.bracket ?? 1}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderCategoryPanel = () => {
     if (!selectedCategory) return null;
+    if (categoryPanelView === 'teams') {
+      return (
+        <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100">
+            <h3 className="text-base font-black text-slate-800">Times ({selectedCategory.name})</h3>
+            <p className="text-xs text-slate-400 font-bold mt-0.5">Times formados nesta categoria.</p>
+          </div>
+          {sortedCategoryPairs.length === 0 ? (
+            <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum time formado nesta categoria.</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 p-4">
+              {sortedCategoryPairs.map((pair) => renderTeamCard(pair, true))}
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    if (categoryPanelView === 'brackets') {
+      const bracketOne = sortedCategoryPairs.filter((pair) => (pair.bracket ?? 1) === 1);
+      const bracketTwo = sortedCategoryPairs.filter((pair) => pair.bracket === 2);
+
+      return (
+        <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100">
+            <h3 className="text-base font-black text-slate-800">Chaves ({selectedCategory.name})</h3>
+            <p className="text-xs text-slate-400 font-bold mt-0.5">Times separados em duas chaves da categoria.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+            {[{ label: 'Chave 1', list: bracketOne }, { label: 'Chave 2', list: bracketTwo }].map((bracket) => (
+              <div key={bracket.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-xs font-black text-slate-800">{bracket.label}</h4>
+                  <span className="text-[10px] font-black text-slate-400">{bracket.list.length} times</span>
+                </div>
+                <div className="space-y-2">
+                  {bracket.list.length === 0 ? (
+                    <p className="py-6 text-center text-xs font-bold text-slate-300">Sem times nesta chave.</p>
+                  ) : (
+                    bracket.list.map((pair) => renderTeamCard(pair))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
     return (
       <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -171,8 +279,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
             <h3 className="text-base font-black text-slate-800">Inscritos ({selectedCategory.name})</h3>
             <p className="text-xs text-slate-400 font-bold mt-0.5">Selecione dois jogadores e clique no botão Formar time.</p>
           </div>
-          <button type="button" onClick={handleFormTeam} disabled={selectedEntries.size !== 2} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-black transition-all disabled:bg-slate-100 disabled:text-slate-300 bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95">
-            <UserPlus size={16} /> Formar time
+          <button type="button" onClick={handleFormTeam} disabled={selectedEntries.size !== 2} className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-black transition-all disabled:bg-slate-100 disabled:text-slate-300 text-white active:scale-95 ${selectedPair ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}>
+            {selectedPair ? <><UserRound size={16} /> Desfazer time</> : <><UsersRound size={16} /> Formar time</>}
           </button>
         </div>
         <div className="flex items-center justify-end gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
@@ -189,7 +297,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                 {sortedCategoryEntries.map((entry) => {
                   const pair = pairForEntry(entry);
                   const isSelected = selectedEntries.has(entry.email);
-                  return <tr key={entry.email} onClick={() => toggleEntrySelection(entry)} className={`transition-colors ${pair ? 'bg-slate-50 text-slate-400' : isSelected ? 'bg-cyan-50' : 'hover:bg-slate-50 cursor-pointer'}`}>
+                  return <tr key={entry.email} onClick={() => toggleEntrySelection(entry)} className={`transition-colors ${isSelected ? 'bg-cyan-50 ring-2 ring-inset ring-cyan-300' : pair ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50 cursor-pointer'}`}>
                     <td className="py-4 px-4"><p className="font-black text-slate-800">{entry.name}</p><p className="text-[10px] text-amber-500 font-black">PIN: {entry.pin}</p></td>
                     <td className={`py-4 px-4 ${entry.gender === 'F' ? 'text-pink-600' : 'text-sky-600'}`}>{entry.gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</td>
                     <td className="py-4 px-4">{pair ? <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-black"><Trophy size={11} /> {pair.teamCode || `Time ${pair.teamNumber || ''}`}</span> : <span className="text-slate-300 text-[10px]">A formar</span>}</td>
@@ -249,7 +357,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                 onClick={resetForm}
                 className="p-1 text-slate-400 hover:text-slate-600"
               >
-                <X size={20} />
+                <ChevronUp size={20} />
               </button>
             </div>
           </div>
@@ -416,35 +524,33 @@ export const EventCategoriesManager: React.FC<Props> = ({
               e.categoryIds?.includes(cat.id)
             ).length;
             const timesCount = pairs.filter((p) =>
-              p.p1.categoryIds?.includes(cat.id) || p.p2.categoryIds?.includes(cat.id)
+              p.categoryId === cat.id || (!p.categoryId && (p.p1.categoryIds?.includes(cat.id) || p.p2.categoryIds?.includes(cat.id)))
             ).length;
             const isEditing = editingId === cat.id && isAdding;
+            const isSelectedCategory = selectedCategoryId === cat.id;
 
             return (
               <React.Fragment key={cat.id}>
               <div
-                onClick={() => { setSelectedCategoryId(cat.id); setSelectedEntries(new Set()); }}
+                onClick={() => openCategoryPanel(cat.id, 'entries')}
                 className={`p-4 rounded-2xl border text-left transition-all space-y-3 w-full cursor-pointer ${
                   isEditing
                     ? 'border-emerald-500 bg-emerald-50 shadow-md scale-[1.01]'
-                    : selectedCategoryId === cat.id
+                    : isSelectedCategory
                     ? 'border-blue-400 bg-blue-50/30 shadow-sm'
                     : 'bg-white border-slate-100 hover:border-emerald-300 hover:shadow-sm shadow-sm'
                 }`}
               >
                 {/* Header: priority badge + format badge + Chevron edit button */}
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
                     <span className="w-6 h-6 inline-flex items-center justify-center bg-slate-100 rounded-lg text-slate-600 font-black text-[10px]">
                       {cat.priority}
                     </span>
-                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                      cat.format === 'Duplas'
-                        ? 'bg-emerald-100 text-emerald-600'
-                        : 'bg-blue-100 text-blue-600'
-                    }`}>
-                      {cat.format}
-                    </span>
+                    <div className="min-w-0">
+                      <p className="font-black text-slate-800 text-sm leading-tight truncate">{cat.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-0.5 truncate">{cat.sportName || cat.sportId}{cat.abbreviation && ` · ${cat.abbreviation}`}</p>
+                    </div>
                   </div>
 
                   <button
@@ -457,17 +563,11 @@ export const EventCategoriesManager: React.FC<Props> = ({
                   </button>
                 </div>
 
-                {/* Category name */}
-                <div>
-                  <p className="font-black text-slate-800 text-sm leading-tight">{cat.name}</p>
-                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                    {cat.sportName || cat.sportId}
-                    {cat.abbreviation && ` · ${cat.abbreviation}`}
-                  </p>
-                </div>
-
                 {/* Gender badges */}
                 <div className="flex items-center gap-1.5">
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${cat.format === 'Duplas' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                    {cat.format}
+                  </span>
                   {cat.gender1 && (
                     <span className={`flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full ${
                       cat.gender1 === 'M' ? 'bg-blue-50 text-blue-600' : 'bg-pink-50 text-pink-600'
@@ -487,18 +587,34 @@ export const EventCategoriesManager: React.FC<Props> = ({
                 </div>
 
                 {/* Stats row */}
-                <div className="flex items-center gap-3 pt-1 border-t border-slate-100">
-                  <div className="flex items-center gap-1 text-[10px] font-black text-slate-500">
+                <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); openCategoryPanel(cat.id, 'entries'); }}
+                    className={`flex items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-black transition-colors ${isSelectedCategory && categoryPanelView === 'entries' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                  >
                     <Users size={11} className="text-emerald-500" />
                     <span>{inscritosCount} inscritos</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-[10px] font-black text-slate-500">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); openCategoryPanel(cat.id, 'teams'); }}
+                    className={`flex items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-black transition-colors ${isSelectedCategory && categoryPanelView === 'teams' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                  >
                     <Trophy size={11} className="text-blue-500" />
                     <span>{timesCount} times</span>
-                  </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); openCategoryPanel(cat.id, 'brackets'); }}
+                    className={`flex items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-black transition-colors ${isSelectedCategory && categoryPanelView === 'brackets' ? 'bg-slate-100 text-slate-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                  >
+                    <Columns2 size={11} className="text-slate-500" />
+                    <span>2 chaves</span>
+                  </button>
                 </div>
               </div>
-              {selectedCategoryId === cat.id && renderCategoryRoster()}
+              {selectedCategoryId === cat.id && renderCategoryPanel()}
               </React.Fragment>
             );
           })}
@@ -518,7 +634,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
               disabled={selectedEntries.size !== 2}
               className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-black transition-all disabled:bg-slate-100 disabled:text-slate-300 bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95"
             >
-              <UserPlus size={16} /> Formar time
+              <UsersRound size={16} /> Formar time
             </button>
           </div>
 

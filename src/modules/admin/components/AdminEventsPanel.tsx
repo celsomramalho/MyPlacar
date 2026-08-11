@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Edit3, Image as ImageIcon, Loader2, Plus, Save, Ticket, Trash2, X, ChevronRight, ArrowLeft, FileText } from 'lucide-react';
+import { Edit3, Image as ImageIcon, Loader2, Plus, Save, Ticket, Trash2, X, ChevronRight, ChevronUp, FileText, ShieldCheck, Search } from 'lucide-react';
 import type { RefObject } from 'react';
 import { EVENT_STATUS_OPTIONS, type EventStatusOption, type TournamentEntry, type TournamentEvent } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
-import { getDb } from '@infra/firebase';
+import { findUserByPin, findUsersByPins, getDb } from '@infra/firebase';
 import { fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { EventDashboardView } from './EventDashboardView';
+import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 
 interface AdminEventsPanelProps {
   eventList: TournamentEvent[];
@@ -40,7 +41,13 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
 }) => {
   const [selectedDashboardEvent, setSelectedDashboardEvent] = useState<TournamentEvent | null>(null);
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
+  const [coAdminPin, setCoAdminPin] = useState('');
+  const [coAdminLookupName, setCoAdminLookupName] = useState('');
+  const [coAdminNamesByPin, setCoAdminNamesByPin] = useState<Record<string, string>>({});
+  const [isSearchingCoAdminPin, setIsSearchingCoAdminPin] = useState(false);
+  const [pendingCoAdminRemovalPin, setPendingCoAdminRemovalPin] = useState<string | null>(null);
   const regulationInputRef = React.useRef<HTMLInputElement>(null);
+  const canManageEventAdmins = isPrimaryAdminEmail(adminEmail);
 
   // Sync selectedDashboardEvent with updated eventList only for fields that
   // don't exist in local state (like active, name, eventStatus, etc.)
@@ -104,6 +111,8 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           payments: fe.payments,
           partnerName: fe.partnerName,
           partnerEmail: fe.partnerEmail,
+          partnerPhone: fe.partnerPhone,
+          categoryPartners: fe.categoryPartners,
         }));
         setSelectedDashboardEvent({ ...freshestEvent, entries });
       } else {
@@ -138,10 +147,85 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         payments: fe.payments,
         partnerName: fe.partnerName,
         partnerEmail: fe.partnerEmail,
+        partnerPhone: fe.partnerPhone,
+        categoryPartners: fe.categoryPartners,
       }));
       setSelectedDashboardEvent((current) => current ? { ...current, entries } : current);
     });
   }, [selectedDashboardEvent?.pin]);
+
+  React.useEffect(() => {
+    const pins = editingEvent?.coAdminPins || [];
+    setPendingCoAdminRemovalPin(null);
+    if (pins.length === 0) {
+      setCoAdminNamesByPin({});
+      return;
+    }
+
+    const db = getDb();
+    if (!db) return;
+
+    findUsersByPins(db, pins)
+      .then((usersByPin) => {
+        const names: Record<string, string> = {};
+        pins.forEach((pin) => {
+          const normalizedPin = pin.toUpperCase().trim();
+          names[normalizedPin] = usersByPin.get(normalizedPin)?.nickname || 'Administrador';
+        });
+        setCoAdminNamesByPin(names);
+      })
+      .catch(() => setCoAdminNamesByPin({}));
+  }, [editingEvent?.coAdminPins]);
+
+  React.useEffect(() => {
+    const lookup = async () => {
+      const pin = coAdminPin.toUpperCase().trim();
+      if (pin.length !== 5) {
+        setCoAdminLookupName('');
+        return;
+      }
+
+      setIsSearchingCoAdminPin(true);
+      const db = getDb();
+      if (!db) {
+        setIsSearchingCoAdminPin(false);
+        return;
+      }
+
+      try {
+        const user = await findUserByPin(db, pin);
+        setCoAdminLookupName(user ? user.nickname : 'Usuário não localizado');
+      } catch {
+        setCoAdminLookupName('');
+      } finally {
+        setIsSearchingCoAdminPin(false);
+      }
+    };
+
+    lookup();
+  }, [coAdminPin]);
+
+  const handleAddCoAdmin = () => {
+    if (!editingEvent || !canManageEventAdmins) return;
+    const pin = coAdminPin.toUpperCase().trim();
+    if (pin.length < 5 || coAdminLookupName === 'Usuário não localizado') return;
+
+    const currentAdmins = (editingEvent.coAdminPins || []).map((adminPin) => adminPin.toUpperCase().trim());
+    if (currentAdmins.includes(pin)) return;
+
+    onChangeEditingEvent({ ...editingEvent, coAdminPins: [...currentAdmins, pin] });
+    setCoAdminPin('');
+    setCoAdminLookupName('');
+  };
+
+  const handleConfirmRemoveCoAdmin = (pin: string) => {
+    if (!editingEvent || !canManageEventAdmins) return;
+    onChangeEditingEvent({
+      ...editingEvent,
+      coAdminPins: (editingEvent.coAdminPins || []).filter((adminPin) => adminPin.toUpperCase().trim() !== pin.toUpperCase().trim()),
+    });
+    setPendingCoAdminRemovalPin(null);
+  };
 
   const handleUpdateDashboardEvent = (updated: TournamentEvent) => {
     setSelectedDashboardEvent(updated);
@@ -156,19 +240,14 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
       <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200 space-y-5 animate-in slide-in-from-top-4">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => onChangeEditingEvent(null)}
-              className="p-1.5 text-slate-500 hover:text-black rounded-xl hover:bg-slate-200 transition-colors"
-            >
-              <ArrowLeft size={18} />
-            </button>
             <h4 className="text-sm font-black text-slate-800 tracking-tight">Configurar evento</h4>
           </div>
           <button
             onClick={() => onChangeEditingEvent(null)}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+            className="w-10 h-10 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center hover:bg-slate-200 active:scale-95 transition-all"
+            title="Recolher configuração"
           >
-            <X size={20} />
+            <ChevronUp size={18} />
           </button>
         </div>
 
@@ -258,6 +337,92 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                 className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
               />
             </div>
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={17} className="text-indigo-600" />
+              <div>
+                <p className="text-xs font-black text-slate-900">Administradores do evento</p>
+                <p className="text-[10px] font-bold text-slate-400">Acesso liberado somente com evento ativo e dentro das datas.</p>
+              </div>
+            </div>
+
+            {canManageEventAdmins && (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={coAdminPin}
+                      onChange={(event) => setCoAdminPin(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5))}
+                      placeholder="PIN"
+                      className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 pr-10 font-black text-sm uppercase outline-none focus:border-indigo-500"
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300">
+                      {isSearchingCoAdminPin ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddCoAdmin}
+                    disabled={!coAdminPin || coAdminLookupName === 'Usuário não localizado'}
+                    className="h-12 px-5 bg-indigo-600 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl font-black text-xs shadow-sm active:scale-95 transition-all"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+                {coAdminLookupName && (
+                  <p className={`text-[10px] font-black ml-1 ${coAdminLookupName === 'Usuário não localizado' ? 'text-red-500' : 'text-indigo-600'}`}>
+                    {coAdminLookupName}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {(editingEvent.coAdminPins || []).length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {(editingEvent.coAdminPins || []).map((pin) => {
+                  const normalizedPin = pin.toUpperCase().trim();
+                  const isConfirmingRemoval = pendingCoAdminRemovalPin === normalizedPin;
+                  return (
+                    <span key={normalizedPin} className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-2 text-[11px] font-black text-indigo-700 border border-indigo-100">
+                      {coAdminNamesByPin[normalizedPin] || 'Administrador'} - {normalizedPin}
+                      {canManageEventAdmins && !isConfirmingRemoval && (
+                        <button
+                          type="button"
+                          onClick={() => setPendingCoAdminRemovalPin(normalizedPin)}
+                          className="text-indigo-400 hover:text-red-500 active:scale-90"
+                          title="Remover administrador"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                      {canManageEventAdmins && isConfirmingRemoval && (
+                        <span className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmRemoveCoAdmin(normalizedPin)}
+                            className="rounded-lg bg-red-500 px-2 py-1 text-[10px] font-black text-white active:scale-95"
+                          >
+                            Confirmar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPendingCoAdminRemovalPin(null)}
+                            className="rounded-lg bg-white px-2 py-1 text-[10px] font-black text-slate-500 border border-slate-200 active:scale-95"
+                          >
+                            Cancelar
+                          </button>
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[11px] font-bold text-slate-400">Nenhum administrador adicional cadastrado.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

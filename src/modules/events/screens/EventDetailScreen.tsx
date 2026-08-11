@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Partner } from '@modules/partners/types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
-import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, DollarSign, Eye } from 'lucide-react';
+import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, UserRound, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, DollarSign, Eye } from 'lucide-react';
 import type { TournamentEvent, TournamentEntry, TournamentPair, TournamentMatch, TournamentConfig, PaymentItem, EventCategory } from '../types';
 import type { UserProfile } from '@modules/auth/types';
-import { deleteEventEntry, deleteUserEventRegistration, fetchEventEntries, findUserByPin, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeEventEntries, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
+import { deleteEventEntry, deleteUserEventRegistration, fetchEventEntries, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeEventEntries, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
 import type { FirebaseTournamentLiveScore } from '@infra/firebase';
 import { Firestore } from 'firebase/firestore';
 import { SPORT_LIST } from '../../../constants.ts';
@@ -14,6 +14,7 @@ import { Toggle } from '@shared/components/Toggle';
 import { Input } from '@shared/components/Input';
 import type { ModalConfig } from '@modules/ui/types';
 import { EventRegistrationForm } from '../components/EventRegistrationForm';
+import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 
 interface Props {
   event: TournamentEvent;
@@ -32,10 +33,7 @@ interface DesfazerTimeIconProps {
 }
 
 const DesfazerTimeIcon: React.FC<DesfazerTimeIconProps> = ({ size = 16 }) => (
-  <div className="relative flex items-center justify-center">
-    <Users size={size} className="text-slate-400" />
-    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-[2px] bg-red-600 -rotate-45 rounded-full shadow-sm pointer-events-none" />
-  </div>
+  <UserRound size={size} className="text-emerald-500" />
 );
 
 const idxToLetter = (idx: number) => String.fromCharCode(65 + idx);
@@ -517,11 +515,6 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   const [manualEntry, setManualEntry] = useState({ name: '', nickname: '', email: '', gender: 'M' as 'M' | 'F' });
   const [isSavingManual, setIsSavingManual] = useState(false);
 
-  const [coAdminPin, setCoAdminPin] = useState('');
-  const [coAdminLookupName, setCoAdminLookupName] = useState('');
-  const [isSearchingCoAdminPin, setIsSearchingCoAdminPin] = useState(false);
-  const [isSavingCoAdmin, setIsSavingCoAdmin] = useState(false);
-
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set());
 
@@ -530,18 +523,9 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   const [tempNickname, setTempNickname] = useState('');
   const [isSavingNickname, setIsSavingNickname] = useState(false);
 
-  const getNicknameByPin = useCallback((pin: string) => {
-    if (userProfile.pin === pin) return userProfile.nickname;
-    const entry = entries.find(e => e.pin === pin);
-    if (entry) return entry.nickname;
-    return 'Administrador';
-  }, [entries, userProfile.pin, userProfile.nickname]);
-
   const isAdmin = useMemo(() => {
-    const coAdmins = (event.coAdminPins as string[]) || [];
-    return userProfile.email?.toLowerCase().trim() === 'celsomramalho@gmail.com' || 
-           coAdmins.includes(userProfile.pin.toUpperCase());
-  }, [userProfile, event.coAdminPins]);
+    return isPrimaryAdminEmail(userProfile.email) || canUseEventAdminAccess(event, userProfile.pin);
+  }, [event, userProfile.email, userProfile.pin]);
 
   const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
 
@@ -560,32 +544,6 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     const unsubscribe = subscribeTournamentLiveScores(db as Firestore, event.pin, setLiveScores);
     return () => unsubscribe();
   }, [event.pin]);
-
-  useEffect(() => {
-    const lookup = async () => {
-      const pin = coAdminPin.toUpperCase().trim();
-      if (pin.length === 5) {
-        setIsSearchingCoAdminPin(true);
-        const db = getDb();
-        if (!db) { setIsSearchingCoAdminPin(false); return; }
-        try {
-          const user = await findUserByPin(db as Firestore, pin);
-          if (user) {
-            setCoAdminLookupName(user.nickname);
-          } else {
-            setCoAdminLookupName("Usuário não localizado");
-          }
-        } catch (e) {
-          setCoAdminLookupName("");
-        } finally {
-          setIsSearchingCoAdminPin(false);
-        }
-      } else {
-        setCoAdminLookupName("");
-      }
-    };
-    lookup();
-  }, [coAdminPin]);
 
   const inviteLink = useMemo(() => {
     return `${baseUrl}/?joinEvent=${event.pin}&refPin=${userProfile.pin.toUpperCase()}`;
@@ -706,52 +664,6 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     } finally {
       setIsSavingNickname(false);
     }
-  };
-
-  const handleAddCoAdmin = async () => {
-    if (!coAdminPin || coAdminPin.length < 5) return;
-    setIsSavingCoAdmin(true);
-    const db = getDb();
-    if (!db) { setIsSavingCoAdmin(false); return; }
-    try {
-      const pinUpper = coAdminPin.toUpperCase().trim();
-      const currentAdmins: string[] = (event.coAdminPins || []) as string[];
-      if (currentAdmins.includes(pinUpper)) {
-        setModalConfig({ title: "Atenção", message: "Este PIN já é um administrador.", onConfirm: () => setModalConfig(null) });
-        return;
-      }
-      const nextAdmins: string[] = [...currentAdmins, pinUpper];
-      await updateEvent(db as Firestore, event.pin, { coAdminPins: nextAdmins });
-      setCoAdminPin('');
-      setCoAdminLookupName('');
-      setModalConfig({ title: "Sucesso", message: "Administrador adicionado com sucesso!", onConfirm: () => setModalConfig(null) });
-    } catch (e) {
-      setModalConfig({ title: "Erro", message: "Erro ao adicionar administrador.", onConfirm: () => setModalConfig(null) });
-    } finally {
-      setIsSavingCoAdmin(false);
-    }
-  };
-
-  const handleRemoveCoAdmin = async (pin: string) => {
-    setModalConfig({
-      title: "Remover administrador?",
-      message: `Deseja realmente remover o administrador com PIN ${pin}?`,
-      confirmLabel: "Remover",
-      variant: 'danger',
-      onConfirm: async () => {
-        const db = getDb();
-        if (!db) return;
-        try {
-          const currentAdmins: string[] = (event.coAdminPins || []) as string[];
-          const nextAdmins = currentAdmins.filter(p => p !== pin);
-          await updateEvent(db as Firestore, event.pin, { coAdminPins: nextAdmins });
-          setModalConfig({ title: "Sucesso", message: "Administrador removido.", onConfirm: () => setModalConfig(null) });
-        } catch (e) {
-          setModalConfig({ title: "Erro", message: "Erro ao remover administrador.", onConfirm: () => setModalConfig(null) });
-        }
-      },
-      onCancel: () => setModalConfig(null)
-    });
   };
 
   const handleDeleteEntry = async (entryEmail: string, nickname: string) => {

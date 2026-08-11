@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2 } from 'lucide-react';
+import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import type { TournamentEvent, TournamentEntry, EventCategory, PaymentItem } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { updateUserProfileFields } from '@infra/firebase/users';
@@ -17,12 +17,14 @@ const formatPhone = (value: string) => {
 interface Props {
   event: TournamentEvent;
   onUpdateEntries: (entries: TournamentEntry[]) => void;
+  onUpdateEvent: (event: TournamentEvent) => void;
   adminEmail?: string;
 }
 
 export const EventRegistrationsManager: React.FC<Props> = ({
   event,
   onUpdateEntries,
+  onUpdateEvent,
   adminEmail,
 }) => {
   const entries = event.entries || [];
@@ -30,6 +32,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingPin, setEditingPin] = useState<string | null>(null);
+  const [expandedRegistrationPin, setExpandedRegistrationPin] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -77,6 +80,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     setEditingPaymentId(null);
     setIsAdding(false);
     setEditingPin(null);
+    setExpandedRegistrationPin(null);
   };
 
   const handleStartAdd = () => {
@@ -300,6 +304,21 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     resetForm();
   };
 
+  const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
+    const db = getDb();
+    if (db && event.pin) {
+      const { saveAdminEventEntry, saveUserEventRegistration } = await import('@infra/firebase/events');
+      await saveAdminEventEntry(db, event.pin, entryData, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+      try {
+        await saveUserEventRegistration(db, entryData.email, event.pin, { pin: event.pin, name: event.name, joinedAt: entryData.joinedAt, bannerUrl: event.bannerUrl || null });
+      } catch (error) {
+        console.warn('Inscrição salva, mas não foi possível criar o índice auxiliar do usuário:', error);
+      }
+    }
+    onUpdateEntries(entries.map((item) => item.pin === originalPin ? entryData : item));
+    setExpandedRegistrationPin(null);
+  };
+
   const handleDelete = async (targetPin: string) => {
     const targetEntry = entries.find(e => e.pin === targetPin);
     const db = getDb();
@@ -332,7 +351,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       {/* Top Banner & Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
         <div>
-          <h2 className="text-xl font-black text-slate-800 tracking-tight">Inscrições (Participantes Oficiais)</h2>
+          <h2 className="text-xl font-black text-slate-800 tracking-tight">Inscrições (participantes oficiais)</h2>
           <p className="text-xs text-slate-400 font-bold mt-0.5">
             Gerencie participantes inscritos, dados financeiros e vínculo de categorias.
           </p>
@@ -342,13 +361,13 @@ export const EventRegistrationsManager: React.FC<Props> = ({
             onClick={handleStartAdd}
             className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all self-start sm:self-auto"
           >
-            Nova Inscrição
+            Nova inscrição
           </button>
         )}
       </div>
 
       {/* Registration Form */}
-      {isAdding && <EventRegistrationForm
+      {isAdding && !editingPin && <EventRegistrationForm
         key={editingPin || 'new-registration'}
         event={event}
         mode="admin"
@@ -668,17 +687,18 @@ export const EventRegistrationsManager: React.FC<Props> = ({
           <div className="p-10 text-center space-y-2">
             <Users className="mx-auto text-slate-300" size={32} />
             <p className="text-sm font-bold text-slate-400">Nenhum participante inscrito ainda.</p>
-            <p className="text-xs text-slate-300">Clique em "Nova Inscrição" para inscrever um jogador.</p>
+            <p className="text-xs text-slate-300">Clique em "Nova inscrição" para inscrever um jogador.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase tracking-wider font-black text-slate-400">
-                  <th className="py-3 px-4">Participante</th>
-                  <th className="py-3 px-4">Gênero</th>
-                  <th className="py-3 px-4">Categorias</th>
-                  <th className="py-3 px-4">Financeiro</th>
+                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] tracking-wider font-black text-slate-400">
+                  <th className="py-3 px-3">Participante</th>
+                  <th className="py-3 px-2">Gênero</th>
+                  <th className="py-3 px-3">Categorias</th>
+                  <th className="py-3 px-3">Financeiro</th>
+                  <th className="py-3 px-2 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-bold">
@@ -687,66 +707,97 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                     entry.categoryIds?.includes(c.id)
                   );
                   const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
+                  const isExpanded = expandedRegistrationPin === entry.pin;
 
                   return (
-                    <tr
-                      key={entry.pin}
-                      onClick={() => handleStartEdit(entry)}
-                      className={`cursor-pointer transition-colors ${
-                        editingPin === entry.pin
-                          ? 'bg-emerald-50/80 hover:bg-emerald-100/80'
-                          : 'hover:bg-slate-50/80'
-                      }`}
-                    >
-                      <td className="py-4 px-4 space-y-0.5">
-                        <p className="font-black text-slate-800">{entry.name}</p>
-                        <p className="text-[10px] text-amber-500 font-black">
-                          PIN: {entry.pin}
-                        </p>
-                      </td>
-                      <td className="py-4 px-4">
-                        {entry.gender === 'F' ? (
-                          <VenusIcon size={20} />
-                        ) : (
-                          <MarsIcon size={20} />
-                        )}
-                      </td>
-                      <td className="py-4 px-4">
-                        {entryCategories.length === 0 ? (
-                          <span className="text-slate-300 text-[10px]">Nenhuma</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {entryCategories.map((c) => (
-                              <span
-                                key={c.id}
-                                className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md text-[10px] font-bold"
-                              >
-                                {c.abbreviation || c.name}
-                              </span>
-                            ))}
+                    <React.Fragment key={entry.pin}>
+                      <tr className={`transition-colors ${isExpanded ? 'bg-emerald-50/50' : 'hover:bg-slate-50/80'}`}>
+                        <td className="py-4 px-3 space-y-0.5">
+                          <p className="font-black text-slate-800">{entry.name}</p>
+                          <p className="text-[10px] text-amber-500 font-black">
+                            PIN: {entry.pin}
+                          </p>
+                        </td>
+                        <td className="py-4 px-2 text-center">
+                          <div className="flex items-center justify-center">
+                            {entry.gender === 'F' ? (
+                              <span className="text-pink-500"><VenusIcon size={20} /></span>
+                            ) : (
+                              <span className="text-sky-500"><MarsIcon size={20} /></span>
+                            )}
                           </div>
-                        )}
-                      </td>
-                      <td className="py-4 px-4 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                              entry.paymentStatus === 'Pago'
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : entry.paymentStatus === 'Isento'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-amber-100 text-amber-700'
-                            }`}
+                        </td>
+                        <td className="py-4 px-3">
+                          {entryCategories.length === 0 ? (
+                            <span className="text-slate-300 text-[10px]">Nenhuma</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {entryCategories.map((c) => (
+                                <span
+                                  key={c.id}
+                                  className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md text-[10px] font-bold"
+                                >
+                                  {c.abbreviation || c.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-4 px-3">
+                          <div className="space-y-2">
+                            <span
+                              className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                                entry.paymentStatus === 'Pago'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : entry.paymentStatus === 'Isento'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-amber-100 text-amber-700'
+                              }`}
+                            >
+                              {entry.paymentStatus || 'Pendente'}
+                            </span>
+                            <p className="text-[10px] text-slate-500">
+                              R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="py-4 px-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAdding(false);
+                              setEditingPin(null);
+                              setExpandedRegistrationPin(isExpanded ? null : entry.pin);
+                            }}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-slate-500 transition-colors hover:bg-gray-200 active:scale-90"
+                            title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
                           >
-                            {entry.paymentStatus || 'Pendente'}
-                          </span>
-                          <span className="text-[10px] text-slate-500">
-                            R$ {entryPaid.toFixed(2)} / R${' '}
-                            {(entry.dueAmount ?? 0).toFixed(2)}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
+                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={5} className="bg-white px-4 pb-5 pt-0">
+                            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                              <EventRegistrationForm
+                                key={`expanded-${entry.pin}`}
+                                event={event}
+                                mode="admin"
+                                entry={entry}
+                                onUpdateEvent={onUpdateEvent}
+                                onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
+                                onDelete={() => {
+                                  void handleDelete(entry.pin);
+                                  setExpandedRegistrationPin(null);
+                                }}
+                                onCancel={() => setExpandedRegistrationPin(null)}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

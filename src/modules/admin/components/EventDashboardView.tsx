@@ -319,6 +319,7 @@ export const EventDashboardView: React.FC<Props> = ({
         <EventRegistrationsManager
           event={event}
           onUpdateEntries={handleUpdateEntries}
+          onUpdateEvent={onUpdateEvent}
           adminEmail={adminEmail}
         />
       )}

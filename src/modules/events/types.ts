@@ -6,6 +6,7 @@ export interface TournamentPair {
   categoryId?: string;
   teamNumber?: number;
   teamCode?: string;
+  bracket?: 1 | 2;
 }
 
 export interface TournamentMatch {
@@ -95,6 +96,12 @@ export interface PaymentItem {
   receiptFileName?: string;
 }
 
+export interface CategoryPartnerInfo {
+  name: string;
+  email: string;
+  phone: string;
+}
+
 export interface TournamentEntry {
   email: string;
   name: string;
@@ -112,6 +119,8 @@ export interface TournamentEntry {
   shirtSize: 'P' | 'M' | 'G';
   partnerName?: string;
   partnerEmail?: string;
+  partnerPhone?: string;
+  categoryPartners?: Record<string, CategoryPartnerInfo>;
 }
 
 export interface EventRegistration {
