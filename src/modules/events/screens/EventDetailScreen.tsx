@@ -256,7 +256,7 @@ const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, can
 
       <div className="space-y-1">
         <label className="text-[10px] font-black text-slate-400 ml-1">Telefone <span className="text-red-500">*</span></label>
-        <input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => canEdit && setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} readOnly={!canEdit} placeholder="(11) 91234-9988" pattern="[(][0-9]{2}[)] [0-9]{4,5}-[0-9]{4}" className={`w-full h-11 border rounded-xl px-3 text-xs font-bold outline-none ${canEdit ? 'bg-white border-slate-200 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-500'}`} />
+        <input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => canEdit && setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} readOnly={!canEdit} placeholder="(11) 91234-9988" className={`w-full h-11 border rounded-xl px-3 text-xs font-bold outline-none ${canEdit ? 'bg-white border-slate-200 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-500'}`} />
       </div>
       <div className="space-y-1">
         <label className="text-[10px] font-black text-slate-400 ml-1">Tamanho camiseta <span className="text-red-500">*</span></label>
@@ -668,9 +668,26 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
 
   const handleDeleteEntry = async (entryEmail: string, nickname: string) => {
     const isSelf = entryEmail === userProfile.email;
+    const targetEmailLower = entryEmail.toLowerCase().trim();
+    
+    // Verificar se o participante possui times formados
+    const userPairs = (event.pairs || []).filter(
+      p => p.p1?.email?.toLowerCase().trim() === targetEmailLower || p.p2?.email?.toLowerCase().trim() === targetEmailLower
+    );
+    const hasFormedTeams = userPairs.length > 0;
+    const teamsListStr = userPairs.map(p => p.teamCode || `Time ${p.teamNumber || ''}`).join(', ');
+
+    let confirmMsg = isSelf
+      ? "Deseja realmente sair deste evento?"
+      : `Deseja realmente remover ${nickname} do evento? Esta ação não pode ser desfeita.`;
+
+    if (hasFormedTeams) {
+      confirmMsg += `\n\nATENÇÃO: Este participante possui time(s) formado(s): [${teamsListStr}]. Ao excluir, este(s) time(s) será(ão) desfeito(s) automaticamente.`;
+    }
+
     setModalConfig({
       title: isSelf ? "Sair do evento?" : "Excluir participante",
-      message: isSelf ? "Deseja realmente sair deste evento?" : `Deseja realmente remover ${nickname} do evento? Esta ação não pode ser desfeita.`,
+      message: confirmMsg,
       confirmLabel: isSelf ? "Sair" : "Excluir",
       variant: 'danger',
       icon: <Trash2 size={24} className="text-red-500" />,
@@ -680,16 +697,25 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
         try {
           await deleteEventEntry(db as Firestore, event.pin, entryEmail);
           await deleteUserEventRegistration(db as Firestore, entryEmail, event.pin);
-          setEntries(prev => prev.filter(e => e.email !== entryEmail));
+          
+          // Desfazer times formados do participante no documento do evento
+          if (hasFormedTeams) {
+            const updatedPairs = (event.pairs || []).filter(
+              p => p.p1?.email?.toLowerCase().trim() !== targetEmailLower && p.p2?.email?.toLowerCase().trim() !== targetEmailLower
+            );
+            await updateEvent(db as Firestore, event.pin, { pairs: updatedPairs });
+          }
+
+          setEntries(prev => prev.filter(e => e.email.toLowerCase().trim() !== targetEmailLower));
           if (isSelf) {
             setModalConfig(null);
             onExitTournament();
           } else {
-            setModalConfig({ title: "Sucesso", message: "Participante removido do evento.", onConfirm: () => setModalConfig(null) });
+            setModalConfig({ title: "Sucesso", message: "Participante removido e times desfeitos com sucesso.", onConfirm: () => setModalConfig(null) });
           }
         } catch (e) {
           console.error("Erro ao excluir participante:", e);
-          setModalConfig({ title: "Erro", message: "Erro ao remover the participante.", onConfirm: () => setModalConfig(null) });
+          setModalConfig({ title: "Erro", message: "Erro ao remover o participante.", onConfirm: () => setModalConfig(null) });
         }
       },
       onCancel: () => setModalConfig(null)
@@ -1091,7 +1117,10 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                 {sortedEntries.map((entry: TournamentEntry) => {
                   const st = getAthleteStatus(entry.email);
                   const isSelected = selectedEntries.has(entry.email);
-                  const isPairedOrMatched = event.pairs?.some(p => (p.p1.email === entry.email || p.p2.email === entry.email));
+                  const formedPair = event.pairs?.find(p => p.p1?.email?.toLowerCase().trim() === entry.email?.toLowerCase().trim() || p.p2?.email?.toLowerCase().trim() === entry.email?.toLowerCase().trim());
+                  const pairCategory = formedPair?.categoryId ? event.categories?.find(c => c.id === formedPair.categoryId) : null;
+                  const formedTeamLabel = formedPair ? (formedPair.teamCode || (pairCategory ? `${String(formedPair.teamNumber || 1).padStart(3, '0')} - ${pairCategory.abbreviation}` : `Time ${formedPair.teamNumber || ''}`)) : null;
+                  const isPairedOrMatched = Boolean(formedPair);
                   const isCurrentUserEntry = entry.email.toLowerCase().trim() === userProfile.email.toLowerCase().trim();
                   const canManageEntry = isAdmin || isCurrentUserEntry;
                   // Participante indisponível para seleção visualmente e logicamente se não fez check-in
@@ -1103,10 +1132,11 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                       onClick={() => isAdmin && toggleEntrySelection(entry.email)}
                       className={`bg-white p-5 rounded-3xl shadow-sm border transition-all duration-300 relative overflow-hidden ${isSelected ? 'border-cyan-500 ring-4 ring-cyan-50 bg-cyan-50/20' : entry.checkedIn ? 'border-emerald-100 ring-2 ring-emerald-50' : 'border-gray-100'} ${st || isPairedOrMatched ? 'border-slate-200 cursor-default' : (isAdmin && !isUnavailable ? 'cursor-pointer' : '')}`}
                     >
-                      {st && (
-                         <div className={`absolute top-0 right-0 px-5 py-2 rounded-bl-3xl font-black text-[10px] text-white shadow-sm flex flex-col items-center leading-none ${st.pairLetter === 'A' ? 'bg-blue-600' : st.pairLetter === 'B' ? 'bg-red-600' : 'bg-slate-800'}`}>
-                            <span>Time {st.pairLetter}</span>
-                            {st.matchNumber && <span className="text-[7px] opacity-80 mt-1 uppercase">Jogo {st.matchNumber}</span>}
+                      {formedTeamLabel && (
+                         <div className="absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl font-black text-[10px] text-white shadow-sm flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600">
+                            <Trophy size={11} className="text-amber-300 shrink-0" />
+                            <span>{formedTeamLabel}</span>
+                            {st?.matchNumber && <span className="text-[7px] opacity-80 uppercase ml-1">• Jogo {st.matchNumber}</span>}
                          </div>
                       )}
                       <div className="flex items-center justify-between">
@@ -1214,8 +1244,69 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                                setExpandedEntryEmail(null);
                                return;
                              }
-                             await saveEventEntry(db as Firestore, event.pin, updated);
-                             fetchEntries();
+                             const { saveAdminEventEntry, updateEvent } = await import('@infra/firebase/events');
+                             await saveAdminEventEntry(db as Firestore, event.pin, updated, userProfile.email);
+                             // Atualiza também o índice auxiliar do usuário
+                             try {
+                               await saveUserEventRegistration(db as Firestore, updated.email, event.pin, {
+                                 pin: event.pin,
+                                 name: event.name,
+                                 joinedAt: updated.joinedAt,
+                                 bannerUrl: event.bannerUrl || null,
+                               });
+                             } catch (e) {
+                               console.warn('Índice auxiliar não atualizado:', e);
+                             }
+
+                             // Sincroniza dados em event.pairs se o participante estiver em duplas formadas
+                             if (event.pairs && event.pairs.length > 0) {
+                               let pairsChanged = false;
+                               const nextPairs = event.pairs.map((pair) => {
+                                 const isP1 = pair.p1?.email === updated.email || pair.p1?.pin === updated.pin;
+                                 const isP2 = pair.p2?.email === updated.email || pair.p2?.pin === updated.pin;
+                                 if (!isP1 && !isP2) return pair;
+
+                                 pairsChanged = true;
+                                 const partnerInfo = updated.categoryPartners?.[pair.categoryId || ''];
+                                 if (isP1) {
+                                   return {
+                                     ...pair,
+                                     p1: { ...pair.p1, ...updated },
+                                     p2: partnerInfo?.name ? {
+                                       ...pair.p2,
+                                       name: partnerInfo.name,
+                                       nickname: partnerInfo.name,
+                                       email: partnerInfo.email || pair.p2.email,
+                                       phone: partnerInfo.phone || pair.p2.phone,
+                                     } : pair.p2,
+                                   };
+                                 } else {
+                                   return {
+                                     ...pair,
+                                     p2: { ...pair.p2, ...updated },
+                                     p1: partnerInfo?.name ? {
+                                       ...pair.p1,
+                                       name: partnerInfo.name,
+                                       nickname: partnerInfo.name,
+                                       email: partnerInfo.email || pair.p1.email,
+                                       phone: partnerInfo.phone || pair.p1.phone,
+                                     } : pair.p1,
+                                   };
+                                 }
+                               });
+
+                               if (pairsChanged) {
+                                 try {
+                                   await updateEvent(db as Firestore, event.pin, { pairs: nextPairs });
+                                   setEvent((prev) => ({ ...prev, pairs: nextPairs }));
+                                 } catch (err) {
+                                   console.warn('Erro ao sincronizar duplas com parceiro:', err);
+                                 }
+                               }
+                             }
+
+                             // Atualiza estado local imediatamente sem esperar snapshot
+                             setEntries(prev => prev.map(e => e.email === updated.email ? { ...e, ...updated } : e));
                            }}
                          />
                        )}

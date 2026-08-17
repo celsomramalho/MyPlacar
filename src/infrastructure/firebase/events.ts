@@ -31,7 +31,7 @@ interface FirebaseTournamentEntry {
   categoryIds?: string[];
   dueAmount?: number;
   paidAmount?: number;
-  paymentStatus?: 'Pendente' | 'Pago' | 'Isento';
+  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento';
   payments?: Array<{ id: string; amount: number; date: number; receiptUrl?: string; receiptName?: string }>;
   phone: string;
   shirtSize: 'P' | 'M' | 'G';
@@ -68,6 +68,30 @@ interface FirebaseTournamentEvent {
   information?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeForFirestore<T>(value: T): T {
+  if (value === undefined) return undefined as any;
+  if (value === null) return null as any;
+
+  if (Array.isArray(value)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return value.map(sanitizeForFirestore).filter((v) => v !== undefined) as any;
+  }
+
+  if (typeof value === 'object') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cleaned: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== undefined && typeof v !== 'function') {
+        cleaned[k] = sanitizeForFirestore(v);
+      }
+    }
+    return cleaned as T;
+  }
+
+  return value;
+}
+
 export const fetchEventByPin = async (db: Firestore, pin: string): Promise<FirebaseTournamentEvent | null> => {
   const snap = await getDoc(doc(db, 'events', pin));
   if (!snap.exists()) return null;
@@ -79,9 +103,16 @@ export const subscribeEventByPin = (
   pin: string,
   onEvent: (event: FirebaseTournamentEvent) => void,
 ): Unsubscribe => {
-  return onSnapshot(doc(db, 'events', pin), (snap) => {
-    if (snap.exists()) onEvent({ pin: snap.id, ...snap.data() } as FirebaseTournamentEvent);
-  });
+  return onSnapshot(
+    doc(db, 'events', pin),
+    (snap) => {
+      if (snap.exists()) onEvent({ pin: snap.id, ...snap.data() } as FirebaseTournamentEvent);
+    },
+    (error) => {
+      console.warn('subscribeEventByPin listener error (fallback to fetch):', error);
+      fetchEventByPin(db, pin).then((ev) => ev && onEvent(ev)).catch(() => {});
+    }
+  );
 };
 
 export const subscribeEventEntries = (
@@ -89,37 +120,41 @@ export const subscribeEventEntries = (
   eventPin: string,
   onEntries: (entries: FirebaseTournamentEntry[]) => void,
 ): Unsubscribe => {
-  return onSnapshot(collection(db, 'events', eventPin, 'entries'), (snap) => {
-    const list: FirebaseTournamentEntry[] = [];
-    snap.forEach((docSnap) => {
-      list.push(docSnap.data() as FirebaseTournamentEntry);
-    });
-    onEntries(list);
-  });
+  // Usar metadata.hasPendingWrites + fromCache para distinguir snapshot real de cache
+  return onSnapshot(
+    collection(db, 'events', eventPin, 'entries'),
+    { includeMetadataChanges: false },
+    (snap) => {
+      const list: FirebaseTournamentEntry[] = [];
+      snap.forEach((docSnap) => {
+        list.push(docSnap.data() as FirebaseTournamentEntry);
+      });
+      // Honrar lista vazia: se a subcoleção não tem documentos, a lista real é vazia
+      onEntries(list);
+    },
+    (error) => {
+      console.warn('subscribeEventEntries listener error (fallback to fetch):', error);
+      fetchEventEntries(db, eventPin).then(onEntries).catch(() => {});
+    }
+  );
 };
 
 export const fetchEventEntries = async (db: Firestore, eventPin: string): Promise<FirebaseTournamentEntry[]> => {
-  const snap = await getDocsFromServer(query(collection(db, 'events', eventPin, 'entries')));
   const entries: FirebaseTournamentEntry[] = [];
-
-  for (const entryDoc of snap.docs) {
-    const entryData = entryDoc.data() as FirebaseTournamentEntry;
-    const userRef = doc(db, 'users', entryData.email);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      const userData = userSnap.data();
-      entries.push({
-        ...entryData,
-        name: userData.name || entryData.name,
-        nickname: userData.nickname || entryData.nickname,
-      });
-    } else {
-      // Usuário não existe em 'users' (inscrição manual ou temporária) — manter a entrada com seus próprios dados
+  try {
+    // Usa getDocsFromServer para garantir dados frescos do servidor, sem cache local
+    const snap = await getDocsFromServer(query(collection(db, 'events', eventPin, 'entries')));
+    for (const entryDoc of snap.docs) {
+      const entryData = entryDoc.data() as FirebaseTournamentEntry;
       entries.push(entryData);
     }
+  } catch (e) {
+    console.warn('fetchEventEntries subcollection warning:', e);
   }
 
+  // Não fazer fallback para data.entries[] ou data.pairs do doc raiz:
+  // esses dados podem estar desatualizados e ressuscitariam participantes já deletados.
+  // A subcoleção /events/{pin}/entries é a fonte de verdade.
   return entries;
 };
 
@@ -147,7 +182,10 @@ export const saveEventEntry = (
   db: Firestore,
   eventPin: string,
   entry: FirebaseTournamentEntry,
-) => setDoc(doc(db, 'events', eventPin, 'entries', entry.email.toLowerCase().trim()), entry);
+) => {
+  const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(entry)));
+  return setDoc(doc(db, 'events', eventPin, 'entries', entry.email.toLowerCase().trim()), sanitized);
+};
 
 /**
  * Salva uma inscrição feita pelo painel administrativo. Em instalações onde
@@ -160,8 +198,9 @@ export const saveAdminEventEntry = async (
   entry: FirebaseTournamentEntry,
   adminEmail?: string,
 ) => {
+  const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(entry)));
   try {
-    await saveEventEntry(db, eventPin, entry);
+    await saveEventEntry(db, eventPin, sanitized);
     return;
   } catch (err: unknown) {
     const firebaseErr = err as { code?: string; message?: string };
@@ -172,7 +211,7 @@ export const saveAdminEventEntry = async (
     const response = await fetch(`${baseUrl}/api/admin-save-entry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eventPin, entry, adminEmail }),
+      body: JSON.stringify({ eventPin, entry: sanitized, adminEmail }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -186,7 +225,10 @@ export const saveUserEventRegistration = (
   email: string,
   eventPin: string,
   registration: FirebaseEventRegistration,
-) => setDoc(doc(db, 'user_registrations', email.toLowerCase().trim(), 'events', eventPin), registration);
+) => {
+  const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(registration)));
+  return setDoc(doc(db, 'user_registrations', email.toLowerCase().trim(), 'events', eventPin), sanitized);
+};
 
 export const deleteEventEntry = (
   db: Firestore,
@@ -205,16 +247,22 @@ export const updateEventEntry = (
   eventPin: string,
   email: string,
   data: Partial<FirebaseTournamentEntry>,
-) => updateDoc(doc(db, 'events', eventPin, 'entries', email.toLowerCase().trim()), data);
+) => {
+  const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(data)));
+  return updateDoc(doc(db, 'events', eventPin, 'entries', email.toLowerCase().trim()), sanitized);
+};
 
 export const updateEvent = (
   db: Firestore,
   eventPin: string,
   data: Partial<FirebaseTournamentEvent>,
-) => updateDoc(doc(db, 'events', eventPin), data);
+) => {
+  const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(data)));
+  return updateDoc(doc(db, 'events', eventPin), sanitized);
+};
 
 export const updateEventMatches = (
   db: Firestore,
   eventPin: string,
   matches: FirebaseTournamentMatch[],
-) => updateDoc(doc(db, 'events', eventPin), { matches });
+) => updateDoc(doc(db, 'events', eventPin), { matches: sanitizeForFirestore(JSON.parse(JSON.stringify(matches))) });

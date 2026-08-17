@@ -8,12 +8,15 @@ import {
   DollarSign,
   CheckCircle2,
   Settings,
+  Award,
 } from 'lucide-react';
-import type { TournamentEvent, EventCategory, TournamentEntry } from '@modules/events/types';
+import type { TournamentEvent, EventCategory, TournamentEntry, EventSponsor } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { EventCategoriesManager } from './EventCategoriesManager';
 import { EventRegistrationsManager } from './EventRegistrationsManager';
 import { EventFormedTeamsView } from './EventFormedTeamsView';
+import { EventSponsorsManager } from './EventSponsorsManager';
+import { EventPaymentsView } from './EventPaymentsView';
 
 export type EventDashboardTab =
   | 'categories'
@@ -21,6 +24,7 @@ export type EventDashboardTab =
   | 'formed-teams'
   | 'pending-payments'
   | 'checkins'
+  | 'sponsors'
   | 'config';
 
 interface Props {
@@ -41,10 +45,46 @@ export const EventDashboardView: React.FC<Props> = ({
   onUpdateEvent,
 }) => {
   const [activeTab, setActiveTab] = useState<EventDashboardTab>('categories');
+  const [targetRegistrationEmail, setTargetRegistrationEmail] = useState<string | null>(null);
 
   const categories = event.categories || [];
   const entries = event.entries || [];
   const pairs = event.pairs || [];
+  const sponsors = event.sponsors || [];
+
+  let totalDue = 0;
+  let totalPaid = 0;
+  let totalPending = 0;
+
+  entries.forEach((e) => {
+    // b) a soma valor devido é a soma do valor devido de todos os inscritos
+    const entryDue = e.dueAmount ?? (event.registrationFee || 0);
+    const isConfirmed = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
+    const isIsento = e.paymentStatus === 'Isento';
+
+    const sumPayments =
+      e.payments && e.payments.length > 0
+        ? e.payments.reduce((acc, p) => acc + (p.amount || 0), 0)
+        : e.paidAmount || 0;
+
+    // c) a soma valor pago é a soma do valor pago com status confirmado
+    const entryPaid = isConfirmed
+      ? sumPayments > 0
+        ? sumPayments
+        : e.paidAmount ?? entryDue
+      : 0;
+
+    // d) a soma valor pendente é a soma do valor pendente de todos os inscritos
+    const entryPending = isIsento
+      ? 0
+      : isConfirmed
+      ? Math.max(0, entryDue - entryPaid)
+      : entryDue;
+
+    totalDue += entryDue;
+    totalPaid += entryPaid;
+    totalPending += entryPending;
+  });
 
   const pendingPaymentsCount = entries.filter(
     (e) => !e.paymentStatus || e.paymentStatus === 'Pendente'
@@ -58,6 +98,10 @@ export const EventDashboardView: React.FC<Props> = ({
 
   const handleUpdateEntries = (newEntries: TournamentEntry[]) => {
     onUpdateEvent({ ...event, entries: newEntries });
+  };
+
+  const handleUpdateSponsors = (newSponsors: EventSponsor[]) => {
+    onUpdateEvent({ ...event, sponsors: newSponsors });
   };
 
   return (
@@ -87,8 +131,8 @@ export const EventDashboardView: React.FC<Props> = ({
           {/* Second line: Badges (PIN & Status) + Botão Voltar (canto inferior direito) */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md">
-                PIN: {event.pin}
+              <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md">
+                Pin: {event.pin}
               </span>
               <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md capitalize">
                 {event.eventStatus || 'Em configuração'}
@@ -130,7 +174,7 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
             <div>
               <p
-                className={`text-[10px] font-black uppercase tracking-wider ${
+                className={`text-[10px] font-black ${
                   activeTab === 'categories' ? 'text-emerald-100' : 'text-slate-400'
                 }`}
               >
@@ -162,7 +206,7 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
             <div>
               <p
-                className={`text-[10px] font-black uppercase tracking-wider ${
+                className={`text-[10px] font-black ${
                   activeTab === 'registrations' ? 'text-emerald-100' : 'text-slate-400'
                 }`}
               >
@@ -194,7 +238,7 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
             <div>
               <p
-                className={`text-[10px] font-black uppercase tracking-wider ${
+                className={`text-[10px] font-black ${
                   activeTab === 'formed-teams' ? 'text-blue-100' : 'text-slate-400'
                 }`}
               >
@@ -203,7 +247,7 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
           </button>
 
-          {/* Card 4: Pagamentos Pendentes */}
+          {/* Card 4: Pagamentos */}
           <button
             onClick={() => setActiveTab('pending-payments')}
             className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
@@ -222,16 +266,34 @@ export const EventDashboardView: React.FC<Props> = ({
               >
                 <DollarSign size={18} />
               </div>
-              <span className="text-2xl font-black leading-none">{pendingPaymentsCount}</span>
+              <span className="text-xl font-black leading-none">{pendingPaymentsCount}</span>
             </div>
-            <div>
+            <div className="space-y-1">
               <p
-                className={`text-[10px] font-black uppercase tracking-wider ${
+                className={`text-[10px] font-black ${
                   activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'
                 }`}
               >
-                Pagamentos pendentes
+                Pagamentos
               </p>
+              <div
+                className={`text-[9px] font-bold leading-tight space-y-0.5 ${
+                  activeTab === 'pending-payments' ? 'text-white' : 'text-slate-500'
+                }`}
+              >
+                <div className="flex justify-between gap-1">
+                  <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Devido:</span>
+                  <span className="font-black">R$ {totalDue.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between gap-1">
+                  <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Pago:</span>
+                  <span className="font-black">R$ {totalPaid.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between gap-1">
+                  <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Pendente:</span>
+                  <span className="font-black">R$ {totalPending.toFixed(2)}</span>
+                </div>
+              </div>
             </div>
           </button>
 
@@ -258,11 +320,43 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
             <div>
               <p
-                className={`text-[10px] font-black uppercase tracking-wider ${
+                className={`text-[10px] font-black ${
                   activeTab === 'checkins' ? 'text-indigo-100' : 'text-slate-400'
                 }`}
               >
                 Check-ins realizados
+              </p>
+            </div>
+          </button>
+
+          {/* Card: Patrocinadores */}
+          <button
+            onClick={() => setActiveTab('sponsors')}
+            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
+              activeTab === 'sponsors'
+                ? 'bg-emerald-500 text-white border-emerald-500 shadow-md scale-[1.02]'
+                : 'bg-slate-50/80 hover:bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
+            }`}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                  activeTab === 'sponsors'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-emerald-100 text-emerald-600'
+                }`}
+              >
+                <Award size={18} />
+              </div>
+              <span className="text-2xl font-black leading-none">{sponsors.length}</span>
+            </div>
+            <div>
+              <p
+                className={`text-[10px] font-black ${
+                  activeTab === 'sponsors' ? 'text-emerald-100' : 'text-slate-400'
+                }`}
+              >
+                Patrocinadores
               </p>
             </div>
           </button>
@@ -294,7 +388,7 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
             <div>
               <p
-                className={`text-[10px] font-black uppercase tracking-wider ${
+                className={`text-[10px] font-black ${
                   activeTab === 'config' ? 'text-purple-100' : 'text-slate-400'
                 }`}
               >
@@ -321,25 +415,28 @@ export const EventDashboardView: React.FC<Props> = ({
           onUpdateEntries={handleUpdateEntries}
           onUpdateEvent={onUpdateEvent}
           adminEmail={adminEmail}
+          initialExpandedPin={targetRegistrationEmail}
         />
       )}
 
-      {activeTab === 'formed-teams' && <EventFormedTeamsView event={event} />}
+      {activeTab === 'sponsors' && (
+        <EventSponsorsManager
+          event={event}
+          onUpdateSponsors={handleUpdateSponsors}
+          onUpdateEvent={onUpdateEvent}
+        />
+      )}
+
+      {activeTab === 'formed-teams' && <EventFormedTeamsView event={event} onUpdateEvent={onUpdateEvent} />}
 
       {activeTab === 'pending-payments' && (
-        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center space-y-3">
-          <DollarSign size={40} className="mx-auto text-amber-500 opacity-80" />
-          <h3 className="text-lg font-black text-slate-800">Pagamentos Pendentes</h3>
-          <p className="text-xs text-slate-400 font-bold max-w-md mx-auto">
-            Módulo financeiro de pagamentos pendentes. Atualmente {pendingPaymentsCount} participante(s) estão com status pendente de confirmação.
-          </p>
-          <button
-            onClick={() => setActiveTab('registrations')}
-            className="bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-black px-4 py-2 rounded-xl transition-all mt-2"
-          >
-            Ver Inscrições e Pagamentos
-          </button>
-        </div>
+        <EventPaymentsView
+          event={event}
+          onNavigateToEntry={(email) => {
+            setTargetRegistrationEmail(email);
+            setActiveTab('registrations');
+          }}
+        />
       )}
 
       {activeTab === 'checkins' && (

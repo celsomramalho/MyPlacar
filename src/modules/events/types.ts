@@ -62,6 +62,16 @@ export interface EventCategory {
   gender2?: 'M' | 'F';
 }
 
+export interface EventSponsor {
+  id: string;
+  name: string;
+  instagram?: string;
+  logoUrl?: string;
+  obs1?: string;
+  obs2?: string;
+  createdAt?: number;
+}
+
 export interface TournamentEvent {
   pin: string;
   name: string;
@@ -72,6 +82,7 @@ export interface TournamentEvent {
   pairs?: TournamentPair[];
   matches?: TournamentMatch[];
   entries?: TournamentEntry[];
+  sponsors?: EventSponsor[];
   coAdminPins?: string[];
   eventDateText?: string;
   startDate?: string;
@@ -111,7 +122,7 @@ export interface TournamentEntry {
   gender?: 'M' | 'F';
   checkedIn?: boolean;
   dueAmount?: number;
-  paymentStatus?: 'Pendente' | 'Pago' | 'Isento';
+  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento';
   paidAmount?: number;
   payments?: PaymentItem[];
   categoryIds?: string[];

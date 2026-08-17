@@ -48,7 +48,7 @@ export interface AppScreenRouterProps {
   activeEvent: TournamentEvent | null;
   userEntryDate: number | null;
   registeredEvents: EventRegistration[];
-  handleJoinTournament: (pin: string, silent?: boolean, profileOverride?: UserProfile, paymentData?: { payments?: import('@modules/events/types').PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }) => Promise<void>;
+  handleJoinTournament: (pin: string, silent?: boolean, profileOverride?: UserProfile, paymentData?: { payments?: import('@modules/events/types').PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }, entryOverride?: Partial<import('@modules/events/types').TournamentEntry>) => Promise<void>;
   handleExitTournament: () => void;
   handleSelectEvent: (ev: TournamentEvent) => void;
   handleLogout: () => void;
@@ -325,7 +325,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
           <TournamentsScreen
             registrations={registeredEvents}
             onBack={() => setCurrentScreen('settings')}
-            onJoin={(pin, profileOverride) => handleJoinTournament(pin, false, profileOverride ? { ...userProfile, ...profileOverride } : undefined, profileOverride ? { payments: profileOverride.payments, dueAmount: profileOverride.dueAmount, paidAmount: profileOverride.paidAmount, paymentStatus: profileOverride.paymentStatus } : undefined)}
+            onJoin={(pin, entryData) => handleJoinTournament(pin, false, entryData as any, undefined, entryData)}
             onSelectEvent={ev => handleSelectEvent(ev as unknown as TournamentEvent)}
             onOpenMenu={() => setIsMenuOpen(true)}
             userProfile={userProfile}

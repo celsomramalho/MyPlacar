@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, setDoc, type Firestore } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, getDocs, setDoc, updateDoc, type Firestore } from 'firebase/firestore';
 import type { TournamentEvent } from '@modules/events/types';
 
 export type FirebaseAdminTournamentEvent = TournamentEvent;
@@ -67,6 +67,8 @@ export const saveAdminEvent = async (
   try {
     // Tenta salvar diretamente (funciona se usuário está autenticado no Firebase Auth com isAdmin)
     await setDoc(doc(db, 'events', event.pin), sanitized, { merge: true });
+    // Garante que o campo entries[] legado seja removido do doc raiz (a fonte de verdade é a subcoleção)
+    await updateDoc(doc(db, 'events', event.pin), { entries: deleteField() }).catch(() => {});
   } catch (err: unknown) {
     const firebaseErr = err as { code?: string; message?: string };
 

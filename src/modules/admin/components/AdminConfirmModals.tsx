@@ -8,12 +8,15 @@ interface AdminConfirmModalsProps {
   showClearCache: boolean;
   showFixLegacyMatches: boolean;
   deleteConfirm: AdminDeleteConfirm | null;
+  showUnsavedChanges?: boolean;
   onCancelClearCache: () => void;
   onConfirmClearCache: () => void;
   onCancelFixLegacyMatches: () => void;
   onConfirmFixLegacyMatches: () => void;
   onCancelDelete: () => void;
   onConfirmDelete: () => void;
+  onCancelUnsavedChanges?: () => void;
+  onConfirmUnsavedChanges?: () => void;
 }
 
 const AdminModalFrame = ({
@@ -70,12 +73,15 @@ export const AdminConfirmModals = ({
   showClearCache,
   showFixLegacyMatches,
   deleteConfirm,
+  showUnsavedChanges,
   onCancelClearCache,
   onConfirmClearCache,
   onCancelFixLegacyMatches,
   onConfirmFixLegacyMatches,
   onCancelDelete,
   onConfirmDelete,
+  onCancelUnsavedChanges,
+  onConfirmUnsavedChanges,
 }: AdminConfirmModalsProps) => (
   <>
     {showClearCache && (
@@ -108,6 +114,18 @@ export const AdminConfirmModals = ({
         confirmClassName="bg-red-500"
         onCancel={onCancelDelete}
         onConfirm={onConfirmDelete}
+      />
+    )}
+
+    {showUnsavedChanges && (
+      <AdminModalFrame
+        title="Alterações não salvas"
+        message="Você fez alterações nas configurações do evento que ainda não foram salvas. Deseja realmente sair e descartar as alterações?"
+        cancelLabel="Continuar editando"
+        confirmLabel="Sair sem salvar"
+        confirmClassName="bg-red-500"
+        onCancel={onCancelUnsavedChanges || (() => {})}
+        onConfirm={onConfirmUnsavedChanges || (() => {})}
       />
     )}
   </>

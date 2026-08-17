@@ -35,7 +35,7 @@ const AppContent: React.FC = () => {
   // ── Hooks com estado (cada um instanciado UMA única vez aqui) ─────────────
   const { authReady } = useAppAuth();
   const { appUrl, newAppUrl, isServiceInterrupted, handleCheckUpdate } = useAppConfig(authReady);
-  const { unreadCommsCount } = useCommunicationsBadge(userProfile.pin);
+  const { unreadCommsCount } = useCommunicationsBadge({ pin: userProfile.pin, email: userProfile.email });
   const {
     activeEvent,
     userEntryDate,

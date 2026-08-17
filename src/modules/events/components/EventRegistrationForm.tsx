@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, DollarSign, Eye, Trash2, Upload, Users } from 'lucide-react';
+import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, Trash2, Upload, Users } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
+import { getDb } from '@infra/firebase';
+import type { Firestore } from 'firebase/firestore';
 import type { CategoryPartnerInfo, EventCategory, PaymentItem, TournamentEntry, TournamentEvent, TournamentPair } from '../types';
 
 interface Props {
@@ -11,6 +13,7 @@ interface Props {
   onUpdateEvent?: (event: TournamentEvent) => void;
   onDelete?: () => void;
   onCancel?: () => void;
+  onPhoneSync?: (phone: string) => void;
 }
 
 const formatPhone = (value: string) => {
@@ -24,24 +27,79 @@ const formatPhone = (value: string) => {
 export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onSave, onUpdateEvent, onDelete, onCancel }) => {
   const canEdit = true;
   const isAdmin = mode === 'admin';
+  const isNewAdminEntry = isAdmin && (!entry.email || entry.email.trim() === '') && (!entry.name || entry.name.trim() === '');
+  const canEditIdentity = isNewAdminEntry;
+
   const [nickname, setNickname] = useState(entry.nickname || '');
   const [name, setName] = useState(entry.name || '');
   const [pin, setPin] = useState(entry.pin || '');
   const [email, setEmail] = useState(entry.email || '');
-  const [phone, setPhone] = useState(entry.phone || '');
+  const [phone, setPhone] = useState(() => {
+    if (entry.phone) return entry.phone;
+    try {
+      const saved = localStorage.getItem('myPlacarUserProfile');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!entry.email || (parsed.email && parsed.email.toLowerCase() === entry.email.toLowerCase())) {
+          return parsed.phone || '';
+        }
+      }
+    } catch (e) {}
+    return '';
+  });
   const [shirtSize, setShirtSize] = useState<'P' | 'M' | 'G'>(entry.shirtSize || 'M');
   const [gender, setGender] = useState<'M' | 'F'>(entry.gender || 'M');
   const [categoryIds, setCategoryIds] = useState<string[]>(entry.categoryIds || []);
   const [categoryPartners, setCategoryPartners] = useState<Record<string, CategoryPartnerInfo>>(() => {
-    if (entry.categoryPartners && Object.keys(entry.categoryPartners).length > 0) return entry.categoryPartners;
-    if (!entry.partnerName && !entry.partnerEmail && !entry.partnerPhone) return {};
-    return (entry.categoryIds || []).reduce<Record<string, CategoryPartnerInfo>>((acc, categoryId) => {
-      acc[categoryId] = { name: entry.partnerName || '', email: entry.partnerEmail || '', phone: entry.partnerPhone || '' };
-      return acc;
-    }, {});
+    const initialMap: Record<string, CategoryPartnerInfo> = {};
+
+    // 1. Se já tem categoryPartners salvo no entry
+    if (entry.categoryPartners && Object.keys(entry.categoryPartners).length > 0) {
+      Object.assign(initialMap, entry.categoryPartners);
+    }
+
+    // 2. Para qualquer categoria que ainda não tem dados no map, se houver pair formado no event.pairs, carrega do pair
+    (entry.categoryIds || []).forEach((catId) => {
+      if (!initialMap[catId] || (!initialMap[catId].name && !initialMap[catId].email && !initialMap[catId].phone)) {
+        const pair = event.pairs?.find((p) => {
+          const isP1 = p.p1?.email === entry.email || p.p1?.pin === entry.pin;
+          const isP2 = p.p2?.email === entry.email || p.p2?.pin === entry.pin;
+          if (!isP1 && !isP2) return false;
+          return p.categoryId === catId || (!p.categoryId && (p.p1?.categoryIds?.includes(catId) || p.p2?.categoryIds?.includes(catId)));
+        });
+        if (pair) {
+          const isP1 = pair.p1?.email === entry.email || pair.p1?.pin === entry.pin;
+          const partnerEntry = isP1 ? pair.p2 : pair.p1;
+          if (partnerEntry) {
+            initialMap[catId] = {
+              name: partnerEntry.name || partnerEntry.nickname || '',
+              email: partnerEntry.email || '',
+              phone: partnerEntry.phone || '',
+            };
+          }
+        }
+      }
+
+      // 3. Se ainda não tem, usa partnerName/partnerEmail legado se existir
+      if (!initialMap[catId]) {
+        if (entry.partnerName || entry.partnerEmail || entry.partnerPhone) {
+          initialMap[catId] = {
+            name: entry.partnerName || '',
+            email: entry.partnerEmail || '',
+            phone: entry.partnerPhone || '',
+          };
+        } else {
+          initialMap[catId] = { name: '', email: '', phone: '' };
+        }
+      }
+    });
+
+    return initialMap;
   });
   const [payments, setPayments] = useState<PaymentItem[]>(entry.payments || []);
-  const [paymentStatus, setPaymentStatus] = useState(entry.paymentStatus || 'Pendente');
+  const [paymentStatus, setPaymentStatus] = useState(
+    entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'
+  );
   const [dueAmount, setDueAmount] = useState(entry.dueAmount ?? event.registrationFee ?? 0);
   const [newAmount, setNewAmount] = useState('');
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
@@ -54,60 +112,30 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const categories = event.categories || [];
   const availableCategories = useMemo(() => categories.filter((cat) => !cat.gender1 || cat.gender1 === gender || cat.gender2 === gender), [categories, gender]);
-  const isDoubles = categoryIds.some((id) => categories.find((cat) => cat.id === id)?.format === 'Duplas');
-  const selectedDoublesCategories = categories.filter((cat) => categoryIds.includes(cat.id) && cat.format === 'Duplas');
+  const isDoubles = (cat: EventCategory) => cat.format === 'Duplas' || !cat.format || cat.name.toLowerCase().includes('dupla') || Boolean(cat.gender2);
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const effectiveDueAmount = isAdmin ? dueAmount : (event.registrationFee ?? 0) + (Math.max(0, categoryIds.length - 1) * (event.extraCategoryFee ?? 0));
+  const pendingAmount = Math.max(0, effectiveDueAmount - totalPaid);
+
+  React.useEffect(() => {
+    if (!editingPaymentId) {
+      const diff = Math.max(0, effectiveDueAmount - totalPaid);
+      setNewAmount(diff > 0 ? diff.toFixed(2) : '');
+    }
+  }, [categoryIds, payments, effectiveDueAmount, totalPaid, editingPaymentId]);
+
   const pairForCategory = (categoryId: string) => event.pairs?.find((pair) => {
     const isEntryPair = pair.p1.email === entry.email || pair.p2.email === entry.email || pair.p1.pin === entry.pin || pair.p2.pin === entry.pin;
     if (!isEntryPair) return false;
     return pair.categoryId === categoryId || (!pair.categoryId && (pair.p1.categoryIds?.includes(categoryId) || pair.p2.categoryIds?.includes(categoryId)));
   });
+
   const pairForEmailInCategory = (targetEmail: string, categoryId: string) => event.pairs?.find((pair) => {
     const normalizedTarget = targetEmail.toLowerCase().trim();
     const isTargetPair = pair.p1.email.toLowerCase().trim() === normalizedTarget || pair.p2.email.toLowerCase().trim() === normalizedTarget;
     if (!isTargetPair) return false;
     return pair.categoryId === categoryId || (!pair.categoryId && (pair.p1.categoryIds?.includes(categoryId) || pair.p2.categoryIds?.includes(categoryId)));
   });
-  const calculateDue = (ids: string[]) => {
-    const base = event.registrationFee ?? 0;
-    const extra = event.extraCategoryFee ?? 0;
-    return ids.length === 0 ? base : base + (ids.length - 1) * extra;
-  };
-  const effectiveDueAmount = isAdmin ? dueAmount : calculateDue(categoryIds);
-  const pendingAmount = Math.max(0, effectiveDueAmount - totalPaid);
-  const toggleCategory = (categoryId: string) => setCategoryIds((ids) => {
-    const next = ids.includes(categoryId) ? ids.filter((id) => id !== categoryId) : [...ids, categoryId];
-    setDueAmount(calculateDue(next));
-    if (!next.includes(categoryId)) {
-      setConfirmTeamCategoryId((current) => current === categoryId ? null : current);
-      setExpandedPartnerCategoryIds((current) => {
-        const nextExpanded = new Set(current);
-        nextExpanded.delete(categoryId);
-        return nextExpanded;
-      });
-    }
-    return next;
-  });
-  const togglePartnerForm = (categoryId: string) => {
-    setExpandedPartnerCategoryIds((current) => {
-      const next = new Set(current);
-      if (next.has(categoryId)) next.delete(categoryId);
-      else next.add(categoryId);
-      return next;
-    });
-    setConfirmTeamCategoryId((current) => current === categoryId ? null : current);
-  };
-  const updateCategoryPartner = (categoryId: string, field: keyof CategoryPartnerInfo, value: string) => {
-    setCategoryPartners((current) => ({
-      ...current,
-      [categoryId]: {
-        name: current[categoryId]?.name || '',
-        email: current[categoryId]?.email || '',
-        phone: current[categoryId]?.phone || '',
-        [field]: field === 'phone' ? value.replace(/\D/g, '').slice(0, 11) : value,
-      },
-    }));
-  };
 
   const partnerEntryForCategory = (categoryId: string, partnerEmail: string) => {
     const normalizedPartnerEmail = partnerEmail.toLowerCase().trim();
@@ -141,76 +169,258 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     setConfirmTeamCategoryId(null);
   };
 
-  const buildEntry = (nextPayments = payments): TournamentEntry => {
-    const normalizedName = name.trim();
-    const normalizedPin = pin.trim().toUpperCase() || `TEMP${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-    const selectedCategoryPartners = selectedDoublesCategories.reduce<Record<string, CategoryPartnerInfo>>((acc, cat) => {
-      const partner = categoryPartners[cat.id] || { name: '', email: '', phone: '' };
-      acc[cat.id] = {
-        name: partner.name.trim(),
-        email: partner.email.trim().toLowerCase(),
-        phone: partner.phone.replace(/\D/g, ''),
-      };
-      return acc;
-    }, {});
+  const togglePartnerForm = (categoryId: string) => {
+    setExpandedPartnerCategoryIds((current) => {
+      const next = new Set(current);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
+      return next;
+    });
+    setConfirmTeamCategoryId((current) => current === categoryId ? null : current);
+  };
+
+  const toggleCategory = (categoryId: string) => setCategoryIds((ids) => {
+    const next = ids.includes(categoryId) ? ids.filter((id) => id !== categoryId) : [...ids, categoryId];
+    setDueAmount((event.registrationFee ?? 0) + (Math.max(0, next.length - 1) * (event.extraCategoryFee ?? 0)));
+    if (!next.includes(categoryId)) {
+      setConfirmTeamCategoryId((current) => current === categoryId ? null : current);
+      setExpandedPartnerCategoryIds((current) => {
+        const nextExpanded = new Set(current);
+        nextExpanded.delete(categoryId);
+        return nextExpanded;
+      });
+    }
+    return next;
+  });
+
+  const updateCategoryPartner = (categoryId: string, field: keyof CategoryPartnerInfo, value: string) => {
+    setCategoryPartners((current) => ({
+      ...current,
+      [categoryId]: {
+        name: current[categoryId]?.name || '',
+        email: current[categoryId]?.email || '',
+        phone: current[categoryId]?.phone || '',
+        [field]: field === 'phone' ? value.replace(/\D/g, '').slice(0, 11) : value,
+      },
+    }));
+  };
+
+  const handleToggleGender = () => {
+    const nextGender = gender === 'M' ? 'F' : 'M';
+    setGender(nextGender);
+    const nextAvailable = categories.filter((cat) => !cat.gender1 || cat.gender1 === nextGender || cat.gender2 === nextGender);
+    const nextAvailableIds = new Set(nextAvailable.map((c) => c.id));
+    setCategoryIds((prev) => prev.filter((id) => nextAvailableIds.has(id)));
+  };
+
+  const buildEntry = (nextPayments = payments, targetCategoryIds = categoryIds): TournamentEntry => {
+    const normalizedName = name.trim() || entry.name;
+    const normalizedPin = isAdmin
+      ? (pin.trim().toUpperCase() || entry.pin || `TEMP${Math.random().toString(36).slice(2, 8).toUpperCase()}`)
+      : (entry.pin || `TEMP${Math.random().toString(36).slice(2, 8).toUpperCase()}`);
+    const selectedCategoryPartners: Record<string, CategoryPartnerInfo> = {};
+    for (const catId of targetCategoryIds) {
+      const partner = categoryPartners[catId];
+      if (partner) {
+        const trimmedName = partner.name?.trim() || '';
+        const trimmedEmail = partner.email?.trim().toLowerCase() || '';
+        const cleanedPhone = (partner.phone || '').replace(/\D/g, '');
+        if (trimmedName || trimmedEmail || cleanedPhone) {
+          selectedCategoryPartners[catId] = {
+            name: trimmedName,
+            email: trimmedEmail,
+            phone: cleanedPhone,
+          };
+        }
+      }
+    }
     const firstPartner = Object.values(selectedCategoryPartners)[0];
     const updated: TournamentEntry = {
-    ...entry,
-    name: normalizedName,
-    pin: normalizedPin,
-    email: email.trim().toLowerCase(),
-    nickname: nickname.trim() || entry.nickname,
-    phone: phone.replace(/\D/g, ''),
-    shirtSize,
-    gender,
-    categoryIds,
-    dueAmount: effectiveDueAmount,
-    paymentStatus,
-    payments: nextPayments,
-    paidAmount: nextPayments.reduce((sum, payment) => sum + payment.amount, 0),
-    partnerName: firstPartner?.name || undefined,
-    partnerEmail: firstPartner?.email || undefined,
-    partnerPhone: firstPartner?.phone || undefined,
-    categoryPartners: Object.keys(selectedCategoryPartners).length > 0 ? selectedCategoryPartners : undefined,
+      ...entry,
+      name: normalizedName,
+      pin: normalizedPin,
+      email: email.trim().toLowerCase(),
+      nickname: nickname.trim() || entry.nickname,
+      phone: phone.replace(/\D/g, ''),
+      shirtSize,
+      gender,
+      categoryIds: targetCategoryIds,
+      dueAmount: effectiveDueAmount,
+      paymentStatus,
+      payments: nextPayments,
+      paidAmount: nextPayments.reduce((sum, payment) => sum + payment.amount, 0),
+      partnerName: firstPartner?.name || undefined,
+      partnerEmail: firstPartner?.email || undefined,
+      partnerPhone: firstPartner?.phone || undefined,
+      categoryPartners: Object.keys(selectedCategoryPartners).length > 0 ? selectedCategoryPartners : undefined,
     };
     return updated;
   };
 
-  const save = async (nextPayments = payments) => {
-    if (!name.trim()) {
+  const initialCategoryIds = useMemo(() => entry.categoryIds || [], [entry.categoryIds]);
+
+  const save = async (nextPayments: PaymentItem[] = payments) => {
+    const trimmedName = name.trim();
+    const trimmedNickname = nickname.trim();
+    const trimmedEmail = email.trim();
+    const cleanPhone = phone.replace(/\D/g, '').trim();
+
+    if (isAdmin && !trimmedName) {
       setFeedback('Informe o nome do jogador antes de salvar.');
       return;
     }
-    if (!nickname.trim()) {
-      setFeedback('Informe como o jogador quer ser chamado antes de salvar.');
+    if (!trimmedNickname) {
+      setFeedback('Informe como quer ser chamado (apelido) antes de salvar.');
       return;
     }
-    if (!email.trim()) {
+    if (!trimmedEmail) {
       setFeedback('Informe o e-mail antes de salvar.');
       return;
     }
-    if (categoryIds.length === 0) {
-      setFeedback('Selecione pelo menos uma categoria antes de salvar.');
+    if (!cleanPhone) {
+      setFeedback('Informe o telefone.');
       return;
     }
-    for (const cat of selectedDoublesCategories) {
-      const partner = categoryPartners[cat.id];
-      if (!partner?.name.trim() || !partner?.email.trim() || !partner?.phone.trim()) {
-        setFeedback(`Informe nome, e-mail e telefone do parceiro para ${cat.abbreviation || cat.name}.`);
+    if (!shirtSize) {
+      setFeedback('Selecione o tamanho da camiseta.');
+      return;
+    }
+
+    const effectiveCategoryIds = categoryIds.filter((catId) => availableCategories.some((c) => c.id === catId));
+    if (effectiveCategoryIds.length === 0) {
+      setFeedback('É obrigatório selecionar pelo menos uma categoria para a inscrição.');
+      return;
+    }
+
+    for (const catId of effectiveCategoryIds) {
+      const cat = (event.categories || []).find((c) => c.id === catId);
+      if (!cat || !isDoubles(cat)) continue;
+      const pair = pairForCategory(cat.id);
+      if (pair) continue; // Se já tem time formado, não precisa exigir dados do parceiro novamente
+      const partner = categoryPartners[catId] || { name: '', email: '', phone: '' };
+      const cleanedPartnerPhone = (partner.phone || '').replace(/\D/g, '');
+      if (!partner.name?.trim() || !partner.email?.trim() || !cleanedPartnerPhone) {
+        const msg = `Informe os dados do parceiro para ${cat.abbreviation || cat.name}.`;
+        setFeedback(msg);
+        setExpandedPartnerCategoryIds((prev) => new Set(prev).add(cat.id));
         return;
       }
     }
+
+    const parsedAmount = Number(newAmount.replace(',', '.'));
+    const willAddPayment = Boolean(parsedAmount && parsedAmount > 0);
+    const hasReceipt = Boolean(newReceipt?.url || (editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.receiptUrl));
+
+    if (willAddPayment && !hasReceipt) {
+      setFeedback('O comprovante é obrigatório para registrar o pagamento.');
+      return;
+    }
+
+    let paymentsToSave = nextPayments;
+    let addedPaymentItem: PaymentItem | null = null;
+    if (willAddPayment && hasReceipt) {
+      const date = new Date(`${newDate}T12:00:00`).getTime();
+      if (editingPaymentId) {
+        paymentsToSave = paymentsToSave.map((payment) => {
+          if (payment.id !== editingPaymentId) return payment;
+          const item: PaymentItem = { id: payment.id, amount: parsedAmount, date };
+          const rUrl = newReceipt?.url || payment.receiptUrl;
+          const rName = newReceipt?.name || payment.receiptFileName;
+          if (rUrl) item.receiptUrl = rUrl;
+          if (rName) item.receiptFileName = rName;
+          return item;
+        });
+        addedPaymentItem = paymentsToSave.find((p) => p.id === editingPaymentId) || null;
+      } else {
+        const newItem: PaymentItem = {
+          id: `pay-${Date.now()}`,
+          amount: parsedAmount,
+          date,
+          ...(newReceipt?.url ? { receiptUrl: newReceipt.url } : {}),
+          ...(newReceipt?.name ? { receiptFileName: newReceipt.name } : {}),
+        };
+        paymentsToSave = [...paymentsToSave, newItem];
+        addedPaymentItem = newItem;
+      }
+    }
+
+    const totalPaymentsCount = paymentsToSave.length;
+    if (effectiveDueAmount > 0 && paymentStatus !== 'Isento' && totalPaymentsCount === 0) {
+      setFeedback('É obrigatório informar o pagamento e anexar o comprovante para realizar a inscrição.');
+      return;
+    }
+
     setIsSaving(true);
     setFeedback(null);
     try {
-      const cleanEntry = buildEntry(nextPayments);
-      Object.keys(cleanEntry).forEach((key) => {
-        if (cleanEntry[key as keyof TournamentEntry] === undefined) {
-          delete cleanEntry[key as keyof TournamentEntry];
+      if (willAddPayment && hasReceipt) {
+        setPayments(paymentsToSave);
+        setNewAmount('');
+        setNewReceipt(null);
+        setEditingPaymentId(null);
+      }
+
+      const cleanEntry = buildEntry(paymentsToSave, effectiveCategoryIds);
+      const jsonClean = JSON.parse(JSON.stringify(cleanEntry));
+      await onSave(jsonClean);
+      setFeedback('✓ Inscrição salva com sucesso!');
+
+      // Sincroniza o telefone com o cadastro do usuário (perfil)
+      if (cleanPhone && cleanEntry.email) {
+        try {
+          const db = getDb();
+          if (db) {
+            const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+            await setDoc(doc(db as Firestore, 'users', cleanEntry.email.toLowerCase().trim()), {
+              phone: cleanPhone,
+              updatedAt: serverTimestamp(),
+            }, { merge: true });
+          }
+          const savedLocal = localStorage.getItem('myPlacarUserProfile');
+          if (savedLocal) {
+            try {
+              const parsed = JSON.parse(savedLocal);
+              if (!parsed.email || parsed.email.toLowerCase() === cleanEntry.email.toLowerCase()) {
+                parsed.phone = cleanPhone;
+                localStorage.setItem('myPlacarUserProfile', JSON.stringify(parsed));
+              }
+            } catch (e) {}
+          }
+        } catch (e) {
+          console.warn('Erro ao atualizar telefone no perfil:', e);
         }
-      });
-      await onSave(cleanEntry);
-      setFeedback('Inscrição salva com sucesso.');
+      }
+
+      // Envio automático dos avisos do sistema
+      const db = getDb();
+      if (db) {
+        const { eventNotificationService } = await import('../services/eventNotificationService');
+        // a) Inscrição confirmada (uma única vez)
+        if (cleanEntry.paymentStatus === 'Confirmado' || cleanEntry.paymentStatus === 'Pago' || cleanEntry.paymentStatus === 'Isento') {
+          void eventNotificationService.notifyRegistrationConfirmed(db as Firestore, event, cleanEntry);
+        }
+
+        // b) Pagamento registrado
+        if (addedPaymentItem) {
+          void eventNotificationService.notifyPaymentCreated(db as Firestore, event, cleanEntry, addedPaymentItem);
+        }
+
+        // c) Novas categorias adicionadas
+        const newlyAddedCategoryIds = categoryIds.filter((id) => !initialCategoryIds.includes(id));
+        for (const catId of newlyAddedCategoryIds) {
+          const catObj = (event.categories || []).find((c) => c.id === catId);
+          if (catObj) {
+            void eventNotificationService.notifyNewCategory(db as Firestore, event, cleanEntry, catObj);
+          }
+        }
+
+        // d) Valor pendente maior que zero
+        const currentTotalPaid = paymentsToSave.reduce((sum, p) => sum + p.amount, 0);
+        const currentPending = Math.max(0, (cleanEntry.dueAmount ?? 0) - currentTotalPaid);
+        if (currentPending > 0) {
+          void eventNotificationService.notifyPendingPayment(db as Firestore, event, cleanEntry, currentPending);
+        }
+      }
     } catch (error) {
       console.error('Erro ao salvar inscrição:', error);
       const failure = error as { code?: string; message?: string };
@@ -220,21 +430,52 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           ? 'Já existe uma inscrição com este PIN ou e-mail.'
           : failure.message || 'Não foi possível salvar a inscrição. Confira os campos obrigatórios.';
       setFeedback(message);
-    } finally { setIsSaving(false); }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const addPayment = async () => {
     const amount = Number(newAmount.replace(',', '.'));
     if (!amount || amount <= 0) return;
+
+    const hasReceipt = newReceipt?.url || (editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.receiptUrl);
+    if (!hasReceipt) {
+      setFeedback('O comprovante é obrigatório para registrar o pagamento.');
+      return;
+    }
+
     const date = new Date(`${newDate}T12:00:00`).getTime();
+    const newPayItem: PaymentItem = {
+      id: `pay-${Date.now()}`,
+      amount,
+      date,
+      ...(newReceipt?.url ? { receiptUrl: newReceipt.url } : {}),
+      ...(newReceipt?.name ? { receiptFileName: newReceipt.name } : {}),
+    };
     const next = editingPaymentId
-      ? payments.map((payment) => payment.id === editingPaymentId ? { ...payment, amount, date, receiptUrl: newReceipt?.url || payment.receiptUrl, receiptFileName: newReceipt?.name || payment.receiptFileName } : payment)
-      : [...payments, { id: `pay-${Date.now()}`, amount, date, receiptUrl: newReceipt?.url, receiptFileName: newReceipt?.name }];
+      ? payments.map((payment) => {
+          if (payment.id !== editingPaymentId) return payment;
+          const item: PaymentItem = { id: payment.id, amount, date };
+          const rUrl = newReceipt?.url || payment.receiptUrl;
+          const rName = newReceipt?.name || payment.receiptFileName;
+          if (rUrl) item.receiptUrl = rUrl;
+          if (rName) item.receiptFileName = rName;
+          return item;
+        })
+      : [...payments, newPayItem];
     setPayments(next);
     setEditingPaymentId(null);
     setNewAmount('');
     setNewReceipt(null);
     await save(next);
+
+    const db = getDb();
+    if (db) {
+      const { eventNotificationService } = await import('../services/eventNotificationService');
+      const cleanEntry = buildEntry(next);
+      void eventNotificationService.notifyPaymentCreated(db as Firestore, event, cleanEntry, newPayItem);
+    }
   };
 
   const removePayment = async (id: string) => {
@@ -244,23 +485,90 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     await save(next);
   };
 
+  const handleDeleteWithConfirmation = () => {
+    if (!onDelete) return;
+
+    const targetEmailLower = (entry.email || '').toLowerCase().trim();
+    const targetPin = (entry.pin || '').trim();
+
+    const formedPairs = (event.pairs || []).filter(
+      (p) =>
+        (p.p1?.email && p.p1.email.toLowerCase().trim() === targetEmailLower) ||
+        (p.p2?.email && p.p2.email.toLowerCase().trim() === targetEmailLower) ||
+        (targetPin && (p.p1?.pin === targetPin || p.p2?.pin === targetPin))
+    );
+
+    let confirmMessage = `Deseja realmente excluir a inscrição de "${entry.name || entry.nickname || entry.email}"?`;
+    if (formedPairs.length > 0) {
+      const teamsStr = formedPairs.map((p) => p.teamCode || `Time ${p.teamNumber || ''}`).join(', ');
+      confirmMessage = `ATENÇÃO: Este participante possui time(s) formado(s): [${teamsStr}].\n\nAo excluir a inscrição, este(s) time(s) será(ão) desfeito(s) automaticamente.\n\nDeseja realmente excluir a inscrição?`;
+    }
+
+    if (window.confirm(confirmMessage)) {
+      onDelete();
+    }
+  };
+
   return <div className="space-y-4 text-left">
-    {mode === 'user' && (event.information || event.regulationUrl) && <div className="space-y-2">
+    {(event.information || event.regulationUrl) && <div className="space-y-2">
       {event.information && <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4"><p className="text-[10px] font-black tracking-wider text-sky-600">Informações do evento</p><p className="text-xs font-bold leading-relaxed whitespace-pre-wrap text-slate-700 mt-1">{event.information}</p></div>}
       {event.regulationUrl && <a href={event.regulationUrl} target="_blank" rel="noopener noreferrer" className="w-full h-11 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 font-black text-xs flex items-center justify-center gap-2"><Eye size={15} /> Regulamento</a>}
     </div>}
 
-    <div className="flex items-center justify-between pb-2 border-b border-slate-100"><h4 className="text-sm font-black text-slate-800">{isAdmin ? 'Editar inscrição' : 'Informações de inscrição'}</h4>{onDelete && <button type="button" onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-500"><Trash2 size={18} /></button>}</div>
-    <div className="grid grid-cols-2 gap-3">
-      <Field label={isAdmin ? 'Nome jogador *' : 'Nome do usuário'}>{isAdmin ? <input required value={name} onChange={(e) => setName(e.target.value)} className="event-registration-field" /> : <div className="event-registration-readonly">{entry.name}</div>}</Field>
-      <Field label="PIN do usuário">{isAdmin ? <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="Opcional" className="event-registration-field uppercase" /> : <div className="event-registration-readonly">{entry.pin}</div>}</Field>
-      <Field label="E-mail *" className="col-span-2"><input type="email" required value={email} readOnly={!isAdmin} onChange={(e) => setEmail(e.target.value)} className="event-registration-field" /></Field>
+    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+      <h4 className="text-sm font-black text-slate-800">{isAdmin ? 'Editar inscrição' : 'Informações de inscrição'}</h4>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={handleDeleteWithConfirmation}
+          className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
+          title="Excluir inscrição"
+        >
+          <Trash2 size={18} />
+        </button>
+      )}
     </div>
-    <Field label="Telefone *"><input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="(11) 91234-9988" pattern="[(][0-9]{2}[)] [0-9]{4,5}-[0-9]{4}" className="event-registration-field" /></Field>
-    <Field label="Tamanho camiseta *"><select required value={shirtSize} onChange={(e) => setShirtSize(e.target.value as 'P' | 'M' | 'G')} className="event-registration-field"><option value="P">P</option><option value="M">M</option><option value="G">G</option></select></Field>
-    <Field label="Como quer ser chamado *"><div className="flex gap-2"><input required value={nickname} onChange={(e) => setNickname(e.target.value)} className="event-registration-field flex-1" /><button type="button" onClick={() => setGender(gender === 'M' ? 'F' : 'M')} className={`w-11 rounded-xl border flex items-center justify-center ${gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}>{gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</button></div></Field>
 
-    <div className="grid grid-cols-2 gap-2"><Field label="Valor devido"><input type="number" value={effectiveDueAmount} disabled={!isAdmin} onChange={(e) => setDueAmount(Number(e.target.value))} className="event-registration-field" /></Field><Field label="Valor pendente"><div className="event-registration-readonly text-amber-600">R$ {pendingAmount.toFixed(2)}</div></Field><Field label="Status do pagamento" className="col-span-2">{isAdmin ? <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as typeof paymentStatus)} className="event-registration-field"><option>Pendente</option><option>Pago</option><option>Isento</option></select> : <div className="event-registration-readonly">{paymentStatus}</div>}</Field></div>
+    {/* Alerta de Feedback no Topo */}
+    {feedback && (
+      <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-top-1 ${
+        feedback.includes('sucesso')
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          : 'bg-red-50 border-red-200 text-red-700'
+      }`}>
+        {feedback.includes('sucesso') ? <CheckCircle2 size={18} className="shrink-0 text-emerald-600" /> : <AlertCircle size={18} className="shrink-0 text-red-600" />}
+        <span>{feedback}</span>
+      </div>
+    )}
+
+    <div className="grid grid-cols-2 gap-3">
+      <Field label={canEditIdentity ? 'Nome jogador *' : 'Nome do usuário'}>
+        {canEditIdentity ? (
+          <input required value={name} onChange={(e) => setName(e.target.value)} className="event-registration-field" />
+        ) : (
+          <div className="event-registration-readonly">{entry.name || name}</div>
+        )}
+      </Field>
+      <Field label="PIN do usuário">
+        {canEditIdentity ? (
+          <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="Opcional" className="event-registration-field uppercase" />
+        ) : (
+          <div className="event-registration-readonly">{entry.pin || pin || '-'}</div>
+        )}
+      </Field>
+      <Field label="E-mail *" className="col-span-2">
+        {canEditIdentity ? (
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="event-registration-field" />
+        ) : (
+          <div className="event-registration-readonly">{entry.email || email}</div>
+        )}
+      </Field>
+    </div>
+    <Field label="Telefone *"><input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="(11) 91234-9988" className="event-registration-field" /></Field>
+    <Field label="Tamanho camiseta *"><select required value={shirtSize} onChange={(e) => setShirtSize(e.target.value as 'P' | 'M' | 'G')} className="event-registration-field"><option value="P">P</option><option value="M">M</option><option value="G">G</option></select></Field>
+    <Field label="Como quer ser chamado *"><div className="flex gap-2"><input required value={nickname} onChange={(e) => setNickname(e.target.value)} className="event-registration-field flex-1" /><button type="button" onClick={handleToggleGender} className={`w-11 rounded-xl border flex items-center justify-center ${gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}>{gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</button></div></Field>
+
+    <div className="grid grid-cols-2 gap-2"><Field label="Valor devido"><input type="number" value={effectiveDueAmount} disabled={!isAdmin} onChange={(e) => setDueAmount(Number(e.target.value))} className="event-registration-field" /></Field><Field label="Valor pendente"><div className="event-registration-readonly text-amber-600">R$ {pendingAmount.toFixed(2)}</div></Field><Field label="Status do pagamento" className="col-span-2">{isAdmin ? <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as typeof paymentStatus)} className="event-registration-field"><option value="Pendente">Pendente</option><option value="Confirmado">Confirmado</option><option value="Isento">Isento</option></select> : <div className="event-registration-readonly">{paymentStatus}</div>}</Field></div>
 
     <Field label="Categorias vinculadas"><div className="space-y-2">{availableCategories.map((cat: EventCategory) => {
       const isSelected = categoryIds.includes(cat.id);
@@ -287,7 +595,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             ) : (
               <span />
             )}
-            {isSelected && cat.format === 'Duplas' ? (
+            {isSelected && isDoubles(cat) ? (
               <button
                 type="button"
                 onClick={() => togglePartnerForm(cat.id)}
@@ -301,12 +609,12 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
               <span />
             )}
           </div>
-          {isSelected && cat.format === 'Duplas' && isPartnerFormExpanded && (
+          {isSelected && isDoubles(cat) && isPartnerFormExpanded && (
             <div className="ml-7 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
               <p className="text-[10px] font-black text-slate-400">Informe seu parceiro - {cat.abbreviation || cat.name} *</p>
               <input required value={partner.name} onChange={(e) => updateCategoryPartner(cat.id, 'name', e.target.value)} placeholder="Nome do parceiro" className="event-registration-field bg-white" />
               <input type="email" required value={partner.email} onChange={(e) => updateCategoryPartner(cat.id, 'email', e.target.value)} placeholder="E-mail do parceiro" className="event-registration-field bg-white" />
-              <input type="tel" required inputMode="numeric" value={formatPhone(partner.phone)} onChange={(e) => updateCategoryPartner(cat.id, 'phone', e.target.value)} placeholder="(11) 91234-9988" pattern="[(][0-9]{2}[)] [0-9]{4,5}-[0-9]{4}" className="event-registration-field bg-white" />
+              <input type="tel" required inputMode="numeric" value={formatPhone(partner.phone)} onChange={(e) => updateCategoryPartner(cat.id, 'phone', e.target.value)} placeholder="(11) 91234-9988" className="event-registration-field bg-white" />
               {canShowFormTeam && confirmTeamCategoryId !== cat.id && (
                 <button type="button" onClick={() => setConfirmTeamCategoryId(cat.id)} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95">
                   Formar time
@@ -331,15 +639,76 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-4">
       <div className="flex items-center justify-between"><span className="text-xs font-black text-slate-700">Pagamentos</span><span className="text-xs font-black text-emerald-600">Total pago: R$ {totalPaid.toFixed(2)}</span></div>
       <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-        <div className="flex items-center justify-between"><span className="text-[10px] font-black text-slate-500">{editingPaymentId ? 'Editar pagamento' : 'Novo pagamento'}</span><button type="button" onClick={addPayment} disabled={!newAmount || isSaving} className="px-4 py-2 bg-emerald-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 disabled:opacity-50"><DollarSign size={14} /> {editingPaymentId ? 'Salvar pagamento' : 'Adicionar pagamento'}</button></div>
-        <Field label="Valor do pagamento (R$)"><input type="number" step="0.01" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="event-registration-field" /></Field>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-black text-slate-500">{editingPaymentId ? 'Editar pagamento' : 'Novo pagamento'}</span>
+          <button
+            type="button"
+            onClick={addPayment}
+            disabled={!newAmount || (!newReceipt && (!editingPaymentId || !payments.find((p) => p.id === editingPaymentId)?.receiptUrl)) || isSaving}
+            className="px-4 py-2 bg-emerald-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 disabled:opacity-50 active:scale-95 transition-all"
+          >
+            <DollarSign size={14} /> {editingPaymentId ? 'Salvar pagamento' : 'Adicionar pagamento'}
+          </button>
+        </div>
+        <Field label="Valor do pagamento (R$)">
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="0,00"
+            value={newAmount}
+            onChange={(e) => {
+              const val = e.target.value.replace(/[^0-9.,]/g, '');
+              setNewAmount(val);
+            }}
+            className="event-registration-field"
+          />
+        </Field>
         <Field label="Data do pagamento"><input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="event-registration-field" /></Field>
-        <Field label="Comprovante"><label className="event-registration-field flex items-center justify-between cursor-pointer"><span className="flex items-center gap-2 truncate"><Upload size={16} className="text-slate-400" />{newReceipt?.name || 'Anexar comprovante...'}</span><span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg">Buscar</span><input type="file" accept="image/*,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setNewReceipt({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file); }} className="hidden" /></label></Field>
+        <Field label="Comprovante *"><label className="event-registration-field flex items-center justify-between cursor-pointer"><span className="flex items-center gap-2 truncate"><Upload size={16} className="text-slate-400" />{newReceipt?.name || 'Anexar comprovante (obrigatório)...'}</span><span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg">Buscar</span><input type="file" accept="image/*,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setNewReceipt({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file); }} className="hidden" /></label></Field>
       </div>
       {payments.length > 0 && <div className="space-y-2"><p className="text-[10px] font-black text-slate-400">Histórico de pagamentos</p>{payments.map((payment) => <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setEditingPaymentId(payment.id); setNewAmount(String(payment.amount)); const date = new Date(payment.date); setNewDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`); setNewReceipt(payment.receiptUrl ? { url: payment.receiptUrl, name: payment.receiptFileName || 'Comprovante' } : null); }} className="flex items-center gap-3 text-left"><span>{new Date(payment.date).toLocaleDateString('pt-BR')}</span><span>R$ {payment.amount.toFixed(2)}</span></button><div className="flex items-center gap-2"><button type="button" disabled={!payment.receiptUrl} onClick={() => payment.receiptUrl && window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')} className="text-sky-600 disabled:text-slate-300" title="Abrir comprovante"><Eye size={16} /></button><button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500" title="Excluir pagamento"><Trash2 size={16} /></button></div></div>)}</div>}
     </div>
-    {feedback && <p className={`text-xs font-bold ${feedback.includes('sucesso') ? 'text-emerald-600' : 'text-red-600'}`}>{feedback}</p>}
-    <div className="flex gap-3"><button type="button" onClick={() => save()} disabled={isSaving} className="flex-1 py-3 bg-emerald-500 text-white font-black text-xs rounded-xl"><CheckCircle2 size={16} className="inline mr-1" /> Salvar inscrição</button>{onCancel && <button type="button" onClick={onCancel} className="px-5 py-3 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl">Cancelar</button>}</div>
+    {/* Alerta de Feedback no Rodapé */}
+    {feedback && (
+      <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-bottom-1 ${
+        feedback.includes('sucesso')
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          : 'bg-red-50 border-red-200 text-red-700'
+      }`}>
+        {feedback.includes('sucesso') ? <CheckCircle2 size={18} className="shrink-0 text-emerald-600" /> : <AlertCircle size={18} className="shrink-0 text-red-600" />}
+        <span>{feedback}</span>
+      </div>
+    )}
+
+    <div className="flex gap-3 pt-1">
+      <button
+        type="button"
+        onClick={() => save()}
+        disabled={isSaving}
+        className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
+      >
+        {isSaving ? (
+          <>
+            <Loader2 size={16} className="animate-spin" />
+            <span>Salvando inscrição...</span>
+          </>
+        ) : (
+          <>
+            <CheckCircle2 size={16} />
+            <span>Salvar inscrição</span>
+          </>
+        )}
+      </button>
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-2xl transition-colors active:scale-95"
+        >
+          Cancelar
+        </button>
+      )}
+    </div>
   </div>;
 };
 

@@ -32,48 +32,42 @@ export const joinTournamentEvent = async (
   pin: string,
   profile: EventJoinProfile,
   paymentData?: PaymentData,
+  entryOverride?: Partial<TournamentEntry>,
 ): Promise<{ event: TournamentEvent; joinedAt: number; registration: EventRegistration } | null> => {
   const event = await fetchEventByPin(db, pin) as TournamentEvent | null;
   if (!event || !event.active) return null;
 
-  const email = profile.email.toLowerCase().trim();
+  const email = (entryOverride?.email || profile.email).toLowerCase().trim();
   const existingEntry = await fetchEventEntry(db, pin, email);
   const joinedAt = existingEntry?.joinedAt ?? Date.now();
 
-  if (!existingEntry) {
-    const baseFee = event.registrationFee ?? 0;
-    const extraFee = event.extraCategoryFee ?? 0;
-    const catCount = profile.categoryIds?.length ?? 0;
-    const computedDue = catCount === 0 ? baseFee : baseFee + (catCount - 1) * extraFee;
+  const baseFee = event.registrationFee ?? 0;
+  const extraFee = event.extraCategoryFee ?? 0;
+  const categoryIds = entryOverride?.categoryIds ?? profile.categoryIds ?? [];
+  const catCount = categoryIds.length;
+  const computedDue = catCount === 0 ? baseFee : baseFee + (catCount - 1) * extraFee;
 
-    const entry: TournamentEntry = {
-      email,
-      name: profile.name,
-      nickname: profile.nickname,
-      pin: profile.pin,
-      gender: profile.gender || (profile.nickname.toLowerCase().endsWith('a') ? 'F' : 'M'),
-      joinedAt,
-      dueAmount: paymentData?.dueAmount ?? computedDue,
-      paymentStatus: 'Pendente',
-      paidAmount: paymentData?.paidAmount ?? 0,
-      payments: paymentData?.payments ?? [],
-      ...(profile.categoryIds && profile.categoryIds.length > 0 ? { categoryIds: profile.categoryIds } : {}),
-      phone: profile.phone || '',
-      shirtSize: profile.shirtSize || 'M',
-      ...(profile.partnerName ? { partnerName: profile.partnerName } : {}),
-      ...(profile.partnerEmail ? { partnerEmail: profile.partnerEmail } : {}),
-    };
-    await saveEventEntry(db, pin, entry);
-  } else if (paymentData?.payments && paymentData.payments.length > 0) {
-    // Se o jogador já estava inscrito mas adicionou pagamentos, atualizar
-    const updatedEntry: TournamentEntry = {
-      ...existingEntry,
-      payments: paymentData.payments,
-      paidAmount: paymentData.paidAmount ?? existingEntry.paidAmount,
-      paymentStatus: existingEntry.paymentStatus === 'Isento' ? 'Isento' : 'Pendente',
-    };
-    await saveEventEntry(db, pin, updatedEntry);
-  }
+  const entry: TournamentEntry = {
+    email,
+    name: entryOverride?.name || profile.name,
+    nickname: entryOverride?.nickname || profile.nickname,
+    pin: entryOverride?.pin || profile.pin,
+    gender: entryOverride?.gender || profile.gender || (profile.nickname.toLowerCase().endsWith('a') ? 'F' : 'M'),
+    joinedAt,
+    dueAmount: entryOverride?.dueAmount ?? paymentData?.dueAmount ?? computedDue,
+    paymentStatus: entryOverride?.paymentStatus || 'Pendente',
+    paidAmount: entryOverride?.paidAmount ?? paymentData?.paidAmount ?? 0,
+    payments: entryOverride?.payments ?? paymentData?.payments ?? [],
+    categoryIds,
+    phone: entryOverride?.phone || profile.phone || '',
+    shirtSize: entryOverride?.shirtSize || profile.shirtSize || 'M',
+    partnerName: entryOverride?.partnerName || profile.partnerName || undefined,
+    partnerEmail: entryOverride?.partnerEmail || profile.partnerEmail || undefined,
+    partnerPhone: entryOverride?.partnerPhone || undefined,
+    categoryPartners: entryOverride?.categoryPartners || undefined,
+  };
+
+  await saveEventEntry(db, pin, entry);
 
   const registration: EventRegistration = {
     pin,
@@ -82,6 +76,28 @@ export const joinTournamentEvent = async (
     bannerUrl: event.bannerUrl || null,
   };
   await saveUserEventRegistration(db, email, pin, registration);
+
+  // Disparar avisos automáticos
+  try {
+    const { eventNotificationService } = await import('./eventNotificationService');
+    // a) Se a inscrição for confirmada/isenta
+    if (entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || entry.paymentStatus === 'Isento') {
+      void eventNotificationService.notifyRegistrationConfirmed(db, event, entry);
+    }
+    // b) Pagamentos registrados
+    if (entry.payments && entry.payments.length > 0) {
+      for (const p of entry.payments) {
+        void eventNotificationService.notifyPaymentCreated(db, event, entry, p);
+      }
+    }
+    // c) Valor pendente maior que zero
+    const currentPending = Math.max(0, (entry.dueAmount ?? 0) - (entry.paidAmount || 0));
+    if (currentPending > 0) {
+      void eventNotificationService.notifyPendingPayment(db, event, entry, currentPending);
+    }
+  } catch (err) {
+    console.warn('Erro ao disparar avisos de evento no join:', err);
+  }
 
   return { event, joinedAt, registration };
 };

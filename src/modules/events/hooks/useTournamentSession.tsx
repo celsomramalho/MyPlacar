@@ -6,7 +6,7 @@ import type { UserProfile } from '@modules/auth/types';
 import { fetchRegisteredEvents } from '@modules/events/services/fetchRegisteredEvents';
 import { getActiveEventEntryDate } from '@modules/events/services/getActiveEventEntryDate';
 import { joinTournamentEvent } from '@modules/events/services/joinTournamentEvent';
-import type { EventRegistration, PaymentItem, TournamentEvent } from '@modules/events/types';
+import type { EventRegistration, PaymentItem, TournamentEntry, TournamentEvent } from '@modules/events/types';
 import { useUI } from '@modules/ui/UIContext';
 import { useGame } from '@modules/game/useGame';
 import { safeJsonParse } from '@shared/utils/safeJsonParse';
@@ -62,7 +62,7 @@ export function useTournamentSession() {
   }, []);
 
   const handleJoinTournament = useCallback(
-    async (pin: string, silent = false, profileOverride?: UserProfile & { phone?: string; shirtSize?: 'P' | 'M' | 'G'; partnerName?: string; partnerEmail?: string; payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }, paymentData?: { payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }) => {
+    async (pin: string, silent = false, profileOverride?: UserProfile & { phone?: string; shirtSize?: 'P' | 'M' | 'G'; partnerName?: string; partnerEmail?: string; partnerPhone?: string; categoryPartners?: Record<string, import('@modules/events/types').CategoryPartnerInfo>; payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }, paymentData?: { payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }, entryOverride?: Partial<TournamentEntry>) => {
       const db = getDb();
       const activeProfile = profileOverride || userProfile;
       if (!db || !navigator.onLine) {
@@ -77,7 +77,7 @@ export function useTournamentSession() {
       }
       if (!activeProfile.email) return;
       try {
-        const joined = await joinTournamentEvent(db as Firestore, pin, activeProfile, paymentData);
+        const joined = await joinTournamentEvent(db as Firestore, pin, activeProfile, paymentData, entryOverride || (profileOverride as unknown as Partial<TournamentEntry>));
         if (joined) {
           setUserEntryDate(joined.joinedAt);
           setActiveEvent(joined.event);

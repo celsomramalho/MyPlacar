@@ -28,20 +28,22 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
     const db = getDb();
     if (!db) { setIsLoading(false); return; }
 
-    const unsubscribe = subscribeUserCommunications(db, userProfile.pin, (docs) => {
+    const unsubscribe = subscribeUserCommunications(db, { pin: userProfile.pin, email: userProfile.email }, (docs) => {
       setCommunications(docs);
       setIsLoading(false);
 
       // Mark as read
       docs.forEach(comm => {
-        if (!comm.readBy?.includes(userProfile.pin)) {
-          markCommunicationAsRead(db, comm.id, userProfile.pin);
+        const readList = comm.readBy || [];
+        const isRead = (userProfile.pin && readList.includes(userProfile.pin)) || (userProfile.email && readList.includes(userProfile.email));
+        if (!isRead) {
+          markCommunicationAsRead(db, comm.id, userProfile.pin || userProfile.email);
         }
       });
     });
 
     return () => unsubscribe();
-  }, [userProfile.pin]);
+  }, [userProfile.pin, userProfile.email]);
 
   const handleVote = async (commId: string) => {
     const db = getDb();

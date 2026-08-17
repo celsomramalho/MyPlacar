@@ -75,6 +75,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [remoteAppVersion, setRemoteAppVersion] = useState(LOCAL_VERSION);
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isVoiceSaved, setIsVoiceSaved] = useState(true);
+  
   const [appUrl, setAppUrl] = useState(() => {
     if (typeof window !== 'undefined' && window.location.origin) {
       if (window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost')) {
@@ -91,7 +92,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isOpenCVP, setIsOpenCVP] = useState(false);
   const [isOpenCVS, setIsOpenCVS] = useState(false);
   const [isOpenCVO, setIsOpenCVO] = useState(false);
-
   const [liveStats, setLiveStats] = useState({ total: 0, expired: 0, expiredIds: [] as string[], inactiveLives: 0, inactiveLivesIds: [] as string[] });
   const [inactiveHours, setInactiveHours] = useState(2);
   const [_isCleaningLives, setIsCleaningLives] = useState(false);
@@ -101,6 +101,45 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [editingEvent, setEditingEvent] = useState<TournamentEvent | null>(null);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [showConfirmClearCache, setShowConfirmClearCache] = useState(false);
+
+  const initialEditingEventSnapshotRef = useRef<string | null>(null);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [pendingNavigationAction, setPendingNavigationAction] = useState<(() => void) | null>(null);
+
+  const hasUnsavedEventChanges = () => {
+    if (!editingEvent || initialEditingEventSnapshotRef.current === null) return false;
+    return JSON.stringify(editingEvent) !== initialEditingEventSnapshotRef.current;
+  };
+
+  const handleGuardedAction = (action: () => void) => {
+    if (hasUnsavedEventChanges()) {
+      setPendingNavigationAction(() => action);
+      setShowUnsavedChangesModal(true);
+    } else {
+      action();
+    }
+  };
+
+  const handleStartEditEvent = (event: TournamentEvent) => {
+    handleGuardedAction(() => {
+      setEditingEvent(event);
+      initialEditingEventSnapshotRef.current = JSON.stringify(event);
+    });
+  };
+
+  const handleCreateNewEvent = () => {
+    const newEvent: TournamentEvent = {
+      pin: '',
+      name: '',
+      active: true,
+      eventStatus: 'Em configuração',
+      createdAt: Date.now(),
+    };
+    handleGuardedAction(() => {
+      setEditingEvent(newEvent);
+      initialEditingEventSnapshotRef.current = JSON.stringify(newEvent);
+    });
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRefImport = useRef<HTMLInputElement>(null);
@@ -117,6 +156,17 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       fetchEvents();
     }
   }, [adminTab]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedEventChanges()) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [editingEvent]);
 
   const slugify = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
@@ -436,6 +486,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       });
       setStatus({ type: 'success', msg: 'Evento salvo com sucesso!' });
       setEditingEvent(null);
+      initialEditingEventSnapshotRef.current = null;
     } catch (e) {
       console.error('Erro ao salvar evento:', e);
       setStatus({ type: 'error', msg: `Erro ao salvar evento: ${e instanceof Error ? e.message : String(e)}` });
@@ -487,15 +538,37 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         showClearCache={showConfirmClearCache}
         showFixLegacyMatches={showConfirmFix}
         deleteConfirm={deleteConfirm}
+        showUnsavedChanges={showUnsavedChangesModal}
         onCancelClearCache={() => setShowConfirmClearCache(false)}
         onConfirmClearCache={clearAdminFirestoreCache}
         onCancelFixLegacyMatches={() => setShowConfirmFix(false)}
         onConfirmFixLegacyMatches={executeFixLegacyMatches}
         onCancelDelete={() => setDeleteConfirm(null)}
         onConfirmDelete={confirmDelete}
+        onCancelUnsavedChanges={() => {
+          setShowUnsavedChangesModal(false);
+          setPendingNavigationAction(null);
+        }}
+        onConfirmUnsavedChanges={() => {
+          setShowUnsavedChangesModal(false);
+          setEditingEvent(null);
+          initialEditingEventSnapshotRef.current = null;
+          if (pendingNavigationAction) {
+            pendingNavigationAction();
+            setPendingNavigationAction(null);
+          }
+        }}
       />
 
-      <AdminHeader activeTab={adminTab} onBack={onBack} onSelectTab={setAdminTab} />
+      <AdminHeader
+        activeTab={adminTab}
+        onBack={() => handleGuardedAction(onBack)}
+        onSelectTab={(tab) => handleGuardedAction(() => {
+          setEditingEvent(null);
+          initialEditingEventSnapshotRef.current = null;
+          setAdminTab(tab);
+        })}
+      />
 
       <main className="flex-1 p-6 space-y-8 max-w-md mx-auto w-full pb-40">
         <AdminStatusAlert status={status} />
@@ -789,8 +862,18 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             bannerInputRef={bannerInputRef}
             activeSports={sports.filter(s => s.isActive !== false)}
             adminEmail={userProfile?.email}
-            onCreateEvent={() => setEditingEvent({ pin: '', name: '', active: true, eventStatus: 'Em configuração', createdAt: Date.now() })}
-            onChangeEditingEvent={setEditingEvent}
+            onCreateEvent={handleCreateNewEvent}
+            onStartEditEvent={handleStartEditEvent}
+            onChangeEditingEvent={(event) => {
+              if (event === null) {
+                handleGuardedAction(() => {
+                  setEditingEvent(null);
+                  initialEditingEventSnapshotRef.current = null;
+                });
+              } else {
+                setEditingEvent(event);
+              }
+            }}
             onSaveEvent={handleSaveEvent}
             onSaveDashboardEvent={handleSaveDashboardEvent}
             onDeleteEvent={(pin) => setDeleteConfirm({ type: 'event', id: pin })}

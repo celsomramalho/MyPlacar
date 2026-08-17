@@ -51,38 +51,79 @@ export const subscribeRecentCommunications = (
 
 export const subscribeUserCommunications = (
   db: Firestore,
-  userPin: string,
+  userIdentifier: { pin?: string; email?: string } | string,
   onCommunications: (communications: FirebaseCommunication[]) => void,
 ): Unsubscribe => {
+  const pin = (typeof userIdentifier === 'string' ? userIdentifier : (userIdentifier.pin || '')).trim();
+  const email = (typeof userIdentifier === 'string' ? '' : (userIdentifier.email || '')).trim().toLowerCase();
+
   const communicationsQuery = query(
     communicationsCollection(db),
-    where('targetUserId', 'in', ['all', userPin]),
     orderBy('createdAt', 'desc'),
+    limit(100),
   );
 
-  return onSnapshot(communicationsQuery, snapshot => {
-    onCommunications(snapshot.docs.map(mapCommunicationDoc));
-  });
+  return onSnapshot(
+    communicationsQuery,
+    snapshot => {
+      const allDocs = snapshot.docs.map(mapCommunicationDoc);
+      const filtered = allDocs.filter(comm => {
+        const t = (comm.targetUserId || '').trim();
+        const tEmail = ((comm as unknown as { targetUserEmail?: string }).targetUserEmail || '').trim().toLowerCase();
+        const tPin = ((comm as unknown as { targetUserPin?: string }).targetUserPin || '').trim();
+        if (t === 'all') return true;
+        if (pin && (t.toUpperCase() === pin.toUpperCase() || tPin.toUpperCase() === pin.toUpperCase())) return true;
+        if (email && (t.toLowerCase() === email || tEmail === email)) return true;
+        return false;
+      });
+      onCommunications(filtered);
+    },
+    error => {
+      console.warn('subscribeUserCommunications error:', error);
+    }
+  );
 };
 
 export const subscribeUnreadCommunicationsCount = (
   db: Firestore,
-  userPin: string,
+  userIdentifier: { pin?: string; email?: string } | string,
   onCount: (count: number) => void,
 ): Unsubscribe => {
+  const pin = (typeof userIdentifier === 'string' ? userIdentifier : (userIdentifier.pin || '')).trim();
+  const email = (typeof userIdentifier === 'string' ? '' : (userIdentifier.email || '')).trim().toLowerCase();
+
   const communicationsQuery = query(
     communicationsCollection(db),
-    where('targetUserId', 'in', ['all', userPin]),
+    orderBy('createdAt', 'desc'),
+    limit(100),
   );
 
-  return onSnapshot(communicationsQuery, snapshot => {
-    const unreadCount = snapshot.docs.filter(docSnapshot => {
-      const communication = docSnapshot.data() as Partial<Communication>;
-      return !communication.readBy?.includes(userPin);
-    }).length;
+  return onSnapshot(
+    communicationsQuery,
+    snapshot => {
+      const unreadCount = snapshot.docs.filter(docSnapshot => {
+        const comm = docSnapshot.data() as Partial<Communication> & { targetUserEmail?: string; targetUserPin?: string };
+        const t = (comm.targetUserId || '').trim();
+        const tEmail = (comm.targetUserEmail || '').trim().toLowerCase();
+        const tPin = (comm.targetUserPin || '').trim();
+        
+        const isForUser = 
+          t === 'all' || 
+          (pin && (t.toUpperCase() === pin.toUpperCase() || tPin.toUpperCase() === pin.toUpperCase())) ||
+          (email && (t.toLowerCase() === email || tEmail === email));
 
-    onCount(unreadCount);
-  });
+        if (!isForUser) return false;
+        const readList = comm.readBy || [];
+        const isRead = (pin && readList.includes(pin)) || (email && readList.includes(email));
+        return !isRead;
+      }).length;
+
+      onCount(unreadCount);
+    },
+    error => {
+      console.warn('subscribeUnreadCommunicationsCount error:', error);
+    }
+  );
 };
 
 export const fetchCommunicationTargetPinByEmail = async (

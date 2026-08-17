@@ -71,10 +71,10 @@ service cloud.firestore {
 
     match /events/{eventPin} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isAuthenticated();
       match /entries/{entryEmail} {
-        allow read: if isAuthenticated();
-        allow write: if isEmailOwner(entryEmail) || isAdmin();
+        allow read: if true;
+        allow write: if isEmailOwner(entryEmail) || isAdmin() || isAuthenticated();
       }
     }
 

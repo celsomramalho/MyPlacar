@@ -19,6 +19,7 @@ interface AdminEventsPanelProps {
   activeSports?: FirebaseAdminSportIcon[];
   adminEmail?: string;
   onCreateEvent: () => void;
+  onStartEditEvent?: (event: TournamentEvent) => void;
   onChangeEditingEvent: (event: TournamentEvent | null) => void;
   onSaveEvent: () => void;
   onSaveDashboardEvent?: (event: TournamentEvent) => void;
@@ -34,6 +35,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   activeSports = [],
   adminEmail,
   onCreateEvent,
+  onStartEditEvent,
   onChangeEditingEvent,
   onSaveEvent,
   onSaveDashboardEvent,
@@ -61,6 +63,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             ? {
                 ...updatedInList,          // Base: latest from list (has name, status, etc.)
                 categories: prev.categories ?? updatedInList.categories, // Prefer local categories
+                sponsors: prev.sponsors ?? updatedInList.sponsors,     // Prefer local sponsors
                 entries: prev.entries,     // Always keep locally loaded entries
               }
             : null
@@ -565,7 +568,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         event={currentDashboardEvent}
         activeSports={activeSports}
         onBackToEvents={() => setSelectedDashboardEvent(null)}
-        onEditEventConfig={() => onChangeEditingEvent(currentDashboardEvent)}
+        onEditEventConfig={() => (onStartEditEvent ? onStartEditEvent(currentDashboardEvent) : onChangeEditingEvent(currentDashboardEvent))}
         onUpdateEvent={handleUpdateDashboardEvent}
         adminEmail={adminEmail}
       />

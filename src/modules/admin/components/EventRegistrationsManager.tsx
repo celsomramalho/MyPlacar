@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import type { TournamentEvent, TournamentEntry, EventCategory, PaymentItem } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
@@ -19,6 +19,7 @@ interface Props {
   onUpdateEntries: (entries: TournamentEntry[]) => void;
   onUpdateEvent: (event: TournamentEvent) => void;
   adminEmail?: string;
+  initialExpandedPin?: string | null;
 }
 
 export const EventRegistrationsManager: React.FC<Props> = ({
@@ -26,13 +27,24 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   onUpdateEntries,
   onUpdateEvent,
   adminEmail,
+  initialExpandedPin,
 }) => {
   const entries = event.entries || [];
   const categories = event.categories || [];
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingPin, setEditingPin] = useState<string | null>(null);
-  const [expandedRegistrationPin, setExpandedRegistrationPin] = useState<string | null>(null);
+  const [expandedRegistrationEmail, setExpandedRegistrationEmail] = useState<string | null>(
+    initialExpandedPin || null
+  );
+
+  useEffect(() => {
+    if (initialExpandedPin) {
+      setExpandedRegistrationEmail(initialExpandedPin);
+      setIsAdding(false);
+      setEditingPin(null);
+    }
+  }, [initialExpandedPin]);
 
   // Form State
   const [name, setName] = useState('');
@@ -45,7 +57,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const [nickname, setNickname] = useState('');
   const [gender, setGender] = useState<'M' | 'F'>('M');
   const [dueAmount, setDueAmount] = useState<number>(event.registrationFee || 0);
-  const [paymentStatus, setPaymentStatus] = useState<'Pendente' | 'Pago' | 'Isento'>('Pendente');
+  const [paymentStatus, setPaymentStatus] = useState<'Pendente' | 'Confirmado' | 'Pago' | 'Isento'>('Pendente');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [payments, setPayments] = useState<PaymentItem[]>([]);
 
@@ -80,7 +92,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     setEditingPaymentId(null);
     setIsAdding(false);
     setEditingPin(null);
-    setExpandedRegistrationPin(null);
+    setExpandedRegistrationEmail(null);
   };
 
   const handleStartAdd = () => {
@@ -316,17 +328,32 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       }
     }
     onUpdateEntries(entries.map((item) => item.pin === originalPin ? entryData : item));
-    setExpandedRegistrationPin(null);
   };
 
   const handleDelete = async (targetPin: string) => {
     const targetEntry = entries.find(e => e.pin === targetPin);
     const db = getDb();
+    const targetEmailLower = targetEntry?.email?.toLowerCase().trim();
+
+    // Filtrar e desfazer duplas que continham esse participante
+    const currentPairs = event.pairs || [];
+    const updatedPairs = currentPairs.filter(
+      p =>
+        p.p1?.pin !== targetPin &&
+        p.p2?.pin !== targetPin &&
+        (!targetEmailLower || (p.p1?.email?.toLowerCase().trim() !== targetEmailLower && p.p2?.email?.toLowerCase().trim() !== targetEmailLower))
+    );
+
     if (db && event.pin && targetEntry?.email) {
       try {
-        const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
+        const { deleteEventEntry, deleteUserEventRegistration, updateEvent } = await import('@infra/firebase/events');
         await deleteEventEntry(db, event.pin, targetEntry.email);
         await deleteUserEventRegistration(db, targetEntry.email, event.pin);
+        
+        // Se havia times formados desfeitos, salvar os novos pairs no Firestore
+        if (updatedPairs.length !== currentPairs.length) {
+          await updateEvent(db, event.pin, { pairs: updatedPairs });
+        }
       } catch (err) {
         console.error("Erro ao excluir inscrição no Firestore:", err);
       }
@@ -334,6 +361,9 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
     const updatedList = entries.filter((entry) => entry.pin !== targetPin);
     onUpdateEntries(updatedList);
+    if (updatedPairs.length !== currentPairs.length) {
+      onUpdateEvent({ ...event, pairs: updatedPairs, entries: updatedList });
+    }
   };
 
   // Filtro de categorias por gênero no admin
@@ -432,7 +462,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 ml-1">Telefone <span className="text-red-500">*</span></label>
-              <input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="(11) 91234-9988" pattern="[(][0-9]{2}[)] [0-9]{4,5}-[0-9]{4}" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500" />
+              <input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="(11) 91234-9988" className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500" />
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 ml-1">Tamanho camiseta <span className="text-red-500">*</span></label>
@@ -482,12 +512,12 @@ export const EventRegistrationsManager: React.FC<Props> = ({
               <div className="space-y-1 col-span-2">
                 <label className="text-[10px] font-black text-slate-400 ml-1">Status do pagamento</label>
                 <select
-                  value={paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value as 'Pendente' | 'Pago' | 'Isento')}
+                  value={paymentStatus === 'Pago' ? 'Confirmado' : paymentStatus}
+                  onChange={(e) => setPaymentStatus(e.target.value as 'Pendente' | 'Confirmado' | 'Pago' | 'Isento')}
                   className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
                 >
                   <option value="Pendente">Pendente</option>
-                  <option value="Pago">Pago</option>
+                  <option value="Confirmado">Confirmado</option>
                   <option value="Isento">Isento</option>
                 </select>
               </div>
@@ -707,10 +737,10 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                     entry.categoryIds?.includes(c.id)
                   );
                   const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
-                  const isExpanded = expandedRegistrationPin === entry.pin;
+                  const isExpanded = expandedRegistrationEmail === entry.email;
 
                   return (
-                    <React.Fragment key={entry.pin}>
+                    <React.Fragment key={entry.email || entry.pin}>
                       <tr className={`transition-colors ${isExpanded ? 'bg-emerald-50/50' : 'hover:bg-slate-50/80'}`}>
                         <td className="py-4 px-3 space-y-0.5">
                           <p className="font-black text-slate-800">{entry.name}</p>
@@ -747,14 +777,14 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                           <div className="space-y-2">
                             <span
                               className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                                entry.paymentStatus === 'Pago'
+                                entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
                                   ? 'bg-emerald-100 text-emerald-700'
                                   : entry.paymentStatus === 'Isento'
                                   ? 'bg-blue-100 text-blue-700'
                                   : 'bg-amber-100 text-amber-700'
                               }`}
                             >
-                              {entry.paymentStatus || 'Pendente'}
+                              {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
                             </span>
                             <p className="text-[10px] text-slate-500">
                               R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
@@ -767,7 +797,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                             onClick={() => {
                               setIsAdding(false);
                               setEditingPin(null);
-                              setExpandedRegistrationPin(isExpanded ? null : entry.pin);
+                              setExpandedRegistrationEmail(isExpanded ? null : entry.email);
                             }}
                             className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-slate-500 transition-colors hover:bg-gray-200 active:scale-90"
                             title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
@@ -781,7 +811,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                           <td colSpan={5} className="bg-white px-4 pb-5 pt-0">
                             <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
                               <EventRegistrationForm
-                                key={`expanded-${entry.pin}`}
+                                key={`expanded-${entry.email || entry.pin}`}
                                 event={event}
                                 mode="admin"
                                 entry={entry}
@@ -789,9 +819,9 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                                 onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
                                 onDelete={() => {
                                   void handleDelete(entry.pin);
-                                  setExpandedRegistrationPin(null);
+                                  setExpandedRegistrationEmail(null);
                                 }}
-                                onCancel={() => setExpandedRegistrationPin(null)}
+                                onCancel={() => setExpandedRegistrationEmail(null)}
                               />
                             </div>
                           </td>

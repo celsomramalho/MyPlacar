@@ -57,6 +57,15 @@ const guessGender = (name: string): 'M' | 'F' | undefined => {
   return lastChar === 'A' ? 'F' : 'M';
 };
 
+const formatPhone = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (!digits) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+
 export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, onLogout, onGoAdmin, onCheckUpdate, setIsUpdatingVersion, settings, setSettings, onVersionTap }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
@@ -442,6 +451,20 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
               </button>
             }
           />
+
+          <div>
+            <label className="block text-[11px] font-black text-slate-500 ml-1 mb-1">
+              <span className="flex items-center gap-1.5"><Smartphone size={14} className="text-blue-600" /> Seu telefone</span>
+            </label>
+            <input
+              type="tel"
+              inputMode="numeric"
+              placeholder="(11) 91234-9988"
+              value={formatPhone(profile.phone || '')}
+              onChange={(e) => setProfile({ ...profile, phone: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-2xl px-4 font-bold text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all"
+            />
+          </div>
         </div>
         
         {isAdmin && onGoAdmin && (
