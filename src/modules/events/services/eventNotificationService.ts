@@ -16,22 +16,6 @@ export const eventNotificationService = {
       const userEmail = (entry.email || '').trim().toLowerCase();
       if (!userPin && !userEmail) return;
 
-      // Verificar se já existe aviso de inscrição enviado para este evento e usuário (uma única vez)
-      const existingQuery = query(
-        collection(db, 'communications'),
-        where('targetUserId', 'in', [userPin, userEmail, userPin.toUpperCase(), userEmail.toLowerCase()]),
-      );
-      const snap = await getDocs(existingQuery);
-      const alreadyNotified = snap.docs.some((docSnap) => {
-        const data = docSnap.data();
-        return (
-          data.eventPin === event.pin &&
-          data.notificationType === 'registration_confirmed'
-        );
-      });
-
-      if (alreadyNotified) return;
-
       const locationStr = event.location ? `${event.location}` : 'Local a definir';
       const dateStr = event.eventDateText
         ? event.eventDateText
