@@ -77,32 +77,18 @@ export const joinTournamentEvent = async (
   };
   await saveUserEventRegistration(db, email, pin, registration);
 
-  // Disparar avisos automáticos
+  // Disparar avisos automáticos da nova inscrição (Avisos 1 e 2)
   try {
     const { eventNotificationService } = await import('./eventNotificationService');
 
-    // a) Inscrição realizada - avisa sempre (confirmada, isenta ou pendente)
+    // 1) Inscrição recebida / confirmada (contém nome do evento, categorias, local e data)
     void eventNotificationService.notifyRegistrationConfirmed(db, event, entry);
 
-    // b) Pagamentos registrados
+    // 2) Pagamento registrado (se informado comprovante/pagamento no ato da inscrição)
     if (entry.payments && entry.payments.length > 0) {
       for (const p of entry.payments) {
         void eventNotificationService.notifyPaymentCreated(db, event, entry, p);
       }
-    }
-
-    // c) Novas categorias inscritas
-    for (const catId of categoryIds) {
-      const catObj = (event.categories || []).find((c) => c.id === catId);
-      if (catObj) {
-        void eventNotificationService.notifyNewCategory(db, event, entry, catObj);
-      }
-    }
-
-    // d) Valor pendente maior que zero
-    const currentPending = Math.max(0, (entry.dueAmount ?? 0) - (entry.paidAmount || 0));
-    if (currentPending > 0) {
-      void eventNotificationService.notifyPendingPayment(db, event, entry, currentPending);
     }
   } catch (err) {
     console.warn('Erro ao disparar avisos de evento no join:', err);

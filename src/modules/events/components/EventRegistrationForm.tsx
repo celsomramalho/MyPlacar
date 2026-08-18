@@ -391,21 +391,13 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         }
       }
 
-      // Envio automático dos avisos do sistema
+      // Envio automático dos avisos do sistema para edições de inscrições existentes (Imagem 2)
+      const isExistingEntry = initialCategoryIds.length > 0;
       const db = getDb();
-      if (db) {
+      if (db && isExistingEntry) {
         const { eventNotificationService } = await import('../services/eventNotificationService');
-        // a) Inscrição confirmada (uma única vez)
-        if (cleanEntry.paymentStatus === 'Confirmado' || cleanEntry.paymentStatus === 'Pago' || cleanEntry.paymentStatus === 'Isento') {
-          void eventNotificationService.notifyRegistrationConfirmed(db as Firestore, event, cleanEntry);
-        }
 
-        // b) Pagamento registrado
-        if (addedPaymentItem) {
-          void eventNotificationService.notifyPaymentCreated(db as Firestore, event, cleanEntry, addedPaymentItem);
-        }
-
-        // c) Novas categorias adicionadas
+        // c) Novas categorias adicionadas após já estar inscrito (Imagem 2)
         const newlyAddedCategoryIds = categoryIds.filter((id) => !initialCategoryIds.includes(id));
         for (const catId of newlyAddedCategoryIds) {
           const catObj = (event.categories || []).find((c) => c.id === catId);
@@ -414,11 +406,14 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           }
         }
 
-        // d) Valor pendente maior que zero
-        const currentTotalPaid = paymentsToSave.reduce((sum, p) => sum + p.amount, 0);
-        const currentPending = Math.max(0, (cleanEntry.dueAmount ?? 0) - currentTotalPaid);
-        if (currentPending > 0) {
-          void eventNotificationService.notifyPendingPayment(db as Firestore, event, cleanEntry, currentPending);
+        // b) Novo pagamento registrado em inscrição existente (Imagem 2)
+        if (addedPaymentItem) {
+          void eventNotificationService.notifyPaymentCreated(db as Firestore, event, cleanEntry, addedPaymentItem);
+        }
+
+        // a) Inscrição confirmada pelo admin (uma única vez)
+        if (cleanEntry.paymentStatus === 'Confirmado' || cleanEntry.paymentStatus === 'Pago' || cleanEntry.paymentStatus === 'Isento') {
+          void eventNotificationService.notifyRegistrationConfirmed(db as Firestore, event, cleanEntry);
         }
       }
     } catch (error) {
@@ -469,13 +464,6 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     setNewAmount('');
     setNewReceipt(null);
     await save(next);
-
-    const db = getDb();
-    if (db) {
-      const { eventNotificationService } = await import('../services/eventNotificationService');
-      const cleanEntry = buildEntry(next);
-      void eventNotificationService.notifyPaymentCreated(db as Firestore, event, cleanEntry, newPayItem);
-    }
   };
 
   const removePayment = async (id: string) => {
