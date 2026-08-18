@@ -177,4 +177,40 @@ export const eventNotificationService = {
       console.warn('Erro ao criar aviso de pagamento pendente:', err);
     }
   },
+
+  /**
+   * Envia aviso para o usuário ao confirmar a saída ou exclusão de uma inscrição:
+   * "Exclusão de inscrição confirmada: Sua inscrição no evento [Nome do Evento] foi cancelada/excluída com sucesso."
+   */
+  notifyRegistrationDeleted: async (
+    db: Firestore,
+    event: TournamentEvent,
+    userPinOrEmail: string,
+    _userNickname?: string,
+  ) => {
+    try {
+      const target = (userPinOrEmail || '').trim();
+      if (!target) return;
+
+      const content = `Sua inscrição no evento ${event.name || 'do torneio'} foi cancelada/excluída com sucesso.`;
+
+      await addDoc(collection(db, 'communications'), {
+        type: 'message',
+        title: 'Exclusão de Inscrição Confirmada',
+        content,
+        authorId: 'system',
+        authorName: event.name || 'Organização',
+        createdAt: Date.now(),
+        targetUserId: target,
+        targetUserEmail: target.includes('@') ? target.toLowerCase() : '',
+        targetUserPin: !target.includes('@') ? target : '',
+        isPinned: false,
+        readBy: [],
+        eventPin: event.pin,
+        notificationType: 'registration_deleted',
+      });
+    } catch (err) {
+      console.warn('Erro ao criar aviso de exclusão de inscrição:', err);
+    }
+  },
 };

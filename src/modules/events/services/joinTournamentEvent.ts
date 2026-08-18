@@ -77,6 +77,35 @@ export const joinTournamentEvent = async (
   };
   await saveUserEventRegistration(db, email, pin, registration);
 
+  // Sincroniza telefone e gênero com o cadastro do usuário (perfil)
+  if (email && (entry.phone || entry.gender)) {
+    try {
+      const userUpdates: Record<string, unknown> = {};
+      if (entry.phone) userUpdates.phone = entry.phone;
+      if (entry.gender) userUpdates.gender = entry.gender;
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      await setDoc(doc(db, 'users', email), {
+        ...userUpdates,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      const savedLocal = typeof localStorage !== 'undefined' ? localStorage.getItem('myPlacarUserProfile') : null;
+      if (savedLocal) {
+        try {
+          const parsed = JSON.parse(savedLocal);
+          if (!parsed.email || parsed.email.toLowerCase() === email.toLowerCase()) {
+            if (entry.phone) parsed.phone = entry.phone;
+            if (entry.gender) parsed.gender = entry.gender;
+            localStorage.setItem('myPlacarUserProfile', JSON.stringify(parsed));
+            window.dispatchEvent(new Event('storage'));
+          }
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('Erro ao atualizar telefone/gênero no perfil via join:', err);
+    }
+  }
+
   // Disparar avisos automáticos da nova inscrição (Avisos 1 e 2)
   try {
     const { eventNotificationService } = await import('./eventNotificationService');

@@ -365,14 +365,18 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       await onSave(jsonClean);
       setFeedback('✓ Inscrição salva com sucesso!');
 
-      // Sincroniza o telefone com o cadastro do usuário (perfil)
-      if (cleanPhone && cleanEntry.email) {
+      // Sincroniza o telefone e o gênero com o cadastro do usuário (perfil)
+      if (cleanEntry.email) {
         try {
           const db = getDb();
-          if (db) {
+          const userUpdates: Record<string, unknown> = {};
+          if (cleanPhone) userUpdates.phone = cleanPhone;
+          if (cleanEntry.gender) userUpdates.gender = cleanEntry.gender;
+
+          if (db && Object.keys(userUpdates).length > 0) {
             const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
             await setDoc(doc(db as Firestore, 'users', cleanEntry.email.toLowerCase().trim()), {
-              phone: cleanPhone,
+              ...userUpdates,
               updatedAt: serverTimestamp(),
             }, { merge: true });
           }
@@ -381,13 +385,15 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             try {
               const parsed = JSON.parse(savedLocal);
               if (!parsed.email || parsed.email.toLowerCase() === cleanEntry.email.toLowerCase()) {
-                parsed.phone = cleanPhone;
+                if (cleanPhone) parsed.phone = cleanPhone;
+                if (cleanEntry.gender) parsed.gender = cleanEntry.gender;
                 localStorage.setItem('myPlacarUserProfile', JSON.stringify(parsed));
+                window.dispatchEvent(new Event('storage'));
               }
             } catch (e) {}
           }
         } catch (e) {
-          console.warn('Erro ao atualizar telefone no perfil:', e);
+          console.warn('Erro ao atualizar telefone/gênero no perfil:', e);
         }
       }
 

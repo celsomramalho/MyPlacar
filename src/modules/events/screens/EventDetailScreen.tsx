@@ -697,6 +697,14 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           await deleteEventEntry(db as Firestore, event.pin, entryEmail);
           await deleteUserEventRegistration(db as Firestore, entryEmail, event.pin);
           
+          // Disparar aviso de exclusão de inscrição confirmada
+          try {
+            const { eventNotificationService } = await import('../services/eventNotificationService');
+            void eventNotificationService.notifyRegistrationDeleted(db as Firestore, event, entryEmail, nickname);
+          } catch (notifErr) {
+            console.warn('Erro ao disparar aviso de exclusão de inscrição:', notifErr);
+          }
+
           // Desfazer times formados do participante no documento do evento
           if (hasFormedTeams) {
             const updatedPairs = (event.pairs || []).filter(

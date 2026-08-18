@@ -350,6 +350,14 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         await deleteEventEntry(db, event.pin, targetEntry.email);
         await deleteUserEventRegistration(db, targetEntry.email, event.pin);
         
+        // Disparar aviso de exclusão de inscrição confirmada para o participante
+        try {
+          const { eventNotificationService } = await import('../../events/services/eventNotificationService');
+          void eventNotificationService.notifyRegistrationDeleted(db, event, targetEntry.email || targetPin, targetEntry.nickname);
+        } catch (notifErr) {
+          console.warn('Erro ao disparar aviso de exclusão de inscrição no admin:', notifErr);
+        }
+
         // Se havia times formados desfeitos, salvar os novos pairs no Firestore
         if (updatedPairs.length !== currentPairs.length) {
           await updateEvent(db, event.pin, { pairs: updatedPairs });
