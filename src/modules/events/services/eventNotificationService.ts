@@ -16,7 +16,7 @@ export const eventNotificationService = {
       const userEmail = (entry.email || '').trim().toLowerCase();
       if (!userPin && !userEmail) return;
 
-      // Verificar se já existe aviso de confirmação enviado para este evento e usuário (uma única vez)
+      // Verificar se já existe aviso de inscrição enviado para este evento e usuário (uma única vez)
       const existingQuery = query(
         collection(db, 'communications'),
         where('targetUserId', 'in', [userPin, userEmail, userPin.toUpperCase(), userEmail.toLowerCase()]),
@@ -48,11 +48,15 @@ export const eventNotificationService = {
         .join(', ');
       const catStr = catNames ? `, categoria(s): ${catNames}` : '';
 
-      const content = `Inscrição confirmada no evento ${event.name}${catStr}, ${locationStr} e ${dateStr}.`;
+      const isConfirmed = entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || entry.paymentStatus === 'Isento';
+      const title = isConfirmed ? 'Inscrição Confirmada' : 'Inscrição Recebida';
+      const content = isConfirmed
+        ? `Inscrição confirmada no evento ${event.name}${catStr}, ${locationStr} e ${dateStr}.`
+        : `Sua inscrição no evento ${event.name}${catStr} foi recebida. ${locationStr}, ${dateStr}. Aguardando confirmação de pagamento.`;
 
       await addDoc(collection(db, 'communications'), {
         type: 'message',
-        title: 'Inscrição Confirmada',
+        title,
         content,
         authorId: 'system',
         authorName: event.name || 'Organização',
@@ -66,7 +70,7 @@ export const eventNotificationService = {
         notificationType: 'registration_confirmed',
       });
     } catch (err) {
-      console.warn('Erro ao criar aviso de inscrição confirmada:', err);
+      console.warn('Erro ao criar aviso de inscrição:', err);
     }
   },
 

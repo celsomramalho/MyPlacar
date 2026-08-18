@@ -12,6 +12,7 @@ interface EventDetailRouteProps {
   event: TournamentEvent;
   handleExitTournament: () => void;
   setModalConfig: Dispatch<SetStateAction<ModalConfig | null>>;
+  unreadCommsCount?: number;
 }
 
 export function EventDetailRoute({
@@ -19,6 +20,7 @@ export function EventDetailRoute({
   event,
   handleExitTournament,
   setModalConfig,
+  unreadCommsCount = 0,
 }: EventDetailRouteProps) {
   const { userProfile, partners, setPartners, initGameState } = useGame();
   const { setCurrentScreen } = useUI();
@@ -41,6 +43,8 @@ export function EventDetailRoute({
         initGameState(true, { match, pair1, pair2, event: ev })
       }
       setModalConfig={setModalConfig}
+      onOpenCommunications={() => setCurrentScreen('communications')}
+      unreadCount={unreadCommsCount}
     />
   );
 }

@@ -34,4 +34,8 @@ export interface Communication {
   replies?: Reply[];
   pushSent?: boolean;
   emailSent?: boolean;
+  eventPin?: string;
+  notificationType?: string;
+  categoryId?: string;
+  paymentId?: string;
 }

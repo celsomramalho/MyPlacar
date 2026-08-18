@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Partner } from '@modules/partners/types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
-import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, UserRound, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, DollarSign, Eye } from 'lucide-react';
+import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, UserRound, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, DollarSign, Eye, Bell } from 'lucide-react';
 import type { TournamentEvent, TournamentEntry, TournamentPair, TournamentMatch, TournamentConfig, PaymentItem, EventCategory } from '../types';
 import type { UserProfile } from '@modules/auth/types';
 import { deleteEventEntry, deleteUserEventRegistration, fetchEventEntries, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeEventEntries, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
@@ -26,6 +26,8 @@ interface Props {
   onStartTournamentMatch: (match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent) => void;
   setModalConfig: React.Dispatch<React.SetStateAction<ModalConfig | null>>;
   appUrl: string;
+  onOpenCommunications?: () => void;
+  unreadCount?: number;
 }
 
 interface DesfazerTimeIconProps {
@@ -504,7 +506,7 @@ const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, can
   );
 };
 
-export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack, userProfile, onExitTournament, onAddPartner, partners, onStartTournamentMatch, setModalConfig, appUrl }) => {
+export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack, userProfile, onExitTournament, onAddPartner, partners, onStartTournamentMatch, setModalConfig, appUrl, onOpenCommunications, unreadCount = 0 }) => {
   const [event, setEvent] = useState<TournamentEvent>(initialEvent);
   const [entries, setEntries] = useState<TournamentEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -897,7 +899,23 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           <Trophy size={22} className="text-amber-500 stroke-[2.5]" />
           <h1 className="text-lg font-black text-black tracking-tight truncate max-w-[200px]">{event.name}</h1>
         </div>
-        <div className="w-10"></div>
+        {onOpenCommunications ? (
+          <button
+            type="button"
+            onClick={onOpenCommunications}
+            className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all relative"
+            title="Comunicados e avisos"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white animate-pulse">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        ) : (
+          <div className="w-10" />
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto no-scrollbar pb-32">

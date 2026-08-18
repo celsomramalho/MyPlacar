@@ -329,6 +329,8 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             onSelectEvent={ev => handleSelectEvent(ev as unknown as TournamentEvent)}
             onOpenMenu={() => setIsMenuOpen(true)}
             userProfile={userProfile}
+            onOpenCommunications={() => setCurrentScreen('communications')}
+            unreadCount={unreadCommsCount}
           />
         )}
 
@@ -338,6 +340,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             event={activeEvent}
             handleExitTournament={handleExitTournament}
             setModalConfig={setModalConfig}
+            unreadCommsCount={unreadCommsCount}
           />
         )}
 

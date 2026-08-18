@@ -80,17 +80,26 @@ export const joinTournamentEvent = async (
   // Disparar avisos automáticos
   try {
     const { eventNotificationService } = await import('./eventNotificationService');
-    // a) Se a inscrição for confirmada/isenta
-    if (entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || entry.paymentStatus === 'Isento') {
-      void eventNotificationService.notifyRegistrationConfirmed(db, event, entry);
-    }
+
+    // a) Inscrição realizada - avisa sempre (confirmada, isenta ou pendente)
+    void eventNotificationService.notifyRegistrationConfirmed(db, event, entry);
+
     // b) Pagamentos registrados
     if (entry.payments && entry.payments.length > 0) {
       for (const p of entry.payments) {
         void eventNotificationService.notifyPaymentCreated(db, event, entry, p);
       }
     }
-    // c) Valor pendente maior que zero
+
+    // c) Novas categorias inscritas
+    for (const catId of categoryIds) {
+      const catObj = (event.categories || []).find((c) => c.id === catId);
+      if (catObj) {
+        void eventNotificationService.notifyNewCategory(db, event, entry, catObj);
+      }
+    }
+
+    // d) Valor pendente maior que zero
     const currentPending = Math.max(0, (entry.dueAmount ?? 0) - (entry.paidAmount || 0));
     if (currentPending > 0) {
       void eventNotificationService.notifyPendingPayment(db, event, entry, currentPending);

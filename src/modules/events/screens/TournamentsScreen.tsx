@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X } from 'lucide-react';
+import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X, Bell } from 'lucide-react';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { fetchActiveEvents } from '../services/fetchActiveEvents';
@@ -15,9 +15,11 @@ interface Props {
   onSelectEvent: (event: EventRegistration) => void;
   onOpenMenu: () => void;
   userProfile?: UserProfile;
+  onOpenCommunications?: () => void;
+  unreadCount?: number;
 }
 
-export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onOpenMenu, userProfile }) => {
+export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onOpenMenu, userProfile, onOpenCommunications, unreadCount = 0 }) => {
   const [pinInput, setPinInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [joiningPin, setJoiningPin] = useState<string | null>(null);
@@ -134,7 +136,23 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
           <Trophy size={22} className="text-amber-500 stroke-[2.5]" />
           <h1 className="text-lg font-black text-black tracking-tight">Meus torneios</h1>
         </div>
-        <div className="w-10"></div>
+        {onOpenCommunications ? (
+          <button
+            type="button"
+            onClick={onOpenCommunications}
+            className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all relative"
+            title="Comunicados e avisos"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white animate-pulse">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        ) : (
+          <div className="w-10" />
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-8 no-scrollbar pb-6">
