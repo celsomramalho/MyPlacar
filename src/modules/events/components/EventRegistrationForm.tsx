@@ -487,26 +487,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const handleDeleteWithConfirmation = () => {
     if (!onDelete) return;
-
-    const targetEmailLower = (entry.email || '').toLowerCase().trim();
-    const targetPin = (entry.pin || '').trim();
-
-    const formedPairs = (event.pairs || []).filter(
-      (p) =>
-        (p.p1?.email && p.p1.email.toLowerCase().trim() === targetEmailLower) ||
-        (p.p2?.email && p.p2.email.toLowerCase().trim() === targetEmailLower) ||
-        (targetPin && (p.p1?.pin === targetPin || p.p2?.pin === targetPin))
-    );
-
-    let confirmMessage = `Deseja realmente excluir a inscrição de "${entry.name || entry.nickname || entry.email}"?`;
-    if (formedPairs.length > 0) {
-      const teamsStr = formedPairs.map((p) => p.teamCode || `Time ${p.teamNumber || ''}`).join(', ');
-      confirmMessage = `ATENÇÃO: Este participante possui time(s) formado(s): [${teamsStr}].\n\nAo excluir a inscrição, este(s) time(s) será(ão) desfeito(s) automaticamente.\n\nDeseja realmente excluir a inscrição?`;
-    }
-
-    if (window.confirm(confirmMessage)) {
-      onDelete();
-    }
+    onDelete();
   };
 
   return <div className="space-y-4 text-left">

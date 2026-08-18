@@ -3,20 +3,25 @@ import { supabase } from './client';
 const isDev = import.meta.env.DEV;
 
 const warn = (fn: string, err: unknown) => {
-  if (isDev) console.warn(`[supabaseMirror] ${fn}:`, err);
-  else {
-    const msg = err instanceof Error
-      ? err.message
-      : typeof err === 'string'
-        ? err
-        : (typeof err === 'object' && err !== null)
-          ? JSON.stringify(err)
-          : String(err);
-    const normalizedMsg = msg || '';
-    if (!normalizedMsg.includes('duplicate') && !normalizedMsg.includes('conflict')) {
-      console.warn(`[supabaseMirror] ${fn}:`, normalizedMsg);
-    }
+  const msg = err instanceof Error
+    ? err.message
+    : typeof err === 'string'
+      ? err
+      : (typeof err === 'object' && err !== null)
+        ? JSON.stringify(err)
+        : String(err);
+  const normalizedMsg = msg || '';
+  if (
+    normalizedMsg.includes('Failed to fetch') ||
+    normalizedMsg.includes('ERR_NAME_NOT_RESOLVED') ||
+    normalizedMsg.includes('duplicate') ||
+    normalizedMsg.includes('conflict') ||
+    normalizedMsg.includes('NetworkError') ||
+    normalizedMsg.includes('fetch')
+  ) {
+    return;
   }
+  if (isDev) console.warn(`[supabaseMirror] ${fn}:`, err);
 };
 
 export interface SupabaseMirrorUserProfile {
@@ -91,7 +96,10 @@ export const mirrorUser = (profile: SupabaseMirrorUserProfile): void => {
   supabase
     .from('users')
     .upsert(row, { onConflict: 'email' })
-    .then(({ error }) => { if (error) warn('mirrorUser', error); });
+    .then(
+      ({ error }) => { if (error) warn('mirrorUser', error); },
+      (err) => warn('mirrorUser', err)
+    );
 };
 
 export const mirrorPartners = (
@@ -113,7 +121,10 @@ export const mirrorPartners = (
   supabase
     .from('user_partners')
     .upsert(rows, { onConflict: 'owner_email,partner_pin' })
-    .then(({ error }) => { if (error) warn('mirrorPartners', error); });
+    .then(
+      ({ error }) => { if (error) warn('mirrorPartners', error); },
+      (err) => warn('mirrorPartners', err)
+    );
 };
 
 export const deletePartners = (
@@ -127,7 +138,10 @@ export const deletePartners = (
     .delete()
     .eq('owner_email', ownerEmail.toLowerCase().trim())
     .in('partner_pin', deletedPins.map(p => p.toUpperCase().trim()))
-    .then(({ error }) => { if (error) warn('deletePartners', error); });
+    .then(
+      ({ error }) => { if (error) warn('deletePartners', error); },
+      (err) => warn('deletePartners', err)
+    );
 };
 
 export const mirrorIcon = (
@@ -150,7 +164,10 @@ export const mirrorIcon = (
     supabase
       .from('sport_icons')
       .upsert(row, { onConflict: 'id' })
-      .then(({ error }) => { if (error) warn('mirrorIcon/sport', error); });
+      .then(
+        ({ error }) => { if (error) warn('mirrorIcon/sport', error); },
+        (err) => warn('mirrorIcon/sport', err)
+      );
     return;
   }
 
@@ -165,7 +182,10 @@ export const mirrorIcon = (
   supabase
     .from('category_icons')
     .upsert(row, { onConflict: 'id' })
-    .then(({ error }) => { if (error) warn('mirrorIcon/category', error); });
+    .then(
+      ({ error }) => { if (error) warn('mirrorIcon/category', error); },
+      (err) => warn('mirrorIcon/category', err)
+    );
 };
 
 export const deleteIcon = (type: 'sport' | 'category', id: string): void => {
@@ -177,5 +197,8 @@ export const deleteIcon = (type: 'sport' | 'category', id: string): void => {
     .from(table)
     .delete()
     .eq('id', id)
-    .then(({ error }) => { if (error) warn('deleteIcon', error); });
+    .then(
+      ({ error }) => { if (error) warn('deleteIcon', error); },
+      (err) => warn('deleteIcon', err)
+    );
 };

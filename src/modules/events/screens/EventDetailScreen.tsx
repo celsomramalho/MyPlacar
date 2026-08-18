@@ -218,10 +218,7 @@ const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, can
           <button
             type="button"
             onClick={() => {
-              if (window.confirm(`Deseja realmente excluir a inscrição de ${entry.nickname}?`)) {
-                // acionar salvamento ou deleção
-                onSave({ ...entry, _deleteRequested: true } as any);
-              }
+              onSave({ ...entry, _deleteRequested: true } as any);
             }}
             className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
             title="Excluir inscrição"
