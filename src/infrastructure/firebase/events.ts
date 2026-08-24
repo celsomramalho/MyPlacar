@@ -21,6 +21,7 @@ interface FirebaseEventRegistration {
 }
 
 interface FirebaseTournamentEntry {
+  registrationId?: number;
   email: string;
   name: string;
   nickname: string;
@@ -266,3 +267,59 @@ export const updateEventMatches = (
   eventPin: string,
   matches: FirebaseTournamentMatch[],
 ) => updateDoc(doc(db, 'events', eventPin), { matches: sanitizeForFirestore(JSON.parse(JSON.stringify(matches))) });
+
+/**
+ * Garante que todas as inscrições existentes de um evento tenham Inscrição_ID sequencial único.
+ * Para inscrições que ainda não possuem Inscrição_ID (ex: os 16 inscritos legados), atribui
+ * automaticamente em ordem cronológica de inscrição (joinedAt) e persiste no Firestore.
+ */
+export const ensureEventEntriesRegistrationIds = async (
+  db: Firestore,
+  eventPin: string,
+  entries: FirebaseTournamentEntry[],
+): Promise<FirebaseTournamentEntry[]> => {
+  if (!entries || entries.length === 0) return entries;
+
+  let hasChanges = false;
+  // Ordena por joinedAt para manter a ordem cronológica de inscrição
+  const sorted = [...entries].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+
+  const existingIds = new Set<number>(
+    sorted
+      .map((e) => Number(e.registrationId))
+      .filter((n) => !isNaN(n) && n > 0)
+  );
+
+  let nextSeq = 1;
+  const getNextAvailableId = () => {
+    while (existingIds.has(nextSeq)) {
+      nextSeq++;
+    }
+    existingIds.add(nextSeq);
+    return nextSeq;
+  };
+
+  const updatedEntries = sorted.map((entry) => {
+    if (!entry.registrationId || isNaN(Number(entry.registrationId)) || Number(entry.registrationId) <= 0) {
+      hasChanges = true;
+      const assignedId = getNextAvailableId();
+      return { ...entry, registrationId: assignedId };
+    }
+    return entry;
+  });
+
+  if (hasChanges && db && eventPin) {
+    for (const entry of updatedEntries) {
+      const original = entries.find((e) => e.email === entry.email);
+      if (!original?.registrationId && entry.registrationId && entry.email) {
+        try {
+          void updateEventEntry(db, eventPin, entry.email, { registrationId: entry.registrationId });
+        } catch (err) {
+          console.warn('Erro ao auto-atribuir Inscrição_ID para', entry.email, err);
+        }
+      }
+    }
+  }
+
+  return updatedEntries;
+};

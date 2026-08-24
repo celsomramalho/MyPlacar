@@ -180,6 +180,23 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             updatedAt: serverTimestamp()
           }, { merge: true });
           mirrorUser(userProfile);
+
+          // Propaga a alteração de gênero para todas as inscrições do usuário em eventos
+          try {
+            const { collection, getDocs, updateDoc } = await import('firebase/firestore');
+            const cleanUserEmail = userProfile.email.toLowerCase().trim();
+            const userRegsSnap = await getDocs(collection(db as Firestore, 'user_registrations', cleanUserEmail, 'events'));
+            for (const regDoc of userRegsSnap.docs) {
+              const eventPin = regDoc.id;
+              try {
+                await updateDoc(doc(db as Firestore, 'events', eventPin, 'entries', cleanUserEmail), {
+                  gender: userProfile.gender || 'M',
+                });
+              } catch {}
+            }
+          } catch (regErr) {
+            console.warn('Não foi possível propagar gênero para inscrições:', regErr);
+          }
         }
       }
     } catch (e) {

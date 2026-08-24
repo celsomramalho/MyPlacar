@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
-import type { TournamentEvent, TournamentEntry, EventCategory, PaymentItem } from '@modules/events/types';
+import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { updateUserProfileFields } from '@infra/firebase/users';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
@@ -254,7 +254,11 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
     const calculatedPaidAmount = payments.reduce((acc, curr) => acc + curr.amount, 0);
 
+    const existingRegistrationId = editingPin ? entries.find(e => e.pin === editingPin)?.registrationId : undefined;
+    const registrationId = existingRegistrationId || getNextRegistrationId(entries);
+
     const entryData: TournamentEntry = {
+      registrationId,
       name: name.trim(),
       pin: cleanPin,
       email: cleanEmail,
@@ -301,33 +305,41 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
   const handleSaveSharedEntry = async (entryData: TournamentEntry) => {
     const db = getDb();
+    const finalEntry: TournamentEntry = {
+      ...entryData,
+      registrationId: entryData.registrationId || getNextRegistrationId(entries),
+    };
     if (db && event.pin) {
       const { saveAdminEventEntry, saveUserEventRegistration } = await import('@infra/firebase/events');
-      await saveAdminEventEntry(db, event.pin, entryData, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+      await saveAdminEventEntry(db, event.pin, finalEntry, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
       // O registro auxiliar não pode impedir a persistência principal da inscrição.
       try {
-        await saveUserEventRegistration(db, entryData.email, event.pin, { pin: event.pin, name: event.name, joinedAt: entryData.joinedAt, bannerUrl: event.bannerUrl || null });
+        await saveUserEventRegistration(db, finalEntry.email, event.pin, { pin: event.pin, name: event.name, joinedAt: finalEntry.joinedAt, bannerUrl: event.bannerUrl || null });
       } catch (error) {
         console.warn('Inscrição salva, mas não foi possível criar o índice auxiliar do usuário:', error);
       }
     }
-    const updated = editingPin ? entries.map((item) => item.pin === editingPin ? entryData : item) : [...entries, entryData];
+    const updated = editingPin ? entries.map((item) => item.pin === editingPin ? finalEntry : item) : [...entries, finalEntry];
     onUpdateEntries(updated);
     resetForm();
   };
 
   const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
     const db = getDb();
+    const finalEntry: TournamentEntry = {
+      ...entryData,
+      registrationId: entryData.registrationId || entries.find(e => e.pin === originalPin)?.registrationId || getNextRegistrationId(entries),
+    };
     if (db && event.pin) {
       const { saveAdminEventEntry, saveUserEventRegistration } = await import('@infra/firebase/events');
-      await saveAdminEventEntry(db, event.pin, entryData, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+      await saveAdminEventEntry(db, event.pin, finalEntry, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
       try {
-        await saveUserEventRegistration(db, entryData.email, event.pin, { pin: event.pin, name: event.name, joinedAt: entryData.joinedAt, bannerUrl: event.bannerUrl || null });
+        await saveUserEventRegistration(db, finalEntry.email, event.pin, { pin: event.pin, name: event.name, joinedAt: finalEntry.joinedAt, bannerUrl: event.bannerUrl || null });
       } catch (error) {
         console.warn('Inscrição salva, mas não foi possível criar o índice auxiliar do usuário:', error);
       }
     }
-    onUpdateEntries(entries.map((item) => item.pin === originalPin ? entryData : item));
+    onUpdateEntries(entries.map((item) => item.pin === originalPin ? finalEntry : item));
   };
 
   const handleDelete = async (targetPin: string) => {
@@ -732,6 +744,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100 text-[10px] tracking-wider font-black text-slate-400">
+                  <th className="py-3 px-3">ID</th>
                   <th className="py-3 px-3">Participante</th>
                   <th className="py-3 px-2">Gênero</th>
                   <th className="py-3 px-3">Categorias</th>
@@ -750,6 +763,9 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                   return (
                     <React.Fragment key={entry.email || entry.pin}>
                       <tr className={`transition-colors ${isExpanded ? 'bg-emerald-50/50' : 'hover:bg-slate-50/80'}`}>
+                        <td className="py-4 px-3 font-mono font-black text-emerald-600">
+                          {formatRegistrationId(entry.registrationId)}
+                        </td>
                         <td className="py-4 px-3 space-y-0.5">
                           <p className="font-black text-slate-800">{entry.name}</p>
                           <p className="text-[10px] text-amber-500 font-black">

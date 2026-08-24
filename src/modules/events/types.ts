@@ -114,6 +114,7 @@ export interface CategoryPartnerInfo {
 }
 
 export interface TournamentEntry {
+  registrationId?: number;
   email: string;
   name: string;
   nickname: string;
@@ -133,6 +134,30 @@ export interface TournamentEntry {
   partnerPhone?: string;
   categoryPartners?: Record<string, CategoryPartnerInfo>;
 }
+
+/**
+ * Formata o Inscrição_ID para 4 dígitos (ex: 1 -> "0001", 24 -> "0024").
+ */
+export const formatRegistrationId = (id?: number | string | null): string => {
+  if (id === undefined || id === null || id === '') return '';
+  const num = Number(id);
+  if (isNaN(num) || num <= 0) return String(id);
+  return String(num).padStart(4, '0');
+};
+
+/**
+ * Gera o próximo número sequencial de inscrição único para o evento.
+ */
+export const getNextRegistrationId = (
+  entries?: Array<{ registrationId?: number | string | null }> | null,
+): number => {
+  if (!entries || entries.length === 0) return 1;
+  const ids = entries
+    .map((e) => Number(e.registrationId))
+    .filter((n) => !isNaN(n) && n > 0);
+  if (ids.length === 0) return 1;
+  return Math.max(...ids) + 1;
+};
 
 export interface EventRegistration {
   pin: string;

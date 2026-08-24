@@ -4,7 +4,7 @@ import type { RefObject } from 'react';
 import { EVENT_STATUS_OPTIONS, type EventStatusOption, type TournamentEntry, type TournamentEvent } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { findUserByPin, findUsersByPins, getDb } from '@infra/firebase';
-import { fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
+import { ensureEventEntriesRegistrationIds, fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { EventDashboardView } from './EventDashboardView';
@@ -133,27 +133,30 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
     const db = getDb();
     if (!db) return;
     return subscribeEventEntries(db, selectedDashboardEvent.pin, (freshEntries) => {
-      const entries: TournamentEntry[] = freshEntries.map((fe) => ({
-        email: fe.email,
-        name: fe.name,
-        nickname: fe.nickname,
-        pin: fe.pin,
-        joinedAt: fe.joinedAt,
-        gender: fe.gender,
-        checkedIn: fe.checkedIn,
-        categoryIds: fe.categoryIds || [],
-        phone: fe.phone || '',
-        shirtSize: fe.shirtSize || 'M',
-        dueAmount: fe.dueAmount,
-        paidAmount: fe.paidAmount,
-        paymentStatus: fe.paymentStatus,
-        payments: fe.payments,
-        partnerName: fe.partnerName,
-        partnerEmail: fe.partnerEmail,
-        partnerPhone: fe.partnerPhone,
-        categoryPartners: fe.categoryPartners,
-      }));
-      setSelectedDashboardEvent((current) => current ? { ...current, entries } : current);
+      void ensureEventEntriesRegistrationIds(db, selectedDashboardEvent.pin, freshEntries).then((withIds) => {
+        const entries: TournamentEntry[] = withIds.map((fe) => ({
+          registrationId: fe.registrationId,
+          email: fe.email,
+          name: fe.name,
+          nickname: fe.nickname,
+          pin: fe.pin,
+          joinedAt: fe.joinedAt,
+          gender: fe.gender,
+          checkedIn: fe.checkedIn,
+          categoryIds: fe.categoryIds || [],
+          phone: fe.phone || '',
+          shirtSize: fe.shirtSize || 'M',
+          dueAmount: fe.dueAmount,
+          paidAmount: fe.paidAmount,
+          paymentStatus: fe.paymentStatus,
+          payments: fe.payments,
+          partnerName: fe.partnerName,
+          partnerEmail: fe.partnerEmail,
+          partnerPhone: fe.partnerPhone,
+          categoryPartners: fe.categoryPartners,
+        }));
+        setSelectedDashboardEvent((current) => current ? { ...current, entries } : current);
+      });
     });
   }, [selectedDashboardEvent?.pin]);
 

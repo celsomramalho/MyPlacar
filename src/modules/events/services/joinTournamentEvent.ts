@@ -1,11 +1,18 @@
 import type { Firestore } from 'firebase/firestore';
 import {
   fetchEventByPin,
+  fetchEventEntries,
   fetchEventEntry,
   saveEventEntry,
   saveUserEventRegistration,
 } from '@infra/firebase/events';
-import type { EventRegistration, PaymentItem, TournamentEntry, TournamentEvent } from '../types';
+import {
+  getNextRegistrationId,
+  type EventRegistration,
+  type PaymentItem,
+  type TournamentEntry,
+  type TournamentEvent,
+} from '../types';
 
 interface EventJoinProfile {
   email: string;
@@ -47,7 +54,13 @@ export const joinTournamentEvent = async (
   const catCount = categoryIds.length;
   const computedDue = catCount === 0 ? baseFee : baseFee + (catCount - 1) * extraFee;
 
+  const existingEntries = (event.entries && event.entries.length > 0)
+    ? event.entries
+    : await fetchEventEntries(db, pin);
+  const registrationId = entryOverride?.registrationId ?? existingEntry?.registrationId ?? getNextRegistrationId(existingEntries);
+
   const entry: TournamentEntry = {
+    registrationId,
     email,
     name: entryOverride?.name || profile.name,
     nickname: entryOverride?.nickname || profile.nickname,

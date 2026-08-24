@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Partner } from '@modules/partners/types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, UserRound, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, DollarSign, Eye, Bell } from 'lucide-react';
-import type { TournamentEvent, TournamentEntry, TournamentPair, TournamentMatch, TournamentConfig, PaymentItem, EventCategory } from '../types';
+import { formatRegistrationId, type TournamentEvent, type TournamentEntry, type TournamentPair, type TournamentMatch, type TournamentConfig, type PaymentItem, type EventCategory } from '../types';
 import type { UserProfile } from '@modules/auth/types';
-import { deleteEventEntry, deleteUserEventRegistration, fetchEventEntries, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeEventEntries, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
+import { deleteEventEntry, deleteUserEventRegistration, ensureEventEntriesRegistrationIds, fetchEventEntries, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeEventEntries, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
 import type { FirebaseTournamentLiveScore } from '@infra/firebase';
 import { Firestore } from 'firebase/firestore';
 import { SPORT_LIST } from '../../../constants.ts';
@@ -228,8 +228,14 @@ const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, can
         )}
       </div>
 
-      {/* Nome, PIN e Email */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* ID, Nome, PIN e Email */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Inscrição_ID</label>
+          <div className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 flex items-center text-xs font-mono font-black text-emerald-600">
+            {formatRegistrationId(entry.registrationId)}
+          </div>
+        </div>
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 ml-1">Nome do usuário</label>
           <div className="h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 flex items-center text-xs font-bold text-slate-700">{entry.name}</div>
@@ -558,7 +564,8 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     setIsLoading(true);
     try {
       const list = await fetchEventEntries(db as Firestore, event.pin);
-      setEntries(list as TournamentEntry[]);
+      const withIds = await ensureEventEntriesRegistrationIds(db as Firestore, event.pin, list);
+      setEntries(withIds as TournamentEntry[]);
     } catch (e) {
       console.error("Erro ao sincronizar participantes:", e);
     } finally {
@@ -571,8 +578,10 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     if (!db) return;
     const unsubscribe = subscribeEventEntries(db as Firestore, event.pin, (liveEntries) => {
       // O snapshot em tempo real é a fonte de verdade dos participantes.
-      // Aplicar também listas vazias evita manter check-ins removidos na tela.
-      setEntries(liveEntries as TournamentEntry[]);
+      // Auto-atribui Inscrição_ID para participantes antigos/sem ID se necessário.
+      void ensureEventEntriesRegistrationIds(db as Firestore, event.pin, liveEntries).then((withIds) => {
+        setEntries(withIds as TournamentEntry[]);
+      });
     });
     return () => unsubscribe();
   }, [event.pin]);
@@ -626,6 +635,17 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
        await updateEventEntry(db as Firestore, event.pin, entryEmail, { gender: nextGender });
        await updateUserProfileFields(db as Firestore, entryEmail, { gender: nextGender });
        setEntries(prev => prev.map(e => e.email === entryEmail ? { ...e, gender: nextGender } : e));
+       if (entryEmail.toLowerCase().trim() === (userProfile.email || '').toLowerCase().trim()) {
+         const savedLocal = localStorage.getItem('myPlacarUserProfile');
+         if (savedLocal) {
+           try {
+             const parsed = JSON.parse(savedLocal);
+             parsed.gender = nextGender;
+             localStorage.setItem('myPlacarUserProfile', JSON.stringify(parsed));
+             window.dispatchEvent(new Event('storage'));
+           } catch {}
+         }
+       }
     } catch (e) {
        console.error("Falha ao alterar gênero:", e);
     }
@@ -1195,6 +1215,11 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                                   </div>
                                ) : (
                                   <div className="flex items-center gap-2">
+                                    {entry.registrationId ? (
+                                      <span className="font-mono text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-lg text-[10px] font-black">
+                                        {formatRegistrationId(entry.registrationId)}
+                                      </span>
+                                    ) : null}
                                     <p className="text-sm font-black text-gray-900 truncate">
                                       {entry.name || entry.nickname}
                                       {isCurrentUserEntry && <span className="text-[10px] opacity-40 ml-1">(você)</span>}

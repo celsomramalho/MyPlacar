@@ -3,7 +3,16 @@ import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, Trash2, Upload, Us
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
-import type { CategoryPartnerInfo, EventCategory, PaymentItem, TournamentEntry, TournamentEvent, TournamentPair } from '../types';
+import {
+  formatRegistrationId,
+  getNextRegistrationId,
+  type CategoryPartnerInfo,
+  type EventCategory,
+  type PaymentItem,
+  type TournamentEntry,
+  type TournamentEvent,
+  type TournamentPair,
+} from '../types';
 
 interface Props {
   event: TournamentEvent;
@@ -29,6 +38,11 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const isAdmin = mode === 'admin';
   const isNewAdminEntry = isAdmin && (!entry.email || entry.email.trim() === '') && (!entry.name || entry.name.trim() === '');
   const canEditIdentity = isNewAdminEntry;
+
+  const registrationId = useMemo(
+    () => entry.registrationId || getNextRegistrationId(event.entries || []),
+    [entry.registrationId, event.entries]
+  );
 
   const [nickname, setNickname] = useState(entry.nickname || '');
   const [name, setName] = useState(entry.name || '');
@@ -237,6 +251,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     const firstPartner = Object.values(selectedCategoryPartners)[0];
     const updated: TournamentEntry = {
       ...entry,
+      registrationId: entry.registrationId || registrationId,
       name: normalizedName,
       pin: normalizedPin,
       email: email.trim().toLowerCase(),
@@ -516,8 +531,13 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
-    <div className="grid grid-cols-2 gap-3">
-      <Field label={canEditIdentity ? 'Nome jogador *' : 'Nome do usuário'}>
+    <div className="grid grid-cols-3 gap-3">
+      <Field label="Inscrição_ID">
+        <div className="event-registration-readonly font-mono font-black text-emerald-600 tracking-wider">
+          {formatRegistrationId(entry.registrationId || registrationId)}
+        </div>
+      </Field>
+      <Field label={canEditIdentity ? 'Nome jogador *' : 'Nome do usuário'} className="col-span-2">
         {canEditIdentity ? (
           <input required value={name} onChange={(e) => setName(e.target.value)} className="event-registration-field" />
         ) : (
