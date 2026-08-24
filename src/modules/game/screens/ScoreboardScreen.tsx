@@ -947,7 +947,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (!effectiveGameState.matchConfig.isWatchMode || !effectiveGameState.isMirroringActive || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) return;
     const interval = setInterval(async () => {
       const db = getDb(); if (!db || !effectiveGameState.ownerPin) return;
-      try { await setDoc(doc(db, "live_matches", effectiveGameState.ownerPin.toUpperCase()), { lastRemotePing: Date.now() }, { merge: true }); } catch (e) {}
+      try { await updateDoc(doc(db, "live_matches", effectiveGameState.ownerPin.toUpperCase()), { lastRemotePing: Date.now() }); } catch (e) {}
     }, 10000);
     return () => clearInterval(interval);
   }, [effectiveGameState.matchConfig.isWatchMode, effectiveGameState.isMirroringActive, effectiveGameState.ownerPin, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)]);

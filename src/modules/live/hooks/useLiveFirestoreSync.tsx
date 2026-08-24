@@ -252,31 +252,11 @@ export function useLiveFirestoreSync(params: {
           }
 
         if (cloudData.isLiveClosed) {
-          // Guard: se este device é o owner ativo da live, ignora isLiveClosed: true
-          // vindo do Firebase — é quase certamente um artefato do próprio reload/reconnect.
-          // Usa ownerDeviceId (fixo) para identificar o dono, não commandOwnerId.
-          const currentGs = gameStateRef.current;
-          const thisDeviceIsActiveOwner =
-            currentGs?.isMirroringActive &&
-            (currentGs?.ownerDeviceId === deviceId ||
-              // fallback para lives sem ownerDeviceId
-              (currentGs?.commandOwnerId === deviceId &&
-                currentGs?.ownerPin?.toUpperCase() === userProfile.pin?.toUpperCase()));
-
-          // Só ignora o isLiveClosed se NÃO foi este device que iniciou o encerramento.
-          // isClosingLiveRef é marcado true em handleCloseCloudLive antes do updateDoc,
-          // garantindo que o owner não ignore o próprio sinal de encerramento.
-          if (thisDeviceIsActiveOwner && !isClosingLiveRef.current) {
-            console.log(
-              '[Sync] isLiveClosed: true ignorado — owner ativo local, provável artefato de reload.',
-            );
-            return;
-          }
-          // Encerramento intencional confirmado — reset do ref.
           isClosingLiveRef.current = false;
 
-          console.log('[Sync] Live fechada detected!');
+          console.log('[Sync] Live fechada detectada pelo Firestore!');
           setCloudLiveExists(false);
+          setActiveLives(prev => prev.filter(l => (l.ownerPin?.toUpperCase() || '') !== listenPin));
           setGameState(prev => {
             if (!prev) return null;
             return {
@@ -463,7 +443,8 @@ export function useLiveFirestoreSync(params: {
                 deviceLabel: baseConfig.deviceLabel,
                 selectedVoiceURI: baseConfig.selectedVoiceURI,
                 voiceEnabled: baseConfig.voiceEnabled,
-                voiceScoring: baseConfig.voiceScoring,
+                // Narrar placar nunca faz sentido no relógio — forçado como desativado.
+                voiceScoring: isWatchDevice() ? false : baseConfig.voiceScoring,
                 actionCooldown: baseConfig.actionCooldown,
                 stateLockout: baseConfig.stateLockout,
               },
@@ -511,30 +492,21 @@ export function useLiveFirestoreSync(params: {
           });
         }
       } else {
-        // E1: snap não existe = live foi deletada após encerramento.
-        // Guard: relógio não reage a snap.exists()===false — esse evento ocorre normalmente
-        // durante reconexão de rede ou quando o targetListenPin muda e o listener antigo
-        // dispara para um PIN que não existe mais. O encerramento real da live é sempre
-        // sinalizado pelo campo isLiveClosed:true no documento, que é tratado acima.
-        // Agir aqui desativaria o relógio prematuramente por latência de rede.
-        if (isWatchDevice()) return;
-        // Correção 4: limpa o estado de live SEMPRE, independente dos flags locais
-        // (isMirroringActive, isLiveClosed). O estado anterior pode estar inconsistente.
+        // E1: snap não existe = live foi deletada após encerramento ou não existe no Firestore.
+        // Limpa o estado de live para TODOS os dispositivos (inclusive relógio).
         const prevGs = gameStateRef.current;
         const wasActiveLocally = prevGs?.isMirroringActive && !prevGs?.isLiveClosed;
 
-        // Limpa o estado local IMEDIATAMENTE antes de configurar o modal,
-        // para que o listener e futuros ciclos não vejam wasActiveLocally como true.
         isClosingLiveRef.current = false;
         setCloudLiveExists(false);
-        setActiveLives([]);
+        setActiveLives(prev => prev.filter(l => (l.ownerPin?.toUpperCase() || '') !== listenPin));
         setGameState(prev => {
           if (!prev) return null;
           return { ...prev, isMirroringActive: false, isLiveClosed: true };
         });
 
         // Notifica observers que ainda não receberam o isLiveClosed (só se relevante)
-        if (wasActiveLocally) {
+        if (wasActiveLocally && !isWatchDevice()) {
           setModalConfig({
             title: 'Live encerrada',
             message: 'A transmissão foi encerrada pelo proprietário.',
@@ -678,18 +650,13 @@ export function useLiveFirestoreSync(params: {
     // não desativa — o Firebase ainda pode estar propagando o novo commandOwnerId.
     const justTookControlRecently = Date.now() - tookControlAtRef.current < 15000;
 
-    // Guard: relógio NUNCA desativa isMirroringActive por ausência de activeLives.
-    // O relógio é sempre um device secundário — deve esperar o onSnapshot do Firestore
-    // confirmar o estado, não reagir à latência da collection.
-    if (isWatchDevice()) return;
-
     if (!hasAnyLive && gameState?.isMirroringActive && !justTookControlRecently) {
       const debounceTimer = setTimeout(() => {
         // Re-verifica o grace period dentro do timeout — pode ter assumido controle nesse intervalo
         if (Date.now() - tookControlAtRef.current < 15000) return;
         setGameState(prev => {
           if (!prev || !prev.isMirroringActive) return prev;
-          return { ...prev, isMirroringActive: false };
+          return { ...prev, isMirroringActive: false, isLiveClosed: true };
         });
       }, 3000);
       return () => clearTimeout(debounceTimer);
@@ -1344,17 +1311,25 @@ export function useLiveFirestoreSync(params: {
                         deviceType: myDeviceType,
                       }
                     : null;
+
                   // Write principal: placar + presença do controlador quando houve ponto/heartbeat.
                   // D1: lastActivityAt habilita TTL de 3h pelo Cloud Function scheduler.
-                  setDoc(
-                    doc(db, 'live_matches', targetPin),
-                    {
-                      ...stateToSave,
-                      ...(presenceRecord ? { controllers: { [deviceId]: presenceRecord } } : {}),
-                      lastActivityAt: Date.now(),
-                    },
-                    { merge: true },
-                  ).catch(() => {});
+                  // Write principal: placar + presença do controlador quando houve ponto/heartbeat.
+                  // D1: lastActivityAt habilita TTL de 3h pelo Cloud Function scheduler.
+                  // Usa updateDoc para NUNCA recriar/ressuscitar live excluída no Firestore.
+                  updateDoc(doc(db, 'live_matches', targetPin), {
+                    ...stateToSave,
+                    ...(presenceRecord ? { [`controllers.${deviceId}`]: presenceRecord } : {}),
+                    lastActivityAt: Date.now(),
+                  }).catch((err) => {
+                    const errMsg = err?.message || String(err);
+                    if (errMsg.includes('No document to update') || err?.code === 'not-found') {
+                      console.log('[Sync] Live não existe mais no Firestore — limpando estado local.');
+                      setCloudLiveExists(false);
+                      setActiveLives(prev => prev.filter(l => (l.ownerPin?.toUpperCase() || '') !== targetPin));
+                      setGameState(prev => (prev ? { ...prev, isMirroringActive: false, isLiveClosed: true } : null));
+                    }
+                  });
 
                   // FB badge — detecta qual time marcou para exibir indicador verde no controller
                   const curScoreKey = `${gameState.p1.score}_${gameState.p1.games}_${gameState.p2.score}_${gameState.p2.games}`;

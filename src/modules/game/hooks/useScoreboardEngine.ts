@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { getDb } from '@infra/firebase';
 import { useLive } from '@modules/live/useLive';
 import { useUI } from '@modules/ui/UIContext';
@@ -120,7 +120,7 @@ export function useScoreboardEngine() {
             const targetPin = resolveTargetPin('initSync');
             const stateToSync = sanitizeForFirestore({ ...nextState, controllers: undefined });
             if (stateToSync && targetPin) {
-              setDoc(doc(db, 'live_matches', targetPin), stateToSync, { merge: true }).catch(() => {});
+              updateDoc(doc(db, 'live_matches', targetPin), stateToSync).catch(() => {});
             }
           }
         }
@@ -217,7 +217,7 @@ export function useScoreboardEngine() {
           const targetPin = resolveTargetPin('confirmMatch');
           const stateToSync = sanitizeForFirestore({ ...nextState, controllers: undefined });
           if (stateToSync && targetPin) {
-            setDoc(doc(db, 'live_matches', targetPin), stateToSync, { merge: true }).catch(() => {});
+            updateDoc(doc(db, 'live_matches', targetPin), stateToSync).catch(() => {});
           }
         }
       }
@@ -347,7 +347,7 @@ export function useScoreboardEngine() {
           const targetPin = resolveTargetPin('confirmMatch');
           const stateToSync = sanitizeForFirestore({ ...nextState, controllers: undefined });
           if (stateToSync && targetPin) {
-            setDoc(doc(db, 'live_matches', targetPin), stateToSync, { merge: true }).catch(() => {});
+            updateDoc(doc(db, 'live_matches', targetPin), stateToSync).catch(() => {});
           }
         }
       }
@@ -420,7 +420,7 @@ export function useScoreboardEngine() {
           const targetPin = resolveTargetPin('confirmMatch');
           const stateToSync = sanitizeForFirestore({ ...nextState, controllers: undefined });
           if (stateToSync && targetPin) {
-            setDoc(doc(db, 'live_matches', targetPin), stateToSync, { merge: true }).catch(() => {});
+            updateDoc(doc(db, 'live_matches', targetPin), stateToSync).catch(() => {});
           }
         }
       }

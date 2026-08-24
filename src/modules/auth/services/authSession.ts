@@ -36,7 +36,7 @@ export const getSavedAuthMethod = (): 'pin' | 'password' => {
 };
 
 export const getOfflineProfile = (): UserProfile | null => {
-  return parseProfile(localStorage.getItem(USER_PROFILE_KEY));
+  return parseProfile(localStorage.getItem(USER_PROFILE_KEY)) || parseProfile(localStorage.getItem(LOWER_USER_PROFILE_KEY));
 };
 
 export const getPendingVerifyCode = () => localStorage.getItem(PENDING_VERIFY_CODE_KEY) || '';
@@ -90,6 +90,24 @@ export const rememberPin = (pin: string) => {
 
 export const forgetPin = () => {
   localStorage.removeItem(SAVED_PIN_KEY);
+};
+
+export const clearAllAuthSessions = () => {
+  localStorage.removeItem(SAVED_EMAIL_KEY);
+  localStorage.removeItem('myPlacarSavedEmail');
+  localStorage.removeItem(SAVED_PIN_KEY);
+  localStorage.removeItem('myPlacarSavedPin');
+  localStorage.removeItem(LEGACY_USER_KEY);
+  localStorage.removeItem(REMEMBER_ME_KEY);
+  localStorage.removeItem(USER_PROFILE_KEY);
+  localStorage.removeItem(LOWER_USER_PROFILE_KEY);
+  localStorage.removeItem(PENDING_VERIFY_CODE_KEY);
+  localStorage.removeItem(PENDING_NAME_KEY);
+  localStorage.removeItem(PENDING_PASSWORD_KEY);
+  localStorage.removeItem(PENDING_REFERRAL_KEY);
+  localStorage.removeItem(PENDING_REFERRAL_PIN_KEY);
+  localStorage.removeItem('myPlacarPendingReferral');
+  localStorage.removeItem('myPlacarPendingReferralPin');
 };
 
 export const saveWatchLoginCache = (data: {

@@ -329,7 +329,7 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
           updateDoc(doc(db, 'live_matches', targetPin), presenceUpdate).catch(() => {});
         } else {
           // Owner era o único controlador ativo — fecha a live
-          setDoc(doc(db, 'live_matches', targetPin), { isLiveClosed: true, isMirroringActive: false }, { merge: true }).catch(() => {});
+          updateDoc(doc(db, 'live_matches', targetPin), { isLiveClosed: true, isMirroringActive: false }).catch(() => {});
         }
       } else if (isOwnerViaRef && !isController) {
         // Owner saiu mas NÃO era o controller — apenas remove sua presença.

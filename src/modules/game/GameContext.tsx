@@ -33,7 +33,7 @@ import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
 import { getDb } from '@infra/firebase/client';
 import { findUserByPin } from '@infra/firebase/users';
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import type { Firestore, FieldValue } from 'firebase/firestore';
 import { mirrorUser } from '@infra/supabase';
 import { markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events/services/updateTournamentMatchProgress';
@@ -107,7 +107,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       if (isWatchDevice()) {
         s.isWatchMode = true;
         s.isScoreboardMode = false;
+        // Narrar placar nunca faz sentido no relógio — forçado sempre como desativado.
+        s.voiceScoring = false;
         localStorage.setItem('myPlacar_LocalWatchMode', 'true');
+        localStorage.setItem('myPlacar_LocalVoiceScoring', 'false');
       } else {
         const savedWatchMode = localStorage.getItem('myPlacar_LocalWatchMode');
         if (savedWatchMode !== null) {
@@ -119,7 +122,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       }
       s.selectedVoiceURI = localStorage.getItem('myPlacar_LocalVoiceURI') || s.selectedVoiceURI;
       s.voiceEnabled = localStorage.getItem('myPlacar_LocalVoiceEnabled') !== 'false';
-      s.voiceScoring = localStorage.getItem('myPlacar_LocalVoiceScoring') !== 'false';
+      // No relógio, voiceScoring já foi forçado acima; nos outros dispositivos lê do localStorage.
+      if (!isWatchDevice()) {
+        s.voiceScoring = localStorage.getItem('myPlacar_LocalVoiceScoring') !== 'false';
+      }
       s.actionCooldown = parseInt(localStorage.getItem('myPlacar_LocalActionCooldown') || '5');
       s.stateLockout = parseInt(localStorage.getItem('myPlacar_LocalStateLockout') || '10');
       s.screenDimTimeout = (parseInt(localStorage.getItem('myPlacar_LocalScreenDimTimeout') || '10') as 10 | 15 | 20);
@@ -664,13 +670,24 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           const { controllers: _controllers, ...stateWithoutControllers } = updatedStateRaw as typeof updatedStateRaw & { controllers?: unknown };
           const updatedState = sanitizeForFirestore(stateWithoutControllers);
           if (updatedState) {
-            await setDoc(doc(db, "live_matches", targetPin), updatedState, { merge: true }).catch(() => {});
-            if (Object.keys(prevDemoteUpdate).length > 0) {
-              await updateDoc(doc(db, "live_matches", targetPin), prevDemoteUpdate).catch(() => {});
-            }
-            await updateDoc(doc(db, "live_matches", targetPin), {
-              [`controllers.${deviceId}`]: { label: myCommandName, nickname: userProfile.nickname || userProfile.name?.split(' ')[0], lastSeen: Date.now(), isOwner: newControllerRole === 'owner', role: newControllerRole, status: 'controller', deviceType: getDeviceType() }
-            }).catch(() => {});
+            const atomicLiveUpdate: Record<string, any> = {
+              ...updatedState,
+              commandOwner: myCommandName,
+              commandOwnerId: deviceId,
+              liveVersion: (cloudState.liveVersion || 0) + 1,
+              lastActivityAt: Date.now(),
+              [`controllers.${deviceId}`]: {
+                label: myCommandName,
+                nickname: userProfile.nickname || userProfile.name?.split(' ')[0],
+                lastSeen: Date.now(),
+                isOwner: newControllerRole === 'owner',
+                role: newControllerRole,
+                status: 'controller',
+                deviceType: getDeviceType(),
+              },
+              ...prevDemoteUpdate,
+            };
+            await updateDoc(doc(db, "live_matches", targetPin), atomicLiveUpdate).catch(() => {});
             const localControllers: Record<string, unknown> = { ...(cloudState.controllers || {}) };
             if (currentControllerId && currentControllerId !== deviceId) {
               const prevEntry = (cloudState.controllers || {})[currentControllerId];
@@ -686,11 +703,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({
               ...syncedSettings,
               isWatchMode: isWatchDevice() ? true : syncedSettings.isWatchMode,
               isScoreboardMode: false,
+              // Narrar placar nunca faz sentido no relógio — forçado como desativado.
+              voiceScoring: isWatchDevice() ? false : syncedSettings.voiceScoring,
             };
             setMatchSettings(settingsAsController); 
             try { localStorage.setItem('myPlacarSettings', JSON.stringify(settingsAsController)); } catch {}
             setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true);
-            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: isWatchDevice() ? true : resolveWatchMode(matchSettings.isWatchMode ?? false), isScoreboardMode: false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+            setGameState({ ...updatedState, isMirroringActive: true, controllers: localControllers, matchConfig: { ...updatedState.matchConfig, isWatchMode: isWatchDevice() ? true : resolveWatchMode(matchSettings.isWatchMode ?? false), isScoreboardMode: false, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: isWatchDevice() ? false : matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
             try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updatedState)); } catch {}
 
             overlayAcceptedRef.current = targetPin;
@@ -793,7 +812,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           };
           const watchModeForEntry = enterAsObserver ? false : resolveWatchMode(matchSettings.isWatchMode ?? false);
           const scoreboardModeForEntry = enterAsObserver ? true : false;
-          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: scoreboardModeForEntry, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
+          setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: scoreboardModeForEntry, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: isWatchDevice() ? false : matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           if (enterAsObserver || isWatchDevice()) setMatchSettings(prev => ({ ...prev, isScoreboardMode: scoreboardModeForEntry, isWatchMode: watchModeForEntry }));
           overlayAcceptedRef.current = pinUpper;
           setShowLiveControlOverlay(false); setCurrentScreen('scoreboard');
@@ -826,7 +845,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       if (isController) {
         const stateToSync = sanitizeForFirestore({ ...gameState, controllers: undefined });
         if (stateToSync) {
-          await setDoc(doc(db, "live_matches", targetPin), { ...stateToSync, lastActivityAt: Date.now() }, { merge: true });
+          await updateDoc(doc(db, "live_matches", targetPin), { ...stateToSync, lastActivityAt: Date.now() });
         }
       } else {
         const snap = await getDoc(doc(db, "live_matches", targetPin));
@@ -1160,7 +1179,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
              isLiveClosed: false
           });
           const targetPin = resolveTargetPin('initSync');
-          if (stateToSync && targetPin) await setDoc(doc(db, "live_matches", targetPin), stateToSync, { merge: true }).catch(() => {});
+          if (stateToSync && targetPin) await updateDoc(doc(db, "live_matches", targetPin), stateToSync).catch(() => {});
        }
     }
 

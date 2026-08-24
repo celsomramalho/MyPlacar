@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { getDb } from '@infra/firebase';
 import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
@@ -91,7 +91,7 @@ export function useGameRules() {
             },
           });
           if (stateToSync && targetPin) {
-            setDoc(doc(db, 'live_matches', targetPin), stateToSync, { merge: true }).catch(() => {});
+            updateDoc(doc(db, 'live_matches', targetPin), stateToSync).catch(() => {});
           }
         }
       }
