@@ -6,17 +6,67 @@ export interface TeamStanding {
   played: number;
   wins: number;
   losses: number;
+  setsWon: number;
+  setsLost: number;
+  setsDiff: number;
   gamesWon: number;
   gamesLost: number;
   gamesDiff: number;
+  gamesPct: number;
+  rank: number;
+  isTiedWithOthers?: boolean;
+  tieBreakNote?: string;
 }
 
+export const parseScoresFromMatch = (match: TournamentMatch) => {
+  let g1 = 0;
+  let g2 = 0;
+  let s1 = 0;
+  let s2 = 0;
+
+  if (match.scores && Array.isArray(match.scores) && match.scores.length > 0) {
+    match.scores.forEach((s) => {
+      if (s && s.p1 !== null && s.p1 !== undefined && s.p2 !== null && s.p2 !== undefined) {
+        const score1 = Number(s.p1);
+        const score2 = Number(s.p2);
+        if (!isNaN(score1) && !isNaN(score2)) {
+          g1 += score1;
+          g2 += score2;
+          if (score1 > score2) s1 += 1;
+          else if (score2 > score1) s2 += 1;
+        }
+      }
+    });
+  } else if (match.result) {
+    const parts = match.result.trim().split(/[\s,]+/);
+    parts.forEach((part) => {
+      const matchScores = part.match(/(\d+)[\/xX\-](\d+)/);
+      if (matchScores) {
+        const score1 = Number(matchScores[1]);
+        const score2 = Number(matchScores[2]);
+        if (!isNaN(score1) && !isNaN(score2)) {
+          g1 += score1;
+          g2 += score2;
+          if (score1 > score2) s1 += 1;
+          else if (score2 > score1) s2 += 1;
+        }
+      }
+    });
+  }
+
+  return { g1, g2, s1, s2 };
+};
+
 /**
- * Calcula a classificação de uma chave com base nos confrontos finalizados.
+ * Calcula a classificação de uma chave com base nos confrontos finalizados,
+ * aplicando os critérios oficiais de desempate:
+ * - Empate entre 2 times: Confronto Direto
+ * - Empate entre 3+ times: Saldo de Sets (se multi-set) -> Saldo de Games -> % Games -> Sorteio
  */
 export const calculateBracketStandings = (
   pairs: TournamentPair[],
-  matches: TournamentMatch[]
+  matches: TournamentMatch[],
+  totalSetsConfig?: number
 ): TeamStanding[] => {
   const standingsMap: Record<string, TeamStanding> = {};
 
@@ -26,11 +76,20 @@ export const calculateBracketStandings = (
       played: 0,
       wins: 0,
       losses: 0,
+      setsWon: 0,
+      setsLost: 0,
+      setsDiff: 0,
       gamesWon: 0,
       gamesLost: 0,
       gamesDiff: 0,
+      gamesPct: 0,
+      rank: 1,
+      isTiedWithOthers: false,
+      tieBreakNote: undefined,
     };
   });
+
+  let detectedMultiSet = totalSetsConfig ? totalSetsConfig > 1 : false;
 
   matches.forEach((match) => {
     if (match.status !== 'finished' || !match.winnerPairId) return;
@@ -50,32 +109,136 @@ export const calculateBracketStandings = (
       standingsMap[p1Id].losses += 1;
     }
 
-    // Parse games se houver placar no formato "6x4", "6/4", "6-4", etc.
-    if (match.result) {
-      const matchScores = match.result.match(/(\d+)[\s/xX\-](\d+)/);
-      if (matchScores) {
-        const score1 = Number(matchScores[1]);
-        const score2 = Number(matchScores[2]);
-        if (!isNaN(score1) && !isNaN(score2)) {
-          standingsMap[p1Id].gamesWon += score1;
-          standingsMap[p1Id].gamesLost += score2;
-          standingsMap[p2Id].gamesWon += score2;
-          standingsMap[p2Id].gamesLost += score1;
-        }
+    const { g1, g2, s1, s2 } = parseScoresFromMatch(match);
+    if (s1 + s2 > 1) {
+      detectedMultiSet = true;
+    }
+
+    standingsMap[p1Id].gamesWon += g1;
+    standingsMap[p1Id].gamesLost += g2;
+    standingsMap[p2Id].gamesWon += g2;
+    standingsMap[p2Id].gamesLost += g1;
+
+    standingsMap[p1Id].setsWon += s1;
+    standingsMap[p1Id].setsLost += s2;
+    standingsMap[p2Id].setsWon += s2;
+    standingsMap[p2Id].setsLost += s1;
+  });
+
+  const isMultiSet = detectedMultiSet;
+
+  const standingsList = Object.values(standingsMap).map((st) => {
+    const gamesTotal = st.gamesWon + st.gamesLost;
+    return {
+      ...st,
+      gamesDiff: st.gamesWon - st.gamesLost,
+      gamesPct: gamesTotal > 0 ? st.gamesWon / gamesTotal : 0,
+      setsDiff: st.setsWon - st.setsLost,
+    };
+  });
+
+  // Agrupa os times pelo número de vitórias
+  const winsGroups: Record<number, TeamStanding[]> = {};
+  standingsList.forEach((st) => {
+    if (!winsGroups[st.wins]) {
+      winsGroups[st.wins] = [];
+    }
+    winsGroups[st.wins].push(st);
+  });
+
+  // Ordena os grupos do maior número de vitórias para o menor
+  const sortedWinKeys = Object.keys(winsGroups)
+    .map(Number)
+    .sort((a, b) => b - a);
+
+  const finalSortedStandings: TeamStanding[] = [];
+
+  sortedWinKeys.forEach((winCount) => {
+    const group = winsGroups[winCount];
+
+    if (group.length === 1) {
+      // Sem empate de vitórias
+      finalSortedStandings.push(group[0]);
+      return;
+    }
+
+    // Se ninguém do grupo jogou ainda, mantém ordem padrão por número/inscrição
+    const hasAnyPlayed = group.some((st) => st.played > 0);
+    if (!hasAnyPlayed) {
+      group.sort((a, b) => (a.pair.teamNumber ?? 999) - (b.pair.teamNumber ?? 999));
+      finalSortedStandings.push(...group);
+      return;
+    }
+
+    // Marca que estão empatados em vitórias
+    group.forEach((st) => {
+      st.isTiedWithOthers = true;
+    });
+
+    // 1. Caso de empate entre exatamente 2 times -> Confronto Direto
+    if (group.length === 2) {
+      const [t1, t2] = group;
+      const directMatch = matches.find(
+        (m) =>
+          m.status === 'finished' &&
+          m.winnerPairId &&
+          ((m.pair1Id === t1.pair.id && m.pair2Id === t2.pair.id) ||
+            (m.pair1Id === t2.pair.id && m.pair2Id === t1.pair.id))
+      );
+
+      if (directMatch && directMatch.winnerPairId) {
+        const winner = directMatch.winnerPairId === t1.pair.id ? t1 : t2;
+        const loser = directMatch.winnerPairId === t1.pair.id ? t2 : t1;
+
+        winner.tieBreakNote = 'Desempate por Confronto Direto';
+        loser.tieBreakNote = 'Desempate por Confronto Direto';
+
+        finalSortedStandings.push(winner, loser);
+        return;
       }
     }
+
+    // 2. Empate entre 3 ou mais times (ou 2 sem confronto direto finalizado):
+    // Cascata: Saldo de Sets (se multi-set) -> Saldo de Games -> % Games -> Sorteio
+    group.sort((a, b) => {
+      if (isMultiSet && b.setsDiff !== a.setsDiff) {
+        return b.setsDiff - a.setsDiff;
+      }
+      if (b.gamesDiff !== a.gamesDiff) {
+        return b.gamesDiff - a.gamesDiff;
+      }
+      if (Math.abs(b.gamesPct - a.gamesPct) > 0.00001) {
+        return b.gamesPct - a.gamesPct;
+      }
+      return (a.pair.teamNumber ?? 999) - (b.pair.teamNumber ?? 999);
+    });
+
+    // Atribui notas explicativas do desempate para os times do grupo
+    const setsDiffVaries = isMultiSet && group.some((st) => st.setsDiff !== group[0].setsDiff);
+    const gamesDiffVaries = group.some((st) => st.gamesDiff !== group[0].gamesDiff);
+    const gamesPctVaries = group.some((st) => Math.abs(st.gamesPct - group[0].gamesPct) > 0.00001);
+
+    group.forEach((st) => {
+      if (setsDiffVaries) {
+        st.tieBreakNote = `Desempate por Maior Saldo de Sets: ${st.setsDiff > 0 ? '+' : ''}${st.setsDiff} (${st.setsWon} - ${st.setsLost})`;
+      } else if (gamesDiffVaries) {
+        st.tieBreakNote = `Desempate por Maior Saldo de Games: ${st.gamesDiff > 0 ? '+' : ''}${st.gamesDiff} (${st.gamesWon} - ${st.gamesLost})`;
+      } else if (gamesPctVaries) {
+        st.tieBreakNote = `Desempate por Maior % Games: ${(st.gamesPct * 100).toFixed(1)}% (${st.gamesWon}/${st.gamesWon + st.gamesLost})`;
+      } else {
+        st.tieBreakNote = `Desempate por Sorteio da comissão (critérios matemáticos iguais)`;
+      }
+    });
+
+    finalSortedStandings.push(...group);
   });
 
-  Object.values(standingsMap).forEach((st) => {
-    st.gamesDiff = st.gamesWon - st.gamesLost;
+  // Atribui posições finais (rank)
+  finalSortedStandings.forEach((st, idx) => {
+    st.rank = idx + 1;
   });
 
-  return Object.values(standingsMap).sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins;
-    if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff;
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-    return (a.pair.teamNumber ?? 999) - (b.pair.teamNumber ?? 999);
-  });
+  return finalSortedStandings;
 };
 
 /**

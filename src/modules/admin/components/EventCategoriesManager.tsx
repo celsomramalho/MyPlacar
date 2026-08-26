@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2, AlertTriangle, Swords, Sparkles } from 'lucide-react';
 import { minifyEntryForPair, minifyPairForStorage, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore } from '@modules/events/types';
 import { generateSystemMatchesForCategory, createManualMatch, formatMatchDisplayString, formatMatchNumber, getPhaseLabel } from '@modules/events/services/matchGenerator';
-import { updatePlayoffProgression } from '@modules/events/services/matchProgression';
+import { updatePlayoffProgression, calculateBracketStandings, type TeamStanding } from '@modules/events/services/matchProgression';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { getDb } from '@infra/firebase';
@@ -493,8 +493,59 @@ const validateCategoryGenders = (
     }
   };
 
-  const renderTeamCard = (pair: TournamentPair, showBracketToggle = true, hasMatches = false) => {
+  const renderTeamCard = (
+    pair: TournamentPair,
+    showBracketToggle = true,
+    hasMatches = false,
+    standing?: TeamStanding,
+    isChaveFinished = false,
+    allCategoryMatches: TournamentMatch[] = []
+  ) => {
     const isSelected = isManualMatchDraw && selectedTeamIds.has(pair.id);
+
+    // Posição final no torneio (quando todas as partidas da categoria estiverem encerradas)
+    const finalMatch = allCategoryMatches.find((m) => m.phase === 'final' && m.status === 'finished');
+    const thirdMatch = allCategoryMatches.find((m) => m.phase === '3lugar' && m.status === 'finished');
+    const allCatFinished = allCategoryMatches.length > 0 && allCategoryMatches.every((m) => m.status === 'finished');
+
+    let finalPositionBadge: string | null = null;
+    if (allCatFinished) {
+      if (finalMatch?.winnerPairId === pair.id) finalPositionBadge = '🏆 Campeão';
+      else if (finalMatch && (finalMatch.pair1Id === pair.id || finalMatch.pair2Id === pair.id)) finalPositionBadge = '🥈 Vice-campeão';
+      else if (thirdMatch?.winnerPairId === pair.id) finalPositionBadge = '🥉 3º lugar';
+      else if (thirdMatch && (thirdMatch.pair1Id === pair.id || thirdMatch.pair2Id === pair.id)) finalPositionBadge = '4º lugar';
+    }
+
+    // Helper: formata o placar de uma partida do ponto de vista deste time
+    const formatMatchScore = (match: TournamentMatch): string => {
+      if (!match.result) return '';
+      const isP1 = match.pair1Id === pair.id;
+      const parts = match.result.trim().split(/[\s,]+/);
+      return parts.map((part) => {
+        const m = part.match(/(\d+)[\/xX\-](\d+)/);
+        if (!m) return part;
+        return isP1 ? `${m[1]} x ${m[2]}` : `${m[2]} x ${m[1]}`;
+      }).join('  ');
+    };
+
+    const getOppName = (match: TournamentMatch): string => {
+      const isP1 = match.pair1Id === pair.id;
+      const opp = isP1
+        ? (match.pair2 || (match.pair2Id ? pairsById[match.pair2Id] : null))
+        : (match.pair1 || (match.pair1Id ? pairsById[match.pair1Id] : null));
+      if (!opp) return 'A definir';
+      return `${opp.p1.nickname || opp.p1.name} & ${opp.p2.nickname || opp.p2.name}`;
+    };
+
+    const semiMatch = allCategoryMatches.find(
+      (m) => m.phase === 'semifinal' && m.status === 'finished' &&
+      (m.pair1Id === pair.id || m.pair2Id === pair.id)
+    );
+    const wonSemi = semiMatch?.winnerPairId === pair.id;
+    const nextMatch = allCategoryMatches.find(
+      (m) => (m.phase === 'final' || m.phase === '3lugar') && m.status === 'finished' &&
+      (m.pair1Id === pair.id || m.pair2Id === pair.id)
+    );
 
     return (
       <div
@@ -510,16 +561,128 @@ const validateCategoryGenders = (
             : 'border-slate-100 hover:border-slate-200'
         }`}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[15px] font-black text-slate-800 leading-tight truncate">
-              {pair.p1.nickname || pair.p1.name} & {pair.p2.nickname || pair.p2.name}
-            </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[15px] font-black text-slate-800 leading-tight">
+                {pair.p1.nickname || pair.p1.name} & {pair.p2.nickname || pair.p2.name}
+              </p>
+              {/* Badge de classificação geral final (quando todo o torneio estiver finalizado) */}
+              {finalPositionBadge && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black shrink-0 border ${
+                    finalPositionBadge.includes('🏆')
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : finalPositionBadge.includes('🥈')
+                      ? 'bg-slate-100 text-slate-600 border-slate-300'
+                      : finalPositionBadge.includes('🥉')
+                      ? 'bg-orange-100 text-orange-800 border-orange-300'
+                      : 'bg-slate-50 text-slate-500 border-slate-200'
+                  }`}
+                >
+                  {finalPositionBadge}
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-xs font-bold text-slate-400 truncate">
               {pair.teamCode || `Time ${pair.teamNumber || ''}`}
             </p>
+
+            {/* Informações da fase de chaves */}
+            {hasMatches && (
+              <div className="mt-2.5 pt-2 border-t border-slate-100/90 space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] font-bold text-slate-500">
+                  <span className="text-[10px] font-black text-slate-400">
+                    Fase de chaves:
+                  </span>
+                  {standing && standing.played > 0 && (
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black shrink-0 border ${
+                        standing.rank === 1
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : standing.rank === 2
+                          ? 'bg-sky-100 text-sky-900 border-sky-300'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}
+                      title={
+                        isChaveFinished
+                          ? `${standing.rank}º lugar - ${standing.rank <= 2 ? 'Classificado para semifinal' : 'Fase de chaves finalizada'}`
+                          : `${standing.rank}º lugar parcial`
+                      }
+                    >
+                      {standing.rank === 1 ? '🥇 1º lugar' : standing.rank === 2 ? '🥈 2º lugar' : `${standing.rank}º lugar`}
+                      {isChaveFinished && (standing.rank === 1 || standing.rank === 2) && ' (Classificado)'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-700">
+                  <span>
+                    Qtde Vitórias: <strong className="font-black text-slate-900">{standing?.wins ?? 0}</strong>
+                  </span>
+                  <span>
+                    Saldo games:{' '}
+                    <strong
+                      className={`font-black ${
+                        (standing?.gamesDiff ?? 0) > 0
+                          ? 'text-emerald-600'
+                          : (standing?.gamesDiff ?? 0) < 0
+                          ? 'text-rose-600'
+                          : 'text-slate-800'
+                      }`}
+                    >
+                      {(standing?.gamesDiff ?? 0) > 0 ? `+${standing?.gamesDiff}` : (standing?.gamesDiff ?? 0)}
+                      {standing ? ` (${standing.gamesWon} - ${standing.gamesLost})` : ' (0 - 0)'}
+                    </strong>
+                  </span>
+                  {standing && standing.setsWon + standing.setsLost > 0 && (
+                    <span>
+                      Saldo sets:{' '}
+                      <strong className="font-black text-slate-800">
+                        {standing.setsDiff > 0 ? `+${standing.setsDiff}` : standing.setsDiff} ({standing.setsWon} - {standing.setsLost})
+                      </strong>
+                    </span>
+                  )}
+                </div>
+
+                {standing?.tieBreakNote && (
+                  <div className="pt-0.5">
+                    <p className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-800 bg-amber-50/90 border border-amber-200/80 rounded-lg px-2.5 py-1 leading-snug">
+                      <span>⚖️ {standing.tieBreakNote}</span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Placar da semifinal */}
+                {semiMatch && (
+                  <div className="pt-1.5 space-y-1">
+                    <p className="text-[10px] font-black text-slate-400">Semifinal:</p>
+                    <p className={`text-xs font-bold leading-snug ${wonSemi ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {getOppName(semiMatch)}{'  '}
+                      <strong>{formatMatchScore(semiMatch)}</strong>
+                      <span className="ml-1 font-black">{wonSemi ? '✓' : '✗'}</span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Placar da final ou 3º lugar */}
+                {nextMatch && (
+                  <div className="pt-0.5 space-y-1">
+                    <p className="text-[10px] font-black text-slate-400">
+                      {nextMatch.phase === 'final' ? 'Final:' : '3º lugar:'}
+                    </p>
+                    <p className={`text-xs font-bold leading-snug ${nextMatch.winnerPairId === pair.id ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {getOppName(nextMatch)}{'  '}
+                      <strong>{formatMatchScore(nextMatch)}</strong>
+                      <span className="ml-1 font-black">{nextMatch.winnerPairId === pair.id ? '✓' : '✗'}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+
+          <div className="flex items-center gap-2 shrink-0 pt-0.5">
             {showBracketToggle && (
               hasMatches ? (
                 <span
@@ -578,8 +741,51 @@ const validateCategoryGenders = (
     const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;
 
     if (categoryPanelView === 'teams') {
-      const bracketOne = sortedCategoryPairs.filter((pair) => (pair.bracket ?? 1) === 1);
-      const bracketTwo = sortedCategoryPairs.filter((pair) => pair.bracket === 2);
+      const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
+      const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
+      const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+
+      const bracketOnePairs = sortedCategoryPairs.filter((pair) => (pair.bracket ?? 1) === 1);
+      const bracketTwoPairs = sortedCategoryPairs.filter((pair) => pair.bracket === 2);
+
+      const b1Standings = calculateBracketStandings(bracketOnePairs, b1Matches, totalSets);
+      const b2Standings = calculateBracketStandings(bracketTwoPairs, b2Matches, totalSets);
+
+      const b1StandingsMap = new Map<string, TeamStanding>(b1Standings.map((s) => [s.pair.id, s]));
+      const b2StandingsMap = new Map<string, TeamStanding>(b2Standings.map((s) => [s.pair.id, s]));
+
+      const b1Finished = b1Matches.length > 0 && b1Matches.every((m) => m.status === 'finished');
+      const b2Finished = b2Matches.length > 0 && b2Matches.every((m) => m.status === 'finished');
+
+      const b1FinishedCount = b1Matches.filter((m) => m.status === 'finished').length;
+      const b2FinishedCount = b2Matches.filter((m) => m.status === 'finished').length;
+
+      const finalMatch = categoryMatches.find((m) => m.phase === 'final' && m.status === 'finished');
+      const thirdMatch = categoryMatches.find((m) => m.phase === '3lugar' && m.status === 'finished');
+      const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished');
+
+      const getOverallRank = (pairId: string, standing?: TeamStanding): number => {
+        if (allCatFinished) {
+          if (finalMatch?.winnerPairId === pairId) return 1;
+          if (finalMatch && (finalMatch.pair1Id === pairId || finalMatch.pair2Id === pairId)) return 2;
+          if (thirdMatch?.winnerPairId === pairId) return 3;
+          if (thirdMatch && (thirdMatch.pair1Id === pairId || thirdMatch.pair2Id === pairId)) return 4;
+          return 4 + (standing?.rank ?? 99);
+        }
+        return (standing?.rank ?? 99);
+      };
+
+      const bracketOneList = hasCategoryMatches && b1Matches.length > 0
+        ? [...b1Standings]
+            .sort((a, b) => getOverallRank(a.pair.id, a) - getOverallRank(b.pair.id, b))
+            .map((s) => s.pair)
+        : bracketOnePairs;
+
+      const bracketTwoList = hasCategoryMatches && b2Matches.length > 0
+        ? [...b2Standings]
+            .sort((a, b) => getOverallRank(a.pair.id, a) - getOverallRank(b.pair.id, b))
+            .map((s) => s.pair)
+        : bracketTwoPairs;
 
       return (
         <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
@@ -609,17 +815,54 @@ const validateCategoryGenders = (
             <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum time formado nesta categoria.</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-              {[{ label: 'Chave 1', list: bracketOne }, { label: 'Chave 2', list: bracketTwo }].map((bracket) => (
-                <div key={bracket.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h4 className="text-xs font-black text-slate-800">{bracket.label}</h4>
-                    <span className="text-[10px] font-black text-slate-400">{bracket.list.length} times</span>
+              {[
+                {
+                  label: 'Chave 1',
+                  list: bracketOneList,
+                  standingsMap: b1StandingsMap,
+                  isFinished: b1Finished,
+                  matchesCount: b1Matches.length,
+                  finishedCount: b1FinishedCount,
+                },
+                {
+                  label: 'Chave 2',
+                  list: bracketTwoList,
+                  standingsMap: b2StandingsMap,
+                  isFinished: b2Finished,
+                  matchesCount: b2Matches.length,
+                  finishedCount: b2FinishedCount,
+                },
+              ].map((bracket) => (
+                <div key={bracket.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 space-y-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800">{bracket.label}</h4>
+                      {hasCategoryMatches && bracket.matchesCount > 0 && (
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                          {bracket.isFinished
+                            ? '✅ 1ª Fase finalizada'
+                            : `⏱️ ${bracket.finishedCount} de ${bracket.matchesCount} partidas finalizadas`}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-black text-slate-400 self-start sm:self-auto">
+                      {bracket.list.length} times
+                    </span>
                   </div>
                   <div className="space-y-2">
                     {bracket.list.length === 0 ? (
                       <p className="py-6 text-center text-xs font-bold text-slate-300">Sem times nesta chave.</p>
                     ) : (
-                      bracket.list.map((pair) => renderTeamCard(pair, true, hasCategoryMatches))
+                      bracket.list.map((pair) =>
+                        renderTeamCard(
+                          pair,
+                          true,
+                          hasCategoryMatches,
+                          bracket.standingsMap.get(pair.id),
+                          bracket.isFinished,
+                          categoryMatches
+                        )
+                      )
                     )}
                   </div>
                 </div>
@@ -807,6 +1050,21 @@ const validateCategoryGenders = (
           match.status === 'live' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 animate-pulse' :
           'bg-slate-100 text-slate-500 border-slate-200';
 
+        const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished');
+
+        // Badges de posição final para partidas de final e 3º lugar já encerradas
+        let p1FinalBadge: string | null = null;
+        let p2FinalBadge: string | null = null;
+        if (allCatFinished && match.status === 'finished' && match.winnerPairId) {
+          if (match.phase === 'final') {
+            p1FinalBadge = match.winnerPairId === match.pair1Id ? '🏆 Campeão' : '🥈 Vice-campeão';
+            p2FinalBadge = match.winnerPairId === match.pair2Id ? '🏆 Campeão' : '🥈 Vice-campeão';
+          } else if (match.phase === '3lugar') {
+            p1FinalBadge = match.winnerPairId === match.pair1Id ? '🥉 3º lugar' : '4º lugar';
+            p2FinalBadge = match.winnerPairId === match.pair2Id ? '🥉 3º lugar' : '4º lugar';
+          }
+        }
+
         return (
           <div key={match.id} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:border-slate-200">
             {/* Top row: Match Code & Phase on Left, Status Badge & Delete on Right */}
@@ -829,15 +1087,26 @@ const validateCategoryGenders = (
               </div>
             </div>
 
+
             {totalSets === 1 ? (
               /* Layout for 1 set (Image 2) */
               <div className="flex items-center justify-between gap-4">
                 {/* Left side: Teams */}
                 <div className="min-w-0 flex-1 space-y-4">
                   <div>
-                    <p className="text-sm font-black text-slate-800 leading-tight">
-                      {team1Name}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-black text-slate-800 leading-tight">
+                        {team1Name}
+                      </p>
+                      {p1FinalBadge && (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
+                          p1FinalBadge.includes('🏆') ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : p1FinalBadge.includes('🥈') ? 'bg-slate-100 text-slate-600 border-slate-300'
+                          : p1FinalBadge.includes('🥉') ? 'bg-orange-100 text-orange-800 border-orange-300'
+                          : 'bg-slate-50 text-slate-400 border-slate-200'
+                        }`}>{p1FinalBadge}</span>
+                      )}
+                    </div>
                     {team1Code && (
                       <p className="text-xs font-bold text-slate-500">
                         [{team1Code}]
@@ -845,9 +1114,19 @@ const validateCategoryGenders = (
                     )}
                   </div>
                   <div>
-                    <p className="text-sm font-black text-slate-800 leading-tight">
-                      {team2Name}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-black text-slate-800 leading-tight">
+                        {team2Name}
+                      </p>
+                      {p2FinalBadge && (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
+                          p2FinalBadge.includes('🏆') ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : p2FinalBadge.includes('🥈') ? 'bg-slate-100 text-slate-600 border-slate-300'
+                          : p2FinalBadge.includes('🥉') ? 'bg-orange-100 text-orange-800 border-orange-300'
+                          : 'bg-slate-50 text-slate-400 border-slate-200'
+                        }`}>{p2FinalBadge}</span>
+                      )}
+                    </div>
                     {team2Code && (
                       <p className="text-xs font-bold text-slate-500">
                         [{team2Code}]
@@ -914,9 +1193,19 @@ const validateCategoryGenders = (
               <div className="space-y-3">
                 {/* Team 1 */}
                 <div>
-                  <p className="text-sm font-black text-slate-800 leading-tight">
-                    {team1Name}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-black text-slate-800 leading-tight">
+                      {team1Name}
+                    </p>
+                    {p1FinalBadge && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
+                        p1FinalBadge.includes('🏆') ? 'bg-amber-100 text-amber-900 border-amber-300'
+                        : p1FinalBadge.includes('🥈') ? 'bg-slate-100 text-slate-600 border-slate-300'
+                        : p1FinalBadge.includes('🥉') ? 'bg-orange-100 text-orange-800 border-orange-300'
+                        : 'bg-slate-50 text-slate-400 border-slate-200'
+                      }`}>{p1FinalBadge}</span>
+                    )}
+                  </div>
                   {team1Code && (
                     <p className="text-xs font-bold text-slate-500">
                       [{team1Code}]
@@ -1012,9 +1301,19 @@ const validateCategoryGenders = (
 
                 {/* Team 2 */}
                 <div>
-                  <p className="text-sm font-black text-slate-800 leading-tight">
-                    {team2Name}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-black text-slate-800 leading-tight">
+                      {team2Name}
+                    </p>
+                    {p2FinalBadge && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
+                        p2FinalBadge.includes('🏆') ? 'bg-amber-100 text-amber-900 border-amber-300'
+                        : p2FinalBadge.includes('🥈') ? 'bg-slate-100 text-slate-600 border-slate-300'
+                        : p2FinalBadge.includes('🥉') ? 'bg-orange-100 text-orange-800 border-orange-300'
+                        : 'bg-slate-50 text-slate-400 border-slate-200'
+                      }`}>{p2FinalBadge}</span>
+                    )}
+                  </div>
                   {team2Code && (
                     <p className="text-xs font-bold text-slate-500">
                       [{team2Code}]
@@ -1069,7 +1368,7 @@ const validateCategoryGenders = (
               {b1Matches.length > 0 && (
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-slate-800">Primeira Fase — Chave 1</h4>
+                    <h4 className="text-xs font-black text-slate-800">Primeira fase — Chave 1</h4>
                     <span className="text-[10px] font-black text-slate-400">{b1Matches.length} jogos</span>
                   </div>
                   <div className="grid grid-cols-1 gap-2.5">
@@ -1080,7 +1379,7 @@ const validateCategoryGenders = (
               {b2Matches.length > 0 && (
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-slate-800">Primeira Fase — Chave 2</h4>
+                    <h4 className="text-xs font-black text-slate-800">Primeira fase — Chave 2</h4>
                     <span className="text-[10px] font-black text-slate-400">{b2Matches.length} jogos</span>
                   </div>
                   <div className="grid grid-cols-1 gap-2.5">
@@ -1102,7 +1401,7 @@ const validateCategoryGenders = (
               {finalMatches.length > 0 && (
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-emerald-900">Finais & 3º Lugar</h4>
+                    <h4 className="text-xs font-black text-emerald-900">Finais & 3º lugar</h4>
                     <span className="text-[10px] font-black text-emerald-600">{finalMatches.length} jogos</span>
                   </div>
                   <div className="grid grid-cols-1 gap-2.5">
