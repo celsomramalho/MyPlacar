@@ -26,7 +26,7 @@ export const markTournamentMatchFinished = async (
   const event = await fetchEventByPin(db, eventPin);
   if (!event) return;
 
-  const updatedMatches = (event.matches || []).map((match) => {
+  const updatedMatches: TournamentMatch[] = ((event.matches || []) as TournamentMatch[]).map((match) => {
     if (match.id !== matchId) return match;
     const winnerPairId = winnerTeam === 1 ? match.pair1Id : match.pair2Id;
     const loserPairId = winnerTeam === 1 ? match.pair2Id : match.pair1Id;
@@ -39,7 +39,7 @@ export const markTournamentMatchFinished = async (
     };
   });
 
-  const progressedMatches = updatePlayoffProgression(event.pairs || [], updatedMatches);
+  const progressedMatches = updatePlayoffProgression((event.pairs || []) as unknown as import('../types').TournamentPair[], updatedMatches);
 
   await updateEventMatches(db, eventPin, progressedMatches);
 };

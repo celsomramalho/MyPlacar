@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2, AlertTriangle, Swords, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2, AlertTriangle, Swords, Sparkles, FileText } from 'lucide-react';
 import { minifyEntryForPair, minifyPairForStorage, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore } from '@modules/events/types';
 import { generateSystemMatchesForCategory, createManualMatch, formatMatchDisplayString, formatMatchNumber, getPhaseLabel } from '@modules/events/services/matchGenerator';
 import { updatePlayoffProgression, calculateBracketStandings, type TeamStanding } from '@modules/events/services/matchProgression';
+import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { getDb } from '@infra/firebase';
@@ -47,7 +48,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [gender1, setGender1] = useState<'M' | 'F'>('M');
   const [gender2, setGender2] = useState<'M' | 'F'>('M');
 
-  const saveMatchesTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const saveMatchesTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pairsById = React.useMemo(() => {
     const map: Record<string, TournamentPair> = {};
@@ -56,6 +57,30 @@ export const EventCategoriesManager: React.FC<Props> = ({
     });
     return map;
   }, [pairs]);
+
+  // Sincroniza e corrige os confrontos de playoffs caso placares anteriores tenham sido zerados
+  useEffect(() => {
+    if (!matches || matches.length === 0) return;
+    const progressed = updatePlayoffProgression(pairs, matches);
+    const hasDifference = progressed.some((m, idx) => {
+      const orig = matches[idx];
+      return (
+        m.pair1Id !== orig?.pair1Id ||
+        m.pair2Id !== orig?.pair2Id ||
+        m.pair1Label !== orig?.pair1Label ||
+        m.pair2Label !== orig?.pair2Label
+      );
+    });
+    if (hasDifference) {
+      onUpdateEvent({ ...event, matches: progressed });
+      const db = getDb();
+      if (db) {
+        updateEvent(db as Firestore, event.pin, { matches: progressed }).catch((err) =>
+          console.error('Erro ao sincronizar progressão de playoffs:', err)
+        );
+      }
+    }
+  }, [matches, pairs, event.pin]);
 
   const resetForm = () => {
     setName('');
@@ -493,6 +518,28 @@ const validateCategoryGenders = (
     }
   };
 
+  const handleDeleteAllCategoryMatches = async () => {
+    if (!selectedCategory) return;
+    const catMatches = matches.filter((m) => m.categoryId === selectedCategory.id);
+    if (catMatches.length === 0) return;
+
+    const confirmDelete = window.confirm(
+      `Tem certeza que deseja excluir todas as ${catMatches.length} partidas da categoria "${selectedCategory.name}"?`
+    );
+    if (!confirmDelete) return;
+
+    const nextMatches = matches.filter((m) => m.categoryId !== selectedCategory.id);
+    onUpdateEvent({ ...event, matches: nextMatches });
+    const db = getDb();
+    if (db) {
+      try {
+        await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+      } catch (err) {
+        console.error('Erro ao excluir todas as partidas da categoria no Firestore:', err);
+      }
+    }
+  };
+
   const renderTeamCard = (
     pair: TournamentPair,
     showBracketToggle = true,
@@ -570,7 +617,7 @@ const validateCategoryGenders = (
               {/* Badge de classificação geral final (quando todo o torneio estiver finalizado) */}
               {finalPositionBadge && (
                 <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black shrink-0 border ${
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
                     finalPositionBadge.includes('🏆')
                       ? 'bg-amber-100 text-amber-900 border-amber-300'
                       : finalPositionBadge.includes('🥈')
@@ -590,14 +637,14 @@ const validateCategoryGenders = (
 
             {/* Informações da fase de chaves */}
             {hasMatches && (
-              <div className="mt-2.5 pt-2 border-t border-slate-100/90 space-y-1.5">
-                <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] font-bold text-slate-500">
-                  <span className="text-[10px] font-black text-slate-400">
+              <div className="mt-2.5 pt-2 border-t border-slate-100/90 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-bold text-slate-500">
+                  <span className="text-xs font-bold text-slate-500">
                     Fase de chaves:
                   </span>
                   {standing && standing.played > 0 && (
                     <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black shrink-0 border ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
                         standing.rank === 1
                           ? 'bg-amber-100 text-amber-900 border-amber-300'
                           : standing.rank === 2
@@ -616,11 +663,11 @@ const validateCategoryGenders = (
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-700">
-                  <span>
+                <div className="space-y-1 text-xs font-bold text-slate-700">
+                  <p>
                     Qtde Vitórias: <strong className="font-black text-slate-900">{standing?.wins ?? 0}</strong>
-                  </span>
-                  <span>
+                  </p>
+                  <p>
                     Saldo games:{' '}
                     <strong
                       className={`font-black ${
@@ -634,29 +681,29 @@ const validateCategoryGenders = (
                       {(standing?.gamesDiff ?? 0) > 0 ? `+${standing?.gamesDiff}` : (standing?.gamesDiff ?? 0)}
                       {standing ? ` (${standing.gamesWon} - ${standing.gamesLost})` : ' (0 - 0)'}
                     </strong>
-                  </span>
+                  </p>
                   {standing && standing.setsWon + standing.setsLost > 0 && (
-                    <span>
+                    <p>
                       Saldo sets:{' '}
                       <strong className="font-black text-slate-800">
                         {standing.setsDiff > 0 ? `+${standing.setsDiff}` : standing.setsDiff} ({standing.setsWon} - {standing.setsLost})
                       </strong>
-                    </span>
+                    </p>
                   )}
                 </div>
 
                 {standing?.tieBreakNote && (
-                  <div className="pt-0.5">
-                    <p className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-800 bg-amber-50/90 border border-amber-200/80 rounded-lg px-2.5 py-1 leading-snug">
-                      <span>⚖️ {standing.tieBreakNote}</span>
+                  <div className="pt-0.5 w-full">
+                    <p className="w-full text-xs font-bold text-amber-800 bg-amber-50/90 border border-amber-200/80 rounded-xl px-3 py-2 leading-snug">
+                      ⚖️ {standing.tieBreakNote}
                     </p>
                   </div>
                 )}
 
                 {/* Placar da semifinal */}
                 {semiMatch && (
-                  <div className="pt-1.5 space-y-1">
-                    <p className="text-[10px] font-black text-slate-400">Semifinal:</p>
+                  <div className="pt-1 space-y-0.5">
+                    <p className="text-xs font-bold text-slate-400">Semifinal:</p>
                     <p className={`text-xs font-bold leading-snug ${wonSemi ? 'text-emerald-700' : 'text-rose-700'}`}>
                       {getOppName(semiMatch)}{'  '}
                       <strong>{formatMatchScore(semiMatch)}</strong>
@@ -667,8 +714,8 @@ const validateCategoryGenders = (
 
                 {/* Placar da final ou 3º lugar */}
                 {nextMatch && (
-                  <div className="pt-0.5 space-y-1">
-                    <p className="text-[10px] font-black text-slate-400">
+                  <div className="pt-1 space-y-0.5">
+                    <p className="text-xs font-bold text-slate-400">
                       {nextMatch.phase === 'final' ? 'Final:' : '3º lugar:'}
                     </p>
                     <p className={`text-xs font-bold leading-snug ${nextMatch.winnerPairId === pair.id ? 'text-emerald-700' : 'text-rose-700'}`}>
@@ -686,7 +733,7 @@ const validateCategoryGenders = (
             {showBracketToggle && (
               hasMatches ? (
                 <span
-                  className={`rounded-xl px-3 py-1.5 text-[10px] font-black border shadow-xs cursor-default ${
+                  className={`rounded-xl px-3 py-1.5 text-xs font-bold border shadow-xs cursor-default ${
                     (pair.bracket ?? 1) === 1
                       ? 'bg-emerald-50/70 text-emerald-700 border-emerald-200'
                       : 'bg-blue-50/70 text-blue-700 border-blue-200'
@@ -702,7 +749,7 @@ const validateCategoryGenders = (
                     e.stopPropagation();
                     handleToggleTeamBracket(pair);
                   }}
-                  className={`rounded-xl px-3 py-1.5 text-[10px] font-black transition-all active:scale-95 shadow-xs ${
+                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 shadow-xs ${
                     (pair.bracket ?? 1) === 1
                       ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200'
                       : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
@@ -739,6 +786,11 @@ const validateCategoryGenders = (
 
     const hasCategoryMatches = categoryMatches.length > 0;
     const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;
+
+    const handleGenerateBlankPdf = () => {
+      if (!selectedCategory) return;
+      exportCategoryMatchesBlankPdf(event, selectedCategory, categoryMatches, pairsById);
+    };
 
     if (categoryPanelView === 'teams') {
       const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
@@ -800,16 +852,40 @@ const validateCategoryGenders = (
                   : 'Times formados separados por chaves. Clique no botão da chave para alternar.'}
               </p>
             </div>
-            {isSystemDraw && (
-              <button
-                type="button"
-                onClick={handleGenerateSystemMatches}
-                className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-5 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-              >
-                <Sparkles size={16} className="text-red-500" />
-                <span>{hasCategoryMatches ? 'Regerar partidas' : 'Gerar partidas'}</span>
-              </button>
-            )}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {isSystemDraw && (
+                <button
+                  type="button"
+                  onClick={handleGenerateSystemMatches}
+                  className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                >
+                  <Sparkles size={16} className="text-emerald-500" />
+                  <span>{hasCategoryMatches ? 'Regerar partidas' : 'Gerar partidas'}</span>
+                </button>
+              )}
+              {hasCategoryMatches && (
+                <button
+                  type="button"
+                  onClick={handleGenerateBlankPdf}
+                  className="flex items-center justify-center gap-2 border-2 border-orange-400 text-orange-600 bg-white hover:bg-orange-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                  title="Gerar PDF com todas as partidas em branco para anotações manuais"
+                >
+                  <FileText size={16} className="text-orange-500" />
+                  <span>Gerar PDF</span>
+                </button>
+              )}
+              {hasCategoryMatches && (
+                <button
+                  type="button"
+                  onClick={handleDeleteAllCategoryMatches}
+                  className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                  title="Deletar todas as partidas geradas desta categoria"
+                >
+                  <Trash2 size={16} className="text-red-500" />
+                  <span>Deletar</span>
+                </button>
+              )}
+            </div>
           </div>
           {sortedCategoryPairs.length === 0 ? (
             <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum time formado nesta categoria.</div>
@@ -1337,15 +1413,37 @@ const validateCategoryGenders = (
                 {categoryMatches.length} {categoryMatches.length === 1 ? 'partida configurada' : 'partidas configuradas'} nesta categoria.
               </p>
             </div>
-            {isSystemDraw && (
-              <button
-                type="button"
-                onClick={handleGenerateSystemMatches}
-                className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-5 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-              >
-                <Sparkles size={16} className="text-red-500" />
-                <span>{categoryMatches.length > 0 ? 'Regerar partidas' : 'Gerar partidas'}</span>
-              </button>
+            {categoryMatches.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {isSystemDraw && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateSystemMatches}
+                    className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                  >
+                    <Sparkles size={16} className="text-emerald-500" />
+                    <span>Regerar partidas</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleGenerateBlankPdf}
+                  className="flex items-center justify-center gap-2 border-2 border-orange-400 text-orange-600 bg-white hover:bg-orange-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                  title="Gerar PDF com todas as partidas em branco para anotações manuais"
+                >
+                  <FileText size={16} className="text-orange-500" />
+                  <span>Gerar PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteAllCategoryMatches}
+                  className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                  title="Deletar todas as partidas geradas desta categoria"
+                >
+                  <Trash2 size={16} className="text-red-500" />
+                  <span>Deletar</span>
+                </button>
+              </div>
             )}
           </div>
 

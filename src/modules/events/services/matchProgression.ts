@@ -1,5 +1,6 @@
 import type { TournamentMatch, TournamentPair } from '../types';
 import { minifyPairForStorage } from '../types';
+import { formatMatchNumber } from './matchGenerator';
 
 export interface TeamStanding {
   pair: TournamentPair;
@@ -244,6 +245,8 @@ export const calculateBracketStandings = (
 /**
  * Atualiza automaticamente os slots de semifinais, final e 3º lugar
  * conforme as partidas das fases anteriores vão sendo concluídas.
+ * Se o placar for zerado ou a fase anterior não estiver completa,
+ * limpa os times dos confrontos seguintes e restaura as legendas genéricas.
  */
 export const updatePlayoffProgression = (
   allPairs: TournamentPair[],
@@ -254,92 +257,174 @@ export const updatePlayoffProgression = (
     pairsById[p.id] = p;
   });
 
-  // Agrupa partidas por fase
-  const b1Matches = matches.filter((m) => m.phase === 'chave1');
-  const b2Matches = matches.filter((m) => m.phase === 'chave2');
-  const semiMatches = matches.filter((m) => m.phase === 'semifinal');
-  const finalMatch = matches.find((m) => m.phase === 'final');
-  const thirdPlaceMatch = matches.find((m) => m.phase === '3lugar');
-
-  const b1Pairs = allPairs.filter((p) => (p.bracket ?? 1) === 1);
-  const b2Pairs = allPairs.filter((p) => p.bracket === 2);
-
-  // Calcula classificação se todos os jogos de grupo estiverem finalizados
-  const b1Finished = b1Matches.length > 0 && b1Matches.every((m) => m.status === 'finished');
-  const b2Finished = b2Matches.length > 0 && b2Matches.every((m) => m.status === 'finished');
-
   const updatedMatches = matches.map((m) => ({ ...m }));
 
-  // 1. Atualizar Semifinais
-  if (b1Finished && b2Finished && semiMatches.length === 2) {
-    const s1Rank = calculateBracketStandings(b1Pairs, b1Matches);
-    const s2Rank = calculateBracketStandings(b2Pairs, b2Matches);
+  // Agrupa e processa por categoria
+  const categoryIds = new Set<string>();
+  matches.forEach((m) => {
+    if (m.categoryId) categoryIds.add(m.categoryId);
+  });
+  allPairs.forEach((p) => {
+    if (p.categoryId) categoryIds.add(p.categoryId);
+  });
 
-    const b1_1st = s1Rank[0]?.pair;
-    const b1_2nd = s1Rank[1]?.pair;
-    const b2_1st = s2Rank[0]?.pair;
-    const b2_2nd = s2Rank[1]?.pair;
-
-    // Semifinal 1: 1º chave1 x 2º chave2
-    const s1Index = updatedMatches.findIndex((m) => m.id === semiMatches[0].id);
-    if (s1Index !== -1 && b1_1st && b2_2nd) {
-      updatedMatches[s1Index].pair1Id = b1_1st.id;
-      updatedMatches[s1Index].pair2Id = b2_2nd.id;
-      updatedMatches[s1Index].pair1 = minifyPairForStorage(b1_1st);
-      updatedMatches[s1Index].pair2 = minifyPairForStorage(b2_2nd);
-    }
-
-    // Semifinal 2: 2º chave1 x 1º chave2
-    const s2Index = updatedMatches.findIndex((m) => m.id === semiMatches[1].id);
-    if (s2Index !== -1 && b1_2nd && b2_1st) {
-      updatedMatches[s2Index].pair1Id = b1_2nd.id;
-      updatedMatches[s2Index].pair2Id = b2_1st.id;
-      updatedMatches[s2Index].pair1 = minifyPairForStorage(b1_2nd);
-      updatedMatches[s2Index].pair2 = minifyPairForStorage(b2_1st);
-    }
+  if (categoryIds.size === 0) {
+    categoryIds.add('');
   }
 
-  // 2. Atualizar Final e 3º Lugar
-  const s1Updated = updatedMatches.find((m) => semiMatches[0] && m.id === semiMatches[0].id);
-  const s2Updated = updatedMatches.find((m) => semiMatches[1] && m.id === semiMatches[1].id);
+  categoryIds.forEach((catId) => {
+    const catMatches = updatedMatches.filter((m) =>
+      catId ? m.categoryId === catId : true
+    );
+    const catPairs = allPairs.filter((p) =>
+      catId
+        ? p.categoryId === catId || (!p.categoryId && (p.p1?.categoryIds?.includes(catId) || p.p2?.categoryIds?.includes(catId)))
+        : true
+    );
 
-  if (s1Updated && s2Updated && s1Updated.status === 'finished' && s2Updated.status === 'finished') {
-    const s1WinnerId = s1Updated.winnerPairId;
-    const s1LoserId = s1Updated.loserPairId || (s1WinnerId === s1Updated.pair1Id ? s1Updated.pair2Id : s1Updated.pair1Id);
+    const b1Matches = catMatches.filter((m) => m.phase === 'chave1');
+    const b2Matches = catMatches.filter((m) => m.phase === 'chave2');
+    const semiMatches = catMatches.filter((m) => m.phase === 'semifinal');
+    const finalMatch = catMatches.find((m) => m.phase === 'final');
+    const thirdPlaceMatch = catMatches.find((m) => m.phase === '3lugar');
 
-    const s2WinnerId = s2Updated.winnerPairId;
-    const s2LoserId = s2Updated.loserPairId || (s2WinnerId === s2Updated.pair1Id ? s2Updated.pair2Id : s2Updated.pair1Id);
+    const b1Pairs = catPairs.filter((p) => (p.bracket ?? 1) === 1);
+    const b2Pairs = catPairs.filter((p) => p.bracket === 2);
 
-    // Final: Winner S1 x Winner S2
-    if (finalMatch && s1WinnerId && s2WinnerId) {
-      const fIndex = updatedMatches.findIndex((m) => m.id === finalMatch.id);
-      if (fIndex !== -1) {
-        const p1 = pairsById[s1WinnerId];
-        const p2 = pairsById[s2WinnerId];
-        if (p1 && p2) {
-          updatedMatches[fIndex].pair1Id = p1.id;
-          updatedMatches[fIndex].pair2Id = p2.id;
-          updatedMatches[fIndex].pair1 = minifyPairForStorage(p1);
-          updatedMatches[fIndex].pair2 = minifyPairForStorage(p2);
-        }
+    // Calcula classificação se todos os jogos de grupo estiverem finalizados
+    const b1Finished = b1Matches.length > 0 && b1Matches.every((m) => m.status === 'finished');
+    const b2Finished = b2Matches.length > 0 && b2Matches.every((m) => m.status === 'finished');
+
+    // 1. Atualizar Semifinais
+    if (b1Finished && b2Finished && semiMatches.length === 2) {
+      const s1Rank = calculateBracketStandings(b1Pairs, b1Matches);
+      const s2Rank = calculateBracketStandings(b2Pairs, b2Matches);
+
+      const b1_1st = s1Rank[0]?.pair;
+      const b1_2nd = s1Rank[1]?.pair;
+      const b2_1st = s2Rank[0]?.pair;
+      const b2_2nd = s2Rank[1]?.pair;
+
+      // Semifinal 1: 1º chave1 x 2º chave2
+      const s1Index = updatedMatches.findIndex((m) => m.id === semiMatches[0].id);
+      if (s1Index !== -1 && b1_1st && b2_2nd) {
+        updatedMatches[s1Index].pair1Id = b1_1st.id;
+        updatedMatches[s1Index].pair2Id = b2_2nd.id;
+        updatedMatches[s1Index].pair1 = minifyPairForStorage(b1_1st);
+        updatedMatches[s1Index].pair2 = minifyPairForStorage(b2_2nd);
+      }
+
+      // Semifinal 2: 2º chave1 x 1º chave2
+      const s2Index = updatedMatches.findIndex((m) => m.id === semiMatches[1].id);
+      if (s2Index !== -1 && b1_2nd && b2_1st) {
+        updatedMatches[s2Index].pair1Id = b1_2nd.id;
+        updatedMatches[s2Index].pair2Id = b2_1st.id;
+        updatedMatches[s2Index].pair1 = minifyPairForStorage(b1_2nd);
+        updatedMatches[s2Index].pair2 = minifyPairForStorage(b2_1st);
+      }
+    } else if (semiMatches.length === 2) {
+      // Se a 1ª fase não está finalizada, limpa os times das semifinais
+      const s1Index = updatedMatches.findIndex((m) => m.id === semiMatches[0].id);
+      if (s1Index !== -1) {
+        delete updatedMatches[s1Index].pair1Id;
+        delete updatedMatches[s1Index].pair2Id;
+        delete updatedMatches[s1Index].pair1;
+        delete updatedMatches[s1Index].pair2;
+        if (!updatedMatches[s1Index].pair1Label) updatedMatches[s1Index].pair1Label = '1º chave1';
+        if (!updatedMatches[s1Index].pair2Label) updatedMatches[s1Index].pair2Label = '2º chave2';
+      }
+      const s2Index = updatedMatches.findIndex((m) => m.id === semiMatches[1].id);
+      if (s2Index !== -1) {
+        delete updatedMatches[s2Index].pair1Id;
+        delete updatedMatches[s2Index].pair2Id;
+        delete updatedMatches[s2Index].pair1;
+        delete updatedMatches[s2Index].pair2;
+        if (!updatedMatches[s2Index].pair1Label) updatedMatches[s2Index].pair1Label = '2º chave1';
+        if (!updatedMatches[s2Index].pair2Label) updatedMatches[s2Index].pair2Label = '1º chave2';
       }
     }
 
-    // 3º Lugar: Loser S1 x Loser S2
-    if (thirdPlaceMatch && s1LoserId && s2LoserId) {
-      const tIndex = updatedMatches.findIndex((m) => m.id === thirdPlaceMatch.id);
-      if (tIndex !== -1) {
-        const p1 = pairsById[s1LoserId];
-        const p2 = pairsById[s2LoserId];
-        if (p1 && p2) {
-          updatedMatches[tIndex].pair1Id = p1.id;
-          updatedMatches[tIndex].pair2Id = p2.id;
-          updatedMatches[tIndex].pair1 = minifyPairForStorage(p1);
-          updatedMatches[tIndex].pair2 = minifyPairForStorage(p2);
+    // 2. Atualizar Final e 3º Lugar
+    const s1Updated = updatedMatches.find((m) => semiMatches[0] && m.id === semiMatches[0].id);
+    const s2Updated = updatedMatches.find((m) => semiMatches[1] && m.id === semiMatches[1].id);
+
+    if (
+      s1Updated &&
+      s2Updated &&
+      s1Updated.status === 'finished' &&
+      s2Updated.status === 'finished' &&
+      s1Updated.winnerPairId &&
+      s2Updated.winnerPairId
+    ) {
+      const s1WinnerId = s1Updated.winnerPairId;
+      const s1LoserId = s1Updated.loserPairId || (s1WinnerId === s1Updated.pair1Id ? s1Updated.pair2Id : s1Updated.pair1Id);
+
+      const s2WinnerId = s2Updated.winnerPairId;
+      const s2LoserId = s2Updated.loserPairId || (s2WinnerId === s2Updated.pair1Id ? s2Updated.pair2Id : s2Updated.pair1Id);
+
+      // Final: Winner S1 x Winner S2
+      if (finalMatch && s1WinnerId && s2WinnerId) {
+        const fIndex = updatedMatches.findIndex((m) => m.id === finalMatch.id);
+        if (fIndex !== -1) {
+          const p1 = pairsById[s1WinnerId];
+          const p2 = pairsById[s2WinnerId];
+          if (p1 && p2) {
+            updatedMatches[fIndex].pair1Id = p1.id;
+            updatedMatches[fIndex].pair2Id = p2.id;
+            updatedMatches[fIndex].pair1 = minifyPairForStorage(p1);
+            updatedMatches[fIndex].pair2 = minifyPairForStorage(p2);
+          }
+        }
+      }
+
+      // 3º Lugar: Loser S1 x Loser S2
+      if (thirdPlaceMatch && s1LoserId && s2LoserId) {
+        const tIndex = updatedMatches.findIndex((m) => m.id === thirdPlaceMatch.id);
+        if (tIndex !== -1) {
+          const p1 = pairsById[s1LoserId];
+          const p2 = pairsById[s2LoserId];
+          if (p1 && p2) {
+            updatedMatches[tIndex].pair1Id = p1.id;
+            updatedMatches[tIndex].pair2Id = p2.id;
+            updatedMatches[tIndex].pair1 = minifyPairForStorage(p1);
+            updatedMatches[tIndex].pair2 = minifyPairForStorage(p2);
+          }
+        }
+      }
+    } else {
+      // Se as semifinais não estão finalizadas, limpa os times da final e do 3º lugar
+      if (finalMatch) {
+        const fIndex = updatedMatches.findIndex((m) => m.id === finalMatch.id);
+        if (fIndex !== -1) {
+          delete updatedMatches[fIndex].pair1Id;
+          delete updatedMatches[fIndex].pair2Id;
+          delete updatedMatches[fIndex].pair1;
+          delete updatedMatches[fIndex].pair2;
+          if (!updatedMatches[fIndex].pair1Label && semiMatches[0]) {
+            updatedMatches[fIndex].pair1Label = `Ganhador ${formatMatchNumber(semiMatches[0].matchNumber || 1)}`;
+          }
+          if (!updatedMatches[fIndex].pair2Label && semiMatches[1]) {
+            updatedMatches[fIndex].pair2Label = `Ganhador ${formatMatchNumber(semiMatches[1].matchNumber || 2)}`;
+          }
+        }
+      }
+      if (thirdPlaceMatch) {
+        const tIndex = updatedMatches.findIndex((m) => m.id === thirdPlaceMatch.id);
+        if (tIndex !== -1) {
+          delete updatedMatches[tIndex].pair1Id;
+          delete updatedMatches[tIndex].pair2Id;
+          delete updatedMatches[tIndex].pair1;
+          delete updatedMatches[tIndex].pair2;
+          if (!updatedMatches[tIndex].pair1Label && semiMatches[0]) {
+            updatedMatches[tIndex].pair1Label = `Perdedor ${formatMatchNumber(semiMatches[0].matchNumber || 1)}`;
+          }
+          if (!updatedMatches[tIndex].pair2Label && semiMatches[1]) {
+            updatedMatches[tIndex].pair2Label = `Perdedor ${formatMatchNumber(semiMatches[1].matchNumber || 2)}`;
+          }
         }
       }
     }
-  }
+  });
 
   return updatedMatches;
 };

@@ -14,6 +14,7 @@ export const minifyEntryForPair = (entry: Partial<TournamentEntry>): TournamentE
   name: entry.name || '',
   nickname: entry.nickname || entry.name || '',
   pin: entry.pin || '',
+  joinedAt: entry.joinedAt || 0,
   gender: entry.gender || 'M',
   categoryIds: entry.categoryIds || [],
   registrationId: entry.registrationId,

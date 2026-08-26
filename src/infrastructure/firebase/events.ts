@@ -45,15 +45,18 @@ interface FirebaseTournamentEntry {
   information?: string;
 }
 
-interface FirebaseTournamentMatch {
+export interface FirebaseTournamentMatch {
   id: string;
-  pair1Id: string;
-  pair2Id: string;
+  pair1Id?: string;
+  pair2Id?: string;
   status: 'waiting' | 'live' | 'finished';
   result?: string;
   winnerPairId?: string;
   ownerPin?: string;
   matchId?: string;
+  round?: number;
+  stage?: string;
+  categoryId?: string;
 }
 
 interface FirebaseTournamentEvent {

@@ -731,7 +731,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         </form>
       )}
 
-      {/* Participants Table */}
+      {/* Participants List */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         {entries.length === 0 ? (
           <div className="p-10 text-center space-y-2">
@@ -740,122 +740,148 @@ export const EventRegistrationsManager: React.FC<Props> = ({
             <p className="text-xs text-slate-300">Clique em "Nova inscrição" para inscrever um jogador.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] tracking-wider font-black text-slate-400">
-                  <th className="py-3 px-3">ID</th>
-                  <th className="py-3 px-3">Participante</th>
-                  <th className="py-3 px-2">Gênero</th>
-                  <th className="py-3 px-3">Categorias</th>
-                  <th className="py-3 px-3">Financeiro</th>
-                  <th className="py-3 px-2 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-bold">
-                {entries.map((entry) => {
-                  const entryCategories = categories.filter((c) =>
-                    entry.categoryIds?.includes(c.id)
-                  );
-                  const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
-                  const isExpanded = expandedRegistrationEmail === entry.email;
+          <div className="divide-y divide-slate-100">
+            {entries.map((entry) => {
+              const entryCategories = categories.filter((c) =>
+                entry.categoryIds?.includes(c.id)
+              );
+              const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
+              const isExpanded = expandedRegistrationEmail === entry.email;
 
-                  return (
-                    <React.Fragment key={entry.email || entry.pin}>
-                      <tr className={`transition-colors ${isExpanded ? 'bg-emerald-50/50' : 'hover:bg-slate-50/80'}`}>
-                        <td className="py-4 px-3 font-mono font-black text-emerald-600">
-                          {formatRegistrationId(entry.registrationId)}
-                        </td>
-                        <td className="py-4 px-3 space-y-0.5">
-                          <p className="font-black text-slate-800">{entry.name}</p>
-                          <p className="text-[10px] text-amber-500 font-black">
-                            PIN: {entry.pin}
-                          </p>
-                        </td>
-                        <td className="py-4 px-2 text-center">
-                          <div className="flex items-center justify-center">
-                            {entry.gender === 'F' ? (
-                              <span className="text-pink-500"><VenusIcon size={20} /></span>
-                            ) : (
-                              <span className="text-sky-500"><MarsIcon size={20} /></span>
-                            )}
+              return (
+                <div
+                  key={entry.email || entry.pin}
+                  className={`transition-colors ${isExpanded ? 'bg-emerald-50/30' : 'hover:bg-slate-50/70'}`}
+                >
+                  <div className="p-3.5 sm:p-4 flex items-center justify-between gap-3">
+                    {/* Lado Esquerdo: Ícone de Gênero + Informações do Participante */}
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      {/* Ícone de Gênero */}
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const nextGender = entry.gender === 'F' ? 'M' : 'F';
+                          const db = getDb();
+                          if (db && event.pin) {
+                            try {
+                              const { updateEventEntry } = await import('@infra/firebase/events');
+                              await updateEventEntry(db, event.pin, entry.email, { gender: nextGender });
+                              await updateUserProfileFields(db, entry.email, { gender: nextGender });
+                            } catch (err) {
+                              console.error('Erro ao alternar gênero:', err);
+                            }
+                          }
+                          onUpdateEntries(
+                            entries.map((item) =>
+                              (item.email === entry.email || item.pin === entry.pin)
+                                ? { ...item, gender: nextGender }
+                                : item
+                            )
+                          );
+                        }}
+                        className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all active:scale-90 ${
+                          entry.gender === 'F'
+                            ? 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'
+                            : 'bg-sky-50 text-sky-500 border-sky-100 hover:bg-sky-100'
+                        }`}
+                        title="Clique para alternar gênero"
+                      >
+                        {entry.gender === 'F' ? <VenusIcon size={20} /> : <MarsIcon size={20} />}
+                      </button>
+
+                      {/* Bloco das Linhas de Informação */}
+                      <div className="space-y-1 min-w-0 flex-1 text-left">
+                        {/* Linha 1: Nome */}
+                        <p className="font-black text-sm text-slate-800 tracking-tight truncate">
+                          {entry.name || entry.nickname}
+                        </p>
+
+                        {/* Linha 2: PIN */}
+                        <p className="text-[11px] font-black text-amber-500">
+                          PIN: {entry.pin}
+                        </p>
+
+                        {/* Linha 3: Categorias */}
+                        {entryCategories.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            {entryCategories.map((c) => (
+                              <span
+                                key={c.id}
+                                className="bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60"
+                              >
+                                {c.abbreviation || c.name}
+                              </span>
+                            ))}
                           </div>
-                        </td>
-                        <td className="py-4 px-3">
-                          {entryCategories.length === 0 ? (
-                            <span className="text-slate-300 text-[10px]">Nenhuma</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1">
-                              {entryCategories.map((c) => (
-                                <span
-                                  key={c.id}
-                                  className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md text-[10px] font-bold"
-                                >
-                                  {c.abbreviation || c.name}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-4 px-3">
-                          <div className="space-y-2">
-                            <span
-                              className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                                entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
-                                  ? 'bg-emerald-100 text-emerald-700'
-                                  : entry.paymentStatus === 'Isento'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-amber-100 text-amber-700'
-                              }`}
-                            >
-                              {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
-                            </span>
-                            <p className="text-[10px] text-slate-500">
-                              R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="py-4 px-2 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsAdding(false);
-                              setEditingPin(null);
-                              setExpandedRegistrationEmail(isExpanded ? null : entry.email);
-                            }}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-slate-500 transition-colors hover:bg-gray-200 active:scale-90"
-                            title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
+                        ) : (
+                          <p className="text-[10px] text-slate-300 font-bold">Sem categoria</p>
+                        )}
+
+                        {/* Linha 4: Status do Pagamento + Valores */}
+                        <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                              entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : entry.paymentStatus === 'Isento'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}
                           >
-                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </button>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={5} className="bg-white px-4 pb-5 pt-0">
-                            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
-                              <EventRegistrationForm
-                                key={`expanded-${entry.email || entry.pin}`}
-                                event={event}
-                                mode="admin"
-                                entry={entry}
-                                onUpdateEvent={onUpdateEvent}
-                                onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
-                                onDelete={() => {
-                                  void handleDelete(entry.pin);
-                                  setExpandedRegistrationEmail(null);
-                                }}
-                                onCancel={() => setExpandedRegistrationEmail(null)}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                            {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
+                          </span>
+                          <span className="text-xs font-bold text-slate-600">
+                            R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lado Direito: Inscrição_ID + Botão de Ação / Chevron */}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
+                        {formatRegistrationId(entry.registrationId)}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAdding(false);
+                          setEditingPin(null);
+                          setExpandedRegistrationEmail(isExpanded ? null : entry.email);
+                        }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-90 shadow-sm"
+                        title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
+                      >
+                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Formulário Expandido */}
+                  {isExpanded && (
+                    <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
+                      <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                        <EventRegistrationForm
+                          key={`expanded-${entry.email || entry.pin}`}
+                          event={event}
+                          mode="admin"
+                          entry={entry}
+                          onUpdateEvent={onUpdateEvent}
+                          onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
+                          onDelete={() => {
+                            void handleDelete(entry.pin);
+                            setExpandedRegistrationEmail(null);
+                          }}
+                          onCancel={() => setExpandedRegistrationEmail(null)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

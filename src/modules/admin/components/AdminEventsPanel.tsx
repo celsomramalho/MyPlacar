@@ -12,6 +12,7 @@ import {
 } from '@modules/events/types';
 import { findUserByPin, findUsersByPins, getDb } from '@infra/firebase';
 import { ensureEventEntriesRegistrationIds, fetchEventByPin, fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
+import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { EventDashboardView } from './EventDashboardView';
