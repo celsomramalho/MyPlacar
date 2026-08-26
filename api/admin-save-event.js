@@ -82,12 +82,46 @@ export default async function handler(req, res) {
     // Remover entries do documento principal (salvo em subcoleção)
     const { entries: _entries, ...eventWithoutEntries } = event;
 
+    if (Array.isArray(eventWithoutEntries.pairs)) {
+      eventWithoutEntries.pairs = eventWithoutEntries.pairs.map((pair) => ({
+        id: pair.id,
+        p1: {
+          email: pair.p1?.email || '',
+          name: pair.p1?.name || '',
+          nickname: pair.p1?.nickname || pair.p1?.name || '',
+          pin: pair.p1?.pin || '',
+          gender: pair.p1?.gender || 'M',
+          categoryIds: pair.p1?.categoryIds || [],
+          registrationId: pair.p1?.registrationId,
+          shirtSize: pair.p1?.shirtSize || 'M',
+          phone: pair.p1?.phone || '',
+          checkedIn: !!pair.p1?.checkedIn,
+        },
+        p2: {
+          email: pair.p2?.email || '',
+          name: pair.p2?.name || '',
+          nickname: pair.p2?.nickname || pair.p2?.name || '',
+          pin: pair.p2?.pin || '',
+          gender: pair.p2?.gender || 'M',
+          categoryIds: pair.p2?.categoryIds || [],
+          registrationId: pair.p2?.registrationId,
+          shirtSize: pair.p2?.shirtSize || 'M',
+          phone: pair.p2?.phone || '',
+          checkedIn: !!pair.p2?.checkedIn,
+        },
+        categoryId: pair.categoryId,
+        teamNumber: pair.teamNumber,
+        teamCode: pair.teamCode,
+        bracket: pair.bracket,
+      }));
+    }
+
     const sanitized = sanitize({
       ...eventWithoutEntries,
       createdAt: event.createdAt || Date.now(),
     });
 
-    await db.collection("events").doc(event.pin).set(sanitized, { merge: true });
+    await db.collection("events").doc(event.pin).set(sanitized);
 
     return res.status(200).json({ success: true });
   } catch (err) {

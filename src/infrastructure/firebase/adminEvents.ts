@@ -1,5 +1,5 @@
 import { collection, deleteDoc, deleteField, doc, getDocs, setDoc, updateDoc, type Firestore } from 'firebase/firestore';
-import type { TournamentEvent } from '@modules/events/types';
+import { minifyPairForStorage, type TournamentEvent, type TournamentPair } from '@modules/events/types';
 
 export type FirebaseAdminTournamentEvent = TournamentEvent;
 
@@ -58,6 +58,9 @@ export const saveAdminEvent = async (
 ) => {
   // Strip entries array from main event document (entries are saved in events/{pin}/entries subcollection)
   const { entries: _entries, ...eventWithoutEntries } = event;
+  if (Array.isArray(eventWithoutEntries.pairs)) {
+    eventWithoutEntries.pairs = (eventWithoutEntries.pairs as TournamentPair[]).map(minifyPairForStorage);
+  }
   const rawPlain = JSON.parse(JSON.stringify({
     ...eventWithoutEntries,
     createdAt: event.createdAt || Date.now(),
@@ -65,10 +68,8 @@ export const saveAdminEvent = async (
   const sanitized = sanitizeForFirestore(rawPlain);
 
   try {
-    // Tenta salvar diretamente (funciona se usuário está autenticado no Firebase Auth com isAdmin)
-    await setDoc(doc(db, 'events', event.pin), sanitized, { merge: true });
-    // Garante que o campo entries[] legado seja removido do doc raiz (a fonte de verdade é a subcoleção)
-    await updateDoc(doc(db, 'events', event.pin), { entries: deleteField() }).catch(() => {});
+    // Tenta salvar diretamente (substitui o doc raiz eliminando o entries[] legado gigante)
+    await setDoc(doc(db, 'events', event.pin), sanitized);
   } catch (err: unknown) {
     const firebaseErr = err as { code?: string; message?: string };
 

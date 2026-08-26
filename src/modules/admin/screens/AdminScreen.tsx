@@ -133,6 +133,11 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       name: '',
       active: true,
       eventStatus: 'Em configuração',
+      eventType: 'Chave classificatória',
+      setsCount: 1,
+      teamDrawType: 'Manual',
+      bracketDrawType: 'Manual',
+      matchDrawType: 'Manual',
       createdAt: Date.now(),
     };
     handleGuardedAction(() => {

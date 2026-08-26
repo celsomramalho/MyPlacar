@@ -1,6 +1,7 @@
 import type { Firestore } from 'firebase/firestore';
 import { fetchEventByPin, updateEventMatches } from '@infra/firebase/events';
 import type { TournamentMatch } from '../types';
+import { updatePlayoffProgression } from './matchProgression';
 
 export const markTournamentMatchLive = async (
   db: Firestore,
@@ -27,13 +28,18 @@ export const markTournamentMatchFinished = async (
 
   const updatedMatches = (event.matches || []).map((match) => {
     if (match.id !== matchId) return match;
+    const winnerPairId = winnerTeam === 1 ? match.pair1Id : match.pair2Id;
+    const loserPairId = winnerTeam === 1 ? match.pair2Id : match.pair1Id;
     return {
       ...match,
       status: 'finished' as const,
       result,
-      winnerPairId: winnerTeam === 1 ? match.pair1Id : match.pair2Id,
+      winnerPairId,
+      loserPairId,
     };
   });
 
-  await updateEventMatches(db, eventPin, updatedMatches);
+  const progressedMatches = updatePlayoffProgression(event.pairs || [], updatedMatches);
+
+  await updateEventMatches(db, eventPin, progressedMatches);
 };

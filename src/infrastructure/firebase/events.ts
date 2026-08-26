@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -12,6 +13,7 @@ import {
   type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { minifyPairForStorage, type TournamentPair } from '@modules/events/types';
 
 interface FirebaseEventRegistration {
   pin: string;
@@ -67,6 +69,11 @@ interface FirebaseTournamentEvent {
   regulationUrl?: string;
   regulationFileName?: string;
   information?: string;
+  eventType?: string;
+  setsCount?: number;
+  teamDrawType?: string;
+  bracketDrawType?: string;
+  matchDrawType?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -253,13 +260,24 @@ export const updateEventEntry = (
   return updateDoc(doc(db, 'events', eventPin, 'entries', email.toLowerCase().trim()), sanitized);
 };
 
-export const updateEvent = (
+export const updateEvent = async (
   db: Firestore,
   eventPin: string,
   data: Partial<FirebaseTournamentEvent>,
 ) => {
-  const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(data)));
-  return updateDoc(doc(db, 'events', eventPin), sanitized);
+  const toSave = { ...data };
+  if (Array.isArray(toSave.pairs)) {
+    toSave.pairs = (toSave.pairs as TournamentPair[]).map(minifyPairForStorage);
+  }
+  const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(toSave)));
+  try {
+    return await updateDoc(doc(db, 'events', eventPin), {
+      ...sanitized,
+      entries: deleteField(),
+    });
+  } catch (_e) {
+    return await updateDoc(doc(db, 'events', eventPin), sanitized);
+  }
 };
 
 export const updateEventMatches = (

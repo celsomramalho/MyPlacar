@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, type RefObject } from 'react';
 import { Edit3, Image as ImageIcon, Loader2, Plus, Save, Ticket, Trash2, X, ChevronRight, ChevronUp, FileText, ShieldCheck, Search } from 'lucide-react';
-import type { RefObject } from 'react';
-import { EVENT_STATUS_OPTIONS, type EventStatusOption, type TournamentEntry, type TournamentEvent } from '@modules/events/types';
-import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
+import {
+  EVENT_STATUS_OPTIONS,
+  EVENT_TYPE_OPTIONS,
+  DRAW_TYPE_OPTIONS,
+  type EventStatusOption,
+  type EventTypeOption,
+  type DrawTypeOption,
+  type TournamentEntry,
+  type TournamentEvent,
+} from '@modules/events/types';
 import { findUserByPin, findUsersByPins, getDb } from '@infra/firebase';
-import { ensureEventEntriesRegistrationIds, fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
+import { ensureEventEntriesRegistrationIds, fetchEventByPin, fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { EventDashboardView } from './EventDashboardView';
@@ -62,6 +69,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           prev
             ? {
                 ...updatedInList,          // Base: latest from list (has name, status, etc.)
+                pairs: prev.pairs ?? updatedInList.pairs, // Prefer local pairs
                 categories: prev.categories ?? updatedInList.categories, // Prefer local categories
                 sponsors: prev.sponsors ?? updatedInList.sponsors,     // Prefer local sponsors
                 entries: prev.entries,     // Always keep locally loaded entries
@@ -95,7 +103,30 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
     try {
       const db = getDb();
       if (db) {
-        const fetchedEntries = await fetchEventEntries(db, event.pin);
+        const [freshEventDoc, fetchedEntries] = await Promise.all([
+          fetchEventByPin(db, event.pin),
+          fetchEventEntries(db, event.pin),
+        ]);
+        const baseEvent: TournamentEvent = {
+          ...freshestEvent,
+          ...(freshEventDoc ? {
+            name: freshEventDoc.name || freshestEvent.name,
+            bannerUrl: freshEventDoc.bannerUrl ?? freshestEvent.bannerUrl,
+            active: freshEventDoc.active ?? freshestEvent.active,
+            pairs: (freshEventDoc.pairs as any) || freshestEvent.pairs || [],
+            matches: (freshEventDoc.matches as any) || freshestEvent.matches,
+            coAdminPins: freshEventDoc.coAdminPins || freshestEvent.coAdminPins,
+            regulationUrl: freshEventDoc.regulationUrl || freshestEvent.regulationUrl,
+            regulationFileName: freshEventDoc.regulationFileName || freshestEvent.regulationFileName,
+            information: freshEventDoc.information || freshestEvent.information,
+            eventType: (freshEventDoc.eventType as any) || freshestEvent.eventType,
+            setsCount: (freshEventDoc.setsCount as any) ?? freshestEvent.setsCount,
+            teamDrawType: (freshEventDoc.teamDrawType as any) || freshestEvent.teamDrawType,
+            bracketDrawType: (freshEventDoc.bracketDrawType as any) || freshestEvent.bracketDrawType,
+            matchDrawType: (freshEventDoc.matchDrawType as any) || freshestEvent.matchDrawType,
+            ...(freshEventDoc as any),
+          } : {}),
+        };
         // Map FirebaseTournamentEntry to TournamentEntry shape
         const entries: TournamentEntry[] = fetchedEntries.map((fe) => ({
           email: fe.email,
@@ -117,7 +148,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           partnerPhone: fe.partnerPhone,
           categoryPartners: fe.categoryPartners,
         }));
-        setSelectedDashboardEvent({ ...freshestEvent, entries });
+        setSelectedDashboardEvent({ ...baseEvent, entries });
       } else {
         setSelectedDashboardEvent(freshestEvent);
       }
@@ -466,6 +497,83 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
               className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
             >
               {EVENT_STATUS_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Tipo de evento</label>
+            <select
+              value={editingEvent.eventType || 'Chave classificatória'}
+              onChange={(event) => onChangeEditingEvent({ ...editingEvent, eventType: event.target.value as EventTypeOption })}
+              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
+            >
+              {EVENT_TYPE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 h-12">
+            <span className="text-sm font-black text-slate-700">Set melhor de</span>
+            <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+              {([1, 3, 5] as const).map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => onChangeEditingEvent({ ...editingEvent, setsCount: num })}
+                  className={`w-10 h-8 rounded-lg text-xs font-black transition-all ${(editingEvent.setsCount ?? 1) === num ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700'}`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">Sorteio formação times</label>
+              <select
+                value={editingEvent.teamDrawType || 'Manual'}
+                onChange={(event) => onChangeEditingEvent({ ...editingEvent, teamDrawType: event.target.value as DrawTypeOption })}
+                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+              >
+                {DRAW_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">Sorteio das chaves</label>
+              <select
+                value={editingEvent.bracketDrawType || 'Manual'}
+                onChange={(event) => onChangeEditingEvent({ ...editingEvent, bracketDrawType: event.target.value as DrawTypeOption })}
+                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+              >
+                {DRAW_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Sorteio das partidas</label>
+            <select
+              value={editingEvent.matchDrawType || 'Manual'}
+              onChange={(event) => onChangeEditingEvent({ ...editingEvent, matchDrawType: event.target.value as DrawTypeOption })}
+              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
+            >
+              {DRAW_TYPE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>

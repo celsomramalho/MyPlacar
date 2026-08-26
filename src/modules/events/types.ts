@@ -9,15 +9,55 @@ export interface TournamentPair {
   bracket?: 1 | 2;
 }
 
+export const minifyEntryForPair = (entry: Partial<TournamentEntry>): TournamentEntry => ({
+  email: entry.email || '',
+  name: entry.name || '',
+  nickname: entry.nickname || entry.name || '',
+  pin: entry.pin || '',
+  gender: entry.gender || 'M',
+  categoryIds: entry.categoryIds || [],
+  registrationId: entry.registrationId,
+  shirtSize: entry.shirtSize || 'M',
+  phone: entry.phone || '',
+  checkedIn: !!entry.checkedIn,
+});
+
+export const minifyPairForStorage = (pair: TournamentPair): TournamentPair => ({
+  id: pair.id,
+  p1: minifyEntryForPair(pair.p1),
+  p2: minifyEntryForPair(pair.p2),
+  categoryId: pair.categoryId,
+  teamNumber: pair.teamNumber,
+  teamCode: pair.teamCode,
+  bracket: pair.bracket,
+});
+
+export interface MatchSetScore {
+  p1?: number | null;
+  p2?: number | null;
+}
+
 export interface TournamentMatch {
   id: string;
-  pair1Id: string;
-  pair2Id: string;
+  matchNumber?: number;
+  matchCode?: string;
+  categoryId?: string;
+  phase?: 'chave1' | 'chave2' | 'semifinal' | 'final' | '3lugar' | string;
+  pair1Id?: string;
+  pair2Id?: string;
+  pair1Label?: string;
+  pair2Label?: string;
+  pair1?: TournamentPair;
+  pair2?: TournamentPair;
   status: 'waiting' | 'live' | 'finished';
   result?: string;
+  scores?: MatchSetScore[];
   winnerPairId?: string;
+  loserPairId?: string;
   ownerPin?: string;
   matchId?: string;
+  court?: string;
+  order?: number;
 }
 
 export interface TournamentConfig {
@@ -47,6 +87,24 @@ export const EVENT_STATUS_OPTIONS: EventStatusOption[] = [
   'Em andamento',
   'Finalizado',
   'Cancelado',
+];
+
+export type EventTypeOption =
+  | 'Chave classificatória'
+  | 'Chave mata-mata';
+
+export const EVENT_TYPE_OPTIONS: EventTypeOption[] = [
+  'Chave classificatória',
+  'Chave mata-mata',
+];
+
+export type DrawTypeOption =
+  | 'Manual'
+  | 'Sistema';
+
+export const DRAW_TYPE_OPTIONS: DrawTypeOption[] = [
+  'Manual',
+  'Sistema',
 ];
 
 export interface EventCategory {
@@ -93,6 +151,11 @@ export interface TournamentEvent {
   registrationFee?: number;
   extraCategoryFee?: number;
   eventStatus?: EventStatusOption;
+  eventType?: EventTypeOption;
+  setsCount?: 1 | 3 | 5;
+  teamDrawType?: DrawTypeOption;
+  bracketDrawType?: DrawTypeOption;
+  matchDrawType?: DrawTypeOption;
   categories?: EventCategory[];
   regulationUrl?: string;
   regulationFileName?: string;
