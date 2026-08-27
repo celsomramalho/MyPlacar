@@ -17,6 +17,7 @@ import { EventRegistrationsManager } from './EventRegistrationsManager';
 import { EventFormedTeamsView } from './EventFormedTeamsView';
 import { EventSponsorsManager } from './EventSponsorsManager';
 import { EventPaymentsView } from './EventPaymentsView';
+import { calculateQueueState } from '@modules/events/services/queueManager';
 
 export type EventDashboardTab =
   | 'categories'
@@ -51,6 +52,9 @@ export const EventDashboardView: React.FC<Props> = ({
   const entries = event.entries || [];
   const pairs = event.pairs || [];
   const sponsors = event.sponsors || [];
+
+  const queueState = calculateQueueState(event);
+  const { freeCourtsCount, busyCourtsCount, interdictedCourtsCount } = queueState;
 
   let totalDue = 0;
   let totalPaid = 0;
@@ -215,7 +219,7 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
           </button>
 
-          {/* Card 3: Times Formados */}
+          {/* Card 3: Gerenciar fila */}
           <button
             onClick={() => setActiveTab('formed-teams')}
             className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
@@ -234,7 +238,9 @@ export const EventDashboardView: React.FC<Props> = ({
               >
                 <Trophy size={18} />
               </div>
-              <span className="text-2xl font-black leading-none">{pairs.length}</span>
+              <span className="text-2xl font-black leading-none">
+                {event.courtsCount || (event.courtNames && event.courtNames.length) || pairs.length}
+              </span>
             </div>
             <div>
               <p
@@ -242,8 +248,37 @@ export const EventDashboardView: React.FC<Props> = ({
                   activeTab === 'formed-teams' ? 'text-blue-100' : 'text-slate-400'
                 }`}
               >
-                Times formados
+                Gerenciar fila
               </p>
+              {/* d) Indicativos de status das quadras, 1 por linha com cores correspondentes */}
+              <div className="flex flex-col gap-1 mt-1.5">
+                <span
+                  className={`inline-flex items-center gap-1.5 text-[10px] font-black whitespace-nowrap ${
+                    activeTab === 'formed-teams' ? 'text-emerald-300' : 'text-emerald-600'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${activeTab === 'formed-teams' ? 'bg-emerald-400' : 'bg-emerald-500'}`} />
+                  {freeCourtsCount} {freeCourtsCount === 1 ? 'Livre' : 'Livres'}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 text-[10px] font-black whitespace-nowrap ${
+                    activeTab === 'formed-teams' ? 'text-amber-300' : 'text-amber-600'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${activeTab === 'formed-teams' ? 'bg-amber-400' : 'bg-amber-500'}`} />
+                  {busyCourtsCount} {busyCourtsCount === 1 ? 'Ocupada' : 'Ocupadas'}
+                </span>
+                {interdictedCourtsCount > 0 && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-[10px] font-black whitespace-nowrap ${
+                      activeTab === 'formed-teams' ? 'text-red-300' : 'text-red-600'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${activeTab === 'formed-teams' ? 'bg-red-400' : 'bg-red-500'}`} />
+                    {interdictedCourtsCount} {interdictedCourtsCount === 1 ? 'Interditada' : 'Interditadas'}
+                  </span>
+                )}
+              </div>
             </div>
           </button>
 

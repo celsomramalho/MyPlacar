@@ -99,6 +99,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [eventList, setEventList] = useState<TournamentEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TournamentEvent | null>(null);
+  const [selectedDashboardEvent, setSelectedDashboardEvent] = useState<TournamentEvent | null>(null);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [showConfirmClearCache, setShowConfirmClearCache] = useState(false);
 
@@ -567,9 +568,19 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
       <AdminHeader
         activeTab={adminTab}
-        onBack={() => handleGuardedAction(onBack)}
+        onBack={() => handleGuardedAction(() => {
+          if (editingEvent) {
+            setEditingEvent(null);
+            initialEditingEventSnapshotRef.current = null;
+          } else if (selectedDashboardEvent) {
+            setSelectedDashboardEvent(null);
+          } else {
+            onBack();
+          }
+        })}
         onSelectTab={(tab) => handleGuardedAction(() => {
           setEditingEvent(null);
+          setSelectedDashboardEvent(null);
           initialEditingEventSnapshotRef.current = null;
           setAdminTab(tab);
         })}
@@ -862,6 +873,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
           <AdminEventsPanel
             eventList={eventList}
             editingEvent={editingEvent}
+            selectedDashboardEvent={selectedDashboardEvent}
+            onSelectDashboardEvent={setSelectedDashboardEvent}
             isLoadingEvents={isLoadingEvents}
             isSavingEvent={isSavingEvent}
             bannerInputRef={bannerInputRef}

@@ -59,6 +59,7 @@ export interface TournamentMatch {
   matchId?: string;
   court?: string;
   order?: number;
+  frozen?: boolean;
 }
 
 export interface TournamentConfig {
@@ -149,6 +150,7 @@ export interface TournamentEvent {
   location?: string;
   courtsCount?: number;
   courtNames?: string[];
+  interdictedCourts?: string[];
   registrationFee?: number;
   extraCategoryFee?: number;
   eventStatus?: EventStatusOption;

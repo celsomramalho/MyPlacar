@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2, AlertTriangle, Swords, Sparkles, FileText } from 'lucide-react';
-import { minifyEntryForPair, minifyPairForStorage, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore } from '@modules/events/types';
+import { minifyEntryForPair, minifyPairForStorage, formatRegistrationId, getNextRegistrationId, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore } from '@modules/events/types';
 import { generateSystemMatchesForCategory, createManualMatch, formatMatchDisplayString, formatMatchNumber, getPhaseLabel } from '@modules/events/services/matchGenerator';
 import { updatePlayoffProgression, calculateBracketStandings, type TeamStanding } from '@modules/events/services/matchProgression';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
+import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { getDb } from '@infra/firebase';
@@ -37,6 +38,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'name' | 'team'>('team');
+  const [expandedRegistrationEmail, setExpandedRegistrationEmail] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -540,6 +542,67 @@ const validateCategoryGenders = (
     }
   };
 
+  const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
+    const db = getDb();
+    const finalEntry: TournamentEntry = {
+      ...entryData,
+      registrationId: entryData.registrationId || entries.find((e) => e.pin === originalPin)?.registrationId || getNextRegistrationId(entries),
+    };
+    if (db && event.pin) {
+      try {
+        const { saveAdminEventEntry, saveUserEventRegistration } = await import('@infra/firebase/events');
+        await saveAdminEventEntry(db, event.pin, finalEntry);
+        try {
+          await saveUserEventRegistration(db, finalEntry.email, event.pin, {
+            pin: event.pin,
+            name: event.name,
+            joinedAt: finalEntry.joinedAt,
+            bannerUrl: event.bannerUrl || null,
+          });
+        } catch (error) {
+          console.warn('Inscrição salva, mas não foi possível criar o índice auxiliar do usuário:', error);
+        }
+      } catch (err) {
+        console.error('Erro ao salvar inscrição no Firestore:', err);
+      }
+    }
+    const updatedEntries = entries.map((item) => (item.pin === originalPin ? finalEntry : item));
+    onUpdateEvent({ ...event, entries: updatedEntries });
+  };
+
+  const handleDeleteEntry = async (targetPin: string) => {
+    const targetEntry = entries.find((e) => e.pin === targetPin);
+    if (!targetEntry) return;
+    const confirmDel = window.confirm(`Deseja realmente excluir a inscrição de "${targetEntry.name}"?`);
+    if (!confirmDel) return;
+
+    const db = getDb();
+    const targetEmailLower = targetEntry.email?.toLowerCase().trim();
+
+    const updatedPairs = pairs.filter((p) => {
+      const p1Email = p.p1.email?.toLowerCase().trim();
+      const p2Email = p.p2.email?.toLowerCase().trim();
+      return p1Email !== targetEmailLower && p2Email !== targetEmailLower;
+    });
+
+    if (db && event.pin) {
+      try {
+        const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
+        await deleteEventEntry(db, event.pin, targetEntry.email);
+        try {
+          await deleteUserEventRegistration(db, targetEntry.email, event.pin);
+        } catch (error) {
+          console.warn('Inscrição removida, mas não foi possível remover o índice do usuário:', error);
+        }
+      } catch (err) {
+        console.error('Erro ao deletar inscrição no Firestore:', err);
+      }
+    }
+
+    const updatedEntries = entries.filter((e) => e.pin !== targetPin);
+    onUpdateEvent({ ...event, entries: updatedEntries, pairs: updatedPairs });
+  };
+
   const renderTeamCard = (
     pair: TournamentPair,
     showBracketToggle = true,
@@ -841,7 +904,7 @@ const validateCategoryGenders = (
 
       return (
         <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
-          <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
             <div>
               <h3 className="text-base font-black text-slate-800">
                 Times ({selectedCategory.name})
@@ -852,18 +915,18 @@ const validateCategoryGenders = (
                   : 'Times formados separados por chaves. Clique no botão da chave para alternar.'}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {isSystemDraw && (
-                <button
-                  type="button"
-                  onClick={handleGenerateSystemMatches}
-                  className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-                >
-                  <Sparkles size={16} className="text-emerald-500" />
-                  <span>{hasCategoryMatches ? 'Regerar partidas' : 'Gerar partidas'}</span>
-                </button>
-              )}
-              {hasCategoryMatches && (
+            {hasCategoryMatches && (
+              <div className="flex flex-wrap items-center gap-2">
+                {isSystemDraw && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateSystemMatches}
+                    className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                  >
+                    <Sparkles size={16} className="text-emerald-500" />
+                    <span>Regerar partidas</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleGenerateBlankPdf}
@@ -873,8 +936,6 @@ const validateCategoryGenders = (
                   <FileText size={16} className="text-orange-500" />
                   <span>Gerar PDF</span>
                 </button>
-              )}
-              {hasCategoryMatches && (
                 <button
                   type="button"
                   onClick={handleDeleteAllCategoryMatches}
@@ -884,8 +945,8 @@ const validateCategoryGenders = (
                   <Trash2 size={16} className="text-red-500" />
                   <span>Deletar</span>
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
           {sortedCategoryPairs.length === 0 ? (
             <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum time formado nesta categoria.</div>
@@ -1404,7 +1465,7 @@ const validateCategoryGenders = (
 
       return (
         <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in space-y-4">
-          <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
             <div>
               <h3 className="text-base font-black text-slate-800">
                 Partidas ({selectedCategory.name})
@@ -1414,7 +1475,7 @@ const validateCategoryGenders = (
               </p>
             </div>
             {categoryMatches.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
                 {isSystemDraw && (
                   <button
                     type="button"
@@ -1529,32 +1590,183 @@ const validateCategoryGenders = (
         <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-black text-slate-800">Inscritos ({selectedCategory.name})</h3>
-            <p className="text-xs text-slate-400 font-bold mt-0.5">Selecione jogadores para formar ou desfazer time.</p>
+            <p className="text-xs text-slate-400 font-bold mt-0.5">Clique nos participantes para formar ou desfazer times.</p>
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
           <span className="text-[10px] font-black text-slate-400">Classificar por</span>
-          <button type="button" onClick={() => setSortBy(sortBy === 'team' ? 'name' : 'team')} className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setSortBy(sortBy === 'team' ? 'name' : 'team')}
+            className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg transition-all hover:bg-slate-50"
+          >
             {sortBy === 'team' ? 'Time' : 'Participante'} <ArrowUpDown size={12} />
           </button>
         </div>
-        {sortedCategoryEntries.length === 0 ? <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum inscrito nesta categoria.</div> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead><tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase tracking-wider font-black text-slate-400"><th className="py-3 px-4">Participante</th><th className="py-3 px-4">Gênero</th><th className="py-3 px-4">Time</th><th className="py-3 px-4 text-right">Selecionar</th></tr></thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-bold">
-                {sortedCategoryEntries.map((entry) => {
-                  const pair = pairForEntry(entry);
-                  const isSelected = selectedEntries.has(entry.email);
-                  return <tr key={entry.email} onClick={() => toggleEntrySelection(entry)} className={`transition-colors ${isSelected ? 'bg-cyan-50 ring-2 ring-inset ring-cyan-300' : pair ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50 cursor-pointer'}`}>
-                    <td className="py-4 px-4"><p className="font-black text-slate-800">{entry.name}</p><p className="text-[10px] text-amber-500 font-black">PIN: {entry.pin}</p></td>
-                    <td className={`py-4 px-4 ${entry.gender === 'F' ? 'text-pink-600' : 'text-sky-600'}`}>{entry.gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</td>
-                    <td className="py-4 px-4">{pair ? <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-black"><Trophy size={11} /> {pair.teamCode || `Time ${pair.teamNumber || ''}`}</span> : <span className="text-slate-300 text-[10px]">A formar</span>}</td>
-                    <td className="py-4 px-4 text-right">{pair ? <UserCheck size={18} className="ml-auto text-emerald-500" /> : <span className={`inline-flex w-5 h-5 rounded-full border-2 ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300'}`}>{isSelected && <Check size={14} className="text-white m-auto" />}</span>}</td>
-                  </tr>;
-                })}
-              </tbody>
-            </table>
+        {sortedCategoryEntries.length === 0 ? (
+          <div className="p-10 text-center text-sm font-bold text-slate-400">
+            Nenhum inscrito nesta categoria.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {sortedCategoryEntries.map((entry) => {
+              const entryCategories = categories.filter((c) =>
+                entry.categoryIds?.includes(c.id)
+              );
+              const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
+              const isExpanded = expandedRegistrationEmail === entry.email;
+              const isSelected = selectedEntries.has(entry.email);
+              const pair = pairForEntry(entry);
+
+              return (
+                <div
+                  key={entry.email || entry.pin}
+                  className={`transition-colors ${
+                    isSelected
+                      ? 'bg-sky-50/70 ring-2 ring-inset ring-sky-400'
+                      : isExpanded
+                      ? 'bg-emerald-50/30'
+                      : 'hover:bg-slate-50/70'
+                  }`}
+                >
+                  <div
+                    onClick={() => toggleEntrySelection(entry)}
+                    className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer"
+                  >
+                    {/* Lado Esquerdo: Ícone de Gênero + Informações do Participante */}
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      {/* Ícone de Gênero */}
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const nextGender = entry.gender === 'F' ? 'M' : 'F';
+                          const db = getDb();
+                          if (db && event.pin) {
+                            try {
+                              const { updateEventEntry } = await import('@infra/firebase/events');
+                              await updateEventEntry(db, event.pin, entry.email, { gender: nextGender });
+                              const { updateUserProfileFields } = await import('@infra/firebase/users');
+                              await updateUserProfileFields(db, entry.email, { gender: nextGender });
+                            } catch (err) {
+                              console.error('Erro ao alternar gênero:', err);
+                            }
+                          }
+                          const updatedEntries = entries.map((item) =>
+                            (item.email === entry.email || item.pin === entry.pin)
+                              ? { ...item, gender: nextGender }
+                              : item
+                          );
+                          onUpdateEvent({ ...event, entries: updatedEntries });
+                        }}
+                        className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all active:scale-90 ${
+                          entry.gender === 'F'
+                            ? 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'
+                            : 'bg-sky-50 text-sky-500 border-sky-100 hover:bg-sky-100'
+                        }`}
+                        title="Clique para alternar gênero"
+                      >
+                        {entry.gender === 'F' ? <VenusIcon size={20} /> : <MarsIcon size={20} />}
+                      </button>
+
+                      {/* Bloco das Linhas de Informação */}
+                      <div className="space-y-1 min-w-0 flex-1 text-left">
+                        {/* Linha 1: Nome */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-black text-sm text-slate-800 tracking-tight truncate">
+                            {entry.name || entry.nickname}
+                          </p>
+                          {pair && (
+                            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg text-[10px] font-black border border-blue-100">
+                              <Trophy size={11} /> {pair.teamCode || `Time ${pair.teamNumber || ''}`}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Linha 2: PIN */}
+                        <p className="text-[11px] font-black text-amber-500">
+                          PIN: {entry.pin}
+                        </p>
+
+                        {/* Linha 3: Categorias */}
+                        {entryCategories.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            {entryCategories.map((c) => (
+                              <span
+                                key={c.id}
+                                className="bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60"
+                              >
+                                {c.abbreviation || c.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-300 font-bold">Sem categoria</p>
+                        )}
+
+                        {/* Linha 4: Status do Pagamento + Valores */}
+                        <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                              entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : entry.paymentStatus === 'Isento'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}
+                          >
+                            {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
+                          </span>
+                          <span className="text-xs font-bold text-slate-600">
+                            R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lado Direito: Inscrição_ID + Botão de Ação / Chevron */}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
+                        {formatRegistrationId(entry.registrationId)}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedRegistrationEmail(isExpanded ? null : entry.email);
+                        }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-90 shadow-sm"
+                        title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
+                      >
+                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Formulário Expandido */}
+                  {isExpanded && (
+                    <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
+                      <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                        <EventRegistrationForm
+                          key={`expanded-${entry.email || entry.pin}`}
+                          event={event}
+                          mode="admin"
+                          entry={entry}
+                          onUpdateEvent={onUpdateEvent}
+                          onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
+                          onDelete={() => {
+                            void handleDeleteEntry(entry.pin);
+                            setExpandedRegistrationEmail(null);
+                          }}
+                          onCancel={() => setExpandedRegistrationEmail(null)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

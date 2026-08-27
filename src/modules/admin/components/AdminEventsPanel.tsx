@@ -21,6 +21,8 @@ import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 interface AdminEventsPanelProps {
   eventList: TournamentEvent[];
   editingEvent: TournamentEvent | null;
+  selectedDashboardEvent?: TournamentEvent | null;
+  onSelectDashboardEvent?: (event: TournamentEvent | null | ((prev: TournamentEvent | null) => TournamentEvent | null)) => void;
   isLoadingEvents: boolean;
   isSavingEvent: boolean;
   bannerInputRef: RefObject<HTMLInputElement>;
@@ -37,6 +39,8 @@ interface AdminEventsPanelProps {
 export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   eventList,
   editingEvent,
+  selectedDashboardEvent: selectedDashboardEventProp,
+  onSelectDashboardEvent,
   isLoadingEvents,
   isSavingEvent,
   bannerInputRef,
@@ -49,7 +53,19 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   onSaveDashboardEvent,
   onDeleteEvent,
 }) => {
-  const [selectedDashboardEvent, setSelectedDashboardEvent] = useState<TournamentEvent | null>(null);
+  const [localSelectedDashboardEvent, setLocalSelectedDashboardEvent] = useState<TournamentEvent | null>(null);
+  const selectedDashboardEvent = selectedDashboardEventProp !== undefined ? selectedDashboardEventProp : localSelectedDashboardEvent;
+  const setSelectedDashboardEvent = (val: TournamentEvent | null | ((prev: TournamentEvent | null) => TournamentEvent | null)) => {
+    if (onSelectDashboardEvent) {
+      if (typeof val === 'function') {
+        onSelectDashboardEvent(val(selectedDashboardEvent));
+      } else {
+        onSelectDashboardEvent(val);
+      }
+    } else {
+      setLocalSelectedDashboardEvent(val);
+    }
+  };
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
   const [coAdminPin, setCoAdminPin] = useState('');
   const [coAdminLookupName, setCoAdminLookupName] = useState('');
