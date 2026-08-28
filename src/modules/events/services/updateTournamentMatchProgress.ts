@@ -10,9 +10,39 @@ export const markTournamentMatchLive = async (
   matchId: string,
   ownerPin: string,
 ) => {
-  const updatedMatches = matches.map((match) => (
+  let sourceMatches = matches;
+  if (sourceMatches.length === 0) {
+    const event = await fetchEventByPin(db, eventPin);
+    sourceMatches = ((event?.matches || []) as TournamentMatch[]);
+  }
+
+  const updatedMatches = sourceMatches.map((match) => (
     match.id === matchId ? { ...match, status: 'live' as const, ownerPin } : match
   ));
+  await updateEventMatches(db, eventPin, updatedMatches);
+};
+
+export const markTournamentMatchScore = async (
+  db: Firestore,
+  eventPin: string,
+  matchId: string,
+  scores: TournamentMatch['scores'],
+) => {
+  const event = await fetchEventByPin(db, eventPin);
+  if (!event) return;
+
+  const updatedMatches: TournamentMatch[] = ((event.matches || []) as TournamentMatch[]).map((match) => {
+    if (match.id !== matchId) return match;
+    return {
+      ...match,
+      scores,
+      result: (scores || [])
+        .filter((score) => score.p1 !== null && score.p1 !== undefined && score.p2 !== null && score.p2 !== undefined)
+        .map((score) => `${score.p1}/${score.p2}`)
+        .join(' '),
+    };
+  });
+
   await updateEventMatches(db, eventPin, updatedMatches);
 };
 

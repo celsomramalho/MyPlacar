@@ -36,8 +36,8 @@ import { findUserByPin } from '@infra/firebase/users';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import type { Firestore, FieldValue } from 'firebase/firestore';
 import { mirrorUser } from '@infra/supabase';
-import { markTournamentMatchFinished, markTournamentMatchLive } from '@modules/events/services/updateTournamentMatchProgress';
-import type { TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
+import { markTournamentMatchFinished, markTournamentMatchLive, markTournamentMatchScore } from '@modules/events/services/updateTournamentMatchProgress';
+import type { MatchSetScore, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { createHistoryItem } from '@modules/history/services/createHistoryItem';
 import { clearLiveOwnerPin, persistLiveOwnerPin } from '../live/liveHelpers.ts';
 import { getDeviceId, getDeviceType, resolveWatchMode } from '@shared/utils/device';
@@ -47,6 +47,31 @@ import { isValidGameState, isValidMatchSettings } from '@modules/game/domain/val
 
 // ─── Contexto ─────────────────────────────────────────────────────────────────
 const GameContext = createContext<GameContextValue | undefined>(undefined);
+
+const getPhaseLabel = (phase?: string) => {
+  if (phase === 'chave1') return 'Chave 1';
+  if (phase === 'chave2') return 'Chave 2';
+  return phase || 'Jogo';
+};
+
+const getMatchCodeLabel = (match: TournamentMatch) =>
+  match.matchCode || String(match.matchNumber || 1).padStart(2, '0');
+
+const getTournamentScoresFromState = (state: GameState): MatchSetScore[] => {
+  const scores: MatchSetScore[] = state.p1.sets.map((p1, index) => ({
+    p1,
+    p2: state.p2.sets[index] ?? 0,
+  }));
+
+  if (!state.isMatchOver) {
+    scores[state.currentSet] = {
+      p1: state.p1.games,
+      p2: state.p2.games,
+    };
+  }
+
+  return scores;
+};
 
 // ─── GameProvider ─────────────────────────────────────────────────────────────
 // Fase 4 concluída: todos os estados migrados. O provider não recebe mais
@@ -976,6 +1001,19 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       
       const next = incrementScore(prev, player, type, source);
       next.isPaused = false;
+
+      const lastPoint = next.pointHistory[next.pointHistory.length - 1];
+      if (lastPoint?.resultingScore && next.tournamentPin && next.tournamentMatchId && navigator.onLine) {
+        const db = getDb();
+        if (db) {
+          markTournamentMatchScore(
+            db as Firestore,
+            next.tournamentPin,
+            next.tournamentMatchId,
+            getTournamentScoresFromState(next)
+          ).catch(() => {});
+        }
+      }
       
       setHistoryStack(stack => {
         const updated = [...stack, JSON.parse(JSON.stringify(next))];
@@ -1168,7 +1206,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
        };
        tournamentMeta = {
           tournamentMatchId: match.id,
-          tournamentPin: event.pin
+          tournamentPin: event.pin,
+          tournamentMatchCode: getMatchCodeLabel(match),
+          tournamentPhaseLabel: getPhaseLabel(match.phase),
        };
        forceNew = true;
         if (navigator.onLine) {
@@ -1177,6 +1217,33 @@ export const GameProvider: React.FC<GameProviderProps> = ({
               markTournamentMatchLive(db as Firestore, event.pin, event.matches || [], match.id, userProfile.pin).catch(() => {});
            }
         }
+    } else if (savedSettings.pendingTournamentMatchId && savedSettings.pendingTournamentPin) {
+       tournamentMeta = {
+          tournamentMatchId: savedSettings.pendingTournamentMatchId,
+          tournamentPin: savedSettings.pendingTournamentPin,
+          tournamentMatchCode: savedSettings.pendingTournamentMatchCode,
+          tournamentPhaseLabel: savedSettings.pendingTournamentPhaseLabel,
+       };
+       configToUse = {
+          ...configToUse,
+          pendingTournamentMatchId: undefined,
+          pendingTournamentPin: undefined,
+          pendingTournamentMatchCode: undefined,
+          pendingTournamentPhaseLabel: undefined,
+       };
+       forceNew = true;
+       if (navigator.onLine) {
+          const db = getDb();
+          if (db) {
+             markTournamentMatchLive(
+               db as Firestore,
+               savedSettings.pendingTournamentPin,
+               [],
+               savedSettings.pendingTournamentMatchId,
+               userProfile.pin
+             ).catch(() => {});
+          }
+       }
     }
 
     if (isWatchDevice()) {

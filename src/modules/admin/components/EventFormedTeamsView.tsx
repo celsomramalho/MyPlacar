@@ -13,6 +13,8 @@ import {
 import type { TournamentEvent, TournamentMatch, MatchSetScore } from '@modules/events/types';
 import { calculateQueueState } from '@modules/events/services/queueManager';
 import { updatePlayoffProgression } from '@modules/events/services/matchProgression';
+import { useGame } from '@modules/game';
+import { useUI } from '@modules/ui';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import type { FirebaseTournamentEvent } from '@infra/firebase/events';
@@ -22,9 +24,20 @@ interface Props {
   onUpdateEvent?: (event: TournamentEvent) => void;
 }
 
+const getMatchCodeLabel = (match: TournamentMatch) =>
+  match.matchCode || String(match.matchNumber || 1).padStart(2, '0');
+
+const getPhaseLabel = (phase?: string) => {
+  if (phase === 'chave1') return 'Chave 1';
+  if (phase === 'chave2') return 'Chave 2';
+  return phase || 'Jogo';
+};
+
 export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) => {
   const [selectedCourtForMatch, setSelectedCourtForMatch] = useState<string | null>(null);
   const [activeSelectMatchId, setActiveSelectMatchId] = useState<string | null>(null);
+  const { setMatchSettings } = useGame();
+  const { setCurrentScreen, setModalConfig } = useUI();
 
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -322,6 +335,48 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     await handlePersistEventChanges(progressed);
   };
 
+  const handleOpenMatchRules = (match: TournamentMatch) => {
+    const pair1 = match.pair1 || (match.pair1Id ? pairsById[match.pair1Id] : undefined);
+    const pair2 = match.pair2 || (match.pair2Id ? pairsById[match.pair2Id] : undefined);
+
+    const player1 = pair1?.p1 ? getPlayerNick(pair1.p1) : match.pair1Label || '';
+    const player3 = pair1?.p2 ? getPlayerNick(pair1.p2) : '';
+    const player2 = pair2?.p1 ? getPlayerNick(pair2.p1) : match.pair2Label || '';
+    const player4 = pair2?.p2 ? getPlayerNick(pair2.p2) : '';
+
+    setMatchSettings((prev) => ({
+      ...prev,
+      sportType: event.config?.sportType || prev.sportType,
+      sets: event.config?.sets || event.setsCount || prev.sets,
+      gamesPerSet: event.config?.gamesPerSet || prev.gamesPerSet,
+      noAd: event.config?.noAd ?? prev.noAd,
+      isDoubles: true,
+      pendingTournamentMatchId: match.id,
+      pendingTournamentPin: event.pin,
+      pendingTournamentMatchCode: getMatchCodeLabel(match),
+      pendingTournamentPhaseLabel: getPhaseLabel(match.phase),
+      p1Name: player1,
+      p1Partner: player3,
+      p2Name: player2,
+      p2Partner: player4,
+      p1Gender: pair1?.p1.gender || prev.p1Gender,
+      p1PartnerGender: pair1?.p2.gender || prev.p1PartnerGender,
+      p2Gender: pair2?.p1.gender || prev.p2Gender,
+      p2PartnerGender: pair2?.p2.gender || prev.p2PartnerGender,
+      p1Verified: !!pair1?.p1,
+      p1PartnerVerified: !!pair1?.p2,
+      p2Verified: !!pair2?.p1,
+      p2PartnerVerified: !!pair2?.p2,
+    }));
+
+    setCurrentScreen('new-game');
+    setModalConfig({
+      title: 'Atenção',
+      message: 'Configurar corretamente conforme evento/fase, depois é só dar Play',
+      onConfirm: () => setModalConfig(null),
+    });
+  };
+
   const totalSets = (event.setsCount || event.config?.sets || 1) as number;
 
   return (
@@ -376,8 +431,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
       {/* SEÇÃO A: Status das Quadras (Uma quadra por linha, 100% dentro do container) */}
       <section className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider whitespace-nowrap">
-            Quadras do Evento ({totalCourtsCount})
+          <h3 className="text-sm font-black text-slate-800 tracking-wider whitespace-nowrap">
+            Quadras do evento ({totalCourtsCount})
           </h3>
         </div>
 
@@ -416,6 +471,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
 
               const parsedSets = activeMatch ? parseMatchSets(activeMatch, totalSets) : { scores: [], setsWon1: 0, setsWon2: 0 };
               const { scores, setsWon1, setsWon2 } = parsedSets;
+              const matchCodeLabel = activeMatch ? getMatchCodeLabel(activeMatch) : '';
+              const phaseLabel = activeMatch ? getPhaseLabel(activeMatch.phase) : '';
 
               return (
                 <div
@@ -482,12 +539,11 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleFreeCourtMatch(activeMatch.id, true)}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1 whitespace-nowrap"
-                            title="Finalizar partida e liberar a quadra"
+                            onClick={() => handleOpenMatchRules(activeMatch)}
+                            className="w-9 h-9 bg-[#fff8e6] hover:bg-emerald-50 active:scale-95 text-emerald-500 rounded-xl transition-all flex items-center justify-center shrink-0"
+                            title="Abrir regras com os jogadores desta partida"
                           >
-                            <CheckCircle2 size={13} />
-                            Liberar quadra
+                            <Play size={18} className="fill-emerald-500" />
                           </button>
                         </>
                       )}
@@ -511,15 +567,14 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                   {isBusy && activeMatch && (
                     <div className="mt-1 p-3 bg-white/95 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
                       {/* a) Abreviação da categoria + fase */}
-                      <div>
+                      <div className="flex items-center justify-between gap-2">
                         <span className="inline-flex items-center text-[10px] font-black text-slate-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg whitespace-nowrap">
                           {activeCat?.abbreviation || activeCat?.name || ''}
                           {activeCat && ' · '}
-                          {activeMatch.phase === 'chave1'
-                            ? 'Chave 1'
-                            : activeMatch.phase === 'chave2'
-                            ? 'Chave 2'
-                            : activeMatch.phase || 'Jogo'}
+                          {phaseLabel}
+                        </span>
+                        <span className="text-xs font-black text-slate-800 whitespace-nowrap shrink-0">
+                          [{matchCodeLabel}] {phaseLabel ? `[${phaseLabel}]` : ''}
                         </span>
                       </div>
 

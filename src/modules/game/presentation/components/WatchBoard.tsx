@@ -121,6 +121,9 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   const s1 = String(gameState?.p1?.score ?? '').trim();
   const s2 = String(gameState?.p2?.score ?? '').trim();
   const isZeroZero = (s1 === '0' || s1 === '00' || s1 === '') && (s2 === '0' || s2 === '00' || s2 === '');
+  const tournamentMatchLabel = gameState.tournamentMatchCode
+    ? `[${gameState.tournamentMatchCode}]${gameState.tournamentPhaseLabel ? ` [${gameState.tournamentPhaseLabel}]` : ''}`
+    : '';
 
   React.useEffect(() => {
     if (!hasFinishedGames || !isZeroZero || gameState?.isMatchOver) {
@@ -479,6 +482,13 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           }} 
           className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner || syncState.role === 'mirror' ? 'opacity-90' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} 
         >
+          {tournamentMatchLabel && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 px-3 py-1 rounded-lg bg-black/35 border border-white/20 pointer-events-none">
+              <span className="text-[18px] font-black text-white tracking-normal leading-none whitespace-nowrap">
+                {tournamentMatchLabel}
+              </span>
+            </div>
+          )}
           {scorePressProgress?.player === 1 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 

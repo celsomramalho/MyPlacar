@@ -248,6 +248,8 @@ export interface GameState {
   matchEndedAt?: number;
   tournamentMatchId?: string;
   tournamentPin?: string;
+  tournamentMatchCode?: string;
+  tournamentPhaseLabel?: string;
   /** @deprecated — usar `judge.pin`. Mantido para retrocompatibilidade com documentos antigos. */
   judgePin?: string;
   /** @deprecated — usar `judge.nickname`. Mantido para retrocompatibilidade com documentos antigos. */
@@ -324,4 +326,8 @@ export interface MatchSettings {
   narratorGender: 'Masculina' | 'Feminina';
   winnersStay?: boolean;
   screenDimTimeout?: 10 | 15 | 20;
+  pendingTournamentMatchId?: string;
+  pendingTournamentPin?: string;
+  pendingTournamentMatchCode?: string;
+  pendingTournamentPhaseLabel?: string;
 }
