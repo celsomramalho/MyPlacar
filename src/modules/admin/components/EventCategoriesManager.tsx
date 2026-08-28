@@ -10,6 +10,7 @@ import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { getDb } from '@infra/firebase';
 import { updateEvent } from '@infra/firebase/events';
 import type { Firestore } from 'firebase/firestore';
+import { useUI } from '@modules/ui';
 
 interface Props {
   event: TournamentEvent;
@@ -24,6 +25,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   onUpdateCategories,
   onUpdateEvent,
 }) => {
+  const { setModalConfig } = useUI();
   type CategoryPanelView = 'entries' | 'teams' | 'matches';
 
   const categories = event.categories || [];
@@ -162,13 +164,24 @@ export const EventCategoriesManager: React.FC<Props> = ({
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
-      const updated = categories.filter((c) => c.id !== id);
-      onUpdateCategories(updated);
-      if (selectedCategoryId === id) {
-        setSelectedCategoryId(null);
-      }
-    }
+    const categoryToDelete = categories.find((c) => c.id === id);
+    setModalConfig({
+      title: 'Excluir categoria?',
+      message: categoryToDelete
+        ? `Deseja excluir a categoria "${categoryToDelete.name}"?`
+        : 'Tem certeza que deseja excluir esta categoria?',
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+      onConfirm: () => {
+        setModalConfig(null);
+        const updated = categories.filter((c) => c.id !== id);
+        onUpdateCategories(updated);
+        if (selectedCategoryId === id) {
+          setSelectedCategoryId(null);
+        }
+      },
+      onCancel: () => setModalConfig(null),
+    });
   };
 
   const openCategoryPanel = (categoryId: string, view: CategoryPanelView) => {
@@ -360,18 +373,28 @@ const validateCategoryGenders = (
   const handleFormTeam = async () => {
     const db = getDb();
     if (selectedPair) {
-      if (window.confirm(`Desfazer o time ${selectedPair.teamCode || ''}?`)) {
-        const nextPairs = pairs.filter((pair) => pair.id !== selectedPair.id);
-        onUpdateEvent({ ...event, pairs: nextPairs });
-        setSelectedEntries(new Set());
-        if (db) {
-          try {
-            await updateEvent(db as Firestore, event.pin, { pairs: nextPairs });
-          } catch (err) {
-            console.error('Erro ao atualizar pairs no Firestore:', err);
+      setModalConfig({
+        title: 'Desfazer time?',
+        message: selectedPair.teamCode
+          ? `Deseja desfazer o time ${selectedPair.teamCode}?`
+          : 'Deseja desfazer o time selecionado?',
+        confirmLabel: 'Desfazer',
+        variant: 'danger',
+        onConfirm: async () => {
+          setModalConfig(null);
+          const nextPairs = pairs.filter((pair) => pair.id !== selectedPair.id);
+          onUpdateEvent({ ...event, pairs: nextPairs });
+          setSelectedEntries(new Set());
+          if (db) {
+            try {
+              await updateEvent(db as Firestore, event.pin, { pairs: nextPairs });
+            } catch (err) {
+              console.error('Erro ao atualizar pairs no Firestore:', err);
+            }
           }
-        }
-      }
+        },
+        onCancel: () => setModalConfig(null),
+      });
       return;
     }
     if (!selectedCategory || selectedEntries.size !== 2) return;
@@ -380,7 +403,11 @@ const validateCategoryGenders = (
 
     const validation = validateCategoryGenders(selectedCategory, selected);
     if (!validation.valid) {
-      window.alert(validation.message || 'Formação de time incompatível com os requisitos da categoria.');
+      setModalConfig({
+        title: 'Atenção',
+        message: validation.message || 'Formação de time incompatível com os requisitos da categoria.',
+        onConfirm: () => setModalConfig(null),
+      });
       return;
     }
 
@@ -476,70 +503,100 @@ const validateCategoryGenders = (
     );
 
     if (catPairs.length < 2) {
-      window.alert('É necessário ter pelo menos 2 times formados nesta categoria para gerar partidas.');
+      setModalConfig({
+        title: 'Atenção',
+        message: 'É necessário ter pelo menos 2 times formados nesta categoria para gerar partidas.',
+        onConfirm: () => setModalConfig(null),
+      });
       return;
     }
 
+    const executeGenerateMatches = async () => {
+      const generated = generateSystemMatchesForCategory(selectedCategory, pairs, matches);
+      const otherMatches = matches.filter((m) => m.categoryId !== selectedCategory.id);
+      const nextMatches = [...otherMatches, ...generated];
+
+      onUpdateEvent({ ...event, matches: nextMatches });
+      setSelectedTeamIds(new Set());
+      setCategoryPanelView('matches');
+
+      const db = getDb();
+      if (db) {
+        try {
+          await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+        } catch (err) {
+          console.error('Erro ao gerar partidas por sistema no Firestore:', err);
+        }
+      }
+    };
+
     const existingCatMatches = matches.filter((m) => m.categoryId === selectedCategory.id);
     if (existingCatMatches.length > 0) {
-      const confirmRegen = window.confirm(
-        `A categoria "${selectedCategory.name}" já possui ${existingCatMatches.length} partidas geradas. Deseja regerar todas as partidas desta categoria?`
-      );
-      if (!confirmRegen) return;
+      setModalConfig({
+        title: 'Regerar partidas?',
+        message: `A categoria "${selectedCategory.name}" já possui ${existingCatMatches.length} partidas geradas. Deseja regerar todas as partidas desta categoria?`,
+        confirmLabel: 'Regerar',
+        variant: 'danger',
+        onConfirm: () => {
+          setModalConfig(null);
+          void executeGenerateMatches();
+        },
+        onCancel: () => setModalConfig(null),
+      });
+      return;
     }
 
-    const generated = generateSystemMatchesForCategory(selectedCategory, pairs, matches);
-    const otherMatches = matches.filter((m) => m.categoryId !== selectedCategory.id);
-    const nextMatches = [...otherMatches, ...generated];
-
-    onUpdateEvent({ ...event, matches: nextMatches });
-    setSelectedTeamIds(new Set());
-    setCategoryPanelView('matches');
-
-    const db = getDb();
-    if (db) {
-      try {
-        await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
-      } catch (err) {
-        console.error('Erro ao gerar partidas por sistema no Firestore:', err);
-      }
-    }
+    await executeGenerateMatches();
   };
 
-  const handleDeleteMatch = async (matchId: string) => {
-    if (!window.confirm('Excluir esta partida?')) return;
-    const nextMatches = matches.filter((m) => m.id !== matchId);
-    onUpdateEvent({ ...event, matches: nextMatches });
-    const db = getDb();
-    if (db) {
-      try {
-        await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
-      } catch (err) {
-        console.error('Erro ao excluir partida no Firestore:', err);
-      }
-    }
+  const handleDeleteMatch = (matchId: string) => {
+    setModalConfig({
+      title: 'Excluir partida?',
+      message: 'Deseja excluir esta partida?',
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+      onConfirm: async () => {
+        setModalConfig(null);
+        const nextMatches = matches.filter((m) => m.id !== matchId);
+        onUpdateEvent({ ...event, matches: nextMatches });
+        const db = getDb();
+        if (db) {
+          try {
+            await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+          } catch (err) {
+            console.error('Erro ao excluir partida no Firestore:', err);
+          }
+        }
+      },
+      onCancel: () => setModalConfig(null),
+    });
   };
 
-  const handleDeleteAllCategoryMatches = async () => {
+  const handleDeleteAllCategoryMatches = () => {
     if (!selectedCategory) return;
     const catMatches = matches.filter((m) => m.categoryId === selectedCategory.id);
     if (catMatches.length === 0) return;
 
-    const confirmDelete = window.confirm(
-      `Tem certeza que deseja excluir todas as ${catMatches.length} partidas da categoria "${selectedCategory.name}"?`
-    );
-    if (!confirmDelete) return;
-
-    const nextMatches = matches.filter((m) => m.categoryId !== selectedCategory.id);
-    onUpdateEvent({ ...event, matches: nextMatches });
-    const db = getDb();
-    if (db) {
-      try {
-        await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
-      } catch (err) {
-        console.error('Erro ao excluir todas as partidas da categoria no Firestore:', err);
-      }
-    }
+    setModalConfig({
+      title: 'Excluir partidas?',
+      message: `Tem certeza que deseja excluir todas as ${catMatches.length} partidas da categoria "${selectedCategory.name}"?`,
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+      onConfirm: async () => {
+        setModalConfig(null);
+        const nextMatches = matches.filter((m) => m.categoryId !== selectedCategory.id);
+        onUpdateEvent({ ...event, matches: nextMatches });
+        const db = getDb();
+        if (db) {
+          try {
+            await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+          } catch (err) {
+            console.error('Erro ao excluir todas as partidas da categoria no Firestore:', err);
+          }
+        }
+      },
+      onCancel: () => setModalConfig(null),
+    });
   };
 
   const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
@@ -570,37 +627,46 @@ const validateCategoryGenders = (
     onUpdateEvent({ ...event, entries: updatedEntries });
   };
 
-  const handleDeleteEntry = async (targetPin: string) => {
+  const handleDeleteEntry = (targetPin: string) => {
     const targetEntry = entries.find((e) => e.pin === targetPin);
     if (!targetEntry) return;
-    const confirmDel = window.confirm(`Deseja realmente excluir a inscrição de "${targetEntry.name}"?`);
-    if (!confirmDel) return;
 
-    const db = getDb();
-    const targetEmailLower = targetEntry.email?.toLowerCase().trim();
+    setModalConfig({
+      title: 'Excluir inscrição?',
+      message: `Deseja excluir a inscrição de "${targetEntry.name}"?`,
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+      onConfirm: async () => {
+        setModalConfig(null);
+        setExpandedRegistrationEmail(null);
+        const db = getDb();
+        const targetEmailLower = targetEntry.email?.toLowerCase().trim();
 
-    const updatedPairs = pairs.filter((p) => {
-      const p1Email = p.p1.email?.toLowerCase().trim();
-      const p2Email = p.p2.email?.toLowerCase().trim();
-      return p1Email !== targetEmailLower && p2Email !== targetEmailLower;
-    });
+        const updatedPairs = pairs.filter((p) => {
+          const p1Email = p.p1.email?.toLowerCase().trim();
+          const p2Email = p.p2.email?.toLowerCase().trim();
+          return p1Email !== targetEmailLower && p2Email !== targetEmailLower;
+        });
 
-    if (db && event.pin) {
-      try {
-        const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
-        await deleteEventEntry(db, event.pin, targetEntry.email);
-        try {
-          await deleteUserEventRegistration(db, targetEntry.email, event.pin);
-        } catch (error) {
-          console.warn('Inscrição removida, mas não foi possível remover o índice do usuário:', error);
+        if (db && event.pin) {
+          try {
+            const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
+            await deleteEventEntry(db, event.pin, targetEntry.email);
+            try {
+              await deleteUserEventRegistration(db, targetEntry.email, event.pin);
+            } catch (error) {
+              console.warn('Inscrição removida, mas não foi possível remover o índice do usuário:', error);
+            }
+          } catch (err) {
+            console.error('Erro ao deletar inscrição no Firestore:', err);
+          }
         }
-      } catch (err) {
-        console.error('Erro ao deletar inscrição no Firestore:', err);
-      }
-    }
 
-    const updatedEntries = entries.filter((e) => e.pin !== targetPin);
-    onUpdateEvent({ ...event, entries: updatedEntries, pairs: updatedPairs });
+        const updatedEntries = entries.filter((e) => e.pin !== targetPin);
+        onUpdateEvent({ ...event, entries: updatedEntries, pairs: updatedPairs });
+      },
+      onCancel: () => setModalConfig(null),
+    });
   };
 
   const renderTeamCard = (
@@ -951,7 +1017,7 @@ const validateCategoryGenders = (
           {sortedCategoryPairs.length === 0 ? (
             <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum time formado nesta categoria.</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+            <div className="flex flex-col gap-4 p-4">
               {[
                 {
                   label: 'Chave 1',
@@ -986,7 +1052,7 @@ const validateCategoryGenders = (
                       {bracket.list.length} times
                     </span>
                   </div>
-                  <div className="space-y-2">
+                  <div className="flex flex-col gap-2">
                     {bracket.list.length === 0 ? (
                       <p className="py-6 text-center text-xs font-bold text-slate-300">Sem times nesta chave.</p>
                     ) : (
@@ -1654,7 +1720,7 @@ const validateCategoryGenders = (
                           }
                           const updatedEntries = entries.map((item) =>
                             (item.email === entry.email || item.pin === entry.pin)
-                              ? { ...item, gender: nextGender }
+                              ? { ...item, gender: nextGender as 'M' | 'F' }
                               : item
                           );
                           onUpdateEvent({ ...event, entries: updatedEntries });
@@ -1756,8 +1822,7 @@ const validateCategoryGenders = (
                           onUpdateEvent={onUpdateEvent}
                           onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
                           onDelete={() => {
-                            void handleDeleteEntry(entry.pin);
-                            setExpandedRegistrationEmail(null);
+                            handleDeleteEntry(entry.pin);
                           }}
                           onCancel={() => setExpandedRegistrationEmail(null)}
                         />

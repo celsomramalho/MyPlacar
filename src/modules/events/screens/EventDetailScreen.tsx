@@ -54,9 +54,10 @@ interface EntryExpandedFormProps {
   event: TournamentEvent;
   canEdit: boolean;
   onSave: (updated: TournamentEntry) => Promise<void>;
+  setModalConfig: React.Dispatch<React.SetStateAction<ModalConfig | null>>;
 }
 
-const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, canEdit, onSave }) => {
+const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, canEdit, onSave, setModalConfig }) => {
   const isManual = entry.pin?.startsWith('TEMP') || !entry.email || entry.email.endsWith('@myplacar.app');
   const [email, setEmail] = useState(entry.email || '');
   const [phone, setPhone] = useState(entry.phone || '');
@@ -477,7 +478,20 @@ const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, can
                       {canEdit && (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); if (window.confirm('Deseja realmente excluir este pagamento?')) handleRemovePayment(pay.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModalConfig({
+                              title: 'Excluir pagamento?',
+                              message: 'Deseja realmente excluir este pagamento?',
+                              confirmLabel: 'Excluir',
+                              variant: 'danger',
+                              onConfirm: () => {
+                                setModalConfig(null);
+                                handleRemovePayment(pay.id);
+                              },
+                              onCancel: () => setModalConfig(null),
+                            });
+                          }}
                           className="p-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-all active:scale-90"
                           title="Excluir pagamento"
                         >

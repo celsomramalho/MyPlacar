@@ -5,6 +5,7 @@ import { getAuthInstance, getDb } from '@infra/firebase';
 import { updateUserProfileFields } from '@infra/firebase/users';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
+import { useUI } from '@modules/ui';
 
 const formatPhone = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -29,6 +30,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   adminEmail,
   initialExpandedPin,
 }) => {
+  const { setModalConfig } = useUI();
   const entries = event.entries || [];
   const categories = event.categories || [];
 
@@ -342,48 +344,66 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     onUpdateEntries(entries.map((item) => item.pin === originalPin ? finalEntry : item));
   };
 
-  const handleDelete = async (targetPin: string) => {
-    const targetEntry = entries.find(e => e.pin === targetPin);
-    const db = getDb();
-    const targetEmailLower = targetEntry?.email?.toLowerCase().trim();
+  const handleDelete = (targetPin: string) => {
+    const targetEntry = entries.find((e) => e.pin === targetPin);
+    if (!targetEntry) return;
 
-    // Filtrar e desfazer duplas que continham esse participante
-    const currentPairs = event.pairs || [];
-    const updatedPairs = currentPairs.filter(
-      p =>
-        p.p1?.pin !== targetPin &&
-        p.p2?.pin !== targetPin &&
-        (!targetEmailLower || (p.p1?.email?.toLowerCase().trim() !== targetEmailLower && p.p2?.email?.toLowerCase().trim() !== targetEmailLower))
-    );
+    setModalConfig({
+      title: 'Excluir inscrição?',
+      message: `Deseja excluir a inscrição de "${targetEntry.name}"?`,
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+      onConfirm: async () => {
+        setModalConfig(null);
+        setEditingPin(null);
+        setIsAdding(false);
+        setExpandedRegistrationEmail(null);
 
-    if (db && event.pin && targetEntry?.email) {
-      try {
-        const { deleteEventEntry, deleteUserEventRegistration, updateEvent } = await import('@infra/firebase/events');
-        await deleteEventEntry(db, event.pin, targetEntry.email);
-        await deleteUserEventRegistration(db, targetEntry.email, event.pin);
-        
-        // Disparar aviso de exclusão de inscrição confirmada para o participante
-        try {
-          const { eventNotificationService } = await import('../../events/services/eventNotificationService');
-          void eventNotificationService.notifyRegistrationDeleted(db, event, targetEntry.email || targetPin, targetEntry.nickname);
-        } catch (notifErr) {
-          console.warn('Erro ao disparar aviso de exclusão de inscrição no admin:', notifErr);
+        const db = getDb();
+        const targetEmailLower = targetEntry.email?.toLowerCase().trim();
+
+        // Filtrar e desfazer duplas que continham esse participante
+        const currentPairs = event.pairs || [];
+        const updatedPairs = currentPairs.filter(
+          (p) =>
+            p.p1?.pin !== targetPin &&
+            p.p2?.pin !== targetPin &&
+            (!targetEmailLower || (p.p1?.email?.toLowerCase().trim() !== targetEmailLower && p.p2?.email?.toLowerCase().trim() !== targetEmailLower))
+        );
+
+        if (db && event.pin && targetEntry.email) {
+          try {
+            const { deleteEventEntry, deleteUserEventRegistration, updateEvent } = await import('@infra/firebase/events');
+            await deleteEventEntry(db, event.pin, targetEntry.email);
+            await deleteUserEventRegistration(db, targetEntry.email, event.pin);
+
+            // Disparar aviso de exclusão de inscrição confirmada para o participante
+            try {
+              const { eventNotificationService } = await import('../../events/services/eventNotificationService');
+              void eventNotificationService.notifyRegistrationDeleted(db, event, targetEntry.email || targetPin, targetEntry.nickname);
+            } catch (notifErr) {
+              console.warn('Erro ao disparar aviso de exclusão de inscrição no admin:', notifErr);
+            }
+
+            // Se havia times formados desfeitos, salvar os novos pairs no Firestore
+            if (updatedPairs.length !== currentPairs.length) {
+              await updateEvent(db, event.pin, { pairs: updatedPairs });
+            }
+          } catch (err) {
+            console.error('Erro ao excluir inscrição no Firestore:', err);
+          }
         }
 
-        // Se havia times formados desfeitos, salvar os novos pairs no Firestore
+        const updatedList = entries.filter((entry) => entry.pin !== targetPin);
+        onUpdateEntries(updatedList);
         if (updatedPairs.length !== currentPairs.length) {
-          await updateEvent(db, event.pin, { pairs: updatedPairs });
+          onUpdateEvent({ ...event, pairs: updatedPairs, entries: updatedList });
+        } else {
+          onUpdateEvent({ ...event, entries: updatedList });
         }
-      } catch (err) {
-        console.error("Erro ao excluir inscrição no Firestore:", err);
-      }
-    }
-
-    const updatedList = entries.filter((entry) => entry.pin !== targetPin);
-    onUpdateEntries(updatedList);
-    if (updatedPairs.length !== currentPairs.length) {
-      onUpdateEvent({ ...event, pairs: updatedPairs, entries: updatedList });
-    }
+      },
+      onCancel: () => setModalConfig(null),
+    });
   };
 
   // Filtro de categorias por gênero no admin
@@ -696,9 +716,17 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm("Deseja realmente excluir este pagamento do histórico?")) {
-                              handleRemovePayment(pay.id);
-                            }
+                            setModalConfig({
+                              title: 'Excluir pagamento?',
+                              message: 'Deseja realmente excluir este pagamento do histórico?',
+                              confirmLabel: 'Excluir',
+                              variant: 'danger',
+                              onConfirm: () => {
+                                setModalConfig(null);
+                                handleRemovePayment(pay.id);
+                              },
+                              onCancel: () => setModalConfig(null),
+                            });
                           }}
                           className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-all active:scale-90"
                           title="Excluir pagamento"
@@ -871,8 +899,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                           onUpdateEvent={onUpdateEvent}
                           onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
                           onDelete={() => {
-                            void handleDelete(entry.pin);
-                            setExpandedRegistrationEmail(null);
+                            handleDelete(entry.pin);
                           }}
                           onCancel={() => setExpandedRegistrationEmail(null)}
                         />

@@ -1,4 +1,4 @@
-import type { TournamentEvent, TournamentMatch, EventCategory } from '../types';
+import type { TournamentEvent, TournamentMatch, TournamentPair, EventCategory } from '../types';
 
 export interface QueueMatchItem {
   match: TournamentMatch;
@@ -48,21 +48,43 @@ function getChaveNumber(phase?: string): number | null {
 }
 
 /**
- * Extrai nomes dos jogadores de uma partida
+ * Obtém o nome de exibição do jogador, priorizando o nickname ("Como quer ser chamado")
  */
-function getMatchPlayerKeys(match: TournamentMatch): { key: string; name: string }[] {
+function getPlayerDisplayName(
+  player?: { nickname?: string; name?: string; email?: string; pin?: string },
+  entriesLookup?: { byEmail: Map<string, string>; byPin: Map<string, string> }
+): string {
+  if (!player) return '';
+  if (player.email && entriesLookup?.byEmail.has(player.email.toLowerCase().trim())) {
+    const nick = entriesLookup.byEmail.get(player.email.toLowerCase().trim());
+    if (nick) return nick;
+  }
+  if (player.pin && entriesLookup?.byPin.has(player.pin.toLowerCase().trim())) {
+    const nick = entriesLookup.byPin.get(player.pin.toLowerCase().trim());
+    if (nick) return nick;
+  }
+  return player.nickname?.trim() || player.name?.trim() || 'Jogador';
+}
+
+/**
+ * Extrai nomes e chaves dos jogadores de uma partida
+ */
+function getMatchPlayerKeys(
+  match: TournamentMatch,
+  entriesLookup?: { byEmail: Map<string, string>; byPin: Map<string, string> }
+): { key: string; name: string }[] {
   const players: { key: string; name: string }[] = [];
 
   const addPair = (pair?: typeof match.pair1) => {
     if (!pair) return;
     if (pair.p1) {
-      const name = pair.p1.name || pair.p1.nickname || 'Jogador';
+      const name = getPlayerDisplayName(pair.p1, entriesLookup);
       if (pair.p1.email) players.push({ key: pair.p1.email.toLowerCase().trim(), name });
       if (pair.p1.pin) players.push({ key: pair.p1.pin.toLowerCase().trim(), name });
       if (!pair.p1.email && !pair.p1.pin && name) players.push({ key: name.toLowerCase().trim(), name });
     }
     if (pair.p2) {
-      const name = pair.p2.name || pair.p2.nickname || 'Jogador';
+      const name = getPlayerDisplayName(pair.p2, entriesLookup);
       if (pair.p2.email) players.push({ key: pair.p2.email.toLowerCase().trim(), name });
       if (pair.p2.pin) players.push({ key: pair.p2.pin.toLowerCase().trim(), name });
       if (!pair.p2.email && !pair.p2.pin && name) players.push({ key: name.toLowerCase().trim(), name });
@@ -76,12 +98,16 @@ function getMatchPlayerKeys(match: TournamentMatch): { key: string; name: string
 }
 
 /**
- * Obtém o nome legível de um time
+ * Obtém o nome legível de um time priorizando nickname ("Como quer ser chamado")
  */
-export function getPairDisplayName(pair?: typeof TournamentMatch.prototype.pair1, fallback = 'Time'): string {
+export function getPairDisplayName(
+  pair?: TournamentPair,
+  fallback = 'Time',
+  entriesLookup?: { byEmail: Map<string, string>; byPin: Map<string, string> }
+): string {
   if (!pair) return fallback;
-  const p1Name = pair.p1?.name || pair.p1?.nickname || 'Jogador 1';
-  const p2Name = pair.p2?.name || pair.p2?.nickname;
+  const p1Name = getPlayerDisplayName(pair.p1, entriesLookup) || 'Jogador 1';
+  const p2Name = pair.p2 ? getPlayerDisplayName(pair.p2, entriesLookup) : undefined;
   return p2Name ? `${p1Name} & ${p2Name}` : p1Name;
 }
 
@@ -106,16 +132,38 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
   const categories = event.categories || [];
   const categoryMap = new Map<string, EventCategory>(categories.map((c) => [c.id, c]));
 
+  // Mapa de inscrições para obter o nickname ("Como quer ser chamado")
+  const entries = event.entries || [];
+  const entriesByEmail = new Map<string, string>();
+  const entriesByPin = new Map<string, string>();
+  for (const e of entries) {
+    const nick = e.nickname?.trim() || e.name?.trim();
+    if (nick) {
+      if (e.email) entriesByEmail.set(e.email.toLowerCase().trim(), nick);
+      if (e.pin) entriesByPin.set(e.pin.toLowerCase().trim(), nick);
+    }
+  }
+  const entriesLookup = { byEmail: entriesByEmail, byPin: entriesByPin };
+
+  const pairsById = new Map<string, TournamentPair>();
+  for (const p of event.pairs || []) {
+    pairsById.set(p.id, p);
+  }
+
   // 1. Mapeia partidas ao vivo por quadra e jogadores ocupados
   const busyPlayersMap = new Map<string, { court: string; name: string }>();
   const courtLiveMatchMap = new Map<string, TournamentMatch>();
 
-  for (const m of allMatches) {
-    if (m.status === 'live' && m.court) {
-      courtLiveMatchMap.set(m.court, m);
-      const players = getMatchPlayerKeys(m);
+  for (const rawM of allMatches) {
+    if (rawM.status === 'live' && rawM.court) {
+      const court = rawM.court;
+      const p1 = rawM.pair1 || (rawM.pair1Id ? pairsById.get(rawM.pair1Id) : undefined);
+      const p2 = rawM.pair2 || (rawM.pair2Id ? pairsById.get(rawM.pair2Id) : undefined);
+      const m = { ...rawM, pair1: p1, pair2: p2, court };
+      courtLiveMatchMap.set(court, m);
+      const players = getMatchPlayerKeys(m, entriesLookup);
       for (const p of players) {
-        busyPlayersMap.set(p.key, { court: m.court, name: p.name });
+        busyPlayersMap.set(p.key, { court, name: p.name });
       }
     }
   }
@@ -148,8 +196,67 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
   const busyCourtsCount = courtStates.filter((c) => c.status === 'busy').length;
   const freeCourtsCount = freeCourts.length;
 
-  // 3. Filtra partidas pendentes (status 'waiting' ou não iniciadas/não finalizadas)
-  const pendingMatches = allMatches.filter((m) => m.status === 'waiting' || (!m.status && m.pair1Id && m.pair2Id));
+/**
+ * Verifica se uma partida de fase avançada (semifinal, final, 3º lugar, etc.)
+ * ou uma partida sem times definidos está bloqueada aguardando o término da fase anterior.
+ */
+function isMatchBlockedByPreviousPhase(match: TournamentMatch, allMatches: TournamentMatch[]): string | null {
+  // Se os times ainda não foram definidos, está bloqueada aguardando fase anterior
+  if (!match.pair1Id || !match.pair2Id || !match.pair1 || !match.pair2) {
+    return 'Aguardando término da fase anterior';
+  }
+
+  const catMatches = allMatches.filter((m) =>
+    match.categoryId ? m.categoryId === match.categoryId : true
+  );
+
+  const phase = match.phase?.toLowerCase().trim() || '';
+
+  // Semifinal: requer que todos os jogos da fase de grupos na mesma categoria estejam finalizados
+  if (phase === 'semifinal') {
+    const groupMatches = catMatches.filter(
+      (m) => m.phase === 'chave1' || m.phase === 'chave2' || (m.phase && m.phase.toLowerCase().startsWith('chave'))
+    );
+    const allGroupFinished = groupMatches.length > 0 && groupMatches.every((m) => m.status === 'finished');
+    if (!allGroupFinished) {
+      return 'Aguardando término da fase anterior';
+    }
+  }
+
+  // Final e 3º Lugar: requer que as semifinais (ou grupos, caso não haja semifinais) estejam finalizadas
+  if (phase === 'final' || phase === '3lugar') {
+    const semiMatches = catMatches.filter((m) => m.phase === 'semifinal');
+    if (semiMatches.length > 0) {
+      const allSemiFinished = semiMatches.every((m) => m.status === 'finished');
+      if (!allSemiFinished) {
+        return 'Aguardando término da fase anterior';
+      }
+    } else {
+      const groupMatches = catMatches.filter(
+        (m) => m.phase === 'chave1' || m.phase === 'chave2' || (m.phase && m.phase.toLowerCase().startsWith('chave'))
+      );
+      const allGroupFinished = groupMatches.length > 0 && groupMatches.every((m) => m.status === 'finished');
+      if (!allGroupFinished) {
+        return 'Aguardando término da fase anterior';
+      }
+    }
+  }
+
+  // Quartas de final / Oitavas
+  if (phase === 'quartas' || phase === 'oitavas') {
+    const groupMatches = catMatches.filter(
+      (m) => m.phase === 'chave1' || m.phase === 'chave2' || (m.phase && m.phase.toLowerCase().startsWith('chave'))
+    );
+    if (groupMatches.length > 0 && !groupMatches.every((m) => m.status === 'finished')) {
+      return 'Aguardando término da fase anterior';
+    }
+  }
+
+  return null;
+}
+
+  // 3. Filtra partidas pendentes (não finalizadas e não ao vivo na quadra)
+  const pendingMatches = allMatches.filter((m) => m.status !== 'finished' && m.status !== 'live');
 
   // 4. Ordenação da Fila Única Inicial:
   // Critério 1: Prioridade da Categoria (menor número = maior prioridade)
@@ -223,25 +330,35 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
 
   // 5. Calcula elegibilidade e status de cada partida na fila
   let eligibleCount = 0;
-  const evaluatedQueue: QueueMatchItem[] = orderedMatches.map((m) => {
-    const cat = m.categoryId ? categoryMap.get(m.categoryId) : undefined;
-    const players = getMatchPlayerKeys(m);
+  const evaluatedQueue: QueueMatchItem[] = orderedMatches.map((rawMatch) => {
+    const p1 = rawMatch.pair1 || (rawMatch.pair1Id ? pairsById.get(rawMatch.pair1Id) : undefined);
+    const p2 = rawMatch.pair2 || (rawMatch.pair2Id ? pairsById.get(rawMatch.pair2Id) : undefined);
+    const m = { ...rawMatch, pair1: p1, pair2: p2 };
 
-    // Verifica conflito de jogador em quadra ativa
-    let conflictReason: string | undefined;
-    for (const p of players) {
-      const busyInfo = busyPlayersMap.get(p.key);
-      if (busyInfo) {
-        conflictReason = `Aguardando: ${busyInfo.name} (jogando na ${busyInfo.court})`;
-        break;
+    const cat = m.categoryId ? categoryMap.get(m.categoryId) : undefined;
+    const players = getMatchPlayerKeys(m, entriesLookup);
+
+    // 1. Verifica se a partida depende de fase anterior ou não tem times definidos
+    const phaseBlockedReason = isMatchBlockedByPreviousPhase(m, allMatches);
+
+    // 2. Verifica conflito de jogador em quadra ativa
+    let playerConflictReason: string | undefined;
+    if (!phaseBlockedReason) {
+      for (const p of players) {
+        const busyInfo = busyPlayersMap.get(p.key);
+        if (busyInfo) {
+          playerConflictReason = `Aguardando: ${busyInfo.name} (jogando na ${busyInfo.court})`;
+          break;
+        }
       }
     }
 
+    const conflictReason = phaseBlockedReason || playerConflictReason;
     const isFrozen = Boolean(m.frozen || conflictReason);
     let queueStatus: 'green' | 'yellow' | 'red' | 'gray' = 'gray';
 
     if (isFrozen) {
-      queueStatus = 'red'; // Bloqueada/Conflito ou Congelada
+      queueStatus = 'red'; // Bloqueada (fase anterior ou conflito de jogador ou congelada manualmente)
     } else {
       // Elegível: status baseado na posição relativa ao número de quadras livres
       if (eligibleCount < freeCourtsCount) {
@@ -254,8 +371,8 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
       eligibleCount++;
     }
 
-    const p1Name = getPairDisplayName(m.pair1, 'Time 1');
-    const p2Name = getPairDisplayName(m.pair2, 'Time 2');
+    const p1Name = getPairDisplayName(m.pair1, m.pair1Label || 'Time 1', entriesLookup);
+    const p2Name = getPairDisplayName(m.pair2, m.pair2Label || 'Time 2', entriesLookup);
 
     let phaseLabel = m.phase || '';
     if (m.phase === 'chave1') phaseLabel = 'Chave 1';

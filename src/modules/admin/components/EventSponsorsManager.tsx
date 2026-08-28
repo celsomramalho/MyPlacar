@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Plus, Trash2, CheckCircle2, ChevronDown, ChevronUp, Upload, Image as ImageIcon } from 'lucide-react';
 import type { TournamentEvent, EventSponsor } from '@modules/events/types';
+import { useUI } from '@modules/ui';
 
 interface Props {
   event: TournamentEvent;
@@ -260,8 +261,8 @@ export const EventSponsorsManager: React.FC<Props> = ({
   event,
   onUpdateSponsors,
 }) => {
+  const { setModalConfig } = useUI();
   const sponsors = event.sponsors || [];
-
   const [isAdding, setIsAdding] = useState(false);
   const [expandedSponsorId, setExpandedSponsorId] = useState<string | null>(null);
 
@@ -284,13 +285,24 @@ export const EventSponsorsManager: React.FC<Props> = ({
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este patrocinador?')) {
-      const updatedList = sponsors.filter((s) => s.id !== id);
-      onUpdateSponsors(updatedList);
-      if (expandedSponsorId === id) {
-        setExpandedSponsorId(null);
-      }
-    }
+    const sponsorToDelete = sponsors.find((s) => s.id === id);
+    setModalConfig({
+      title: 'Excluir patrocinador?',
+      message: sponsorToDelete
+        ? `Deseja excluir o patrocinador "${sponsorToDelete.name}"?`
+        : 'Tem certeza que deseja excluir este patrocinador?',
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+      onConfirm: () => {
+        setModalConfig(null);
+        const updatedList = sponsors.filter((s) => s.id !== id);
+        onUpdateSponsors(updatedList);
+        if (expandedSponsorId === id) {
+          setExpandedSponsorId(null);
+        }
+      },
+      onCancel: () => setModalConfig(null),
+    });
   };
 
   return (

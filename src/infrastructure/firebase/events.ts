@@ -59,7 +59,7 @@ export interface FirebaseTournamentMatch {
   categoryId?: string;
 }
 
-interface FirebaseTournamentEvent {
+export interface FirebaseTournamentEvent {
   pin: string;
   name: string;
   bannerUrl?: string;
@@ -68,6 +68,7 @@ interface FirebaseTournamentEvent {
   config?: Record<string, unknown>;
   pairs?: unknown[];
   matches?: FirebaseTournamentMatch[];
+  interdictedCourts?: string[];
   coAdminPins?: string[];
   regulationUrl?: string;
   regulationFileName?: string;

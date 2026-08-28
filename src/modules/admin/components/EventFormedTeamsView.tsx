@@ -15,6 +15,7 @@ import { calculateQueueState } from '@modules/events/services/queueManager';
 import { updatePlayoffProgression } from '@modules/events/services/matchProgression';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
+import type { FirebaseTournamentEvent } from '@infra/firebase/events';
 
 interface Props {
   event: TournamentEvent;
@@ -25,7 +26,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
   const [selectedCourtForMatch, setSelectedCourtForMatch] = useState<string | null>(null);
   const [activeSelectMatchId, setActiveSelectMatchId] = useState<string | null>(null);
 
-  const saveMatchesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const queueState = calculateQueueState(event);
   const {
@@ -48,6 +49,36 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     return map;
   }, [pairs]);
 
+  const entries = event.entries || [];
+  const entriesByEmail = useMemo(() => {
+    const map = new Map<string, string>();
+    entries.forEach((e) => {
+      const nick = e.nickname?.trim() || e.name?.trim();
+      if (nick && e.email) map.set(e.email.toLowerCase().trim(), nick);
+    });
+    return map;
+  }, [entries]);
+
+  const entriesByPin = useMemo(() => {
+    const map = new Map<string, string>();
+    entries.forEach((e) => {
+      const nick = e.nickname?.trim() || e.name?.trim();
+      if (nick && e.pin) map.set(e.pin.toLowerCase().trim(), nick);
+    });
+    return map;
+  }, [entries]);
+
+  const getPlayerNick = (p?: { nickname?: string; name?: string; email?: string; pin?: string }) => {
+    if (!p) return '';
+    if (p.email && entriesByEmail.has(p.email.toLowerCase().trim())) {
+      return entriesByEmail.get(p.email.toLowerCase().trim())!;
+    }
+    if (p.pin && entriesByPin.has(p.pin.toLowerCase().trim())) {
+      return entriesByPin.get(p.pin.toLowerCase().trim())!;
+    }
+    return p.nickname?.trim() || p.name?.trim() || 'Jogador';
+  };
+
   // Atualiza partidas e quadras interditadas no Firestore e estado local
   const handlePersistEventChanges = async (
     updatedMatches?: TournamentMatch[],
@@ -67,7 +98,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     if (db && event.pin) {
       try {
         const { updateEvent } = await import('@infra/firebase/events');
-        const payload: Partial<TournamentEvent> = {};
+        const payload: Partial<FirebaseTournamentEvent> = {};
         if (updatedMatches !== undefined) payload.matches = updatedMatches;
         if (updatedInterdictedCourts !== undefined) payload.interdictedCourts = updatedInterdictedCourts;
         await updateEvent(db as Firestore, event.pin, payload);
@@ -373,10 +404,14 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
               const p1 = activeMatch ? activeMatch.pair1 || (activeMatch.pair1Id && pairsById ? pairsById[activeMatch.pair1Id] : undefined) : undefined;
               const p2 = activeMatch ? activeMatch.pair2 || (activeMatch.pair2Id && pairsById ? pairsById[activeMatch.pair2Id] : undefined) : undefined;
 
-              const team1Name = p1 ? `${p1.p1.nickname || p1.p1.name}${p1.p2 ? ` & ${p1.p2.nickname || p1.p2.name}` : ''}` : activeMatch?.pair1Label || 'Time 1';
+              const team1P1Name = p1?.p1 ? getPlayerNick(p1.p1) : '';
+              const team1P2Name = p1?.p2 ? getPlayerNick(p1.p2) : undefined;
+              const team1Name = p1 ? (team1P2Name ? `${team1P1Name} & ${team1P2Name}` : team1P1Name) : activeMatch?.pair1Label || 'Time 1';
               const team1Code = p1 ? (p1.teamCode || `Time ${p1.teamNumber || ''}`) : '';
 
-              const team2Name = p2 ? `${p2.p1.nickname || p2.p1.name}${p2.p2 ? ` & ${p2.p2.nickname || p2.p2.name}` : ''}` : activeMatch?.pair2Label || 'Time 2';
+              const team2P1Name = p2?.p1 ? getPlayerNick(p2.p1) : '';
+              const team2P2Name = p2?.p2 ? getPlayerNick(p2.p2) : undefined;
+              const team2Name = p2 ? (team2P2Name ? `${team2P1Name} & ${team2P2Name}` : team2P1Name) : activeMatch?.pair2Label || 'Time 2';
               const team2Code = p2 ? (p2.teamCode || `Time ${p2.teamNumber || ''}`) : '';
 
               const parsedSets = activeMatch ? parseMatchSets(activeMatch, totalSets) : { scores: [], setsWon1: 0, setsWon2: 0 };
@@ -813,7 +848,11 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                       {isRed && (
                         <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 whitespace-nowrap shrink-0">
                           <AlertTriangle size={10} />
-                          {conflictReason ? 'Conflito de Jogador' : 'Congelada'}
+                          {conflictReason
+                            ? conflictReason.includes('fase anterior')
+                              ? 'Aguardando Fase'
+                              : 'Conflito de Jogador'
+                            : 'Congelada'}
                         </span>
                       )}
                     </div>
@@ -839,6 +878,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                       <button
                         type="button"
                         onClick={() => {
+                          if (isRed) return;
                           if (freeCourts.length === 0) {
                             window.alert('Não há quadras livres disponíveis no momento.');
                             return;
@@ -849,10 +889,12 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                             setActiveSelectMatchId(isSelectingCourt ? null : match.id);
                           }
                         }}
-                        disabled={freeCourts.length === 0}
+                        disabled={freeCourts.length === 0 || isRed}
                         className={`px-3.5 py-1.5 rounded-2xl text-xs font-black transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap ${
                           isSelectingCourt
                             ? 'bg-slate-200 text-slate-700 border border-slate-300'
+                            : isRed
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 opacity-60'
                             : freeCourts.length > 0
                             ? isGreen
                               ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
@@ -860,14 +902,16 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                             : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                         }`}
                         title={
-                          freeCourts.length > 0
+                          isRed
+                            ? (conflictReason || 'Partida bloqueada ou congelada')
+                            : freeCourts.length > 0
                             ? 'Vincular esta partida a uma quadra livre'
                             : 'Nenhuma quadra livre disponível'
                         }
                       >
                         <Play size={12} className="fill-current" />
                         <span>Quadra</span>
-                        {freeCourts.length > 1 && (
+                        {!isRed && freeCourts.length > 1 && (
                           <ChevronDown
                             size={12}
                             className={isSelectingCourt ? 'rotate-180 transition-transform' : 'transition-transform'}
