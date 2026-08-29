@@ -143,6 +143,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     let setsWon2 = 0;
 
     scores.forEach((s) => {
+      if (s.inProgress && match.status !== 'finished') return;
       if (s.p1 !== null && s.p1 !== undefined && s.p2 !== null && s.p2 !== undefined) {
         if (Number(s.p1) > Number(s.p2)) {
           setsWon1 += 1;
@@ -622,7 +623,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                 onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p1', e.target.value)}
                                 onBlur={handleScoreBlur}
                                 className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
-                                  scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) > Number(scores[0].p2)
+                                  !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) > Number(scores[0].p2)
                                     ? 'bg-[#22c55e] text-white'
                                     : 'bg-white text-slate-900 focus:bg-slate-50'
                                 }`}
@@ -651,7 +652,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                 onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p2', e.target.value)}
                                 onBlur={handleScoreBlur}
                                 className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
-                                  scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) > Number(scores[0].p1)
+                                  !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) > Number(scores[0].p1)
                                     ? 'bg-[#22c55e] text-white'
                                     : 'bg-white text-slate-900 focus:bg-slate-50'
                                 }`}
@@ -683,6 +684,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                               </span>
                               {scores.map((setScore, setIdx) => {
                                 const isSetWon =
+                                  !setScore.inProgress &&
                                   setScore.p1 !== null &&
                                   setScore.p1 !== undefined &&
                                   setScore.p2 !== null &&
@@ -731,6 +733,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                               </span>
                               {scores.map((setScore, setIdx) => {
                                 const isSetWon =
+                                  !setScore.inProgress &&
                                   setScore.p1 !== null &&
                                   setScore.p1 !== undefined &&
                                   setScore.p2 !== null &&

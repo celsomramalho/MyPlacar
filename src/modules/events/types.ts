@@ -36,6 +36,7 @@ export const minifyPairForStorage = (pair: TournamentPair): TournamentPair => ({
 export interface MatchSetScore {
   p1?: number | null;
   p2?: number | null;
+  inProgress?: boolean;
 }
 
 export interface TournamentMatch {

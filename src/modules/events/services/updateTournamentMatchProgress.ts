@@ -66,6 +66,8 @@ export const markTournamentMatchFinished = async (
       result,
       winnerPairId,
       loserPairId,
+      court: undefined,
+      ownerPin: undefined,
     };
   });
 

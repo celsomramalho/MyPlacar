@@ -67,6 +67,7 @@ const getTournamentScoresFromState = (state: GameState): MatchSetScore[] => {
     scores[state.currentSet] = {
       p1: state.p1.games,
       p2: state.p2.games,
+      inProgress: true,
     };
   }
 
@@ -443,6 +444,30 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const p2SetsWon = state.p2.sets.filter((s, i) => s > state.p1.sets[i]).length;
     const winnerTeam = p1SetsWon > p2SetsWon ? 1 : 2;
     const winnersStay = state.matchConfig.winnersStay;
+    const isTournamentMatch = !!(state.tournamentPin && state.tournamentMatchId);
+
+    const clearTournamentMatchLocally = () => {
+      if (!isTournamentMatch) return;
+      setMatchSettings(prev => ({
+        ...prev,
+        p1Name: '',
+        p1Partner: '',
+        p2Name: '',
+        p2Partner: '',
+        p1Verified: false,
+        p1PartnerVerified: false,
+        p2Verified: false,
+        p2PartnerVerified: false,
+        pendingTournamentMatchId: undefined,
+        pendingTournamentPin: undefined,
+        pendingTournamentMatchCode: undefined,
+        pendingTournamentPhaseLabel: undefined,
+      }));
+      setGameState(null);
+      setCloudLiveExists(false);
+      setShowLiveControlOverlay(false);
+      setCurrentScreen('settings');
+    };
 
     if (state.tournamentPin && state.tournamentMatchId && navigator.onLine) {
        const db = getDb();
@@ -479,9 +504,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (!state.matchConfig.isHistoryEnabled) {
       try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
       const db = getDb();
-      if (!db) return;
+      if (!db) {
+        clearTournamentMatchLocally();
+        return;
+      }
       const targetPin = resolveTargetPin('write');
-      if (!targetPin) return;
+      if (!targetPin) {
+        clearTournamentMatchLocally();
+        return;
+      }
       if (targetPin && navigator.onLine) {
         const { doc, updateDoc } = await import('firebase/firestore');
         updateDoc(doc(db, "live_matches", targetPin), {
@@ -497,10 +528,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           deleteDoc(doc(db, "live_matches", targetPin)).catch(() => {});
         }, 4000);
       }
+      clearTournamentMatchLocally();
       return;
     }
 
-    if (matchHistoryRef.current.some(m => m.id === state.matchId)) return;
+    if (matchHistoryRef.current.some(m => m.id === state.matchId)) {
+      clearTournamentMatchLocally();
+      return;
+    }
     let location: { lat: number, lng: number } | undefined = undefined;
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => { 
@@ -518,10 +553,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       updateDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), {
         isMatchOver: true,
         isConfirmedFinished: true,
-        matchEndedAt: Date.now()
+        matchEndedAt: Date.now(),
+        ...(isTournamentMatch ? {
+          isLiveClosed: true,
+          isMirroringActive: false,
+          lastActivityAt: Date.now(),
+        } : {}),
       }).catch(() => {});
     }
-  }, [persistHistory, userProfile.pin, partners, setPlayerQueue, resolveTargetPin]);
+    clearTournamentMatchLocally();
+  }, [persistHistory, userProfile.pin, partners, setPlayerQueue, resolveTargetPin, setMatchSettings, setGameState, setCloudLiveExists, setShowLiveControlOverlay, setCurrentScreen]);
 
   const handleLeaveLive = useCallback(async () => {
     if (!gameState?.isMirroringActive) return;
