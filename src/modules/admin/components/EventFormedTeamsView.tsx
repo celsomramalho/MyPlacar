@@ -6,6 +6,7 @@ import {
   Ban,
   CheckCircle2,
   Play,
+  RefreshCw,
   ChevronDown,
   AlertTriangle,
   Flame,
@@ -36,6 +37,7 @@ const getPhaseLabel = (phase?: string) => {
 export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) => {
   const [selectedCourtForMatch, setSelectedCourtForMatch] = useState<string | null>(null);
   const [activeSelectMatchId, setActiveSelectMatchId] = useState<string | null>(null);
+  const [refreshingMatchId, setRefreshingMatchId] = useState<string | null>(null);
   const { setMatchSettings } = useGame();
   const { setCurrentScreen, setModalConfig } = useUI();
 
@@ -373,9 +375,35 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     setCurrentScreen('new-game');
     setModalConfig({
       title: 'Atenção',
-      message: 'Configurar corretamente conforme evento/fase, depois é só dar Play',
+      message: (
+        <>
+          <span className="block">Configurar conforme evento: {event.name}</span>
+          <span className="block mt-2">Fase: {getPhaseLabel(match.phase)}</span>
+          <span className="mt-3 inline-flex items-center justify-center gap-2">
+            Depois é só dar <Play size={18} className="text-emerald-500 fill-emerald-500" aria-hidden="true" />
+          </span>
+        </>
+      ),
       onConfirm: () => setModalConfig(null),
     });
+  };
+
+  const handleRefreshEventScore = async (matchId: string) => {
+    if (!event.pin || refreshingMatchId) return;
+    setRefreshingMatchId(matchId);
+    try {
+      const db = getDb();
+      if (!db) return;
+      const { fetchEventByPinFromServer } = await import('@infra/firebase/events');
+      const freshEvent = await fetchEventByPinFromServer(db as Firestore, event.pin);
+      if (freshEvent && onUpdateEvent) {
+        onUpdateEvent(freshEvent as TournamentEvent);
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar placar do evento:', err);
+    } finally {
+      setRefreshingMatchId(null);
+    }
   };
 
   const totalSets = (event.setsCount || event.config?.sets || 1) as number;
@@ -574,9 +602,20 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                           {activeCat && ' · '}
                           {phaseLabel}
                         </span>
-                        <span className="text-xs font-black text-slate-800 whitespace-nowrap shrink-0">
-                          [{matchCodeLabel}] {phaseLabel ? `[${phaseLabel}]` : ''}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs font-black text-slate-800 whitespace-nowrap">
+                            [{matchCodeLabel}] {phaseLabel ? `[${phaseLabel}]` : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRefreshEventScore(activeMatch.id)}
+                            disabled={refreshingMatchId === activeMatch.id}
+                            className="w-8 h-8 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-blue-600 active:scale-95 transition-all flex items-center justify-center disabled:opacity-60"
+                            title="Atualizar placar"
+                          >
+                            <RefreshCw size={14} className={refreshingMatchId === activeMatch.id ? 'animate-spin' : ''} />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Placar e Nomes dos Times: Layout idêntico ao de categorias/partidas */}

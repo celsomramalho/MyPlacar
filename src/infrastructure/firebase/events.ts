@@ -4,6 +4,7 @@ import {
   deleteField,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   getDocsFromServer,
   onSnapshot,
@@ -106,6 +107,12 @@ function sanitizeForFirestore<T>(value: T): T {
 
 export const fetchEventByPin = async (db: Firestore, pin: string): Promise<FirebaseTournamentEvent | null> => {
   const snap = await getDoc(doc(db, 'events', pin));
+  if (!snap.exists()) return null;
+  return { pin: snap.id, ...snap.data() } as FirebaseTournamentEvent;
+};
+
+export const fetchEventByPinFromServer = async (db: Firestore, pin: string): Promise<FirebaseTournamentEvent | null> => {
+  const snap = await getDocFromServer(doc(db, 'events', pin));
   if (!snap.exists()) return null;
   return { pin: snap.id, ...snap.data() } as FirebaseTournamentEvent;
 };
