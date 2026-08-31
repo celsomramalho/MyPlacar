@@ -6,6 +6,7 @@ import type { Firestore } from 'firebase/firestore';
 import {
   formatRegistrationId,
   getNextRegistrationId,
+  orderPairEntriesForMixed,
   type CategoryPartnerInfo,
   type EventCategory,
   type PaymentItem,
@@ -169,10 +170,11 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       0,
       ...pairs.map((pair, index) => pair.teamNumber || Number(pair.teamCode?.match(/^\d{3}/)?.[0]) || index + 1)
     ) + 1;
+    const [orderedP1, orderedP2] = orderPairEntriesForMixed(currentEntry, partnerEntry);
     const newPair: TournamentPair = {
       id: `pair_${Date.now()}`,
-      p1: currentEntry,
-      p2: partnerEntry,
+      p1: orderedP1,
+      p2: orderedP2,
       categoryId: cat.id,
       teamNumber,
       teamCode: `${String(teamNumber).padStart(3, '0')} - ${cat.abbreviation}`,
@@ -659,7 +661,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           />
         </Field>
         <Field label="Data do pagamento"><input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="event-registration-field" /></Field>
-        <Field label="Comprovante *"><label className="event-registration-field flex items-center justify-between cursor-pointer"><span className="flex items-center gap-2 truncate"><Upload size={16} className="text-slate-400" />{newReceipt?.name || 'Anexar comprovante (obrigatório)...'}</span><span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg">Buscar</span><input type="file" accept="image/*,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setNewReceipt({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file); }} className="hidden" /></label></Field>
+        <Field label="Comprovante *"><label className="event-registration-field flex items-center justify-between cursor-pointer"><span className="flex items-center gap-2 truncate"><Upload size={16} className="text-slate-400" />{newReceipt?.name || 'Anexar comprovante (obrigatório)...'}</span><span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg">Buscar</span><input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setNewReceipt({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file); }} className="hidden" /></label></Field>
       </div>
       {payments.length > 0 && <div className="space-y-2"><p className="text-[10px] font-black text-slate-400">Histórico de pagamentos</p>{payments.map((payment) => <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setEditingPaymentId(payment.id); setNewAmount(String(payment.amount)); const date = new Date(payment.date); setNewDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`); setNewReceipt(payment.receiptUrl ? { url: payment.receiptUrl, name: payment.receiptFileName || 'Comprovante' } : null); }} className="flex items-center gap-3 text-left"><span>{new Date(payment.date).toLocaleDateString('pt-BR')}</span><span>R$ {payment.amount.toFixed(2)}</span></button><div className="flex items-center gap-2"><button type="button" disabled={!payment.receiptUrl} onClick={() => payment.receiptUrl && window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')} className="text-sky-600 disabled:text-slate-300" title="Abrir comprovante"><Eye size={16} /></button><button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500" title="Excluir pagamento"><Trash2 size={16} /></button></div></div>)}</div>}
     </div>

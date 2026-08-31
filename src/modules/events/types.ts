@@ -33,6 +33,20 @@ export const minifyPairForStorage = (pair: TournamentPair): TournamentPair => ({
   bracket: pair.bracket,
 });
 
+/**
+ * Ordena os participantes da dupla para que, em times mistos (mulher e homem),
+ * a mulher (gender === 'F') seja sempre p1 (primeiro nome) e o homem (gender === 'M') seja sempre p2.
+ */
+export const orderPairEntriesForMixed = (
+  entry1: TournamentEntry,
+  entry2: TournamentEntry,
+): [TournamentEntry, TournamentEntry] => {
+  if (entry1.gender === 'M' && entry2.gender === 'F') {
+    return [entry2, entry1];
+  }
+  return [entry1, entry2];
+};
+
 export interface MatchSetScore {
   p1?: number | null;
   p2?: number | null;

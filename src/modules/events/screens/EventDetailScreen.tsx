@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Partner } from '@modules/partners/types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, UserRound, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, DollarSign, Eye, Bell } from 'lucide-react';
-import { formatRegistrationId, type TournamentEvent, type TournamentEntry, type TournamentPair, type TournamentMatch, type TournamentConfig, type PaymentItem, type EventCategory } from '../types';
+import { formatRegistrationId, orderPairEntriesForMixed, type TournamentEvent, type TournamentEntry, type TournamentPair, type TournamentMatch, type TournamentConfig, type PaymentItem, type EventCategory } from '../types';
 import type { UserProfile } from '@modules/auth/types';
 import { deleteEventEntry, deleteUserEventRegistration, ensureEventEntriesRegistrationIds, fetchEventEntries, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeEventEntries, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
 import type { FirebaseTournamentLiveScore } from '@infra/firebase';
@@ -428,7 +428,7 @@ const EntryExpandedForm: React.FC<EntryExpandedFormProps> = ({ entry, event, can
                     )}
                     <label className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-slate-300 transition-colors">
                       Buscar
-                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} />
+                      <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={handleFileChange} />
                     </label>
                   </div>
                 </div>
@@ -878,10 +878,11 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     const db = getDb();
     if (!db) return;
     const selected = Array.from(selectedEntries).map(email => entries.find(e => e.email === email)!);
+    const [orderedP1, orderedP2] = orderPairEntriesForMixed(selected[0], selected[1]);
     const newPair: TournamentPair = {
       id: `pair_${Date.now()}`,
-      p1: selected[0],
-      p2: selected[1]
+      p1: orderedP1,
+      p2: orderedP2
     };
     const nextPairs = [...(event.pairs || []), newPair];
     await updateEvent(db as Firestore, event.pin, { pairs: nextPairs });
@@ -1241,7 +1242,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                                   </div>
                                 )}
                               </div>
-                              <p className="text-[10px] font-bold text-gray-400 uppercase">{entry.nickname} - {maskPin(entry.pin)}</p>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase">{(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">

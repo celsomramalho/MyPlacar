@@ -462,11 +462,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         pendingTournamentPin: undefined,
         pendingTournamentMatchCode: undefined,
         pendingTournamentPhaseLabel: undefined,
+        pendingTournamentCourt: undefined,
       }));
       setGameState(null);
       setCloudLiveExists(false);
       setShowLiveControlOverlay(false);
-      setCurrentScreen('settings');
+      try {
+        if (state.tournamentPin) {
+          sessionStorage.setItem('admin_target_event_pin', state.tournamentPin);
+          sessionStorage.setItem('admin_target_dashboard_tab', 'formed-teams');
+        }
+      } catch {}
+      setCurrentScreen('admin');
     };
 
     if (state.tournamentPin && state.tournamentMatchId && navigator.onLine) {
@@ -1250,6 +1257,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           tournamentPin: event.pin,
           tournamentMatchCode: getMatchCodeLabel(match),
           tournamentPhaseLabel: getPhaseLabel(match.phase),
+          tournamentCourt: match.court,
        };
        forceNew = true;
         if (navigator.onLine) {
@@ -1264,6 +1272,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           tournamentPin: savedSettings.pendingTournamentPin,
           tournamentMatchCode: savedSettings.pendingTournamentMatchCode,
           tournamentPhaseLabel: savedSettings.pendingTournamentPhaseLabel,
+          tournamentCourt: savedSettings.pendingTournamentCourt,
        };
        configToUse = {
           ...configToUse,
@@ -1271,6 +1280,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           pendingTournamentPin: undefined,
           pendingTournamentMatchCode: undefined,
           pendingTournamentPhaseLabel: undefined,
+          pendingTournamentCourt: undefined,
        };
        forceNew = true;
        if (navigator.onLine) {

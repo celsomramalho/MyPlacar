@@ -157,6 +157,27 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     fetchGlobalConfigs();
   }, []);
 
+  // Se veio de finalização de partida de evento no placar, abre diretamente o evento e a aba Gerenciar fila
+  useEffect(() => {
+    try {
+      const targetPin = sessionStorage.getItem('admin_target_event_pin');
+      if (targetPin) {
+        setAdminTab('events');
+        const db = getDb();
+        if (db) {
+          import('@infra/firebase/events').then(({ fetchEventByPin }) => {
+            fetchEventByPin(db, targetPin).then((ev) => {
+              if (ev) {
+                setSelectedDashboardEvent(ev as TournamentEvent);
+                sessionStorage.removeItem('admin_target_event_pin');
+              }
+            });
+          });
+        }
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (adminTab === 'events') {
       fetchEvents();

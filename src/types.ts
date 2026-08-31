@@ -250,6 +250,7 @@ export interface GameState {
   tournamentPin?: string;
   tournamentMatchCode?: string;
   tournamentPhaseLabel?: string;
+  tournamentCourt?: string;
   /** @deprecated — usar `judge.pin`. Mantido para retrocompatibilidade com documentos antigos. */
   judgePin?: string;
   /** @deprecated — usar `judge.nickname`. Mantido para retrocompatibilidade com documentos antigos. */
@@ -330,4 +331,5 @@ export interface MatchSettings {
   pendingTournamentPin?: string;
   pendingTournamentMatchCode?: string;
   pendingTournamentPhaseLabel?: string;
+  pendingTournamentCourt?: string;
 }

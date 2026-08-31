@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Snowflake,
   Ban,
+  Check,
   CheckCircle2,
   Play,
   RefreshCw,
@@ -222,23 +223,19 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
       let status: 'waiting' | 'live' | 'finished' = m.status || 'live';
       let winnerPairId = m.winnerPairId;
       let loserPairId = m.loserPairId;
-      let court = m.court;
+      const court = m.court;
 
-      // Se atingiu o número de sets para vencer, finaliza e libera a quadra
-      if (setsWon1 >= setsToWin) {
-        status = 'finished';
+      // Atualiza vencedor/perdedor com base no placar digitado, sem expulsar a partida da quadra prematuramente
+      if (setsWon1 > setsWon2) {
         winnerPairId = m.pair1Id;
         loserPairId = m.pair2Id;
-        court = undefined;
-      } else if (setsWon2 >= setsToWin) {
-        status = 'finished';
+      } else if (setsWon2 > setsWon1) {
         winnerPairId = m.pair2Id;
         loserPairId = m.pair1Id;
-        court = undefined;
-      } else if (resultParts.length > 0) {
+      }
+
+      if (court) {
         status = 'live';
-        winnerPairId = undefined;
-        loserPairId = undefined;
       }
 
       return {
@@ -324,11 +321,29 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
   // Desvincula/libera uma quadra ocupada voltando a partida para 'waiting' ou finalizando
   const handleFreeCourtMatch = async (matchId: string, finish = false) => {
     const allMatches = event.matches || [];
+    const totalSets = (event.setsCount || event.config?.sets || 1) as number;
     const nextMatches = allMatches.map((m) => {
       if (m.id === matchId) {
+        if (finish) {
+          const { setsWon1, setsWon2 } = parseMatchSets(m, totalSets);
+          const winnerPairId =
+            setsWon1 > setsWon2
+              ? m.pair1Id
+              : setsWon2 > setsWon1
+              ? m.pair2Id
+              : m.winnerPairId || m.pair1Id;
+          const loserPairId = winnerPairId === m.pair1Id ? m.pair2Id : m.pair1Id;
+          return {
+            ...m,
+            status: 'finished' as const,
+            winnerPairId,
+            loserPairId,
+            court: undefined,
+          };
+        }
         return {
           ...m,
-          status: finish ? ('finished' as const) : ('waiting' as const),
+          status: 'waiting' as const,
           court: undefined,
         };
       }
@@ -358,6 +373,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
       pendingTournamentPin: event.pin,
       pendingTournamentMatchCode: getMatchCodeLabel(match),
       pendingTournamentPhaseLabel: getPhaseLabel(match.phase),
+      pendingTournamentCourt: match.court,
       p1Name: player1,
       p1Partner: player3,
       p2Name: player2,
@@ -815,6 +831,19 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                           </div>
                         </div>
                       )}
+
+                      {/* Botão Finalizar partida — abaixo do placar */}
+                      <div className="pt-1 border-t border-amber-100 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleFreeCourtMatch(activeMatch.id, true)}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm whitespace-nowrap"
+                          title="Registrar placar final e liberar a quadra"
+                        >
+                          <Check size={13} />
+                          Finalizar partida
+                        </button>
+                      </div>
                     </div>
                   )}
 

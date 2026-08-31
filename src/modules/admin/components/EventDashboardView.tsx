@@ -45,7 +45,16 @@ export const EventDashboardView: React.FC<Props> = ({
   onEditEventConfig,
   onUpdateEvent,
 }) => {
-  const [activeTab, setActiveTab] = useState<EventDashboardTab>('categories');
+  const [activeTab, setActiveTab] = useState<EventDashboardTab>(() => {
+    try {
+      const targetTab = sessionStorage.getItem('admin_target_dashboard_tab');
+      if (targetTab) {
+        sessionStorage.removeItem('admin_target_dashboard_tab');
+        return targetTab as EventDashboardTab;
+      }
+    } catch {}
+    return 'categories';
+  });
   const [targetRegistrationEmail, setTargetRegistrationEmail] = useState<string | null>(null);
 
   const categories = event.categories || [];

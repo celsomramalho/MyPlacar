@@ -4,6 +4,7 @@ import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { updateUserProfileFields } from '@infra/firebase/users';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
+import { maskPin } from '@shared/utils/formatters';
 import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
 import { useUI } from '@modules/ui';
 
@@ -676,7 +677,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                           <span className="truncate">{newPaymentReceipt?.name || 'Anexar comprovante...'}</span>
                     </div>
                     <span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg shrink-0">Buscar</span>
-                    <input type="file" accept="image/*,application/pdf" onChange={handleFileUpload} className="hidden" />
+                    <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={handleFileUpload} className="hidden" />
                   </label>
                 </div>
               </div>
@@ -820,14 +821,14 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
                       {/* Bloco das Linhas de Informação */}
                       <div className="space-y-1 min-w-0 flex-1 text-left">
-                        {/* Linha 1: Nome */}
+                        {/* Linha 1: Nome do usuário */}
                         <p className="font-black text-sm text-slate-800 tracking-tight truncate">
                           {entry.name || entry.nickname}
                         </p>
 
-                        {/* Linha 2: PIN */}
-                        <p className="text-[11px] font-black text-amber-500">
-                          PIN: {entry.pin}
+                        {/* Linha 2: Como quer ser chamado - PIN mascarado (padrão Meus Parceiros) */}
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          {(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}
                         </p>
 
                         {/* Linha 3: Categorias */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2, AlertTriangle, Swords, Sparkles, FileText } from 'lucide-react';
-import { minifyEntryForPair, minifyPairForStorage, formatRegistrationId, getNextRegistrationId, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore } from '@modules/events/types';
+import { minifyEntryForPair, minifyPairForStorage, orderPairEntriesForMixed, formatRegistrationId, getNextRegistrationId, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore } from '@modules/events/types';
 import { generateSystemMatchesForCategory, createManualMatch, formatMatchDisplayString, formatMatchNumber, getPhaseLabel } from '@modules/events/services/matchGenerator';
 import { updatePlayoffProgression, calculateBracketStandings, type TeamStanding } from '@modules/events/services/matchProgression';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
@@ -416,10 +416,11 @@ const validateCategoryGenders = (
       ...pairs.map((pair, index) => pair.teamNumber || Number(pair.teamCode?.match(/^\d{3}/)?.[0]) || index + 1)
     ) + 1;
     const teamCode = `${String(teamNumber).padStart(3, '0')} - ${selectedCategory.abbreviation}`;
+    const [orderedP1, orderedP2] = orderPairEntriesForMixed(selected[0], selected[1]);
     const newPair: TournamentPair = {
       id: `pair_${Date.now()}`,
-      p1: minifyEntryForPair(selected[0]),
-      p2: minifyEntryForPair(selected[1]),
+      p1: minifyEntryForPair(orderedP1),
+      p2: minifyEntryForPair(orderedP2),
       categoryId: selectedCategory.id,
       teamNumber,
       teamCode,

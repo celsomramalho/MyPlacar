@@ -121,9 +121,89 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   const s1 = String(gameState?.p1?.score ?? '').trim();
   const s2 = String(gameState?.p2?.score ?? '').trim();
   const isZeroZero = (s1 === '0' || s1 === '00' || s1 === '') && (s2 === '0' || s2 === '00' || s2 === '');
-  const tournamentMatchLabel = gameState.tournamentMatchCode
-    ? `[${gameState.tournamentMatchCode}]${gameState.tournamentPhaseLabel ? ` [${gameState.tournamentPhaseLabel}]` : ''}`
+  const courtRaw = gameState.tournamentCourt || (gameState.matchConfig.deviceLabel?.toLowerCase().startsWith('quadra') ? gameState.matchConfig.deviceLabel : '');
+  const courtBadge = courtRaw
+    ? `[${courtRaw.toLowerCase().startsWith('quadra') ? courtRaw : `Quadra ${courtRaw}`}]`
+    : (gameState.matchConfig.deviceLabel && !gameState.tournamentMatchCode ? `[${gameState.matchConfig.deviceLabel}]` : '');
+  const matchCodeBadge = gameState.tournamentMatchCode
+    ? `[${gameState.tournamentMatchCode}]`
     : '';
+  const phaseBadge = gameState.tournamentPhaseLabel
+    ? `[${gameState.tournamentPhaseLabel}]`
+    : '';
+  const tournamentFullBadge = `${courtBadge}${matchCodeBadge}${phaseBadge}`;
+
+  const isMatchActive = !gameState.isConfirmedFinished && !gameState.isMatchOver && !(gameState.isMirroringActive && gameState.isLiveClosed);
+  const offset = gameState.servingOrderOffset;
+  const sport = gameState.matchConfig.sportType;
+  const pkl = gameState.pickleball;
+
+  const isPlayerServing = (team: 1 | 2, isPartner: boolean) => {
+    if (!isMatchActive) return false;
+    const p = team === 1 ? gameState.p1 : gameState.p2;
+    const playerName = isPartner ? p.partnerName : p.name;
+    if (sport === 'pickleball' && pkl) {
+      return pkl.server.team === team && pkl.server.serverName === playerName;
+    }
+    const expectedOffset = team === 1 ? (isPartner ? 2 : 0) : (isPartner ? 3 : 1);
+    return offset === expectedOffset;
+  };
+
+  const renderTeamPlayers = (team: 1 | 2) => {
+    const p = team === 1 ? gameState.p1 : gameState.p2;
+    const p1Name = (p.name || '').trim();
+    const p2Name = (p.partnerName || '').trim();
+    const isP1Serving = isPlayerServing(team, false);
+    const isP2Serving = isPlayerServing(team, true);
+
+    if (gameState.matchConfig.isDoubles && p2Name) {
+      return (
+        <div className="absolute top-2 right-2 z-30 flex flex-col items-end gap-1 max-w-[45%]">
+          <button
+            type="button"
+            onPointerDown={(e) => { e.stopPropagation(); onSwitchServer(team, false); }}
+            className={`text-right text-xs md:text-sm font-black tracking-tight leading-tight px-2 py-0.5 rounded transition-all truncate max-w-full cursor-pointer active:scale-95 ${
+              isP1Serving
+                ? 'bg-[#bef264] text-[#1a1a1a] shadow-md'
+                : 'text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)] hover:text-white'
+            }`}
+            title="Definir como sacador"
+          >
+            {p1Name || 'Jogador 1'}
+          </button>
+          <button
+            type="button"
+            onPointerDown={(e) => { e.stopPropagation(); onSwitchServer(team, true); }}
+            className={`text-right text-xs md:text-sm font-black tracking-tight leading-tight px-2 py-0.5 rounded transition-all truncate max-w-full cursor-pointer active:scale-95 ${
+              isP2Serving
+                ? 'bg-[#bef264] text-[#1a1a1a] shadow-md'
+                : 'text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)] hover:text-white'
+            }`}
+            title="Definir como sacador"
+          >
+            {p2Name}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="absolute top-2 right-2 z-30 flex items-center max-w-[45%]">
+        <button
+          type="button"
+          onPointerDown={(e) => { e.stopPropagation(); onSwitchServer(team, false); }}
+          className={`text-right text-xs md:text-sm font-black tracking-tight leading-tight px-2 py-0.5 rounded transition-all truncate max-w-full cursor-pointer active:scale-95 ${
+          isP1Serving
+            ? 'bg-[#bef264] text-[#1a1a1a] shadow-md'
+            : 'text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)] hover:text-white'
+        }`}
+        title="Definir como sacador"
+      >
+        {p1Name || (team === 1 ? 'Time 1' : 'Time 2')}
+      </button>
+    </div>
+  );
+};
 
   React.useEffect(() => {
     if (!hasFinishedGames || !isZeroZero || gameState?.isMatchOver) {
@@ -482,25 +562,31 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           }} 
           className={`flex-1 w-full flex items-center justify-center relative overflow-hidden transition-all ${WATCH_COLORS[gameState.p1.color || 'azul']} ${!isCommandOwner || syncState.role === 'mirror' ? 'opacity-90' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} 
         >
-          {tournamentMatchLabel && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 px-3 py-1 rounded-lg bg-black/35 border border-white/20 pointer-events-none">
-              <span className="text-[18px] font-black text-white tracking-normal leading-none whitespace-nowrap">
-                {tournamentMatchLabel}
-              </span>
+          {/* Topo-esquerdo: Quadra + Código + Fase da Partida */}
+          {tournamentFullBadge && (
+            <div className="absolute top-2 left-2 z-30 pointer-events-none px-2.5 py-0.5 rounded-lg bg-white/95 text-slate-900 border border-black/20 shadow-sm font-black text-xs sm:text-sm tracking-tight whitespace-nowrap">
+              {tournamentFullBadge}
             </div>
           )}
+
+          {/* Topo-direito: Nomes dos jogadores do Time 1 com destaque no sacador */}
+          {renderTeamPlayers(1)}
+
           {scorePressProgress?.player === 1 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
               style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
             />
           )}
-          <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 transition-all duration-300 ${gameState.server === 1 ? 'text-[#bef264]' : 'text-white'}`}>{showSetGamesInMainScore ? gameState.p1.games : gameState.p1.score}</span>
+
+          {/* Placar principal */}
+          <span className={`text-[120px] sm:text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 transition-all duration-300 ${gameState.server === 1 ? 'text-[#bef264]' : 'text-white'}`}>{showSetGamesInMainScore ? gameState.p1.games : gameState.p1.score}</span>
+
           {remoteActionFeedback === 'P1_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
           {renderServerIndicator(1)}
-          {/* FB Sync Badge — topo-esquerdo, compacto para display do relógio */}
+          {/* FB Sync Badge — topo-esquerdo abaixo do badge do torneio se houver */}
           {fbSyncStatus?.team === 1 && (
-            <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1">
+            <div className={`absolute ${tournamentFullBadge ? 'top-10' : 'top-2'} left-2 z-30 pointer-events-none flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1`}>
               <span className="text-[16px] font-black text-white leading-none tabular-nums">FB|{fbSyncStatus.seq}</span>
               <span className={`w-3 h-3 rounded-full animate-pulse flex-shrink-0 ${fbSyncStatus.isObserver ? 'bg-blue-400' : 'bg-green-400'}`} />
             </div>
@@ -832,13 +918,19 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
           onPointerUp={() => { if (syncState.role === 'mirror') return; handleScoreCardPointerUp('game', 2); }} 
           className={`flex-1 w-full flex items-center justify-center transition-all relative overflow-hidden ${WATCH_COLORS[gameState.p2.color || 'vermelho']} ${!isCommandOwner || syncState.role === 'mirror' ? 'opacity-90' : ''} ${gameState.isMirroringActive && gameState.isLiveClosed && !isOfflineMode ? 'pointer-events-none grayscale opacity-50' : ''}`} 
         >
+          {/* Topo-direito: Nomes dos jogadores do Time 2 com destaque no sacador */}
+          {renderTeamPlayers(2)}
+
           {scorePressProgress?.player === 2 && scorePressProgress?.type === 'game' && (
             <div 
               className="absolute inset-0 bg-white/20 origin-left transition-all duration-75 z-0" 
               style={{ transform: `scaleX(${scorePressProgress.progress / 100})` }} 
             />
           )}
-          <span className={`text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 transition-all duration-300 ${gameState.server === 2 ? 'text-[#bef264]' : 'text-white'}`}>{showSetGamesInMainScore ? gameState.p2.games : gameState.p2.score}</span>
+
+          {/* Placar principal */}
+          <span className={`text-[120px] sm:text-[130px] font-black leading-none tabular-nums tracking-tighter relative z-10 transition-all duration-300 ${gameState.server === 2 ? 'text-[#bef264]' : 'text-white'}`}>{showSetGamesInMainScore ? gameState.p2.games : gameState.p2.score}</span>
+
           {remoteActionFeedback === 'P2_POINT' && <div className="absolute inset-0 bg-white/20 animate-ping pointer-events-none" />}
           {renderServerIndicator(2)}
           {/* FB Sync Badge — inferior-esquerdo (topo ocupado pelo indicador de saque) */}

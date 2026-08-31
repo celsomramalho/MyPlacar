@@ -191,9 +191,47 @@ export const fetchUserEventRegistrations = async (
   db: Firestore,
   email: string,
 ): Promise<FirebaseEventRegistration[]> => {
-  const snap = await getDocs(query(collection(db, 'user_registrations', email.toLowerCase().trim(), 'events')));
+  const cleanEmail = email.toLowerCase().trim();
+  const snap = await getDocs(query(collection(db, 'user_registrations', cleanEmail, 'events')));
   const registrations: FirebaseEventRegistration[] = [];
-  snap.forEach((registrationDoc) => registrations.push(registrationDoc.data() as FirebaseEventRegistration));
+  const registeredPins = new Set<string>();
+
+  snap.forEach((registrationDoc) => {
+    const reg = registrationDoc.data() as FirebaseEventRegistration;
+    registrations.push(reg);
+    registeredPins.add(reg.pin);
+  });
+
+  // Reconciliação: se o usuário foi inscrito manualmente pelo admin, busca os eventos e reconhece a inscrição
+  try {
+    const eventsSnap = await getDocs(query(collection(db, 'events')));
+    for (const eventDoc of eventsSnap.docs) {
+      const eventPin = eventDoc.id;
+      if (registeredPins.has(eventPin)) continue;
+
+      const entrySnap = await getDoc(doc(db, 'events', eventPin, 'entries', cleanEmail));
+      if (entrySnap.exists()) {
+        const entryData = entrySnap.data() as FirebaseTournamentEntry;
+        const eventData = eventDoc.data() as FirebaseTournamentEvent;
+        const autoReg: FirebaseEventRegistration = {
+          pin: eventPin,
+          name: eventData.name || eventPin,
+          joinedAt: entryData.joinedAt || Date.now(),
+          bannerUrl: eventData.bannerUrl || null,
+        };
+        registrations.push(autoReg);
+        registeredPins.add(eventPin);
+
+        // Salva na subcoleção do usuário para agilizar próximas consultas
+        try {
+          await saveUserEventRegistration(db, cleanEmail, eventPin, autoReg);
+        } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn('Reconciliação de inscrições:', err);
+  }
+
   return registrations.sort((a, b) => b.joinedAt - a.joinedAt);
 };
 
