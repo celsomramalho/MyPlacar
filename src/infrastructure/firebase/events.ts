@@ -76,6 +76,7 @@ export interface FirebaseTournamentEvent {
   information?: string;
   eventType?: string;
   setsCount?: number;
+  gamesPerSet?: number;
   teamDrawType?: string;
   bracketDrawType?: string;
   matchDrawType?: string;

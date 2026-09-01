@@ -136,6 +136,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       eventStatus: 'Em configuração',
       eventType: 'Chave classificatória',
       setsCount: 1,
+      gamesPerSet: 6,
       teamDrawType: 'Manual',
       bracketDrawType: 'Manual',
       matchDrawType: 'Manual',

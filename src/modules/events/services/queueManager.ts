@@ -380,6 +380,10 @@ function isMatchBlockedByPreviousPhase(match: TournamentMatch, allMatches: Tourn
     else if (m.phase === 'semifinal') phaseLabel = 'Semifinal';
     else if (m.phase === 'final') phaseLabel = 'Final';
     else if (m.phase === '3lugar') phaseLabel = '3º Lugar';
+    else if (m.phase?.toLowerCase().startsWith('rodada')) {
+      const num = m.phase.replace(/\D/g, '');
+      phaseLabel = num ? `Rodada ${num}` : m.phase;
+    }
 
     return {
       match: m,

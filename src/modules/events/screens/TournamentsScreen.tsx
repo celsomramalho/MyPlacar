@@ -50,6 +50,13 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
 
   // Open pre-join form for a known event card
   const handleRequestJoinEvent = async (ev: TournamentEvent) => {
+    if (registeredPins.has(ev.pin.toUpperCase())) {
+      const existing = registrations.find((r) => r.pin.toUpperCase() === ev.pin.toUpperCase());
+      if (existing) {
+        onSelectEvent(existing);
+        return;
+      }
+    }
     const db = getDb();
     const freshEvent = db ? await fetchEventByPin(db as Firestore, ev.pin) : null;
     setPendingEvent((freshEvent as TournamentEvent | null) || ev);
@@ -60,6 +67,13 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
   const handleRequestJoinPin = async () => {
     const targetPin = pinInput.trim();
     if (!targetPin) return;
+    if (registeredPins.has(targetPin.toUpperCase())) {
+      const existing = registrations.find((r) => r.pin.toUpperCase() === targetPin.toUpperCase());
+      if (existing) {
+        onSelectEvent(existing);
+        return;
+      }
+    }
     setPendingPin(targetPin);
     setIsSearching(true);
     const db = getDb();

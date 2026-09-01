@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, Trash2, Upload, Users } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
-import { getDb } from '@infra/firebase';
+import { findUserByPin, getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import {
   formatRegistrationId,
@@ -125,11 +125,65 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const [expandedPartnerCategoryIds, setExpandedPartnerCategoryIds] = useState<Set<string>>(() => new Set());
   const [confirmTeamCategoryId, setConfirmTeamCategoryId] = useState<string | null>(null);
 
+  const [isSearchingPin, setIsSearchingPin] = useState(false);
+  const [pinLookupMessage, setPinLookupMessage] = useState<string | null>(null);
+
+  const isSuper8 = event.eventType === 'Super 8';
+  const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
+
+  React.useEffect(() => {
+    if (!canEditIdentity) return;
+    const cleanPin = pin.trim().toUpperCase();
+    if (cleanPin.length >= 4) {
+      setIsSearchingPin(true);
+      const db = getDb();
+      if (!db) {
+        setIsSearchingPin(false);
+        return;
+      }
+      const timer = setTimeout(async () => {
+        try {
+          const user = await findUserByPin(db as Firestore, cleanPin);
+          if (user) {
+            const isAlreadyInEvent = (event.entries || []).some(
+              (e) => e.pin?.toUpperCase().trim() === cleanPin || (user.email && e.email?.toLowerCase().trim() === user.email.toLowerCase().trim())
+            );
+            if (isAlreadyInEvent) {
+              setPinLookupMessage(`${user.nickname} já está inscrito neste evento`);
+            } else {
+              setPinLookupMessage(`${user.nickname} já cadastrado`);
+            }
+            if (user.name) setName(user.name);
+            if (user.nickname) setNickname(user.nickname);
+            if (user.email) setEmail(user.email);
+            if (user.phone) setPhone(user.phone);
+            if (user.gender) setGender(user.gender);
+            if (user.shirtSize) setShirtSize(user.shirtSize);
+          } else {
+            setPinLookupMessage('PIN não localizado');
+          }
+        } catch (e) {
+          setPinLookupMessage('Erro ao buscar PIN');
+        } finally {
+          setIsSearchingPin(false);
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
+    } else {
+      setPinLookupMessage(null);
+    }
+  }, [pin, canEditIdentity, event.entries]);
+
   const categories = event.categories || [];
   const availableCategories = useMemo(() => categories.filter((cat) => !cat.gender1 || cat.gender1 === gender || cat.gender2 === gender), [categories, gender]);
-  const isDoubles = (cat: EventCategory) => cat.format === 'Duplas' || !cat.format || cat.name.toLowerCase().includes('dupla') || Boolean(cat.gender2);
+  const isDoubles = (cat: EventCategory) => !isSuper8 && (cat.format === 'Duplas' || !cat.format || cat.name.toLowerCase().includes('dupla') || Boolean(cat.gender2));
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
-  const effectiveDueAmount = isAdmin ? dueAmount : (event.registrationFee ?? 0) + (Math.max(0, categoryIds.length - 1) * (event.extraCategoryFee ?? 0));
+  const effectiveDueAmount = isFreeEvent
+    ? 0
+    : isAdmin
+      ? dueAmount
+      : (event.registrationFee ?? 0) + (Math.max(0, categoryIds.length - 1) * (event.extraCategoryFee ?? 0));
   const pendingAmount = Math.max(0, effectiveDueAmount - totalPaid);
 
   React.useEffect(() => {
@@ -298,9 +352,20 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       setFeedback('Informe o telefone.');
       return;
     }
-    if (!shirtSize) {
-      setFeedback('Selecione o tamanho da camiseta.');
-      return;
+    // Validação de duplicidade: não permitir que o mesmo usuário se inscreva 2 vezes no mesmo evento
+    if (canEditIdentity) {
+      const normalizedEmail = trimmedEmail.toLowerCase();
+      const normalizedPin = pin.trim().toUpperCase();
+      const alreadyRegistered = (event.entries || []).some((e) => {
+        const entryEmail = e.email?.toLowerCase().trim();
+        const entryPin = e.pin?.toUpperCase().trim();
+        return (entryEmail && entryEmail === normalizedEmail) || (normalizedPin && entryPin && entryPin === normalizedPin);
+      });
+
+      if (alreadyRegistered) {
+        setFeedback('Este participante já está inscrito neste evento.');
+        return;
+      }
     }
 
     const effectiveCategoryIds = categoryIds.filter((catId) => availableCategories.some((c) => c.id === catId));
@@ -311,7 +376,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
     for (const catId of effectiveCategoryIds) {
       const cat = (event.categories || []).find((c) => c.id === catId);
-      if (!cat || !isDoubles(cat)) continue;
+      if (isSuper8 || !cat || !isDoubles(cat)) continue;
       const pair = pairForCategory(cat.id);
       if (pair) continue; // Se já tem time formado, não precisa exigir dados do parceiro novamente
       const partner = categoryPartners[catId] || { name: '', email: '', phone: '' };
@@ -548,7 +613,30 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </Field>
       <Field label="PIN do usuário">
         {canEditIdentity ? (
-          <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="Opcional" className="event-registration-field uppercase" />
+          <div className="space-y-1">
+            <div className="relative">
+              <input
+                value={pin}
+                onChange={(e) => setPin(e.target.value.toUpperCase())}
+                placeholder="Ex: CARLO"
+                className="event-registration-field uppercase"
+              />
+              {isSearchingPin && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <Loader2 size={16} className="animate-spin text-slate-400" />
+                </div>
+              )}
+            </div>
+            {pinLookupMessage && (
+              <p className={`text-[10px] font-black ${
+                pinLookupMessage.includes('cadastrado')
+                  ? 'text-emerald-600'
+                  : 'text-amber-600'
+              }`}>
+                {pinLookupMessage}
+              </p>
+            )}
+          </div>
         ) : (
           <div className="event-registration-readonly">{entry.pin || pin || '-'}</div>
         )}
@@ -565,7 +653,39 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     <Field label="Tamanho camiseta *"><select required value={shirtSize} onChange={(e) => setShirtSize(e.target.value as 'P' | 'M' | 'G')} className="event-registration-field"><option value="P">P</option><option value="M">M</option><option value="G">G</option></select></Field>
     <Field label="Como quer ser chamado *"><div className="flex gap-2"><input required value={nickname} onChange={(e) => setNickname(e.target.value)} className="event-registration-field flex-1" /><button type="button" onClick={handleToggleGender} className={`w-11 rounded-xl border flex items-center justify-center ${gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}>{gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</button></div></Field>
 
-    <div className="grid grid-cols-2 gap-2"><Field label="Valor devido"><input type="number" value={effectiveDueAmount} disabled={!isAdmin} onChange={(e) => setDueAmount(Number(e.target.value))} className="event-registration-field" /></Field><Field label="Valor pendente"><div className="event-registration-readonly text-amber-600">R$ {pendingAmount.toFixed(2)}</div></Field><Field label="Status do pagamento" className="col-span-2">{isAdmin ? <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as typeof paymentStatus)} className="event-registration-field"><option value="Pendente">Pendente</option><option value="Confirmado">Confirmado</option><option value="Isento">Isento</option></select> : <div className="event-registration-readonly">{paymentStatus}</div>}</Field></div>
+    {!isFreeEvent && (
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Valor devido">
+          <input
+            type="number"
+            value={effectiveDueAmount}
+            disabled={!isAdmin}
+            onChange={(e) => setDueAmount(Number(e.target.value))}
+            className="event-registration-field"
+          />
+        </Field>
+        <Field label="Valor pendente">
+          <div className="event-registration-readonly text-amber-600">
+            R$ {pendingAmount.toFixed(2)}
+          </div>
+        </Field>
+        <Field label="Status do pagamento" className="col-span-2">
+          {isAdmin ? (
+            <select
+              value={paymentStatus}
+              onChange={(e) => setPaymentStatus(e.target.value as typeof paymentStatus)}
+              className="event-registration-field"
+            >
+              <option value="Pendente">Pendente</option>
+              <option value="Confirmado">Confirmado</option>
+              <option value="Isento">Isento</option>
+            </select>
+          ) : (
+            <div className="event-registration-readonly">{paymentStatus}</div>
+          )}
+        </Field>
+      </div>
+    )}
 
     <Field label="Categorias vinculadas"><div className="space-y-2">{availableCategories.map((cat: EventCategory) => {
       const isSelected = categoryIds.includes(cat.id);
@@ -573,7 +693,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       const partner = categoryPartners[cat.id] || { name: '', email: '', phone: '' };
       const partnerEntry = partnerEntryForCategory(cat.id, partner.email);
       const partnerAlreadyPaired = partner.email ? pairForEmailInCategory(partner.email, cat.id) : undefined;
-      const canShowFormTeam = Boolean(onUpdateEvent && isSelected && cat.format === 'Duplas' && partnerEntry && !pair && !partnerAlreadyPaired);
+      const canShowFormTeam = Boolean(!isSuper8 && onUpdateEvent && isSelected && cat.format === 'Duplas' && partnerEntry && !pair && !partnerAlreadyPaired);
       const isPartnerFormExpanded = expandedPartnerCategoryIds.has(cat.id);
       const partnerFormMissingData = !partner.name.trim() || !partner.email.trim() || !partner.phone.trim();
       return (
@@ -583,7 +703,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
               <input type="checkbox" checked={isSelected} onChange={() => toggleCategory(cat.id)} className="h-4 w-4 accent-emerald-500" />
               <span>{cat.name} ({cat.abbreviation})</span>
             </label>
-            {isSelected ? (
+            {!isSuper8 && isSelected ? (
               <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${
                 pair ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-200'
               }`}>
@@ -592,7 +712,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             ) : (
               <span />
             )}
-            {isSelected && isDoubles(cat) ? (
+            {!isSuper8 && isSelected && isDoubles(cat) ? (
               <button
                 type="button"
                 onClick={() => togglePartnerForm(cat.id)}
@@ -606,7 +726,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
               <span />
             )}
           </div>
-          {isSelected && isDoubles(cat) && isPartnerFormExpanded && (
+          {!isSuper8 && isSelected && isDoubles(cat) && isPartnerFormExpanded && (
             <div className="ml-7 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
               <p className="text-[10px] font-black text-slate-400">Informe seu parceiro - {cat.abbreviation || cat.name} *</p>
               <input required value={partner.name} onChange={(e) => updateCategoryPartner(cat.id, 'name', e.target.value)} placeholder="Nome do parceiro" className="event-registration-field bg-white" />
@@ -633,38 +753,40 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       );
     })}</div></Field>
 
-    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-4">
-      <div className="flex items-center justify-between"><span className="text-xs font-black text-slate-700">Pagamentos</span><span className="text-xs font-black text-emerald-600">Total pago: R$ {totalPaid.toFixed(2)}</span></div>
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-black text-slate-500">{editingPaymentId ? 'Editar pagamento' : 'Novo pagamento'}</span>
-          <button
-            type="button"
-            onClick={addPayment}
-            disabled={!newAmount || (!newReceipt && (!editingPaymentId || !payments.find((p) => p.id === editingPaymentId)?.receiptUrl)) || isSaving}
-            className="px-4 py-2 bg-emerald-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 disabled:opacity-50 active:scale-95 transition-all"
-          >
-            <DollarSign size={14} /> {editingPaymentId ? 'Salvar pagamento' : 'Adicionar pagamento'}
-          </button>
+    {!isFreeEvent && (
+      <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-4">
+        <div className="flex items-center justify-between"><span className="text-xs font-black text-slate-700">Pagamentos</span><span className="text-xs font-black text-emerald-600">Total pago: R$ {totalPaid.toFixed(2)}</span></div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black text-slate-500">{editingPaymentId ? 'Editar pagamento' : 'Novo pagamento'}</span>
+            <button
+              type="button"
+              onClick={addPayment}
+              disabled={!newAmount || (!newReceipt && (!editingPaymentId || !payments.find((p) => p.id === editingPaymentId)?.receiptUrl)) || isSaving}
+              className="px-4 py-2 bg-emerald-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 disabled:opacity-50 active:scale-95 transition-all"
+            >
+              <DollarSign size={14} /> {editingPaymentId ? 'Salvar pagamento' : 'Adicionar pagamento'}
+            </button>
+          </div>
+          <Field label="Valor do pagamento (R$)">
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={newAmount}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9.,]/g, '');
+                setNewAmount(val);
+              }}
+              className="event-registration-field"
+            />
+          </Field>
+          <Field label="Data do pagamento"><input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="event-registration-field" /></Field>
+          <Field label="Comprovante *"><label className="event-registration-field flex items-center justify-between cursor-pointer"><span className="flex items-center gap-2 truncate"><Upload size={16} className="text-slate-400" />{newReceipt?.name || 'Anexar comprovante (obrigatório)...'}</span><span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg">Buscar</span><input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setNewReceipt({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file); }} className="hidden" /></label></Field>
         </div>
-        <Field label="Valor do pagamento (R$)">
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="0,00"
-            value={newAmount}
-            onChange={(e) => {
-              const val = e.target.value.replace(/[^0-9.,]/g, '');
-              setNewAmount(val);
-            }}
-            className="event-registration-field"
-          />
-        </Field>
-        <Field label="Data do pagamento"><input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="event-registration-field" /></Field>
-        <Field label="Comprovante *"><label className="event-registration-field flex items-center justify-between cursor-pointer"><span className="flex items-center gap-2 truncate"><Upload size={16} className="text-slate-400" />{newReceipt?.name || 'Anexar comprovante (obrigatório)...'}</span><span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg">Buscar</span><input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setNewReceipt({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file); }} className="hidden" /></label></Field>
+        {payments.length > 0 && <div className="space-y-2"><p className="text-[10px] font-black text-slate-400">Histórico de pagamentos</p>{payments.map((payment) => <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setEditingPaymentId(payment.id); setNewAmount(String(payment.amount)); const date = new Date(payment.date); setNewDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`); setNewReceipt(payment.receiptUrl ? { url: payment.receiptUrl, name: payment.receiptFileName || 'Comprovante' } : null); }} className="flex items-center gap-3 text-left"><span>{new Date(payment.date).toLocaleDateString('pt-BR')}</span><span>R$ {payment.amount.toFixed(2)}</span></button><div className="flex items-center gap-2"><button type="button" disabled={!payment.receiptUrl} onClick={() => payment.receiptUrl && window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')} className="text-sky-600 disabled:text-slate-300" title="Abrir comprovante"><Eye size={16} /></button><button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500" title="Excluir pagamento"><Trash2 size={16} /></button></div></div>)}</div>}
       </div>
-      {payments.length > 0 && <div className="space-y-2"><p className="text-[10px] font-black text-slate-400">Histórico de pagamentos</p>{payments.map((payment) => <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setEditingPaymentId(payment.id); setNewAmount(String(payment.amount)); const date = new Date(payment.date); setNewDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`); setNewReceipt(payment.receiptUrl ? { url: payment.receiptUrl, name: payment.receiptFileName || 'Comprovante' } : null); }} className="flex items-center gap-3 text-left"><span>{new Date(payment.date).toLocaleDateString('pt-BR')}</span><span>R$ {payment.amount.toFixed(2)}</span></button><div className="flex items-center gap-2"><button type="button" disabled={!payment.receiptUrl} onClick={() => payment.receiptUrl && window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')} className="text-sky-600 disabled:text-slate-300" title="Abrir comprovante"><Eye size={16} /></button><button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500" title="Excluir pagamento"><Trash2 size={16} /></button></div></div>)}</div>}
-    </div>
+    )}
     {/* Alerta de Feedback no Rodapé */}
     {feedback && (
       <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-bottom-1 ${

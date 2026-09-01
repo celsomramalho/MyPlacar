@@ -1,4 +1,4 @@
-import type { TournamentMatch, TournamentPair } from '../types';
+import type { PlayerStanding, TournamentEntry, TournamentMatch, TournamentPair } from '../types';
 import { minifyPairForStorage } from '../types';
 import { formatMatchNumber } from './matchGenerator';
 
@@ -427,4 +427,238 @@ export const updatePlayoffProgression = (
   });
 
   return updatedMatches;
+};
+
+/**
+ * Normaliza chave de identificação do atleta (email prioritário, fallback PIN ou nome)
+ */
+const getEntryKey = (e?: Partial<TournamentEntry>): string => {
+  if (!e) return '';
+  return (e.email || e.pin || e.name || '').toLowerCase().trim();
+};
+
+/**
+ * Calcula a classificação individual dos atletas no Super 8 de acordo com os critérios:
+ * 1º Critério: Número de Vitórias (Pontos)
+ * 2º Critério: Saldo de Games (SG = Games a Favor - Games Sofridos)
+ * 3º Critério: Games Pró (GP = total de Games a Favor)
+ * 4º Critério: Confronto Direto (caso 2 jogadores continuem empatados, verifica quem venceu em lados opostos)
+ */
+export const calculateSuper8PlayerStandings = (
+  entries: TournamentEntry[],
+  categoryMatches: TournamentMatch[]
+): PlayerStanding[] => {
+  const playerMap = new Map<string, PlayerStanding>();
+
+  entries.forEach((entry) => {
+    const key = getEntryKey(entry);
+    if (key) {
+      playerMap.set(key, {
+        entry,
+        played: 0,
+        wins: 0,
+        losses: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        gamesDiff: 0,
+        rank: 1,
+        isTiedWithOthers: false,
+        tieBreakNote: undefined,
+      });
+    }
+  });
+
+  categoryMatches.forEach((match) => {
+    if (match.status !== 'finished') return;
+
+    const { g1, g2 } = parseScoresFromMatch(match);
+    const isPair1Winner = match.winnerPairId
+      ? match.winnerPairId === match.pair1Id || match.winnerPairId === match.pair1?.id
+      : g1 > g2;
+
+    const pair1Athletes = [match.pair1?.p1, match.pair1?.p2].filter(Boolean) as TournamentEntry[];
+    const pair2Athletes = [match.pair2?.p1, match.pair2?.p2].filter(Boolean) as TournamentEntry[];
+
+    pair1Athletes.forEach((athlete) => {
+      const key = getEntryKey(athlete);
+      const st = playerMap.get(key);
+      if (st) {
+        st.played += 1;
+        st.gamesWon += g1;
+        st.gamesLost += g2;
+        if (isPair1Winner) st.wins += 1;
+        else st.losses += 1;
+      }
+    });
+
+    pair2Athletes.forEach((athlete) => {
+      const key = getEntryKey(athlete);
+      const st = playerMap.get(key);
+      if (st) {
+        st.played += 1;
+        st.gamesWon += g2;
+        st.gamesLost += g1;
+        if (!isPair1Winner) st.wins += 1;
+        else st.losses += 1;
+      }
+    });
+  });
+
+  // Atualiza saldo de games para cada atleta
+  const standingsList = Array.from(playerMap.values()).map((st) => ({
+    ...st,
+    gamesDiff: st.gamesWon - st.gamesLost,
+  }));
+
+  const hasAnyPlayed = standingsList.some((st) => st.played > 0);
+  if (!hasAnyPlayed) {
+    // Se nenhuma partida foi jogada/finalizada (ou todas foram excluídas), não há classificação nem rank atribuído
+    return standingsList.map((st) => ({
+      ...st,
+      rank: undefined,
+      tieBreakNote: undefined,
+      isTiedWithOthers: false,
+    }));
+  }
+
+  // Agrupa os atletas pelo número de vitórias
+  const winsGroups: Record<number, PlayerStanding[]> = {};
+  standingsList.forEach((st) => {
+    if (!winsGroups[st.wins]) {
+      winsGroups[st.wins] = [];
+    }
+    winsGroups[st.wins].push(st);
+  });
+
+  const sortedWinKeys = Object.keys(winsGroups)
+    .map(Number)
+    .sort((a, b) => b - a);
+
+  const finalSortedStandings: PlayerStanding[] = [];
+
+  sortedWinKeys.forEach((winCount) => {
+    const group = winsGroups[winCount];
+
+    if (group.length === 1) {
+      finalSortedStandings.push(group[0]);
+      return;
+    }
+
+    const hasAnyPlayed = group.some((st) => st.played > 0);
+    if (!hasAnyPlayed) {
+      group.sort((a, b) => (a.entry.name || '').localeCompare(b.entry.name || ''));
+      finalSortedStandings.push(...group);
+      return;
+    }
+
+    group.forEach((st) => {
+      st.isTiedWithOthers = true;
+    });
+
+    // 1. Caso de empate entre exatamente 2 atletas -> Saldo de Games -> Games Pró -> Confronto Direto
+    if (group.length === 2) {
+      const [p1, p2] = group;
+      if (p1.gamesDiff !== p2.gamesDiff) {
+        const higher = p1.gamesDiff > p2.gamesDiff ? p1 : p2;
+        const lower = p1.gamesDiff > p2.gamesDiff ? p2 : p1;
+        higher.tieBreakNote = `Desempate por Saldo de Games: ${higher.gamesDiff > 0 ? '+' : ''}${higher.gamesDiff} (${higher.gamesWon} - ${higher.gamesLost})`;
+        lower.tieBreakNote = `Desempate por Saldo de Games: ${lower.gamesDiff > 0 ? '+' : ''}${lower.gamesDiff} (${lower.gamesWon} - ${lower.gamesLost})`;
+        finalSortedStandings.push(higher, lower);
+        return;
+      }
+
+      if (p1.gamesWon !== p2.gamesWon) {
+        const higher = p1.gamesWon > p2.gamesWon ? p1 : p2;
+        const lower = p1.gamesWon > p2.gamesWon ? p2 : p1;
+        higher.tieBreakNote = `Desempate por Games Pró: ${higher.gamesWon} games`;
+        lower.tieBreakNote = `Desempate por Games Pró: ${lower.gamesWon} games`;
+        finalSortedStandings.push(higher, lower);
+        return;
+      }
+
+      // Se empatados em SG e GP, verifica confronto direto
+      const key1 = getEntryKey(p1.entry);
+      const key2 = getEntryKey(p2.entry);
+
+      const directMatch = categoryMatches.find((m) => {
+        if (m.status !== 'finished') return false;
+        const p1Athletes = [m.pair1?.p1, m.pair1?.p2].map(getEntryKey);
+        const p2Athletes = [m.pair2?.p1, m.pair2?.p2].map(getEntryKey);
+        const inOppositeTeams =
+          (p1Athletes.includes(key1) && p2Athletes.includes(key2)) ||
+          (p1Athletes.includes(key2) && p2Athletes.includes(key1));
+        return inOppositeTeams;
+      });
+
+      if (directMatch) {
+        const { g1, g2 } = parseScoresFromMatch(directMatch);
+        const isPair1Winner = directMatch.winnerPairId
+          ? directMatch.winnerPairId === directMatch.pair1Id || directMatch.winnerPairId === directMatch.pair1?.id
+          : g1 > g2;
+
+        const p1Athletes = [directMatch.pair1?.p1, directMatch.pair1?.p2].map(getEntryKey);
+        const p1Won = p1Athletes.includes(key1) ? isPair1Winner : !isPair1Winner;
+
+        const winner = p1Won ? p1 : p2;
+        const loser = p1Won ? p2 : p1;
+        winner.tieBreakNote = 'Desempate por Confronto Direto';
+        loser.tieBreakNote = 'Desempate por Confronto Direto';
+        finalSortedStandings.push(winner, loser);
+        return;
+      }
+    }
+
+    // 2. Empate entre 3 ou mais atletas (ou 2 sem confronto direto finalizado):
+    group.sort((a, b) => {
+      // 2º Critério: Saldo de Games (SG)
+      if (b.gamesDiff !== a.gamesDiff) {
+        return b.gamesDiff - a.gamesDiff;
+      }
+      // 3º Critério: Games Pró (GP)
+      if (b.gamesWon !== a.gamesWon) {
+        return b.gamesWon - a.gamesWon;
+      }
+      // 4º Critério: Confronto Direto caso sobrem 2
+      const keyA = getEntryKey(a.entry);
+      const keyB = getEntryKey(b.entry);
+      const direct = categoryMatches.find((m) => {
+        if (m.status !== 'finished') return false;
+        const team1 = [m.pair1?.p1, m.pair1?.p2].map(getEntryKey);
+        const team2 = [m.pair2?.p1, m.pair2?.p2].map(getEntryKey);
+        return (team1.includes(keyA) && team2.includes(keyB)) || (team1.includes(keyB) && team2.includes(keyA));
+      });
+      if (direct) {
+        const { g1, g2 } = parseScoresFromMatch(direct);
+        const pair1Won = direct.winnerPairId
+          ? direct.winnerPairId === direct.pair1Id || direct.winnerPairId === direct.pair1?.id
+          : g1 > g2;
+        const team1 = [direct.pair1?.p1, direct.pair1?.p2].map(getEntryKey);
+        const aWon = team1.includes(keyA) ? pair1Won : !pair1Won;
+        return aWon ? -1 : 1;
+      }
+      return (a.entry.name || '').localeCompare(b.entry.name || '');
+    });
+
+    const gamesDiffVaries = group.some((st) => st.gamesDiff !== group[0].gamesDiff);
+    const gamesWonVaries = group.some((st) => st.gamesWon !== group[0].gamesWon);
+
+    group.forEach((st) => {
+      if (gamesDiffVaries) {
+        st.tieBreakNote = `Desempate por Saldo de Games: ${st.gamesDiff > 0 ? '+' : ''}${st.gamesDiff} (${st.gamesWon} - ${st.gamesLost})`;
+      } else if (gamesWonVaries) {
+        st.tieBreakNote = `Desempate por Games Pró (GP): ${st.gamesWon} games`;
+      } else {
+        st.tieBreakNote = 'Desempate por Sorteio / Comissão';
+      }
+    });
+
+    finalSortedStandings.push(...group);
+  });
+
+  // Atribui posições finais (rank)
+  finalSortedStandings.forEach((st, idx) => {
+    st.rank = idx + 1;
+  });
+
+  return finalSortedStandings;
 };

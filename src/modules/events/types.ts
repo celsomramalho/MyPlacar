@@ -7,6 +7,7 @@ export interface TournamentPair {
   teamNumber?: number;
   teamCode?: string;
   bracket?: 1 | 2;
+  bracketOrder?: number;
 }
 
 export const minifyEntryForPair = (entry: Partial<TournamentEntry>): TournamentEntry => ({
@@ -31,6 +32,7 @@ export const minifyPairForStorage = (pair: TournamentPair): TournamentPair => ({
   teamNumber: pair.teamNumber,
   teamCode: pair.teamCode,
   bracket: pair.bracket,
+  bracketOrder: pair.bracketOrder,
 });
 
 /**
@@ -108,12 +110,29 @@ export const EVENT_STATUS_OPTIONS: EventStatusOption[] = [
 
 export type EventTypeOption =
   | 'Chave classificatória'
-  | 'Chave mata-mata';
+  | 'Chave mata-mata'
+  | 'Super 8'
+  | 'Ranking';
 
 export const EVENT_TYPE_OPTIONS: EventTypeOption[] = [
   'Chave classificatória',
   'Chave mata-mata',
+  'Super 8',
+  'Ranking',
 ];
+
+export interface PlayerStanding {
+  entry: TournamentEntry;
+  played: number;
+  wins: number;
+  losses: number;
+  gamesWon: number;
+  gamesLost: number;
+  gamesDiff: number;
+  rank?: number;
+  tieBreakNote?: string;
+  isTiedWithOthers?: boolean;
+}
 
 export type DrawTypeOption =
   | 'Manual'
@@ -171,6 +190,7 @@ export interface TournamentEvent {
   eventStatus?: EventStatusOption;
   eventType?: EventTypeOption;
   setsCount?: 1 | 3 | 5;
+  gamesPerSet?: number;
   teamDrawType?: DrawTypeOption;
   bracketDrawType?: DrawTypeOption;
   matchDrawType?: DrawTypeOption;

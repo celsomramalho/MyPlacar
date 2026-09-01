@@ -138,6 +138,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             information: freshEventDoc.information || freshestEvent.information,
             eventType: (freshEventDoc.eventType as any) || freshestEvent.eventType,
             setsCount: (freshEventDoc.setsCount as any) ?? freshestEvent.setsCount,
+            gamesPerSet: (freshEventDoc.gamesPerSet as any) ?? freshestEvent.gamesPerSet,
             teamDrawType: (freshEventDoc.teamDrawType as any) || freshestEvent.teamDrawType,
             bracketDrawType: (freshEventDoc.bracketDrawType as any) || freshestEvent.bracketDrawType,
             matchDrawType: (freshEventDoc.matchDrawType as any) || freshestEvent.matchDrawType,
@@ -525,7 +526,22 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             <label className="text-[10px] font-black text-slate-400 ml-1">Tipo de evento</label>
             <select
               value={editingEvent.eventType || 'Chave classificatória'}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, eventType: event.target.value as EventTypeOption })}
+              onChange={(event) => {
+                const newType = event.target.value as EventTypeOption;
+                const currentGames = editingEvent.gamesPerSet;
+                let newGames = currentGames;
+                if (newType === 'Super 8' && (!currentGames || currentGames === 6)) {
+                  newGames = 4;
+                } else if ((newType === 'Chave classificatória' || newType === 'Chave mata-mata') && (!currentGames || currentGames === 4)) {
+                  newGames = 6;
+                }
+                onChangeEditingEvent({
+                  ...editingEvent,
+                  eventType: newType,
+                  gamesPerSet: newGames,
+                  config: { ...editingEvent.config, gamesPerSet: newGames } as any,
+                });
+              }}
               className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
             >
               {EVENT_TYPE_OPTIONS.map((option) => (
@@ -545,6 +561,26 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                   type="button"
                   onClick={() => onChangeEditingEvent({ ...editingEvent, setsCount: num })}
                   className={`w-10 h-8 rounded-lg text-xs font-black transition-all ${(editingEvent.setsCount ?? 1) === num ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700'}`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 h-12">
+            <span className="text-sm font-black text-slate-700">Games por set</span>
+            <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+              {([4, 6] as const).map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => onChangeEditingEvent({
+                    ...editingEvent,
+                    gamesPerSet: num,
+                    config: { ...editingEvent.config, gamesPerSet: num } as any,
+                  })}
+                  className={`w-10 h-8 rounded-lg text-xs font-black transition-all ${(editingEvent.gamesPerSet ?? (editingEvent.eventType === 'Super 8' ? 4 : 6)) === num ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700'}`}
                 >
                   {num}
                 </button>

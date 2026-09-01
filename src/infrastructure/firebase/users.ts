@@ -4,9 +4,12 @@ import type { PlanType, UserProfile } from '@modules/auth/types';
 export interface FirebaseUserByPin {
   id: string;
   pin: string;
+  email?: string;
   name?: string;
   nickname: string;
   gender?: 'M' | 'F';
+  phone?: string;
+  shirtSize?: 'P' | 'M' | 'G';
 }
 
 export interface FirebaseReferredUser extends FirebaseUserByPin {
@@ -34,13 +37,17 @@ const mapUserDocByPin = (
 ): FirebaseUserByPin => {
   const data = docSnapshot.data();
   const pin = normalizeUserPin(data.pin || docSnapshot.id);
+  const email = data.email || (docSnapshot.id.includes('@') ? docSnapshot.id : undefined);
 
   return {
     id: docSnapshot.id,
     pin,
+    email,
     name: data.name,
     nickname: getResolvedNickname({ nickname: data.nickname, name: data.name, pin }, options?.fallbackNickname),
     gender: data.gender,
+    phone: data.phone,
+    shirtSize: data.shirtSize,
   };
 };
 

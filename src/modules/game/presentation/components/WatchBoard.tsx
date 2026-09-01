@@ -155,10 +155,11 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     const p2Name = (p.partnerName || '').trim();
     const isP1Serving = isPlayerServing(team, false);
     const isP2Serving = isPlayerServing(team, true);
+    const positionClass = team === 1 ? 'top-2 right-2' : 'bottom-2 right-2';
 
     if (gameState.matchConfig.isDoubles && p2Name) {
       return (
-        <div className="absolute top-2 right-2 z-30 flex flex-col items-end gap-1 max-w-[45%]">
+        <div className={`absolute ${positionClass} z-30 flex flex-col items-end gap-1 max-w-[45%]`}>
           <button
             type="button"
             onPointerDown={(e) => { e.stopPropagation(); onSwitchServer(team, false); }}
@@ -188,22 +189,22 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
     }
 
     return (
-      <div className="absolute top-2 right-2 z-30 flex items-center max-w-[45%]">
+      <div className={`absolute ${positionClass} z-30 flex items-center max-w-[45%]`}>
         <button
           type="button"
           onPointerDown={(e) => { e.stopPropagation(); onSwitchServer(team, false); }}
           className={`text-right text-xs md:text-sm font-black tracking-tight leading-tight px-2 py-0.5 rounded transition-all truncate max-w-full cursor-pointer active:scale-95 ${
-          isP1Serving
-            ? 'bg-[#bef264] text-[#1a1a1a] shadow-md'
-            : 'text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)] hover:text-white'
-        }`}
-        title="Definir como sacador"
-      >
-        {p1Name || (team === 1 ? 'Time 1' : 'Time 2')}
-      </button>
-    </div>
-  );
-};
+            isP1Serving
+              ? 'bg-[#bef264] text-[#1a1a1a] shadow-md'
+              : 'text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)] hover:text-white'
+          }`}
+          title="Definir como sacador"
+        >
+          {p1Name || (team === 1 ? 'Time 1' : 'Time 2')}
+        </button>
+      </div>
+    );
+  };
 
   React.useEffect(() => {
     if (!hasFinishedGames || !isZeroZero || gameState?.isMatchOver) {

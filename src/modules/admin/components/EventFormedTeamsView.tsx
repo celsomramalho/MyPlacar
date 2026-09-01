@@ -126,6 +126,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
 
   // Helper para parsear os sets de uma partida
   const parseMatchSets = (match: TournamentMatch, totalSets: number) => {
+    const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
     const scores: MatchSetScore[] = Array.from({ length: totalSets }, (_, i) => {
       if (match.scores && match.scores[i]) {
         return match.scores[i];
@@ -148,9 +149,11 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     scores.forEach((s) => {
       if (s.inProgress && match.status !== 'finished') return;
       if (s.p1 !== null && s.p1 !== undefined && s.p2 !== null && s.p2 !== undefined) {
-        if (Number(s.p1) > Number(s.p2)) {
+        const n1 = Number(s.p1);
+        const n2 = Number(s.p2);
+        if (n1 >= gamesPerSet && n1 > n2) {
           setsWon1 += 1;
-        } else if (Number(s.p2) > Number(s.p1)) {
+        } else if (n2 >= gamesPerSet && n2 > n1) {
           setsWon2 += 1;
         }
       }
@@ -184,6 +187,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
   ) => {
     const totalSets = (event.setsCount || event.config?.sets || 1) as number;
     const setsToWin = Math.ceil(totalSets / 2);
+    const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
     const allMatches = event.matches || [];
 
     const nextMatches = allMatches.map((m) => {
@@ -208,34 +212,43 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
       let setsWon1 = 0;
       let setsWon2 = 0;
       const resultParts: string[] = [];
+      let hasAnyScore = false;
 
       currentScores.forEach((s) => {
         if (s.p1 !== null && s.p1 !== undefined && s.p2 !== null && s.p2 !== undefined) {
           resultParts.push(`${s.p1}/${s.p2}`);
-          if (Number(s.p1) > Number(s.p2)) {
+          hasAnyScore = true;
+          const n1 = Number(s.p1);
+          const n2 = Number(s.p2);
+          if (n1 >= gamesPerSet && n1 > n2) {
             setsWon1 += 1;
-          } else if (Number(s.p2) > Number(s.p1)) {
+          } else if (n2 >= gamesPerSet && n2 > n1) {
             setsWon2 += 1;
           }
+        } else if (s.p1 !== null || s.p2 !== null) {
+          hasAnyScore = true;
         }
       });
 
       let status: 'waiting' | 'live' | 'finished' = m.status || 'live';
-      let winnerPairId = m.winnerPairId;
-      let loserPairId = m.loserPairId;
+      let winnerPairId: string | undefined = undefined;
+      let loserPairId: string | undefined = undefined;
       const court = m.court;
 
-      // Atualiza vencedor/perdedor com base no placar digitado, sem expulsar a partida da quadra prematuramente
-      if (setsWon1 > setsWon2) {
+      if (setsWon1 >= setsToWin) {
+        status = 'finished';
         winnerPairId = m.pair1Id;
         loserPairId = m.pair2Id;
-      } else if (setsWon2 > setsWon1) {
+      } else if (setsWon2 >= setsToWin) {
+        status = 'finished';
         winnerPairId = m.pair2Id;
         loserPairId = m.pair1Id;
-      }
-
-      if (court) {
+      } else if (court) {
         status = 'live';
+      } else if (hasAnyScore) {
+        status = 'live';
+      } else {
+        status = 'waiting';
       }
 
       return {
@@ -365,8 +378,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     setMatchSettings((prev) => ({
       ...prev,
       sportType: event.config?.sportType || prev.sportType,
-      sets: event.config?.sets || event.setsCount || prev.sets,
-      gamesPerSet: event.config?.gamesPerSet || prev.gamesPerSet,
+      sets: event.setsCount || event.config?.sets || prev.sets,
+      gamesPerSet: event.gamesPerSet || event.config?.gamesPerSet || prev.gamesPerSet,
       noAd: event.config?.noAd ?? prev.noAd,
       isDoubles: true,
       pendingTournamentMatchId: match.id,
@@ -423,6 +436,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
   };
 
   const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+  const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
 
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
@@ -678,7 +692,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                 onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p1', e.target.value)}
                                 onBlur={handleScoreBlur}
                                 className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
-                                  !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) > Number(scores[0].p2)
+                                  !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) >= gamesPerSet && Number(scores[0].p1) > Number(scores[0].p2)
                                     ? 'bg-[#22c55e] text-white'
                                     : 'bg-white text-slate-900 focus:bg-slate-50'
                                 }`}
@@ -707,7 +721,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                 onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p2', e.target.value)}
                                 onBlur={handleScoreBlur}
                                 className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
-                                  !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) > Number(scores[0].p1)
+                                  !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) >= gamesPerSet && Number(scores[0].p2) > Number(scores[0].p1)
                                     ? 'bg-[#22c55e] text-white'
                                     : 'bg-white text-slate-900 focus:bg-slate-50'
                                 }`}
@@ -744,6 +758,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                   setScore.p1 !== undefined &&
                                   setScore.p2 !== null &&
                                   setScore.p2 !== undefined &&
+                                  Number(setScore.p1) >= gamesPerSet &&
                                   Number(setScore.p1) > Number(setScore.p2);
 
                                 return (
@@ -793,6 +808,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                   setScore.p1 !== undefined &&
                                   setScore.p2 !== null &&
                                   setScore.p2 !== undefined &&
+                                  Number(setScore.p2) >= gamesPerSet &&
                                   Number(setScore.p2) > Number(setScore.p1);
 
                                 return (
