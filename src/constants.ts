@@ -120,3 +120,25 @@ export const INITIAL_PLAYER_STATE = {
   games: 0,
   sets: [],
 };
+
+export const COURT_COLOR_PAIRS = [
+  { p1Color: 'azul', p2Color: 'vermelho' },   // Quadra 1, 5, 9...
+  { p1Color: 'amarelo', p2Color: 'lilas' },    // Quadra 2, 6, 10...
+  { p1Color: 'laranja', p2Color: 'verde' },    // Quadra 3, 7, 11...
+  { p1Color: 'marrom', p2Color: 'roxo' },      // Quadra 4, 8, 12...
+];
+
+export const getCourtColors = (courtNameOrIndex: string | number): { p1Color: string; p2Color: string } => {
+  let courtNum = 1;
+  if (typeof courtNameOrIndex === 'number') {
+    courtNum = courtNameOrIndex + 1;
+  } else if (typeof courtNameOrIndex === 'string') {
+    const match = courtNameOrIndex.match(/\d+/);
+    if (match) {
+      courtNum = parseInt(match[0], 10);
+    }
+  }
+  const colorIndex = Math.max(0, (courtNum - 1) % COURT_COLOR_PAIRS.length);
+  return COURT_COLOR_PAIRS[colorIndex];
+};
+

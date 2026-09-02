@@ -18,6 +18,7 @@ import { EventFormedTeamsView } from './EventFormedTeamsView';
 import { EventSponsorsManager } from './EventSponsorsManager';
 import { EventPaymentsView } from './EventPaymentsView';
 import { calculateQueueState } from '@modules/events/services/queueManager';
+import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 
 export type EventDashboardTab =
   | 'categories'
@@ -131,11 +132,11 @@ export const EventDashboardView: React.FC<Props> = ({
               {event.name}
             </h1>
 
-            {/* Botão Chevron no canto superior direito - abre direto o cadastro para edição */}
+            {/* Botão Chevron no canto superior direito - abre direto o cadastro */}
             <button
               onClick={onEditEventConfig}
               className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl active:scale-95 transition-all shrink-0"
-              title="Editar cadastro do evento"
+              title={isPrimaryAdminEmail(adminEmail) ? 'Editar cadastro do evento' : 'Visualizar cadastro do evento'}
             >
               <ChevronDown size={20} />
             </button>

@@ -23,6 +23,7 @@ interface AdminEventsPanelProps {
   editingEvent: TournamentEvent | null;
   selectedDashboardEvent?: TournamentEvent | null;
   onSelectDashboardEvent?: (event: TournamentEvent | null | ((prev: TournamentEvent | null) => TournamentEvent | null)) => void;
+  onBackToTournaments?: () => void;
   isLoadingEvents: boolean;
   isSavingEvent: boolean;
   bannerInputRef: RefObject<HTMLInputElement>;
@@ -41,6 +42,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   editingEvent,
   selectedDashboardEvent: selectedDashboardEventProp,
   onSelectDashboardEvent,
+  onBackToTournaments,
   isLoadingEvents,
   isSavingEvent,
   bannerInputRef,
@@ -73,7 +75,16 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   const [isSearchingCoAdminPin, setIsSearchingCoAdminPin] = useState(false);
   const [pendingCoAdminRemovalPin, setPendingCoAdminRemovalPin] = useState<string | null>(null);
   const regulationInputRef = React.useRef<HTMLInputElement>(null);
-  const canManageEventAdmins = isPrimaryAdminEmail(adminEmail);
+  const isPrimaryAdmin = isPrimaryAdminEmail(adminEmail);
+  const isReadOnlyRegistration = !isPrimaryAdmin;
+  const canManageEventAdmins = isPrimaryAdmin;
+
+  const handleProtectedChangeEditingEvent = (updated: TournamentEvent | null) => {
+    if (isReadOnlyRegistration && updated !== null) {
+      return;
+    }
+    onChangeEditingEvent(updated);
+  };
 
   // Sync selectedDashboardEvent with updated eventList only for fields that
   // don't exist in local state (like active, name, eventStatus, etc.)
@@ -295,7 +306,9 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
       <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200 space-y-5 animate-in slide-in-from-top-4">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2">
-            <h4 className="text-sm font-black text-slate-800 tracking-tight">Configurar evento</h4>
+            <h4 className="text-sm font-black text-slate-800 tracking-tight">
+              {isReadOnlyRegistration ? 'Visualizar cadastro do evento' : 'Configurar evento'}
+            </h4>
           </div>
           <button
             onClick={() => onChangeEditingEvent(null)}
@@ -306,14 +319,23 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           </button>
         </div>
 
+        {isReadOnlyRegistration && (
+          <div className="flex items-center gap-2.5 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-bold animate-in fade-in">
+            <ShieldCheck size={20} className="text-amber-600 shrink-0" />
+            <span>Visualização do cadastro do evento (somente leitura). O co-administrador tem acesso para gerenciar o torneio, mas alterações cadastrais são permitidas apenas pelo organizador principal.</span>
+          </div>
+        )}
+
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1 pb-1 border-b border-slate-200">
             <span className="text-[10px] font-black text-slate-400">Ativo</span>
-            <Toggle
-              id="sw-event-active"
-              checked={editingEvent.active}
-              onChange={(active) => onChangeEditingEvent({ ...editingEvent, active })}
-            />
+            <div className={isReadOnlyRegistration ? 'pointer-events-none opacity-60' : ''}>
+              <Toggle
+                id="sw-event-active"
+                checked={editingEvent.active}
+                onChange={(active) => !isReadOnlyRegistration && handleProtectedChangeEditingEvent({ ...editingEvent, active })}
+              />
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -321,23 +343,41 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             <input
               type="text"
               value={editingEvent.name}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, name: event.target.value })}
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, name: event.target.value })}
               placeholder="Nome visível"
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
             />
           </div>
 
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 ml-1">Regulamento (PDF)</label>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => regulationInputRef.current?.click()} className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-500"><FileText size={16} /> {editingEvent.regulationFileName || 'Carregar regulamento'}</button>
-              <input ref={regulationInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => onChangeEditingEvent({ ...editingEvent, regulationUrl: String(reader.result), regulationFileName: file.name }); reader.readAsDataURL(file); }} />
-            </div>
+            {isReadOnlyRegistration ? (
+              editingEvent.regulationUrl ? (
+                <a
+                  href={editingEvent.regulationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-indigo-600 hover:underline"
+                >
+                  <FileText size={16} /> Ver regulamento ({editingEvent.regulationFileName || 'PDF'})
+                </a>
+              ) : (
+                <div className="w-full h-12 bg-slate-100 border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-400">
+                  <FileText size={16} /> Nenhum regulamento anexado
+                </div>
+              )
+            ) : (
+              <div className="flex gap-2">
+                <button type="button" onClick={() => regulationInputRef.current?.click()} className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-500"><FileText size={16} /> {editingEvent.regulationFileName || 'Carregar regulamento'}</button>
+                <input ref={regulationInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => handleProtectedChangeEditingEvent({ ...editingEvent, regulationUrl: String(reader.result), regulationFileName: file.name }); reader.readAsDataURL(file); }} />
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 ml-1">Informações do evento</label>
-            <textarea rows={5} value={editingEvent.information || ''} onChange={(event) => onChangeEditingEvent({ ...editingEvent, information: event.target.value })} placeholder="Orientações e informações para os participantes" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-xs outline-none resize-y" />
+            <textarea rows={5} value={editingEvent.information || ''} disabled={isReadOnlyRegistration} onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, information: event.target.value })} placeholder="Orientações e informações para os participantes" className="w-full bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 py-3 font-bold text-xs outline-none resize-y" />
           </div>
 
           <div className="space-y-1">
@@ -345,9 +385,10 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             <input
               type="text"
               value={editingEvent.pin}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, pin: event.target.value })}
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, pin: event.target.value })}
               placeholder="Pin do evento"
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
             />
           </div>
 
@@ -356,9 +397,10 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             <input
               type="text"
               value={editingEvent.location || ''}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, location: event.target.value })}
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, location: event.target.value })}
               placeholder="ex: Clube Carmo - Belo Horizonte"
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
             />
           </div>
 
@@ -367,9 +409,10 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             <input
               type="text"
               value={editingEvent.eventDateText || ''}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, eventDateText: event.target.value })}
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, eventDateText: event.target.value })}
               placeholder="ex: 15 a 17 de Março"
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
             />
           </div>
 
@@ -379,8 +422,9 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
               <input
                 type="date"
                 value={editingEvent.startDate || ''}
-                onChange={(event) => onChangeEditingEvent({ ...editingEvent, startDate: event.target.value })}
-                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, startDate: event.target.value })}
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
               />
             </div>
             <div className="space-y-1">
@@ -388,8 +432,9 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
               <input
                 type="date"
                 value={editingEvent.endDate || ''}
-                onChange={(event) => onChangeEditingEvent({ ...editingEvent, endDate: event.target.value })}
-                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, endDate: event.target.value })}
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
               />
             </div>
           </div>
@@ -488,9 +533,10 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                 step="0.01"
                 min={0}
                 value={editingEvent.registrationFee ?? ''}
-                onChange={(event) => onChangeEditingEvent({ ...editingEvent, registrationFee: event.target.value ? Number(event.target.value) : undefined })}
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, registrationFee: event.target.value ? Number(event.target.value) : undefined })}
                 placeholder="0,00"
-                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
               />
             </div>
             <div className="space-y-1">
@@ -500,9 +546,10 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                 step="0.01"
                 min={0}
                 value={editingEvent.extraCategoryFee ?? ''}
-                onChange={(event) => onChangeEditingEvent({ ...editingEvent, extraCategoryFee: event.target.value ? Number(event.target.value) : undefined })}
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, extraCategoryFee: event.target.value ? Number(event.target.value) : undefined })}
                 placeholder="0,00"
-                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
               />
             </div>
           </div>
@@ -511,8 +558,9 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             <label className="text-[10px] font-black text-slate-400 ml-1">Status do evento</label>
             <select
               value={editingEvent.eventStatus || 'Em configuração'}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, eventStatus: event.target.value as EventStatusOption })}
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, eventStatus: event.target.value as EventStatusOption })}
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
             >
               {EVENT_STATUS_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -526,6 +574,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             <label className="text-[10px] font-black text-slate-400 ml-1">Tipo de evento</label>
             <select
               value={editingEvent.eventType || 'Chave classificatória'}
+              disabled={isReadOnlyRegistration}
               onChange={(event) => {
                 const newType = event.target.value as EventTypeOption;
                 const currentGames = editingEvent.gamesPerSet;
@@ -535,14 +584,14 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                 } else if ((newType === 'Chave classificatória' || newType === 'Chave mata-mata') && (!currentGames || currentGames === 4)) {
                   newGames = 6;
                 }
-                onChangeEditingEvent({
+                handleProtectedChangeEditingEvent({
                   ...editingEvent,
                   eventType: newType,
                   gamesPerSet: newGames,
                   config: { ...editingEvent.config, gamesPerSet: newGames } as any,
                 });
               }}
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
             >
               {EVENT_TYPE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -554,12 +603,13 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
 
           <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 h-12">
             <span className="text-sm font-black text-slate-700">Set melhor de</span>
-            <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+            <div className={`flex bg-slate-100 rounded-xl p-1 gap-1 ${isReadOnlyRegistration ? 'pointer-events-none opacity-80' : ''}`}>
               {([1, 3, 5] as const).map((num) => (
                 <button
                   key={num}
                   type="button"
-                  onClick={() => onChangeEditingEvent({ ...editingEvent, setsCount: num })}
+                  disabled={isReadOnlyRegistration}
+                  onClick={() => handleProtectedChangeEditingEvent({ ...editingEvent, setsCount: num })}
                   className={`w-10 h-8 rounded-lg text-xs font-black transition-all ${(editingEvent.setsCount ?? 1) === num ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700'}`}
                 >
                   {num}
@@ -570,12 +620,13 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
 
           <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 h-12">
             <span className="text-sm font-black text-slate-700">Games por set</span>
-            <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+            <div className={`flex bg-slate-100 rounded-xl p-1 gap-1 ${isReadOnlyRegistration ? 'pointer-events-none opacity-80' : ''}`}>
               {([4, 6] as const).map((num) => (
                 <button
                   key={num}
                   type="button"
-                  onClick={() => onChangeEditingEvent({
+                  disabled={isReadOnlyRegistration}
+                  onClick={() => handleProtectedChangeEditingEvent({
                     ...editingEvent,
                     gamesPerSet: num,
                     config: { ...editingEvent.config, gamesPerSet: num } as any,
@@ -593,8 +644,9 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
               <label className="text-[10px] font-black text-slate-400 ml-1">Sorteio formação times</label>
               <select
                 value={editingEvent.teamDrawType || 'Manual'}
-                onChange={(event) => onChangeEditingEvent({ ...editingEvent, teamDrawType: event.target.value as DrawTypeOption })}
-                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, teamDrawType: event.target.value as DrawTypeOption })}
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
               >
                 {DRAW_TYPE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
@@ -607,8 +659,9 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
               <label className="text-[10px] font-black text-slate-400 ml-1">Sorteio das chaves</label>
               <select
                 value={editingEvent.bracketDrawType || 'Manual'}
-                onChange={(event) => onChangeEditingEvent({ ...editingEvent, bracketDrawType: event.target.value as DrawTypeOption })}
-                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, bracketDrawType: event.target.value as DrawTypeOption })}
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
               >
                 {DRAW_TYPE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
@@ -623,8 +676,9 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             <label className="text-[10px] font-black text-slate-400 ml-1">Sorteio das partidas</label>
             <select
               value={editingEvent.matchDrawType || 'Manual'}
-              onChange={(event) => onChangeEditingEvent({ ...editingEvent, matchDrawType: event.target.value as DrawTypeOption })}
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChangeEditingEvent({ ...editingEvent, matchDrawType: event.target.value as DrawTypeOption })}
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
             >
               {DRAW_TYPE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -637,21 +691,24 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 ml-1">Banner do evento (imagem)</label>
             <div className="flex gap-3">
-              <button
-                onClick={() => bannerInputRef.current?.click()}
-                className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-500"
-              >
-                <ImageIcon size={16} /> Carregar capa
-              </button>
-              {editingEvent.bannerUrl && (
+              {!isReadOnlyRegistration && (
+                <button
+                  type="button"
+                  onClick={() => bannerInputRef.current?.click()}
+                  className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-500 hover:bg-slate-50 active:scale-95"
+                >
+                  <ImageIcon size={16} /> Carregar capa
+                </button>
+              )}
+              {editingEvent.bannerUrl ? (
                 <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 shrink-0">
                   <img src={editingEvent.bannerUrl} className="w-full h-full object-cover" />
                 </div>
-              )}
+              ) : isReadOnlyRegistration ? (
+                <p className="text-xs font-bold text-slate-400 italic">Nenhuma capa anexada</p>
+              ) : null}
             </div>
           </div>
-
-
 
           {/* Quantidade de quadras movida para o final */}
           <div className="space-y-1 pt-2 border-t border-slate-200">
@@ -660,6 +717,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
               type="number"
               min={0}
               value={editingEvent.courtsCount ?? ''}
+              disabled={isReadOnlyRegistration}
               onChange={(e) => {
                 const count = e.target.value ? Math.max(0, Number(e.target.value)) : undefined;
                 const currentNames = editingEvent.courtNames || [];
@@ -667,14 +725,14 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                 if (count && count > 0) {
                   newNames = Array.from({ length: count }, (_, i) => currentNames[i] || `Quadra ${i + 1}`);
                 }
-                onChangeEditingEvent({
+                handleProtectedChangeEditingEvent({
                   ...editingEvent,
                   courtsCount: count,
                   courtNames: newNames,
                 });
               }}
               placeholder="ex: 4"
-              className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
             />
           </div>
 
@@ -696,19 +754,20 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                       <input
                         type="text"
                         value={val}
+                        disabled={isReadOnlyRegistration}
                         onChange={(e) => {
                           const updatedNames = Array.from(
                             { length: editingEvent.courtsCount || 0 },
                             (_, i) => currentNames[i] || `Quadra ${i + 1}`
                           );
                           updatedNames[index] = e.target.value;
-                          onChangeEditingEvent({
+                          handleProtectedChangeEditingEvent({
                             ...editingEvent,
                             courtNames: updatedNames,
                           });
                         }}
                         placeholder={`Nome da Quadra ${index + 1}`}
-                        className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+                        className="w-full h-10 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
                       />
                     </div>
                   );
@@ -718,9 +777,15 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           ) : null}
         </div>
 
-        <Button onClick={handleSaveEventAndSyncDashboard} disabled={isSavingEvent} className="w-full !bg-amber-500 !py-4 rounded-xl font-black flex gap-2 text-white">
-          {isSavingEvent ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar evento
-        </Button>
+        {isReadOnlyRegistration ? (
+          <Button onClick={() => onChangeEditingEvent(null)} className="w-full !bg-slate-700 hover:!bg-slate-800 !py-4 rounded-xl font-black flex gap-2 text-white shadow-md active:scale-95 transition-all">
+            <X size={18} /> Fechar visualização
+          </Button>
+        ) : (
+          <Button onClick={handleSaveEventAndSyncDashboard} disabled={isSavingEvent} className="w-full !bg-amber-500 !py-4 rounded-xl font-black flex gap-2 text-white">
+            {isSavingEvent ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar evento
+          </Button>
+        )}
       </div>
     );
   }
@@ -731,7 +796,12 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
       <EventDashboardView
         event={currentDashboardEvent}
         activeSports={activeSports}
-        onBackToEvents={() => setSelectedDashboardEvent(null)}
+        onBackToEvents={() => {
+          setSelectedDashboardEvent(null);
+          if (!isPrimaryAdmin && onBackToTournaments) {
+            onBackToTournaments();
+          }
+        }}
         onEditEventConfig={() => (onStartEditEvent ? onStartEditEvent(currentDashboardEvent) : onChangeEditingEvent(currentDashboardEvent))}
         onUpdateEvent={handleUpdateDashboardEvent}
         adminEmail={adminEmail}

@@ -1403,26 +1403,18 @@ const validateCategoryGenders = (
         }
       });
 
-      let status: 'waiting' | 'live' | 'finished' = 'waiting';
-      let winnerPairId: string | undefined = undefined;
-      let loserPairId: string | undefined = undefined;
+      let status: 'waiting' | 'live' | 'finished' = m.status === 'finished' ? 'finished' : (hasAnyScore ? 'live' : 'waiting');
+      let winnerPairId: string | undefined = m.winnerPairId;
+      let loserPairId: string | undefined = m.loserPairId;
 
-      if (setsWon1 >= setsToWin) {
-        status = 'finished';
-        winnerPairId = m.pair1Id;
-        loserPairId = m.pair2Id;
-      } else if (setsWon2 >= setsToWin) {
-        status = 'finished';
-        winnerPairId = m.pair2Id;
-        loserPairId = m.pair1Id;
-      } else if (hasAnyScore) {
-        status = 'live';
-        winnerPairId = undefined;
-        loserPairId = undefined;
-      } else {
-        status = 'waiting';
-        winnerPairId = undefined;
-        loserPairId = undefined;
+      if (status === 'finished') {
+        if (setsWon1 > setsWon2) {
+          winnerPairId = m.pair1Id;
+          loserPairId = m.pair2Id;
+        } else if (setsWon2 > setsWon1) {
+          winnerPairId = m.pair2Id;
+          loserPairId = m.pair1Id;
+        }
       }
 
       return {
@@ -1455,50 +1447,189 @@ const validateCategoryGenders = (
     }, 600);
   };
 
-    if (categoryPanelView === 'matches') {
-      const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
-      const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
-      const semiMatches = categoryMatches.filter((m) => m.phase === 'semifinal');
-      const finalMatches = categoryMatches.filter((m) => m.phase === 'final' || m.phase === '3lugar');
-      const otherMatches = categoryMatches.filter(
-        (m) => !['chave1', 'chave2', 'semifinal', 'final', '3lugar'].includes(m.phase || '')
-      );
+  const handleFinishMatch = async (matchId: string) => {
+    const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+    const nextMatches = matches.map((m) => {
+      if (m.id !== matchId) return m;
+      const { setsWon1, setsWon2, scores } = parseMatchSets(m, totalSets);
+      let winnerPairId = m.winnerPairId;
+      let loserPairId = m.loserPairId;
 
-      const renderMatchItem = (match: TournamentMatch) => {
-        const code = match.matchCode || formatMatchNumber(match.matchNumber || 1);
-        const phase = getPhaseLabel(match.phase);
-        const phaseStr = phase ? `[${phase}]` : '';
+      if (setsWon1 > setsWon2) {
+        winnerPairId = m.pair1Id;
+        loserPairId = m.pair2Id;
+      } else if (setsWon2 > setsWon1) {
+        winnerPairId = m.pair2Id;
+        loserPairId = m.pair1Id;
+      } else if (scores[0]?.p1 !== null && scores[0]?.p2 !== null) {
+        const n1 = Number(scores[0]?.p1 ?? 0);
+        const n2 = Number(scores[0]?.p2 ?? 0);
+        if (n1 > n2) {
+          winnerPairId = m.pair1Id;
+          loserPairId = m.pair2Id;
+        } else if (n2 > n1) {
+          winnerPairId = m.pair2Id;
+          loserPairId = m.pair1Id;
+        }
+      }
 
-        const p1 = match.pair1 || (match.pair1Id && pairsById ? pairsById[match.pair1Id] : undefined);
-        const p2 = match.pair2 || (match.pair2Id && pairsById ? pairsById[match.pair2Id] : undefined);
+      return {
+        ...m,
+        status: 'finished' as const,
+        winnerPairId: winnerPairId || m.pair1Id,
+        loserPairId: loserPairId || m.pair2Id,
+      };
+    });
 
-        const team1Name = p1 ? `${p1.p1.nickname || p1.p1.name} & ${p1.p2.nickname || p1.p2.name}` : match.pair1Label || 'A definir';
-        const team1Code = p1 ? (p1.teamCode || `Time ${p1.teamNumber || ''}`) : '';
+    const progressedMatches = updatePlayoffProgression(pairs, nextMatches);
+    onUpdateEvent({ ...event, matches: progressedMatches });
 
-        const team2Name = p2 ? `${p2.p1.nickname || p2.p1.name} & ${p2.p2.nickname || p2.p2.name}` : match.pair2Label || 'A definir';
-        const team2Code = p2 ? (p2.teamCode || `Time ${p2.teamNumber || ''}`) : '';
+    const db = getDb();
+    if (db) {
+      try {
+        await updateEvent(db as Firestore, event.pin, { matches: progressedMatches });
+      } catch (err) {
+        console.error('Erro ao finalizar partida no Firestore:', err);
+      }
+    }
+  };
 
-        const totalSets = (event.setsCount || event.config?.sets || 1) as number;
-        const setsToWin = Math.ceil(totalSets / 2);
-        const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
-        const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets);
+  const handleFinishMatchWithValidation = (matchId: string) => {
+    const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+    const setsToWin = Math.ceil(totalSets / 2);
+    const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
 
-        const hasAnyScore = scores.some((s) => (s.p1 !== null && s.p1 !== undefined) || (s.p2 !== null && s.p2 !== undefined));
-        const isMatchFinished = setsWon1 >= setsToWin || setsWon2 >= setsToWin || (match.status === 'finished' && !hasAnyScore);
-        const isMatchLive = !isMatchFinished && (hasAnyScore || match.status === 'live');
+    const match = matches.find((m) => m.id === matchId);
+    if (!match) return;
 
-        const statusLabel =
-          isMatchFinished ? 'Finalizado' :
-          isMatchLive ? 'Ao vivo' : 'Aguardando';
-        const statusColor =
-          isMatchFinished ? 'bg-blue-50 text-blue-700 border-blue-200' :
-          isMatchLive ? 'bg-emerald-50 text-emerald-700 border-emerald-200 animate-pulse' :
-          'bg-slate-100 text-slate-500 border-slate-200';
+    const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets);
 
-        const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => {
-          const { setsWon1: s1, setsWon2: s2 } = parseMatchSets(m, totalSets);
-          return s1 >= setsToWin || s2 >= setsToWin || m.status === 'finished';
-        });
+    // Verifica se algum set tem placar digitado
+    const hasAnyScore = scores.some((s) => s.p1 !== null || s.p2 !== null);
+    if (!hasAnyScore) {
+      setModalConfig({
+        title: 'Placar não informado',
+        message: 'Digite o placar antes de finalizar a partida.',
+        onConfirm: () => setModalConfig(null),
+        variant: 'info',
+      });
+      return;
+    }
+
+    // Verifica se o vencedor atingiu o número correto de games por set
+    const scoreWarnings: string[] = [];
+    scores.forEach((s, idx) => {
+      if (s.p1 === null || s.p2 === null) return;
+      const n1 = Number(s.p1);
+      const n2 = Number(s.p2);
+      const maxScore = Math.max(n1, n2);
+      const minScore = Math.min(n1, n2);
+      if (maxScore < gamesPerSet) {
+        scoreWarnings.push(`Set ${idx + 1}: vencedor tem ${maxScore} games, esperado ${gamesPerSet}`);
+      } else if (maxScore > gamesPerSet && !(maxScore === gamesPerSet + 1 && minScore === gamesPerSet - 1)) {
+        scoreWarnings.push(`Set ${idx + 1}: placar ${n1}x${n2} parece inválido para ${gamesPerSet} games por set`);
+      }
+    });
+
+    // Verifica se a partida tem vencedor claro
+    const winnerDefined = setsWon1 >= setsToWin || setsWon2 >= setsToWin;
+    if (!winnerDefined && totalSets > 1) {
+      scoreWarnings.push(`Nenhum time atingiu ${setsToWin} set(s) para vencer (melhor de ${totalSets})`);
+    }
+
+    if (scoreWarnings.length > 0) {
+      setModalConfig({
+        title: 'Placar irregular',
+        message: (
+          <>
+            <span className="block font-bold mb-2">O placar informado parece incorreto:</span>
+            {scoreWarnings.map((w, i) => (
+              <span key={i} className="block text-sm text-slate-700">• {w}</span>
+            ))}
+            <span className="block mt-3 text-sm">Deseja finalizar mesmo assim?</span>
+          </>
+        ),
+        confirmLabel: 'Finalizar assim mesmo',
+        cancelLabel: 'Corrigir placar',
+        onConfirm: () => {
+          setModalConfig(null);
+          handleFinishMatch(matchId);
+        },
+        onCancel: () => setModalConfig(null),
+        variant: 'danger',
+      });
+      return;
+    }
+
+    // Placar válido, finaliza direto
+    handleFinishMatch(matchId);
+  };
+
+  const handleReopenMatch = async (matchId: string) => {
+    const nextMatches = matches.map((m) => {
+      if (m.id !== matchId) return m;
+      return {
+        ...m,
+        status: 'live' as const,
+        winnerPairId: undefined,
+        loserPairId: undefined,
+      };
+    });
+
+    const progressedMatches = updatePlayoffProgression(pairs, nextMatches);
+    onUpdateEvent({ ...event, matches: progressedMatches });
+
+    const db = getDb();
+    if (db) {
+      try {
+        await updateEvent(db as Firestore, event.pin, { matches: progressedMatches });
+      } catch (err) {
+        console.error('Erro ao reabrir partida no Firestore:', err);
+      }
+    }
+  };
+
+  if (categoryPanelView === 'matches') {
+    const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
+    const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
+    const semiMatches = categoryMatches.filter((m) => m.phase === 'semifinal');
+    const finalMatches = categoryMatches.filter((m) => m.phase === 'final' || m.phase === '3lugar');
+    const otherMatches = categoryMatches.filter(
+      (m) => !['chave1', 'chave2', 'semifinal', 'final', '3lugar'].includes(m.phase || '')
+    );
+
+    const renderMatchItem = (match: TournamentMatch) => {
+      const code = match.matchCode || formatMatchNumber(match.matchNumber || 1);
+      const phase = getPhaseLabel(match.phase);
+      const phaseStr = phase ? `[${phase}]` : '';
+
+      const p1 = match.pair1 || (match.pair1Id && pairsById ? pairsById[match.pair1Id] : undefined);
+      const p2 = match.pair2 || (match.pair2Id && pairsById ? pairsById[match.pair2Id] : undefined);
+
+      const team1Name = p1 ? `${p1.p1.nickname || p1.p1.name} & ${p1.p2.nickname || p1.p2.name}` : match.pair1Label || 'A definir';
+      const team1Code = p1 ? (p1.teamCode || `Time ${p1.teamNumber || ''}`) : '';
+
+      const team2Name = p2 ? `${p2.p1.nickname || p2.p1.name} & ${p2.p2.nickname || p2.p2.name}` : match.pair2Label || 'A definir';
+      const team2Code = p2 ? (p2.teamCode || `Time ${p2.teamNumber || ''}`) : '';
+
+      const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+      const setsToWin = Math.ceil(totalSets / 2);
+      const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
+      const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets);
+
+      const hasAnyScore = scores.some((s) => (s.p1 !== null && s.p1 !== undefined) || (s.p2 !== null && s.p2 !== undefined));
+      const isMatchFinished = match.status === 'finished';
+      const isMatchLive = !isMatchFinished && (hasAnyScore || match.status === 'live');
+
+      const statusLabel =
+        isMatchFinished ? 'Finalizado' :
+        isMatchLive ? 'Ao vivo' : 'Aguardando';
+      const statusColor =
+        isMatchFinished ? 'bg-blue-50 text-blue-700 border-blue-200' :
+        isMatchLive ? 'bg-emerald-50 text-emerald-700 border-emerald-200 animate-pulse' :
+        'bg-slate-100 text-slate-500 border-slate-200';
+
+      const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished');
 
         // Badges de posição final para partidas de final e 3º lugar já encerradas
         let p1FinalBadge: string | null = null;
@@ -1782,6 +1913,35 @@ const validateCategoryGenders = (
                 </div>
               </div>
             )}
+
+            {/* Botão Finalizar partida igual ao de Gerenciar partidas/Quadras */}
+            {!isMatchFinished ? (
+              <div className="pt-3 mt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => handleFinishMatchWithValidation(match.id)}
+                  className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm"
+                  title="Registrar placar final e concluir partida"
+                >
+                  <Check size={14} />
+                  Finalizar partida
+                </button>
+              </div>
+            ) : (
+              <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                  <Check size={13} className="text-emerald-500" /> Partida finalizada
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleReopenMatch(match.id)}
+                  className="text-[11px] font-black text-slate-400 hover:text-blue-600 hover:underline transition-colors"
+                  title="Reabrir partida para alteração de placar"
+                >
+                  Reabrir partida
+                </button>
+              </div>
+            )}
           </div>
         );
       };
@@ -1957,29 +2117,59 @@ const validateCategoryGenders = (
                 Classificação Super 8
               </span>
               {(() => {
-                // Calcula a rodada atual: a maior rodada com ao menos uma partida em andamento ou finalizada
-                const roundNumbers = categoryMatches
-                  .map((m) => {
-                    const phase = m.phase || 'rodada1';
-                    return Number(phase.replace(/\D/g, '')) || 1;
-                  });
-                if (roundNumbers.length === 0) return null;
-                const maxRound = Math.max(...roundNumbers);
-                // Verifica se alguma partida da rodada atual ainda está em andamento
-                const currentRoundMatches = categoryMatches.filter((m) => {
+                if (categoryMatches.length === 0) return null;
+
+                const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+                const setsToWin = Math.ceil(totalSets / 2);
+
+                const isMatchDone = (m: TournamentMatch) => {
+                  if (m.status === 'finished') return true;
+                  const { setsWon1, setsWon2 } = parseMatchSets(m, totalSets);
+                  return setsWon1 >= setsToWin || setsWon2 >= setsToWin;
+                };
+
+                const roundMap = new Map<number, TournamentMatch[]>();
+                categoryMatches.forEach((m) => {
                   const num = Number((m.phase || 'rodada1').replace(/\D/g, '')) || 1;
-                  return num === maxRound;
+                  if (!roundMap.has(num)) {
+                    roundMap.set(num, []);
+                  }
+                  roundMap.get(num)!.push(m);
                 });
-                const allFinished = currentRoundMatches.every((m) => m.status === 'finished');
-                const hasAny = currentRoundMatches.length > 0;
-                if (!hasAny) return null;
+
+                const sortedRoundNumbers = Array.from(roundMap.keys()).sort((a, b) => a - b);
+                if (sortedRoundNumbers.length === 0) return null;
+
+                // Encontra a primeira rodada que ainda não foi 100% finalizada
+                const currentRoundNum = sortedRoundNumbers.find((rNum) => {
+                  const rMatches = roundMap.get(rNum) || [];
+                  return !rMatches.every(isMatchDone);
+                });
+
+                if (currentRoundNum === undefined) {
+                  // Todas as rodadas foram finalizadas
+                  const maxRound = sortedRoundNumbers[sortedRoundNumbers.length - 1];
+                  return (
+                    <span className="text-[10px] font-black px-2.5 py-1 rounded-lg border text-emerald-700 bg-emerald-50 border-emerald-200">
+                      Rodada: {maxRound} — finalizada
+                    </span>
+                  );
+                }
+
+                const currentRoundMatches = roundMap.get(currentRoundNum) || [];
+                const hasStarted = currentRoundMatches.some((m) =>
+                  m.status === 'live' ||
+                  isMatchDone(m) ||
+                  (m.scores && m.scores.some((s) => s.p1 !== null || s.p2 !== null))
+                );
+
                 return (
                   <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${
-                    allFinished
-                      ? 'text-slate-600 bg-slate-100 border-slate-200'
-                      : 'text-sky-700 bg-sky-50 border-sky-200'
+                    hasStarted
+                      ? 'text-sky-700 bg-sky-50 border-sky-200'
+                      : 'text-slate-600 bg-slate-100 border-slate-200'
                   }`}>
-                    Rodada: {maxRound} — {allFinished ? 'finalizada' : 'em andamento'}
+                    Rodada: {currentRoundNum} — {hasStarted ? 'em andamento' : 'aguardando'}
                   </span>
                 );
               })()}

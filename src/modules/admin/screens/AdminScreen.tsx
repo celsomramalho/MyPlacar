@@ -31,6 +31,7 @@ import { VoiceCommands, ErrorSoundType, Tab } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
 import { AdminCommunicationsPanel } from '@modules/communications';
 import { playErrorBeep, unlockAudio } from '@modules/game/presentation/hooks/useScoreAnnouncer';
+import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 
 interface Props {
   onBack: () => void;
@@ -48,7 +49,8 @@ type CategoryItem = FirebaseAdminCategoryIcon;
 type SportItem = FirebaseAdminSportIcon;
 
 export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory, initialTab, onOpenMenu, userProfile }) => {
-  const [adminTab, setAdminTab] = useState<AdminTab>(initialTab || 'configs');
+  const isPrimary = isPrimaryAdminEmail(userProfile?.email);
+  const [adminTab, setAdminTab] = useState<AdminTab>(() => (!isPrimary ? 'events' : initialTab || 'configs'));
   const [loading, setLoading] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
   const [showConfirmFix, setShowConfirmFix] = useState(false);
@@ -154,11 +156,19 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [uploadTarget, setUploadTarget] = useState<AdminIconUploadTarget | null>(null);
 
   useEffect(() => {
-    fetchData();
-    fetchGlobalConfigs();
-  }, []);
+    if (isPrimary) {
+      fetchData();
+      fetchGlobalConfigs();
+    }
+  }, [isPrimary]);
 
-  // Se veio de finalização de partida de evento no placar, abre diretamente o evento e a aba Gerenciar fila
+  useEffect(() => {
+    if (!isPrimary && adminTab !== 'events') {
+      setAdminTab('events');
+    }
+  }, [isPrimary, adminTab]);
+
+  // Se veio de finalização de partida de evento no placar ou de Meus torneios, abre diretamente o evento
   useEffect(() => {
     try {
       const targetPin = sessionStorage.getItem('admin_target_event_pin');
@@ -171,19 +181,25 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
               if (ev) {
                 setSelectedDashboardEvent(ev as TournamentEvent);
                 sessionStorage.removeItem('admin_target_event_pin');
+              } else if (!isPrimary) {
+                onBack();
               }
+            }).catch(() => {
+              if (!isPrimary) onBack();
             });
           });
         }
+      } else if (!isPrimary && !selectedDashboardEvent) {
+        onBack();
       }
     } catch {}
-  }, []);
+  }, [isPrimary]);
 
   useEffect(() => {
-    if (adminTab === 'events') {
+    if (adminTab === 'events' && isPrimary) {
       fetchEvents();
     }
-  }, [adminTab]);
+  }, [adminTab, isPrimary]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -590,17 +606,22 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
       <AdminHeader
         activeTab={adminTab}
+        hideTabs={!isPrimary}
         onBack={() => handleGuardedAction(() => {
           if (editingEvent) {
             setEditingEvent(null);
             initialEditingEventSnapshotRef.current = null;
           } else if (selectedDashboardEvent) {
             setSelectedDashboardEvent(null);
+            if (!isPrimary) {
+              onBack();
+            }
           } else {
             onBack();
           }
         })}
         onSelectTab={(tab) => handleGuardedAction(() => {
+          if (!isPrimary) return;
           setEditingEvent(null);
           setSelectedDashboardEvent(null);
           initialEditingEventSnapshotRef.current = null;
@@ -897,6 +918,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             editingEvent={editingEvent}
             selectedDashboardEvent={selectedDashboardEvent}
             onSelectDashboardEvent={setSelectedDashboardEvent}
+            onBackToTournaments={onBack}
             isLoadingEvents={isLoadingEvents}
             isSavingEvent={isSavingEvent}
             bannerInputRef={bannerInputRef}

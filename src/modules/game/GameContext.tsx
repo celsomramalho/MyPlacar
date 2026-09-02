@@ -24,7 +24,7 @@ import type { MatchHistoryItem } from '@modules/history/types';
 import { persistLocalHistory } from '@modules/history/services/persistLocalHistory';
 import { safeJsonParse } from '@shared/utils/safeJsonParse';
 import { isWatchDevice } from '@shared/utils/device';
-import { DEFAULT_TENNIS_SETTINGS, APP_VERSION } from '../../constants.ts';
+import { DEFAULT_TENNIS_SETTINGS, APP_VERSION, getCourtColors } from '../../constants.ts';
 import type { GameState, MatchSettings, PointType } from '../../types.ts';
 import { initPickleballState } from '@modules/game/domain/pickleballEngine';
 import { getEngineForSport } from '@modules/game/domain/sportEngine';
@@ -1242,12 +1242,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
     if (tournamentOverride) {
        const { match, pair1, pair2, event } = tournamentOverride;
+       const courtColors = getCourtColors(match.court || 0);
        configToUse = {
           ...matchSettings,
           p1Name: pair1.p1.nickname,
           p1Partner: pair1.p2.nickname,
           p2Name: pair2.p1.nickname,
           p2Partner: pair2.p2.nickname,
+          p1Color: courtColors.p1Color,
+          p2Color: courtColors.p2Color,
           isDoubles: true,
           p1Verified: true, p1PartnerVerified: true, p2Verified: true, p2PartnerVerified: true,
           ...(event.config || {})
@@ -1267,6 +1270,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
            }
         }
     } else if (savedSettings.pendingTournamentMatchId && savedSettings.pendingTournamentPin) {
+       const courtColors = getCourtColors(savedSettings.pendingTournamentCourt || savedSettings.deviceLabel || 0);
        tournamentMeta = {
           tournamentMatchId: savedSettings.pendingTournamentMatchId,
           tournamentPin: savedSettings.pendingTournamentPin,
@@ -1276,6 +1280,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
        };
        configToUse = {
           ...configToUse,
+          p1Color: courtColors.p1Color,
+          p2Color: courtColors.p2Color,
           pendingTournamentMatchId: undefined,
           pendingTournamentPin: undefined,
           pendingTournamentMatchCode: undefined,

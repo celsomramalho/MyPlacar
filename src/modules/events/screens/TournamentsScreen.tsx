@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X, Bell } from 'lucide-react';
+import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X, Bell, ShieldCheck } from 'lucide-react';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { fetchActiveEvents } from '../services/fetchActiveEvents';
@@ -7,19 +7,21 @@ import { fetchEventByPin } from '@infra/firebase/events';
 import type { EventRegistration, TournamentEntry, TournamentEvent } from '../types';
 import type { UserProfile } from '@modules/auth/types';
 import { EventRegistrationForm } from '../components/EventRegistrationForm';
+import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 
 interface Props {
   registrations: EventRegistration[];
   onBack: () => void;
   onJoin: (pin: string, entryData: Partial<TournamentEntry>) => void;
   onSelectEvent: (event: EventRegistration) => void;
+  onSelectAdminEvent?: (event: TournamentEvent | EventRegistration) => void;
   onOpenMenu: () => void;
   userProfile?: UserProfile;
   onOpenCommunications?: () => void;
   unreadCount?: number;
 }
 
-export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onOpenMenu, userProfile, onOpenCommunications, unreadCount = 0 }) => {
+export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onSelectAdminEvent, onOpenMenu, userProfile, onOpenCommunications, unreadCount = 0 }) => {
   const [pinInput, setPinInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [joiningPin, setJoiningPin] = useState<string | null>(null);
@@ -29,6 +31,9 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
   // Pre-join form state
   const [pendingEvent, setPendingEvent] = useState<TournamentEvent | null>(null);
   const [pendingPin, setPendingPin] = useState<string | null>(null);
+
+  // Mapa suplementar: eventos das inscrições do usuário que não estão em activeEvents
+  const [registeredEventsMap, setRegisteredEventsMap] = useState<Map<string, TournamentEvent>>(new Map());
 
   useEffect(() => {
     let isMounted = true;
@@ -47,6 +52,36 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     loadActiveEvents();
     return () => { isMounted = false; };
   }, []);
+
+  // Para cada inscrição que NÃO está em activeEvents, buscar o evento completo para checar coAdminPins
+  useEffect(() => {
+    if (!userProfile?.pin && !isPrimaryAdminEmail(userProfile?.email)) return;
+    let isMounted = true;
+    const db = getDb();
+    if (!db || registrations.length === 0) return;
+
+    const fetchMissingEvents = async () => {
+      const activeMap = new Map<string, boolean>();
+      activeEvents.forEach((ev) => { if (ev.pin) activeMap.set(ev.pin.toUpperCase(), true); });
+
+      const missing = registrations.filter((r) => !activeMap.has(r.pin.toUpperCase()));
+      if (missing.length === 0) return;
+
+      const fetched = new Map<string, TournamentEvent>();
+      await Promise.all(
+        missing.map(async (r) => {
+          try {
+            const ev = await fetchEventByPin(db as Firestore, r.pin);
+            if (ev && isMounted) fetched.set(r.pin.toUpperCase(), ev as TournamentEvent);
+          } catch { /* ignorar erros individuais */ }
+        })
+      );
+      if (isMounted) setRegisteredEventsMap(fetched);
+    };
+
+    fetchMissingEvents();
+    return () => { isMounted = false; };
+  }, [registrations, activeEvents, userProfile?.pin, userProfile?.email]);
 
   // Open pre-join form for a known event card
   const handleRequestJoinEvent = async (ev: TournamentEvent) => {
@@ -127,15 +162,52 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     });
   }, [activeEvents, registeredPins, normalizedSearch]);
 
-  // Minhas inscrições: todos os eventos nos quais o usuário já se inscreveu (mesmo inativos)
+  // Mapa de eventos ativos por PIN
+  const activeEventsMap = useMemo(() => {
+    const map = new Map<string, TournamentEvent>();
+    activeEvents.forEach((ev) => {
+      if (ev.pin) map.set(ev.pin.toUpperCase(), ev);
+    });
+    return map;
+  }, [activeEvents]);
+
+  // Combina inscrições do usuário com eventos ativos onde ele foi cadastrado como administrador
+  const allUserEvents = useMemo(() => {
+    const list = [...registrations];
+    const userPin = userProfile?.pin;
+    const userEmail = userProfile?.email;
+    const isPrimary = isPrimaryAdminEmail(userEmail);
+
+    if (userPin || isPrimary) {
+      activeEvents.forEach((ev) => {
+        const pinUpper = ev.pin?.toUpperCase();
+        if (!pinUpper) return;
+        const alreadyInList = list.some((r) => r.pin.toUpperCase() === pinUpper);
+        if (!alreadyInList) {
+          const hasAdminAccess = isPrimary || canUseEventAdminAccess(ev, userPin);
+          if (hasAdminAccess) {
+            list.push({
+              pin: ev.pin,
+              name: ev.name,
+              joinedAt: ev.createdAt || Date.now(),
+              bannerUrl: ev.bannerUrl || null,
+            });
+          }
+        }
+      });
+    }
+    return list;
+  }, [registrations, activeEvents, userProfile?.pin, userProfile?.email]);
+
+  // Minhas inscrições: todos os eventos nos quais o usuário já se inscreveu (mesmo inativos) + eventos que administra
   const filteredRegistrations = useMemo(() => {
-    if (!normalizedSearch) return registrations;
-    return registrations.filter((reg) => {
+    if (!normalizedSearch) return allUserEvents;
+    return allUserEvents.filter((reg) => {
       const matchName = reg.name?.toLowerCase().includes(normalizedSearch);
       const matchPin = reg.pin?.toLowerCase().includes(normalizedSearch);
       return matchName || matchPin;
     });
-  }, [registrations, normalizedSearch]);
+  }, [allUserEvents, normalizedSearch]);
 
   const showPreJoin = pendingEvent !== null;
   const preJoinEventName = pendingEvent?.name ?? `Evento PIN: ${pendingPin}`;
@@ -288,26 +360,49 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
             <div className="space-y-3">
               {filteredRegistrations.map((reg) => {
                 const { pin, name, joinedAt } = reg;
+                // Usa o evento completo do mapa ativo; se não estiver lá, usa o mapa de inscrições (eventos inativos)
+                const eventObj = activeEventsMap.get(pin.toUpperCase()) ?? registeredEventsMap.get(pin.toUpperCase());
+                const isUserAdmin =
+                  isPrimaryAdminEmail(userProfile?.email) ||
+                  (eventObj ? canUseEventAdminAccess(eventObj, userProfile?.pin) : false);
+
                 return (
-                  <button
+                  <div
                     key={pin}
                     onClick={() => onSelectEvent(reg)}
-                    className="w-full bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100 flex items-center justify-between active:scale-[0.98] transition-all group"
+                    className="w-full bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100 flex items-center justify-between active:scale-[0.99] transition-all group cursor-pointer hover:border-amber-200"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 shadow-inner">
+                    <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
+                      <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 shadow-inner shrink-0">
                         <Trophy size={24} />
                       </div>
-                      <div className="text-left">
-                        <p className="text-sm font-black text-gray-900 mb-1">{name}</p>
+                      <div className="text-left min-w-0 flex-1">
+                        <p className="text-sm font-black text-gray-900 mb-1 truncate">{name}</p>
                         <div className="flex items-center gap-1.5 text-slate-400">
-                          <Calendar size={12} />
-                          <p className="text-[10px] font-bold">Inscrito em {new Date(joinedAt).toLocaleDateString('pt-BR')}</p>
+                          <Calendar size={12} className="shrink-0" />
+                          <p className="text-[10px] font-bold truncate">Inscrito em {new Date(joinedAt).toLocaleDateString('pt-BR')}</p>
                         </div>
                       </div>
                     </div>
-                    <ChevronRight size={20} className="text-gray-300 group-hover:text-amber-500 transition-colors" />
-                  </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isUserAdmin && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectAdminEvent) {
+                              onSelectAdminEvent(eventObj || reg);
+                            }
+                          }}
+                          className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-600 hover:text-white flex items-center justify-center transition-all active:scale-90 shadow-sm"
+                          title="Acessar como administrador do evento"
+                        >
+                          <ShieldCheck size={20} />
+                        </button>
+                      )}
+                      <ChevronRight size={20} className="text-gray-300 group-hover:text-amber-500 transition-colors" />
+                    </div>
+                  </div>
                 );
               })}
             </div>

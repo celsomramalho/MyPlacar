@@ -69,18 +69,50 @@ export default async function handler(req, res) {
   try {
     const db = admin.firestore();
 
-    // Validar que o usuário é realmente admin no Firestore
-    const userDoc = await db.collection("users").doc(adminEmail.toLowerCase().trim()).get();
-    const isAdminUser =
-      (userDoc.exists && userDoc.data()?.isAdmin === true) ||
-      adminEmail.toLowerCase().trim() === "celsomramalho@gmail.com";
+    // Validar se é admin global ou co-admin deste evento
+    const existingEventDoc = await db.collection("events").doc(event.pin).get();
+    const existingEventData = existingEventDoc.exists ? existingEventDoc.data() : null;
 
-    if (!isAdminUser) {
-      return res.status(403).json({ error: "Acesso negado: usuário não é administrador" });
+    const userPin = (userDoc.exists && userDoc.data()?.pin ? String(userDoc.data().pin) : '').toUpperCase().trim();
+    const coAdminPins = ((existingEventData?.coAdminPins) || []).map(p => String(p).toUpperCase().trim());
+    const isCoAdmin = Boolean(userPin && coAdminPins.includes(userPin) && existingEventData?.active === true);
+
+    if (!isAdminUser && !isCoAdmin) {
+      return res.status(403).json({ error: "Acesso negado: usuário não é administrador do evento" });
     }
 
     // Remover entries do documento principal (salvo em subcoleção)
-    const { entries: _entries, ...eventWithoutEntries } = event;
+    let { entries: _entries, ...eventWithoutEntries } = event;
+
+    // Se for co-admin (e não admin global), preserva dados cadastrais intocados
+    if (isCoAdmin && !isAdminUser && existingEventData) {
+      eventWithoutEntries = {
+        ...eventWithoutEntries,
+        name: existingEventData.name,
+        pin: existingEventData.pin,
+        active: existingEventData.active,
+        eventStatus: existingEventData.eventStatus,
+        eventType: existingEventData.eventType,
+        setsCount: existingEventData.setsCount,
+        gamesPerSet: existingEventData.gamesPerSet,
+        teamDrawType: existingEventData.teamDrawType,
+        bracketDrawType: existingEventData.bracketDrawType,
+        matchDrawType: existingEventData.matchDrawType,
+        startDate: existingEventData.startDate,
+        endDate: existingEventData.endDate,
+        eventDateText: existingEventData.eventDateText,
+        location: existingEventData.location,
+        registrationFee: existingEventData.registrationFee,
+        extraCategoryFee: existingEventData.extraCategoryFee,
+        courtsCount: existingEventData.courtsCount,
+        courtNames: existingEventData.courtNames,
+        coAdminPins: existingEventData.coAdminPins,
+        bannerUrl: existingEventData.bannerUrl,
+        regulationUrl: existingEventData.regulationUrl,
+        regulationFileName: existingEventData.regulationFileName,
+        information: existingEventData.information,
+      };
+    }
 
     if (Array.isArray(eventWithoutEntries.pairs)) {
       eventWithoutEntries.pairs = eventWithoutEntries.pairs.map((pair) => ({

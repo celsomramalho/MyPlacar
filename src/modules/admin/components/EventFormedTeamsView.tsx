@@ -11,6 +11,9 @@ import {
   ChevronDown,
   AlertTriangle,
   Flame,
+  ArrowLeft,
+  ShieldOff,
+  ShieldAlert,
 } from 'lucide-react';
 import type { TournamentEvent, TournamentMatch, MatchSetScore } from '@modules/events/types';
 import { calculateQueueState } from '@modules/events/services/queueManager';
@@ -20,6 +23,7 @@ import { useUI } from '@modules/ui';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import type { FirebaseTournamentEvent } from '@infra/firebase/events';
+import { getCourtColors } from '../../../constants.ts';
 
 interface Props {
   event: TournamentEvent;
@@ -28,6 +32,65 @@ interface Props {
 
 const getMatchCodeLabel = (match: TournamentMatch) =>
   match.matchCode || String(match.matchNumber || 1).padStart(2, '0');
+
+const COURT_TEAM_STYLES: Record<string, { bar: string; input: string; text: string; subText: string; wonInput: string }> = {
+  azul: {
+    bar: 'bg-[#0095ff] text-white',
+    input: 'bg-[#0055ff] text-white placeholder-white/50 border-2 border-black focus:bg-blue-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  vermelho: {
+    bar: 'bg-[#ff0055] text-white',
+    input: 'bg-[#cc0044] text-white placeholder-white/50 border-2 border-black focus:bg-red-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  amarelo: {
+    bar: 'bg-yellow-400 text-slate-900',
+    input: 'bg-yellow-300 text-slate-900 placeholder-slate-600 border-2 border-black focus:bg-yellow-200',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-slate-900',
+    subText: 'text-slate-700',
+  },
+  lilas: {
+    bar: 'bg-violet-500 text-white',
+    input: 'bg-violet-700 text-white placeholder-white/50 border-2 border-black focus:bg-violet-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  laranja: {
+    bar: 'bg-orange-500 text-white',
+    input: 'bg-orange-700 text-white placeholder-white/50 border-2 border-black focus:bg-orange-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  verde: {
+    bar: 'bg-emerald-500 text-white',
+    input: 'bg-emerald-700 text-white placeholder-white/50 border-2 border-black focus:bg-emerald-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  marrom: {
+    bar: 'bg-amber-800 text-white',
+    input: 'bg-amber-950 text-white placeholder-white/50 border-2 border-black focus:bg-amber-900',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  roxo: {
+    bar: 'bg-purple-600 text-white',
+    input: 'bg-purple-800 text-white placeholder-white/50 border-2 border-black focus:bg-purple-700',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+};
 
 const getPhaseLabel = (phase?: string) => {
   if (phase === 'chave1') return 'Chave 1';
@@ -231,24 +294,14 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
       });
 
       let status: 'waiting' | 'live' | 'finished' = m.status || 'live';
-      let winnerPairId: string | undefined = undefined;
-      let loserPairId: string | undefined = undefined;
-      const court = m.court;
-
-      if (setsWon1 >= setsToWin) {
-        status = 'finished';
-        winnerPairId = m.pair1Id;
-        loserPairId = m.pair2Id;
-      } else if (setsWon2 >= setsToWin) {
-        status = 'finished';
-        winnerPairId = m.pair2Id;
-        loserPairId = m.pair1Id;
-      } else if (court) {
-        status = 'live';
-      } else if (hasAnyScore) {
-        status = 'live';
-      } else {
-        status = 'waiting';
+      if (status !== 'finished') {
+        if (m.court) {
+          status = 'live';
+        } else if (hasAnyScore) {
+          status = 'live';
+        } else {
+          status = m.status || 'waiting';
+        }
       }
 
       return {
@@ -256,9 +309,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
         scores: currentScores,
         result: resultParts.join(' '),
         status,
-        winnerPairId,
-        loserPairId,
-        court,
+        court: m.court,
       };
     });
 
@@ -338,19 +389,33 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     const nextMatches = allMatches.map((m) => {
       if (m.id === matchId) {
         if (finish) {
-          const { setsWon1, setsWon2 } = parseMatchSets(m, totalSets);
-          const winnerPairId =
-            setsWon1 > setsWon2
-              ? m.pair1Id
-              : setsWon2 > setsWon1
-              ? m.pair2Id
-              : m.winnerPairId || m.pair1Id;
-          const loserPairId = winnerPairId === m.pair1Id ? m.pair2Id : m.pair1Id;
+          const { setsWon1, setsWon2, scores } = parseMatchSets(m, totalSets);
+          let winnerPairId = m.winnerPairId;
+          let loserPairId = m.loserPairId;
+
+          if (setsWon1 > setsWon2) {
+            winnerPairId = m.pair1Id;
+            loserPairId = m.pair2Id;
+          } else if (setsWon2 > setsWon1) {
+            winnerPairId = m.pair2Id;
+            loserPairId = m.pair1Id;
+          } else if (scores[0]?.p1 !== null && scores[0]?.p2 !== null) {
+            const n1 = Number(scores[0]?.p1 ?? 0);
+            const n2 = Number(scores[0]?.p2 ?? 0);
+            if (n1 > n2) {
+              winnerPairId = m.pair1Id;
+              loserPairId = m.pair2Id;
+            } else if (n2 > n1) {
+              winnerPairId = m.pair2Id;
+              loserPairId = m.pair1Id;
+            }
+          }
+
           return {
             ...m,
             status: 'finished' as const,
-            winnerPairId,
-            loserPairId,
+            winnerPairId: winnerPairId || m.pair1Id,
+            loserPairId: loserPairId || m.pair2Id,
             court: undefined,
           };
         }
@@ -366,6 +431,81 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     await handlePersistEventChanges(progressed);
   };
 
+  // Valida o placar e exibe confirmação se inválido antes de finalizar
+  const handleFinishCourtMatchWithValidation = (matchId: string) => {
+    const allMatches = event.matches || [];
+    const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+    const setsToWin = Math.ceil(totalSets / 2);
+    const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
+
+    const match = allMatches.find((m) => m.id === matchId);
+    if (!match) return;
+
+    const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets);
+
+    // Verifica se algum set tem placar digitado
+    const hasAnyScore = scores.some((s) => s.p1 !== null || s.p2 !== null);
+    if (!hasAnyScore) {
+      setModalConfig({
+        title: 'Placar não informado',
+        message: 'Digite o placar antes de finalizar a partida.',
+        onConfirm: () => setModalConfig(null),
+        variant: 'info',
+      });
+      return;
+    }
+
+    // Verifica se o vencedor atingiu o número correto de games por set
+    let scoreWarnings: string[] = [];
+    scores.forEach((s, idx) => {
+      if (s.p1 === null || s.p2 === null) return;
+      const n1 = Number(s.p1);
+      const n2 = Number(s.p2);
+      const maxScore = Math.max(n1, n2);
+      const minScore = Math.min(n1, n2);
+      // Vencedor deve ter exatamente gamesPerSet games (ou mais em caso de deuce)
+      if (maxScore < gamesPerSet) {
+        scoreWarnings.push(`Set ${idx + 1}: vencedor tem ${maxScore} games, esperado ${gamesPerSet}`);
+      } else if (maxScore > gamesPerSet && !(maxScore === gamesPerSet + 1 && minScore === gamesPerSet - 1)) {
+        // Permite empate por 1 acima do esperado (ex: 7x6 num jogo de 6 games)
+        scoreWarnings.push(`Set ${idx + 1}: placar ${n1}x${n2} parece inválido para ${gamesPerSet} games por set`);
+      }
+    });
+
+    // Verifica se a partida tem vencedor claro
+    const winnerDefined = setsWon1 >= setsToWin || setsWon2 >= setsToWin;
+    if (!winnerDefined && totalSets > 1) {
+      scoreWarnings.push(`Nenhum time atingiu ${setsToWin} set(s) para vencer (melhor de ${totalSets})`);
+    }
+
+    if (scoreWarnings.length > 0) {
+      setModalConfig({
+        title: 'Placar irregular',
+        message: (
+          <>
+            <span className="block font-bold mb-2">O placar informado parece incorreto:</span>
+            {scoreWarnings.map((w, i) => (
+              <span key={i} className="block text-sm text-slate-700">• {w}</span>
+            ))}
+            <span className="block mt-3 text-sm">Deseja finalizar mesmo assim?</span>
+          </>
+        ),
+        confirmLabel: 'Finalizar assim mesmo',
+        cancelLabel: 'Corrigir placar',
+        onConfirm: () => {
+          setModalConfig(null);
+          handleFreeCourtMatch(matchId, true);
+        },
+        onCancel: () => setModalConfig(null),
+        variant: 'danger',
+      });
+      return;
+    }
+
+    // Placar válido, finaliza direto
+    handleFreeCourtMatch(matchId, true);
+  };
+
   const handleOpenMatchRules = (match: TournamentMatch) => {
     const pair1 = match.pair1 || (match.pair1Id ? pairsById[match.pair1Id] : undefined);
     const pair2 = match.pair2 || (match.pair2Id ? pairsById[match.pair2Id] : undefined);
@@ -374,6 +514,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     const player3 = pair1?.p2 ? getPlayerNick(pair1.p2) : '';
     const player2 = pair2?.p1 ? getPlayerNick(pair2.p1) : match.pair2Label || '';
     const player4 = pair2?.p2 ? getPlayerNick(pair2.p2) : '';
+    const courtColors = getCourtColors(match.court || '');
 
     setMatchSettings((prev) => ({
       ...prev,
@@ -391,6 +532,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
       p1Partner: player3,
       p2Name: player2,
       p2Partner: player4,
+      p1Color: courtColors.p1Color,
+      p2Color: courtColors.p2Color,
       p1Gender: pair1?.p1.gender || prev.p1Gender,
       p1PartnerGender: pair1?.p2.gender || prev.p1PartnerGender,
       p2Gender: pair2?.p1.gender || prev.p2Gender,
@@ -533,6 +676,10 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
               const matchCodeLabel = activeMatch ? getMatchCodeLabel(activeMatch) : '';
               const phaseLabel = activeMatch ? getPhaseLabel(activeMatch.phase) : '';
 
+              const courtColors = getCourtColors(court.courtName || index);
+              const t1Style = COURT_TEAM_STYLES[courtColors.p1Color] || COURT_TEAM_STYLES.azul;
+              const t2Style = COURT_TEAM_STYLES[courtColors.p2Color] || COURT_TEAM_STYLES.vermelho;
+
               return (
                 <div
                   key={index}
@@ -544,10 +691,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                       : 'bg-red-50/40 border-red-200'
                   }`}
                 >
-                  {/* Linha Superior da Quadra: Identificação, Status e Botões de Ação */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    {/* Lado Esquerdo: Ícone + Nome da Quadra + Badge */}
-                    <div className="flex items-center gap-2.5 min-w-0">
+                  {/* Linha Superior da Quadra: Identificação e Status */}
+                  <div className="flex items-center gap-2.5 min-w-0">
                       <div
                         className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                           isFree
@@ -584,43 +729,54 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                       </div>
                     </div>
 
-                    {/* Lado Direito: Botões de Ação 100% contidos dentro do card */}
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                      {isBusy && activeMatch && (
-                        <>
+                    {/* Botões de Ação: layout em 3 colunas (esq | centro | dir) */}
+                    <div className="flex items-center w-full mt-2 gap-2">
+                      {/* Esquerda: Voltar para fila (só quando ocupada) */}
+                      <div className="flex-1 flex justify-start">
+                        {isBusy && activeMatch && (
                           <button
                             type="button"
                             onClick={() => handleFreeCourtMatch(activeMatch.id, false)}
-                            className="px-3 py-1.5 bg-white hover:bg-slate-50 active:scale-95 text-slate-600 font-black text-xs rounded-xl border border-slate-200 transition-all whitespace-nowrap"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 active:scale-95 text-slate-600 font-black text-xs rounded-xl border border-slate-200 transition-all whitespace-nowrap"
                             title="Desvincular da quadra e devolver para a fila de espera"
                           >
+                            <ArrowLeft size={13} />
                             Voltar para fila
                           </button>
+                        )}
+                      </div>
+
+                      {/* Centro: Play (só quando ocupada) */}
+                      <div className="flex justify-center shrink-0">
+                        {isBusy && activeMatch && (
                           <button
                             type="button"
                             onClick={() => handleOpenMatchRules(activeMatch)}
-                            className="w-9 h-9 bg-[#fff8e6] hover:bg-emerald-50 active:scale-95 text-emerald-500 rounded-xl transition-all flex items-center justify-center shrink-0"
+                            className="w-9 h-9 bg-[#fff8e6] hover:bg-emerald-50 active:scale-95 text-emerald-500 rounded-xl transition-all flex items-center justify-center"
                             title="Abrir regras com os jogadores desta partida"
                           >
                             <Play size={18} className="fill-emerald-500" />
                           </button>
-                        </>
-                      )}
+                        )}
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleToggleInterdictCourt(court.courtName)}
-                        className={`text-xs font-black px-3 py-1.5 rounded-xl border transition-all active:scale-95 flex items-center gap-1 whitespace-nowrap ${
-                          isInterdicted
-                            ? 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'
-                            : 'bg-white text-slate-500 border-slate-200 hover:text-red-600 hover:border-red-200'
-                        }`}
-                        title={isInterdicted ? 'Liberar quadra para jogos' : 'Interditar esta quadra'}
-                      >
-                        {isInterdicted ? 'Desinterditar' : 'Interditar'}
-                      </button>
+                      {/* Direita: Interditar */}
+                      <div className="flex-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleInterdictCourt(court.courtName)}
+                          className={`flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl border transition-all active:scale-95 whitespace-nowrap ${
+                            isInterdicted
+                              ? 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'
+                              : 'bg-white text-slate-500 border-slate-200 hover:text-red-600 hover:border-red-200'
+                          }`}
+                          title={isInterdicted ? 'Liberar quadra para jogos' : 'Interditar esta quadra'}
+                        >
+                          {isInterdicted ? <ShieldOff size={13} /> : <ShieldAlert size={13} />}
+                          {isInterdicted ? 'Desinterditar' : 'Interditar'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
                   {/* Linha Inferior da Quadra: Dados da Partida em Andamento e Placar Editável */}
                   {isBusy && activeMatch && (
@@ -648,41 +804,23 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                         </div>
                       </div>
 
-                      {/* Placar e Nomes dos Times: Layout idêntico ao de categorias/partidas */}
+                      {/* Placar e Nomes dos Times: Com destaque nas cores da quadra (Time 1 e Time 2) */}
                       {totalSets === 1 ? (
-                        /* Layout para 1 Set */
-                        <div className="flex items-center justify-between gap-4">
-                          {/* Lado Esquerdo: Nomes dos Times */}
-                          <div className="min-w-0 flex-1 space-y-3">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 leading-tight truncate">
+                        /* Layout para 1 Set com Destaque nas Cores dos Times */
+                        <div className="space-y-2">
+                          {/* Time 1 Bar */}
+                          <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar}`}>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
                                 {team1Name}
                               </p>
                               {team1Code && (
-                                <p className="text-xs font-bold text-slate-500">
+                                <p className={`text-xs font-bold ${t1Style.subText}`}>
                                   [{team1Code}]
                                 </p>
                               )}
                             </div>
-                            <div>
-                              <p className="text-sm font-black text-slate-800 leading-tight truncate">
-                                {team2Name}
-                              </p>
-                              {team2Code && (
-                                <p className="text-xs font-bold text-slate-500">
-                                  [{team2Code}]
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Lado Direito: Placar do Set 1 */}
-                          <div className="flex flex-col items-center shrink-0">
-                            {/* Linha 1: Pontuação Time 1 */}
-                            <div className="flex items-center gap-2">
-                              <span className="w-5 text-center text-sm font-black text-slate-800">
-                                {setsWon1}
-                              </span>
+                            <div className="flex items-center gap-2 shrink-0">
                               <input
                                 type="text"
                                 inputMode="numeric"
@@ -691,27 +829,28 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                 value={scores[0]?.p1 !== null && scores[0]?.p1 !== undefined ? scores[0].p1 : ''}
                                 onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p1', e.target.value)}
                                 onBlur={handleScoreBlur}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
                                   !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) >= gamesPerSet && Number(scores[0].p1) > Number(scores[0].p2)
-                                    ? 'bg-[#22c55e] text-white'
-                                    : 'bg-white text-slate-900 focus:bg-slate-50'
+                                    ? t1Style.wonInput
+                                    : t1Style.input
                                 }`}
                               />
                             </div>
+                          </div>
 
-                            {/* Linha 2: Label set1 */}
-                            <div className="flex items-center gap-2 py-1">
-                              <span className="w-5" />
-                              <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-600">
-                                set1
-                              </span>
+                          {/* Time 2 Bar */}
+                          <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar}`}>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                                {team2Name}
+                              </p>
+                              {team2Code && (
+                                <p className={`text-xs font-bold ${t2Style.subText}`}>
+                                  [{team2Code}]
+                                </p>
+                              )}
                             </div>
-
-                            {/* Linha 3: Pontuação Time 2 */}
-                            <div className="flex items-center gap-2">
-                              <span className="w-5 text-center text-sm font-black text-slate-800">
-                                {setsWon2}
-                              </span>
+                            <div className="flex items-center gap-2 shrink-0">
                               <input
                                 type="text"
                                 inputMode="numeric"
@@ -720,35 +859,32 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                 value={scores[0]?.p2 !== null && scores[0]?.p2 !== undefined ? scores[0].p2 : ''}
                                 onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p2', e.target.value)}
                                 onBlur={handleScoreBlur}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
                                   !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) >= gamesPerSet && Number(scores[0].p2) > Number(scores[0].p1)
-                                    ? 'bg-[#22c55e] text-white'
-                                    : 'bg-white text-slate-900 focus:bg-slate-50'
+                                    ? t2Style.wonInput
+                                    : t2Style.input
                                 }`}
                               />
                             </div>
                           </div>
                         </div>
                       ) : (
-                        /* Layout para Mais de 1 Set (ex: 3 ou 5 sets) */
-                        <div className="space-y-3">
-                          {/* Time 1 */}
-                          <div>
-                            <p className="text-sm font-black text-slate-800 leading-tight truncate">
-                              {team1Name}
-                            </p>
-                            {team1Code && (
-                              <p className="text-xs font-bold text-slate-500">
-                                [{team1Code}]
+                        /* Layout para Mais de 1 Set com Destaque nas Cores dos Times */
+                        <div className="space-y-2">
+                          {/* Time 1 Bar */}
+                          <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar}`}>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                                {team1Name}
                               </p>
-                            )}
-                          </div>
-
-                          {/* Grid de Sets */}
-                          <div className="flex flex-col items-start pl-0.5">
-                            {/* Linha 1: Input Placar Time 1 */}
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-5 text-center text-sm font-black text-slate-800">
+                              {team1Code && (
+                                <p className={`text-xs font-bold ${t1Style.subText}`}>
+                                  [{team1Code}]
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className={`w-5 text-center text-sm font-black ${t1Style.text}`}>
                                 {setsWon1}
                               </span>
                               {scores.map((setScore, setIdx) => {
@@ -773,32 +909,31 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                       handleScoreInputChange(activeMatch.id, setIdx, 'p1', e.target.value)
                                     }
                                     onBlur={handleScoreBlur}
-                                    className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
                                       isSetWon
-                                        ? 'bg-[#22c55e] text-white'
-                                        : 'bg-white text-slate-900 focus:bg-slate-50'
+                                        ? t1Style.wonInput
+                                        : t1Style.input
                                     }`}
                                   />
                                 );
                               })}
                             </div>
+                          </div>
 
-                            {/* Linha 2: Labels dos sets */}
-                            <div className="flex items-center gap-1.5 py-1">
-                              <span className="w-5" />
-                              {scores.map((_, setIdx) => (
-                                <span
-                                  key={`label_set_${setIdx}`}
-                                  className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-600"
-                                >
-                                  set{setIdx + 1}
-                                </span>
-                              ))}
+                          {/* Time 2 Bar */}
+                          <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar}`}>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                                {team2Name}
+                              </p>
+                              {team2Code && (
+                                <p className={`text-xs font-bold ${t2Style.subText}`}>
+                                  [{team2Code}]
+                                </p>
+                              )}
                             </div>
-
-                            {/* Linha 3: Input Placar Time 2 */}
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-5 text-center text-sm font-black text-slate-800">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className={`w-5 text-center text-sm font-black ${t2Style.text}`}>
                                 {setsWon2}
                               </span>
                               {scores.map((setScore, setIdx) => {
@@ -823,40 +958,28 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                       handleScoreInputChange(activeMatch.id, setIdx, 'p2', e.target.value)
                                     }
                                     onBlur={handleScoreBlur}
-                                    className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
                                       isSetWon
-                                        ? 'bg-[#22c55e] text-white'
-                                        : 'bg-white text-slate-900 focus:bg-slate-50'
+                                        ? t2Style.wonInput
+                                        : t2Style.input
                                     }`}
                                   />
                                 );
                               })}
                             </div>
                           </div>
-
-                          {/* Time 2 */}
-                          <div>
-                            <p className="text-sm font-black text-slate-800 leading-tight truncate">
-                              {team2Name}
-                            </p>
-                            {team2Code && (
-                              <p className="text-xs font-bold text-slate-500">
-                                [{team2Code}]
-                              </p>
-                            )}
-                          </div>
                         </div>
                       )}
 
-                      {/* Botão Finalizar partida — abaixo do placar */}
-                      <div className="pt-1 border-t border-amber-100 flex justify-end">
+                      {/* Botão Finalizar partida — abaixo do placar, largura total */}
+                      <div className="pt-1 border-t border-amber-100">
                         <button
                           type="button"
-                          onClick={() => handleFreeCourtMatch(activeMatch.id, true)}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm whitespace-nowrap"
+                          onClick={() => handleFinishCourtMatchWithValidation(activeMatch.id)}
+                          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm"
                           title="Registrar placar final e liberar a quadra"
                         >
-                          <Check size={13} />
+                          <Check size={14} />
                           Finalizar partida
                         </button>
                       </div>

@@ -327,6 +327,13 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             onBack={() => setCurrentScreen('settings')}
             onJoin={(pin, entryData) => handleJoinTournament(pin, false, entryData as any, undefined, entryData)}
             onSelectEvent={ev => handleSelectEvent(ev as unknown as TournamentEvent)}
+            onSelectAdminEvent={(ev) => {
+              try {
+                sessionStorage.setItem('admin_target_event_pin', ev.pin);
+              } catch {}
+              setAdminTab('events');
+              setCurrentScreen('admin');
+            }}
             onOpenMenu={() => setIsMenuOpen(true)}
             userProfile={userProfile}
             onOpenCommunications={() => setCurrentScreen('communications')}

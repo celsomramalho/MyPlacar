@@ -27,9 +27,8 @@ export const isDateWithinEventRange = (event: Pick<TournamentEvent, 'startDate' 
 export const canUseEventAdminAccess = (
   event: Pick<TournamentEvent, 'active' | 'coAdminPins' | 'startDate' | 'endDate'>,
   userPin?: string | null,
-  now = new Date(),
 ) => {
   const pin = normalizePin(userPin);
-  if (!pin || event.active !== true || !isDateWithinEventRange(event, now)) return false;
+  if (!pin || event.active !== true) return false;
   return (event.coAdminPins || []).map(normalizePin).includes(pin);
 };

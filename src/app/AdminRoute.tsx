@@ -2,6 +2,7 @@ import React from 'react';
 import { AdminScreen } from '@modules/admin';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
+import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 import type { AdminTab, Tab } from '../types';
 
 interface AdminRouteProps {
@@ -21,10 +22,19 @@ export function AdminRoute({
 }: AdminRouteProps) {
   const { setCurrentScreen, setModalConfig } = useUI();
   const { handleExportData, userProfile } = useGame();
+  const isPrimary = isPrimaryAdminEmail(userProfile?.email);
+
+  const handleBack = () => {
+    if (!isPrimary) {
+      setCurrentScreen('tournaments');
+    } else {
+      setCurrentScreen('settings');
+    }
+  };
 
   return (
     <AdminScreen
-      onBack={() => setCurrentScreen('settings')}
+      onBack={handleBack}
       onNavigateToTab={t => { setActiveTab(t); setCurrentScreen('settings'); }}
       onOpenRules={() => setCurrentScreen('new-game')}
       onExportData={handleExportData}
