@@ -129,6 +129,8 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const [pinLookupMessage, setPinLookupMessage] = useState<string | null>(null);
 
   const isSuper8 = event.eventType === 'Super 8';
+  const isRanking = event.eventType === 'Ranking';
+  const isSinglePlayer = isSuper8 || isRanking;
   const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
 
   React.useEffect(() => {
@@ -177,7 +179,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const categories = event.categories || [];
   const availableCategories = useMemo(() => categories.filter((cat) => !cat.gender1 || cat.gender1 === gender || cat.gender2 === gender), [categories, gender]);
-  const isDoubles = (cat: EventCategory) => !isSuper8 && (cat.format === 'Duplas' || !cat.format || cat.name.toLowerCase().includes('dupla') || Boolean(cat.gender2));
+  const isDoubles = (cat: EventCategory) => !isSinglePlayer && (cat.format === 'Duplas' || !cat.format || cat.name.toLowerCase().includes('dupla') || Boolean(cat.gender2));
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const effectiveDueAmount = isFreeEvent
     ? 0
@@ -376,7 +378,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
     for (const catId of effectiveCategoryIds) {
       const cat = (event.categories || []).find((c) => c.id === catId);
-      if (isSuper8 || !cat || !isDoubles(cat)) continue;
+      if (isSinglePlayer || !cat || !isDoubles(cat)) continue;
       const pair = pairForCategory(cat.id);
       if (pair) continue; // Se já tem time formado, não precisa exigir dados do parceiro novamente
       const partner = categoryPartners[catId] || { name: '', email: '', phone: '' };
@@ -693,7 +695,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       const partner = categoryPartners[cat.id] || { name: '', email: '', phone: '' };
       const partnerEntry = partnerEntryForCategory(cat.id, partner.email);
       const partnerAlreadyPaired = partner.email ? pairForEmailInCategory(partner.email, cat.id) : undefined;
-      const canShowFormTeam = Boolean(!isSuper8 && onUpdateEvent && isSelected && cat.format === 'Duplas' && partnerEntry && !pair && !partnerAlreadyPaired);
+      const canShowFormTeam = Boolean(!isSinglePlayer && onUpdateEvent && isSelected && cat.format === 'Duplas' && partnerEntry && !pair && !partnerAlreadyPaired);
       const isPartnerFormExpanded = expandedPartnerCategoryIds.has(cat.id);
       const partnerFormMissingData = !partner.name.trim() || !partner.email.trim() || !partner.phone.trim();
       return (
@@ -703,7 +705,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
               <input type="checkbox" checked={isSelected} onChange={() => toggleCategory(cat.id)} className="h-4 w-4 accent-emerald-500" />
               <span>{cat.name} ({cat.abbreviation})</span>
             </label>
-            {!isSuper8 && isSelected ? (
+            {!isSinglePlayer && isSelected ? (
               <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${
                 pair ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-200'
               }`}>
@@ -712,7 +714,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             ) : (
               <span />
             )}
-            {!isSuper8 && isSelected && isDoubles(cat) ? (
+            {!isSinglePlayer && isSelected && isDoubles(cat) ? (
               <button
                 type="button"
                 onClick={() => togglePartnerForm(cat.id)}
@@ -726,7 +728,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
               <span />
             )}
           </div>
-          {!isSuper8 && isSelected && isDoubles(cat) && isPartnerFormExpanded && (
+          {!isSinglePlayer && isSelected && isDoubles(cat) && isPartnerFormExpanded && (
             <div className="ml-7 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
               <p className="text-[10px] font-black text-slate-400">Informe seu parceiro - {cat.abbreviation || cat.name} *</p>
               <input required value={partner.name} onChange={(e) => updateCategoryPartner(cat.id, 'name', e.target.value)} placeholder="Nome do parceiro" className="event-registration-field bg-white" />

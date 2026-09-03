@@ -186,6 +186,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   };
 
   const isSuper8 = event.eventType === 'Super 8';
+  const isRanking = event.eventType === 'Ranking';
 
   const openCategoryPanel = (categoryId: string, view: CategoryPanelView) => {
     setSelectedEntries(new Set());
@@ -211,29 +212,50 @@ export const EventCategoriesManager: React.FC<Props> = ({
         (!m.categoryId && pairs.some((p) => (p.id === m.pair1Id || p.id === m.pair2Id) && p.categoryId === selectedCategory.id)))
   );
 
-  const super8Standings = React.useMemo(() => {
-    if (!isSuper8 || !selectedCategory) return [];
-    return calculateSuper8PlayerStandings(categoryEntries, categoryMatches);
-  }, [isSuper8, selectedCategory, categoryEntries, categoryMatches]);
+  const isIndividualRanking = isSuper8 || isRanking;
 
-  const super8StandingsMap = React.useMemo(() => {
+  const playerStandings = React.useMemo(() => {
+    if (!isIndividualRanking || !selectedCategory) return [];
+    return calculateSuper8PlayerStandings(categoryEntries, categoryMatches);
+  }, [isIndividualRanking, selectedCategory, categoryEntries, categoryMatches]);
+
+  const playerStandingsMap = React.useMemo(() => {
     const map = new Map<string, PlayerStanding>();
-    super8Standings.forEach((st) => {
+    playerStandings.forEach((st) => {
       const k1 = (st.entry.email || '').toLowerCase().trim();
       const k2 = (st.entry.pin || '').toLowerCase().trim();
       if (k1) map.set(k1, st);
       if (k2) map.set(k2, st);
     });
     return map;
-  }, [super8Standings]);
+  }, [playerStandings]);
 
   const sortedCategoryEntries = React.useMemo(() => {
-    if (isSuper8) {
+    if (isIndividualRanking) {
       return [...categoryEntries].sort((a, b) => {
+        if (isRanking) {
+          const pA = pairs.find((p) =>
+            ((p.p1.email && a.email && p.p1.email.toLowerCase().trim() === a.email.toLowerCase().trim()) ||
+             (p.p2.email && a.email && p.p2.email.toLowerCase().trim() === a.email.toLowerCase().trim()) ||
+             (p.p1.pin && a.pin && p.p1.pin.toUpperCase().trim() === a.pin.toUpperCase().trim()) ||
+             (p.p2.pin && a.pin && p.p2.pin.toUpperCase().trim() === a.pin.toUpperCase().trim())) &&
+            p.categoryId === selectedCategory?.id
+          );
+          const pB = pairs.find((p) =>
+            ((p.p1.email && b.email && p.p1.email.toLowerCase().trim() === b.email.toLowerCase().trim()) ||
+             (p.p2.email && b.email && p.p2.email.toLowerCase().trim() === b.email.toLowerCase().trim()) ||
+             (p.p1.pin && b.pin && p.p1.pin.toUpperCase().trim() === b.pin.toUpperCase().trim()) ||
+             (p.p2.pin && b.pin && p.p2.pin.toUpperCase().trim() === b.pin.toUpperCase().trim())) &&
+            p.categoryId === selectedCategory?.id
+          );
+          if (pA && !pB) return -1;
+          if (!pA && pB) return 1;
+          if (pA && pB && pA.id !== pB.id) return (pA.teamNumber || 0) - (pB.teamNumber || 0);
+        }
         const kA = (a.email || a.pin || '').toLowerCase().trim();
         const kB = (b.email || b.pin || '').toLowerCase().trim();
-        const stA = super8StandingsMap.get(kA);
-        const stB = super8StandingsMap.get(kB);
+        const stA = playerStandingsMap.get(kA);
+        const stB = playerStandingsMap.get(kB);
         if (stA?.rank !== undefined && stB?.rank !== undefined && stA.rank !== stB.rank) {
           return stA.rank - stB.rank;
         }
@@ -249,7 +271,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
       if (pA && pB) return (pA.teamNumber || 0) - (pB.teamNumber || 0);
       return a.name.localeCompare(b.name);
     });
-  }, [categoryEntries, isSuper8, super8StandingsMap, sortBy, pairs, selectedCategory?.id]);
+  }, [categoryEntries, isIndividualRanking, isRanking, playerStandingsMap, sortBy, pairs, selectedCategory?.id]);
 
   const categoryPairs = pairs.filter((p) =>
     selectedCategory
@@ -268,6 +290,13 @@ export const EventCategoriesManager: React.FC<Props> = ({
         (p.p1.email === entry.email || p.p2.email === entry.email) &&
         (p.categoryId === selectedCategory?.id || !p.categoryId)
     );
+
+  const entriesWithTeam = isRanking
+    ? sortedCategoryEntries.filter((e) => Boolean(pairForEntry(e)))
+    : [];
+  const entriesWithoutTeam = isRanking
+    ? sortedCategoryEntries.filter((e) => !pairForEntry(e))
+    : [];
 
   const selectedPair = React.useMemo(() => {
     if (selectedEntries.size === 0) return null;
@@ -314,7 +343,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const isManualMatchDraw = event.matchDrawType === 'Manual';
 
   const toggleTeamSelection = (pair: TournamentPair) => {
-    if (!isManualMatchDraw) return;
+    if (!isManualMatchDraw && !isRanking) return;
     const next = new Set(selectedTeamIds);
     if (next.has(pair.id)) {
       next.delete(pair.id);
@@ -631,6 +660,9 @@ const validateCategoryGenders = (
       selectedCategory,
       matches
     );
+    if (isRanking) {
+      newMatch.phase = 'ranking';
+    }
 
     const nextMatches = [...matches, newMatch];
     onUpdateEvent({ ...event, matches: nextMatches });
@@ -862,9 +894,10 @@ const validateCategoryGenders = (
     isChaveFinished = false,
     allCategoryMatches: TournamentMatch[] = [],
     positionIndex?: number,
-    totalInBracket?: number
+    totalInBracket?: number,
+    isRanking?: boolean
   ) => {
-    const isSelected = isManualMatchDraw && selectedTeamIds.has(pair.id);
+    const isSelected = (isManualMatchDraw || isRanking) && selectedTeamIds.has(pair.id);
 
     // Posição final no torneio (quando todas as partidas da categoria estiverem encerradas)
     const finalMatch = allCategoryMatches.find((m) => m.phase === 'final' && m.status === 'finished');
@@ -914,10 +947,10 @@ const validateCategoryGenders = (
       <div
         key={pair.id}
         onClick={() => {
-          if (isManualMatchDraw) toggleTeamSelection(pair);
+          if (isManualMatchDraw || isRanking) toggleTeamSelection(pair);
         }}
         className={`rounded-2xl border bg-white p-4 shadow-sm transition-all ${
-          isManualMatchDraw ? 'cursor-pointer select-none' : ''
+          (isManualMatchDraw || isRanking) ? 'cursor-pointer select-none' : ''
         } ${
           isSelected
             ? 'border-sky-500 bg-sky-50/60 ring-2 ring-sky-300'
@@ -1210,6 +1243,12 @@ const validateCategoryGenders = (
             .map((s) => s.pair)
         : bracketTwoPairs;
 
+      const rankingStandings = isRanking ? calculateBracketStandings(categoryPairs, categoryMatches, totalSets) : [];
+      const rankingStandingsMap = new Map<string, TeamStanding>(rankingStandings.map((s) => [s.pair.id, s]));
+      const rankingPairsList = categoryMatches.length > 0
+        ? [...rankingStandings].sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map((s) => s.pair)
+        : [...categoryPairs].sort((a, b) => (a.teamNumber || 0) - (b.teamNumber || 0));
+
       return (
         <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
           <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
@@ -1218,12 +1257,14 @@ const validateCategoryGenders = (
                 Times ({selectedCategory.name})
               </h3>
               <p className="text-xs text-slate-400 font-bold mt-0.5">
-                {hasCategoryMatches
+                {isRanking
+                  ? 'Classificação do ranking e times formados nesta categoria.'
+                  : hasCategoryMatches
                   ? 'Times formados (chaves e posições bloqueadas pois as partidas já foram geradas).'
                   : 'Defina as chaves e use as setas ▲/▼ para ordenar a sequência dos confrontos.'}
               </p>
             </div>
-            {!hasCategoryMatches && isSystemDraw && categoryPairs.length >= 2 && (
+            {!isRanking && !hasCategoryMatches && isSystemDraw && categoryPairs.length >= 2 && (
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -1237,7 +1278,32 @@ const validateCategoryGenders = (
               </div>
             )}
           </div>
-          {sortedCategoryPairs.length === 0 ? (
+          {isRanking ? (
+            categoryPairs.length === 0 ? (
+              <div className="p-10 text-center text-sm font-bold text-slate-400">
+                Nenhum time formado no momento. Na aba "Inscritos", selecione 2 atletas disponíveis para formar um time para a partida.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 p-4">
+                <p className="text-[11px] font-bold text-slate-400">
+                  Selecione 2 times para formar partida ou desfazer confronto existente.
+                </p>
+                {categoryPairs.map((pair, index) =>
+                  renderTeamCard(
+                    pair,
+                    false,
+                    false,
+                    undefined,
+                    false,
+                    categoryMatches,
+                    index,
+                    categoryPairs.length,
+                    true
+                  )
+                )}
+              </div>
+            )
+          ) : sortedCategoryPairs.length === 0 ? (
             <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum time formado nesta categoria.</div>
           ) : (
             <div className="flex flex-col gap-4 p-4">
@@ -1449,6 +1515,8 @@ const validateCategoryGenders = (
 
   const handleFinishMatch = async (matchId: string) => {
     const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+    const targetMatch = matches.find((m) => m.id === matchId);
+
     const nextMatches = matches.map((m) => {
       if (m.id !== matchId) return m;
       const { setsWon1, setsWon2, scores } = parseMatchSets(m, totalSets);
@@ -1473,21 +1541,31 @@ const validateCategoryGenders = (
         }
       }
 
+      const p1Obj = m.pair1 || (m.pair1Id ? pairs.find((p) => p.id === m.pair1Id) : undefined);
+      const p2Obj = m.pair2 || (m.pair2Id ? pairs.find((p) => p.id === m.pair2Id) : undefined);
+
       return {
         ...m,
         status: 'finished' as const,
         winnerPairId: winnerPairId || m.pair1Id,
         loserPairId: loserPairId || m.pair2Id,
+        pair1: p1Obj ? minifyPairForStorage(p1Obj) : m.pair1,
+        pair2: p2Obj ? minifyPairForStorage(p2Obj) : m.pair2,
       };
     });
 
-    const progressedMatches = updatePlayoffProgression(pairs, nextMatches);
-    onUpdateEvent({ ...event, matches: progressedMatches });
+    let nextPairs = pairs;
+    if (isRanking && targetMatch) {
+      nextPairs = pairs.filter((p) => p.id !== targetMatch.pair1Id && p.id !== targetMatch.pair2Id);
+    }
+
+    const progressedMatches = isRanking ? nextMatches : updatePlayoffProgression(pairs, nextMatches);
+    onUpdateEvent({ ...event, matches: progressedMatches, pairs: nextPairs });
 
     const db = getDb();
     if (db) {
       try {
-        await updateEvent(db as Firestore, event.pin, { matches: progressedMatches });
+        await updateEvent(db as Firestore, event.pin, { matches: progressedMatches, pairs: nextPairs });
       } catch (err) {
         console.error('Erro ao finalizar partida no Firestore:', err);
       }
@@ -1513,6 +1591,11 @@ const validateCategoryGenders = (
         onConfirm: () => setModalConfig(null),
         variant: 'info',
       });
+      return;
+    }
+
+    if (isRanking) {
+      handleFinishMatch(matchId);
       return;
     }
 
@@ -1566,6 +1649,7 @@ const validateCategoryGenders = (
   };
 
   const handleReopenMatch = async (matchId: string) => {
+    const targetMatch = matches.find((m) => m.id === matchId);
     const nextMatches = matches.map((m) => {
       if (m.id !== matchId) return m;
       return {
@@ -1576,13 +1660,23 @@ const validateCategoryGenders = (
       };
     });
 
-    const progressedMatches = updatePlayoffProgression(pairs, nextMatches);
-    onUpdateEvent({ ...event, matches: progressedMatches });
+    let nextPairs = pairs;
+    if (isRanking && targetMatch) {
+      const toAdd = [targetMatch.pair1, targetMatch.pair2].filter(
+        (p): p is TournamentPair => Boolean(p && !pairs.some((ep) => ep.id === p.id))
+      );
+      if (toAdd.length > 0) {
+        nextPairs = [...pairs, ...toAdd.map(minifyPairForStorage)];
+      }
+    }
+
+    const progressedMatches = isRanking ? nextMatches : updatePlayoffProgression(nextPairs, nextMatches);
+    onUpdateEvent({ ...event, matches: progressedMatches, pairs: nextPairs });
 
     const db = getDb();
     if (db) {
       try {
-        await updateEvent(db as Firestore, event.pin, { matches: progressedMatches });
+        await updateEvent(db as Firestore, event.pin, { matches: progressedMatches, pairs: nextPairs });
       } catch (err) {
         console.error('Erro ao reabrir partida no Firestore:', err);
       }
@@ -1992,14 +2086,22 @@ const validateCategoryGenders = (
           {categoryMatches.length === 0 ? (
             <div className="p-10 text-center space-y-3">
               <p className="text-sm font-bold text-slate-400">Nenhuma partida gerada para esta categoria.</p>
-              <button
-                type="button"
-                onClick={handleGenerateSystemMatches}
-                className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
-              >
-                <Sparkles size={16} />
-                <span>Gerar partidas</span>
-              </button>
+              {!isRanking && (
+                <button
+                  type="button"
+                  onClick={handleGenerateSystemMatches}
+                  className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
+                >
+                  <Sparkles size={16} />
+                  <span>Gerar partidas</span>
+                </button>
+              )}
+            </div>
+          ) : isRanking ? (
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-1 gap-2.5">
+                {categoryMatches.map(renderMatchItem)}
+              </div>
             </div>
           ) : isSuper8 ? (
             <div className="p-4 space-y-6">
@@ -2191,6 +2293,411 @@ const validateCategoryGenders = (
           <div className="p-10 text-center text-sm font-bold text-slate-400">
             Nenhum inscrito nesta categoria.
           </div>
+        ) : isRanking ? (
+          <div>
+            {entriesWithTeam.length > 0 && (
+              <div>
+                <div className="px-4 py-2 bg-sky-50 border-b border-sky-100 flex items-center gap-2">
+                  <Users size={13} className="text-sky-600" />
+                  <span className="text-[11px] font-black text-sky-700">Em time — aguardando partida ({entriesWithTeam.length})</span>
+                </div>
+                <div className="divide-y divide-sky-100/60">
+                  {entriesWithTeam.map((entry, entryIndex) => {
+              const entryCategories = categories.filter((c) =>
+                entry.categoryIds?.includes(c.id)
+              );
+              const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
+              const isExpanded = expandedRegistrationEmail === entry.email;
+              const isSelected = !isSuper8 && selectedEntries.has(entry.email);
+              const pair = !isSuper8 ? pairForEntry(entry) : null;
+              const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
+              const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
+              const partner = pair
+                ? (pair.p1.email === entry.email ? pair.p2 : pair.p1)
+                : null;
+
+              return (
+                <div
+                  key={entry.email || entry.pin}
+                  className={`transition-all ${
+                    isSelected
+                      ? isRanking && !pair
+                        ? 'bg-emerald-100/90 ring-2 ring-inset ring-emerald-500 border-l-4 border-l-emerald-600'
+                        : 'bg-sky-100/90 ring-2 ring-inset ring-sky-500 border-l-4 border-l-sky-600'
+                      : isRanking && pair
+                      ? 'bg-sky-50/30 hover:bg-sky-50/60 border-l-4 border-l-sky-400'
+                      : isRanking && !pair
+                      ? 'bg-emerald-50/20 hover:bg-emerald-50/50 border-l-4 border-l-emerald-400'
+                      : isExpanded
+                      ? 'bg-emerald-50/30'
+                      : entryIndex % 2 === 0
+                      ? 'bg-white hover:bg-slate-50/70'
+                      : 'bg-emerald-50/30 hover:bg-emerald-50/50'
+                  }`}
+                >
+                  <div
+                    onClick={() => !isSuper8 && toggleEntrySelection(entry)}
+                    className={`p-3.5 sm:p-4 flex flex-col gap-2.5 ${isSuper8 ? 'cursor-default' : 'cursor-pointer'}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      {/* Lado Esquerdo: Ícone de Gênero + Informações do Participante */}
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        {/* Ícone de Gênero */}
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const nextGender = entry.gender === 'F' ? 'M' : 'F';
+                            const db = getDb();
+                            if (db && event.pin) {
+                              try {
+                                const { updateEventEntry } = await import('@infra/firebase/events');
+                                await updateEventEntry(db, event.pin, entry.email, { gender: nextGender });
+                                const { updateUserProfileFields } = await import('@infra/firebase/users');
+                                await updateUserProfileFields(db, entry.email, { gender: nextGender });
+                              } catch (err) {
+                                console.error('Erro ao alternar gênero:', err);
+                              }
+                            }
+                            const updatedEntries = entries.map((item) =>
+                              (item.email === entry.email || item.pin === entry.pin)
+                                ? { ...item, gender: nextGender as 'M' | 'F' }
+                                : item
+                            );
+                            onUpdateEvent({ ...event, entries: updatedEntries });
+                          }}
+                          className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all active:scale-90 ${
+                            entry.gender === 'F'
+                              ? 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'
+                              : 'bg-sky-50 text-sky-500 border-sky-100 hover:bg-sky-100'
+                          }`}
+                          title="Clique para alternar gênero"
+                        >
+                          {entry.gender === 'F' ? <VenusIcon size={20} /> : <MarsIcon size={20} />}
+                        </button>
+
+                        {/* Bloco das Linhas de Informação */}
+                        <div className="space-y-1 min-w-0 flex-1 text-left">
+                          {/* Linha 1: Nome */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {isIndividualRanking && standing?.rank !== undefined && (
+                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
+                                standing.rank === 1
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : standing.rank === 2
+                                  ? 'bg-slate-200 text-slate-700 border border-slate-300'
+                                  : standing.rank === 3
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
+                              </span>
+                            )}
+                            <p className="font-black text-sm text-slate-800 tracking-tight truncate">
+                              {entry.name || entry.nickname}
+                            </p>
+                            {pair ? (
+                              <span className="inline-flex items-center gap-1 bg-sky-100 text-sky-800 px-2 py-0.5 rounded-lg text-[10px] font-black border border-sky-300">
+                                <Users size={11} /> {pair.teamCode || `Time ${pair.teamNumber || ''}`}
+                              </span>
+                            ) : isRanking ? (
+                              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-lg text-[10px] font-black border border-emerald-300">
+                                <Sparkles size={11} className="text-emerald-600" /> Disponível
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {/* Linha 2: Nickname - PIN mascarado (padrão Inscrições) */}
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            {(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}
+                          </p>
+
+                          {/* Linha 2b: Parceiro (apenas Ranking quando em time) */}
+                          {isRanking && partner && (
+                            <p className="text-[11px] font-bold text-sky-700 flex items-center gap-1">
+                              <UsersRound size={12} /> Parceiro(a): <span className="font-black text-slate-800">{partner.nickname || partner.name}</span>
+                            </p>
+                          )}
+
+                          {/* Linha 3: Categorias */}
+                          {entryCategories.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                              {entryCategories.map((c) => (
+                                <span
+                                  key={c.id}
+                                  className="bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60"
+                                >
+                                  {c.abbreviation || c.name}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-slate-300 font-bold">Sem categoria</p>
+                          )}
+
+                          {/* Linha 4: Status do Pagamento + Valores — oculto quando inscrição gratuita */}
+                          {((entry.dueAmount ?? 0) > 0 || entryPaid > 0) && (
+                            <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                              <span
+                                className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                                  entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : entry.paymentStatus === 'Isento'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}
+                              >
+                                {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
+                              </span>
+                              <span className="text-xs font-bold text-slate-600">
+                                R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Lado Direito: Inscrição_ID + Botão de Ação / Chevron */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
+                          {formatRegistrationId(entry.registrationId)}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedRegistrationEmail(isExpanded ? null : entry.email);
+                          }}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-90 shadow-sm"
+                          title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
+                        >
+                          {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Controles de estatísticas do Super 8 / Ranking */}
+                    {isIndividualRanking && standing && categoryMatches.length > 0 && (
+                      <div className="mt-1 pt-2.5 border-t border-slate-100 space-y-1.5">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {/* Linha 1 */}
+                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                            <span className="text-[11px] font-black text-slate-500">Vitórias (Pts):</span>
+                            <span className="font-black text-slate-900 text-xs">{standing.wins}</span>
+                          </div>
+                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                            <span className="text-[11px] font-black text-slate-500">Saldo de Games:</span>
+                            <span className={`font-black text-xs ${standing.gamesDiff > 0 ? 'text-emerald-600' : standing.gamesDiff < 0 ? 'text-red-600' : 'text-slate-800'}`}>
+                              {standing.gamesDiff > 0 ? `+${standing.gamesDiff}` : standing.gamesDiff}
+                            </span>
+                          </div>
+                          {/* Linha 2 */}
+                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                            <span className="text-[11px] font-black text-slate-500">Games a Favor:</span>
+                            <span className="font-black text-slate-900 text-xs">{standing.gamesWon}</span>
+                          </div>
+                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                            <span className="text-[11px] font-black text-slate-500">Games Sofridos:</span>
+                            <span className="font-black text-slate-900 text-xs">{standing.gamesLost}</span>
+                          </div>
+                        </div>
+                        {standing.tieBreakNote && (
+                          <div className="pt-0.5">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                              ⚖️ {standing.tieBreakNote}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Formulário Expandido */}
+                  {isExpanded && (
+                    <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
+                      <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                        <EventRegistrationForm
+                          key={`expanded-${entry.email || entry.pin}`}
+                          event={event}
+                          mode="admin"
+                          entry={entry}
+                          onUpdateEvent={onUpdateEvent}
+                          onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
+                          onDelete={() => {
+                            handleDeleteEntry(entry.pin);
+                          }}
+                          onCancel={() => setExpandedRegistrationEmail(null)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+                </div>
+              </div>
+            )}
+            {entriesWithoutTeam.length > 0 && (
+              <div>
+                <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 border-t border-t-slate-100 flex items-center gap-2">
+                  <Sparkles size={13} className="text-emerald-600" />
+                  <span className="text-[11px] font-black text-emerald-700">Disponíveis para formar time ({entriesWithoutTeam.length})</span>
+                </div>
+                <div className="divide-y divide-emerald-100/40">
+                  {entriesWithoutTeam.map((entry, entryIndex) => {
+                    const entryCategories = categories.filter((c) => entry.categoryIds?.includes(c.id));
+                    const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
+                    const isExpanded = expandedRegistrationEmail === entry.email;
+                    const isSelected = !isSuper8 && selectedEntries.has(entry.email);
+                    const pair = null;
+                    const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
+                    const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
+                    const partner = null;
+                    return (
+                      <div
+                        key={entry.email || entry.pin}
+                        className={`transition-all ${
+                          isSelected
+                            ? 'bg-emerald-100/90 ring-2 ring-inset ring-emerald-500 border-l-4 border-l-emerald-600'
+                            : isExpanded
+                            ? 'bg-emerald-50/30 border-l-4 border-l-emerald-400'
+                            : 'bg-emerald-50/20 hover:bg-emerald-50/50 border-l-4 border-l-emerald-400'
+                        }`}
+                      >
+                        <div
+                          onClick={() => !isSuper8 && toggleEntrySelection(entry)}
+                          className={`p-3.5 sm:p-4 flex flex-col gap-2.5 ${isSuper8 ? 'cursor-default' : 'cursor-pointer'}`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const nextGender = entry.gender === 'F' ? 'M' : 'F';
+                                  const db = getDb();
+                                  if (db && event.pin) {
+                                    try {
+                                      const { updateEventEntry } = await import('@infra/firebase/events');
+                                      await updateEventEntry(db, event.pin, entry.email, { gender: nextGender });
+                                      const { updateUserProfileFields } = await import('@infra/firebase/users');
+                                      await updateUserProfileFields(db, entry.email, { gender: nextGender });
+                                    } catch (err) {
+                                      console.error('Erro ao alternar gênero:', err);
+                                    }
+                                  }
+                                  const updatedEntries = entries.map((item) =>
+                                    (item.email === entry.email || item.pin === entry.pin)
+                                      ? { ...item, gender: nextGender as 'M' | 'F' }
+                                      : item
+                                  );
+                                  onUpdateEvent({ ...event, entries: updatedEntries });
+                                }}
+                                className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all active:scale-90 ${
+                                  entry.gender === 'F'
+                                    ? 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'
+                                    : 'bg-sky-50 text-sky-500 border-sky-100 hover:bg-sky-100'
+                                }`}
+                                title="Clique para alternar gênero"
+                              >
+                                {entry.gender === 'F' ? <VenusIcon size={20} /> : <MarsIcon size={20} />}
+                              </button>
+                              <div className="space-y-1 min-w-0 flex-1 text-left">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {isIndividualRanking && standing?.rank !== undefined && (
+                                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
+                                      standing.rank === 1
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                        : standing.rank === 2
+                                        ? 'bg-slate-200 text-slate-700 border border-slate-300'
+                                        : standing.rank === 3
+                                        ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
+                                        : 'bg-slate-100 text-slate-600'
+                                    }`}>
+                                      {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
+                                    </span>
+                                  )}
+                                  <p className="font-black text-sm text-slate-800 tracking-tight truncate">
+                                    {entry.name || entry.nickname}
+                                  </p>
+                                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-lg text-[10px] font-black border border-emerald-300">
+                                    <Sparkles size={11} className="text-emerald-600" /> Disponível
+                                  </span>
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  {(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}
+                                </p>
+                                {entryCategories.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                    {entryCategories.map((c) => (
+                                      <span key={c.id} className="bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60">
+                                        {c.abbreviation || c.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-[10px] text-slate-300 font-bold">Sem categoria</p>
+                                )}
+                                {((entry.dueAmount ?? 0) > 0 || entryPaid > 0) && (
+                                  <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                                    <span className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                                      entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : entry.paymentStatus === 'Isento'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : 'bg-amber-100 text-amber-700'
+                                    }`}>
+                                      {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-600">
+                                      R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
+                                {formatRegistrationId(entry.registrationId)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedRegistrationEmail(isExpanded ? null : entry.email);
+                                }}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-90 shadow-sm"
+                                title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
+                              >
+                                {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        {isExpanded && (
+                          <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
+                            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                              <EventRegistrationForm
+                                key={`expanded-${entry.email || entry.pin}`}
+                                event={event}
+                                mode="admin"
+                                entry={entry}
+                                onUpdateEvent={onUpdateEvent}
+                                onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
+                                onDelete={() => { handleDeleteEntry(entry.pin); }}
+                                onCancel={() => setExpandedRegistrationEmail(null)}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="divide-y divide-slate-100">
             {sortedCategoryEntries.map((entry, entryIndex) => {
@@ -2202,7 +2709,10 @@ const validateCategoryGenders = (
               const isSelected = !isSuper8 && selectedEntries.has(entry.email);
               const pair = !isSuper8 ? pairForEntry(entry) : null;
               const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
-              const standing = isSuper8 ? super8StandingsMap.get(standingKey) : null;
+              const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
+              const partner = pair
+                ? (pair.p1.email === entry.email ? pair.p2 : pair.p1)
+                : null;
 
               return (
                 <div
@@ -2262,7 +2772,7 @@ const validateCategoryGenders = (
                         <div className="space-y-1 min-w-0 flex-1 text-left">
                           {/* Linha 1: Nome */}
                           <div className="flex items-center gap-2 flex-wrap">
-                            {isSuper8 && standing?.rank !== undefined && (
+                            {isIndividualRanking && standing?.rank !== undefined && (
                               <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
                                 standing.rank === 1
                                   ? 'bg-amber-100 text-amber-800 border border-amber-200'
@@ -2272,17 +2782,12 @@ const validateCategoryGenders = (
                                   ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
                                   : 'bg-slate-100 text-slate-600'
                               }`}>
-                                {standing.rank}º
+                                {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
                               </span>
                             )}
                             <p className="font-black text-sm text-slate-800 tracking-tight truncate">
                               {entry.name || entry.nickname}
                             </p>
-                            {pair && (
-                              <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg text-[10px] font-black border border-blue-100">
-                                <Trophy size={11} /> {pair.teamCode || `Time ${pair.teamNumber || ''}`}
-                              </span>
-                            )}
                           </div>
 
                           {/* Linha 2: Nickname - PIN mascarado (padrão Inscrições) */}
@@ -2347,41 +2852,6 @@ const validateCategoryGenders = (
                         </button>
                       </div>
                     </div>
-
-                    {/* Controles de estatísticas do Super 8 (Requisitos h, i, j) */}
-                    {isSuper8 && standing && categoryMatches.length > 0 && (
-                      <div className="mt-1 pt-2.5 border-t border-slate-100 space-y-1.5">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          {/* Linha 1 */}
-                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="text-[11px] font-black text-slate-500">Vitórias (Pts):</span>
-                            <span className="font-black text-slate-900 text-xs">{standing.wins}</span>
-                          </div>
-                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="text-[11px] font-black text-slate-500">Saldo de Games:</span>
-                            <span className={`font-black text-xs ${standing.gamesDiff > 0 ? 'text-emerald-600' : standing.gamesDiff < 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                              {standing.gamesDiff > 0 ? `+${standing.gamesDiff}` : standing.gamesDiff}
-                            </span>
-                          </div>
-                          {/* Linha 2 */}
-                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="text-[11px] font-black text-slate-500">Games a Favor:</span>
-                            <span className="font-black text-slate-900 text-xs">{standing.gamesWon}</span>
-                          </div>
-                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="text-[11px] font-black text-slate-500">Games Sofridos:</span>
-                            <span className="font-black text-slate-900 text-xs">{standing.gamesLost}</span>
-                          </div>
-                        </div>
-                        {standing.tieBreakNote && (
-                          <div className="pt-0.5">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
-                              ⚖️ {standing.tieBreakNote}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   {/* Formulário Expandido */}
@@ -2464,41 +2934,67 @@ const validateCategoryGenders = (
         </header>
       )}
 
-      {/* Top Selection Action Bar for TEAMS (Manual Match Generation - Item a1 / Image 3 style) */}
-      {isManualMatchDraw && selectedTeamIds.size > 0 && (
-        <header className="px-6 py-5 flex items-center justify-between bg-sky-600 text-white fixed top-0 left-0 right-0 z-[60] shadow-lg animate-in slide-in-from-top duration-200">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => setSelectedTeamIds(new Set())}
-              className="p-2 -ml-2 active:scale-90 transition-transform text-white hover:text-sky-100"
-              title="Limpar seleção"
-            >
-              <X size={24} />
-            </button>
-            <h1 className="text-lg font-bold text-white">
-              {selectedTeamIds.size} {selectedTeamIds.size === 1 ? 'Selecionado' : 'Selecionados'}
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            {selectedTeamIds.size === 2 ? (
+      {/* Top Selection Action Bar for TEAMS (Manual Match Generation & Ranking Formar/Desfazer Partida) */}
+      {(isManualMatchDraw || isRanking) && selectedTeamIds.size > 0 && (() => {
+        const selectedTeamIdsArray = Array.from(selectedTeamIds);
+        const existingMatchBetweenSelectedTeams = selectedTeamIdsArray.length === 2
+          ? categoryMatches.find(
+              (m) =>
+                (m.pair1Id === selectedTeamIdsArray[0] && m.pair2Id === selectedTeamIdsArray[1]) ||
+                (m.pair1Id === selectedTeamIdsArray[1] && m.pair2Id === selectedTeamIdsArray[0])
+            )
+          : null;
+
+        return (
+          <header className="px-6 py-5 flex items-center justify-between bg-sky-600 text-white fixed top-0 left-0 right-0 z-[60] shadow-lg animate-in slide-in-from-top duration-200">
+            <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={handleCreateManualMatch}
-                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
-                title="Gerar partida com os 2 times selecionados"
+                onClick={() => setSelectedTeamIds(new Set())}
+                className="p-2 -ml-2 active:scale-90 transition-transform text-white hover:text-sky-100"
+                title="Limpar seleção"
               >
-                <UsersRound size={16} />
-                <span>Gerar partida</span>
+                <X size={24} />
               </button>
-            ) : (
-              <span className="text-xs font-bold text-sky-100 bg-sky-700/60 px-3 py-2 rounded-xl">
-                Selecione +1 time
-              </span>
-            )}
-          </div>
-        </header>
-      )}
+              <h1 className="text-lg font-bold text-white">
+                {selectedTeamIds.size} {selectedTeamIds.size === 1 ? 'Selecionado' : 'Selecionados'}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedTeamIds.size === 2 ? (
+                existingMatchBetweenSelectedTeams ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDeleteMatch(existingMatchBetweenSelectedTeams.id);
+                      setSelectedTeamIds(new Set());
+                    }}
+                    className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
+                    title="Desfazer partida entre os times selecionados"
+                  >
+                    <Trash2 size={16} />
+                    <span>Desfazer partida</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleCreateManualMatch}
+                    className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
+                    title="Formar partida com os 2 times selecionados"
+                  >
+                    <UsersRound size={16} />
+                    <span>{isRanking ? 'Formar partida' : 'Gerar partida'}</span>
+                  </button>
+                )
+              ) : (
+                <span className="text-xs font-bold text-sky-100 bg-sky-700/60 px-3 py-2 rounded-xl">
+                  Selecione +1 time
+                </span>
+              )}
+            </div>
+          </header>
+        );
+      })()}
 
       {/* Top Banner & Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">

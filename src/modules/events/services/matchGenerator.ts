@@ -269,6 +269,83 @@ export const isCategoryMixed = (category: EventCategory): boolean => {
   return Boolean(isExplicitMixed || isTextMixed);
 };
 
+export const validateCategoryGenders = (
+  cat: EventCategory,
+  selectedPlayers: TournamentEntry[]
+): { valid: boolean; message?: string } => {
+  if (selectedPlayers.length !== 2) {
+    return { valid: false, message: 'Selecione exatamente 2 jogadores.' };
+  }
+
+  const mCount = selectedPlayers.filter((p) => p.gender === 'M').length;
+  const fCount = selectedPlayers.filter((p) => p.gender === 'F').length;
+
+  const catNameLower = (cat.name || '').toLowerCase();
+  const catDescLower = (cat.description || '').toLowerCase();
+  const isExplicitMixed =
+    (cat.gender1 === 'M' && cat.gender2 === 'F') ||
+    (cat.gender1 === 'F' && cat.gender2 === 'M');
+  const isTextMixed =
+    catNameLower.includes('misto') ||
+    catNameLower.includes('mista') ||
+    catNameLower.includes('mix') ||
+    catDescLower.includes('misto') ||
+    catDescLower.includes('mista');
+
+  if (isExplicitMixed || isTextMixed) {
+    if (mCount !== 1 || fCount !== 1) {
+      return {
+        valid: false,
+        message: `A categoria "${cat.name}" é mista e exige 1 atleta masculino e 1 jogadora feminina.`,
+      };
+    }
+    return { valid: true };
+  }
+
+  const isExplicitFemale = cat.gender1 === 'F' && cat.gender2 === 'F';
+  const isTextFemale =
+    (catNameLower.includes('fem') || catDescLower.includes('fem')) &&
+    !isTextMixed;
+
+  if (isExplicitFemale || isTextFemale) {
+    if (fCount !== 2) {
+      return {
+        valid: false,
+        message: `A categoria "${cat.name}" é feminina e exige 2 atletas do gênero feminino.`,
+      };
+    }
+    return { valid: true };
+  }
+
+  const isExplicitMale = cat.gender1 === 'M' && cat.gender2 === 'M';
+  const isTextMale =
+    (catNameLower.includes('masc') || catDescLower.includes('masc')) &&
+    !isTextMixed;
+
+  if (isExplicitMale || isTextMale) {
+    if (mCount !== 2) {
+      return {
+        valid: false,
+        message: `A categoria "${cat.name}" é masculina e exige 2 atletas do gênero masculino.`,
+      };
+    }
+    return { valid: true };
+  }
+
+  if (cat.gender1 && cat.gender2) {
+    const requiredM = (cat.gender1 === 'M' ? 1 : 0) + (cat.gender2 === 'M' ? 1 : 0);
+    const requiredF = (cat.gender1 === 'F' ? 1 : 0) + (cat.gender2 === 'F' ? 1 : 0);
+    if (mCount !== requiredM || fCount !== requiredF) {
+      return {
+        valid: false,
+        message: `Os atletas selecionados (${mCount} masc / ${fCount} fem) não correspondem à categoria "${cat.name}".`,
+      };
+    }
+  }
+
+  return { valid: true };
+};
+
 const SUPER_8_ROUNDS: Array<Array<[[number, number], [number, number]]>> = [
   // Round 1
   [
