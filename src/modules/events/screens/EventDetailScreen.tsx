@@ -539,7 +539,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   const isChaveEvent = !event.eventType || event.eventType === 'Chave classificatória' || event.eventType === 'Chave mata-mata';
   const isRanking = event.eventType === 'Ranking';
   const isSuper8 = event.eventType === 'Super 8';
-  const saveMatchesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set());
