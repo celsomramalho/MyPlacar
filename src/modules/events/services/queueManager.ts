@@ -11,6 +11,8 @@ export interface QueueMatchItem {
   pair1Code?: string;
   pair2Code?: string;
   phaseLabel: string;
+  estimatedWaitMinutes?: number;
+  estimatedCallTimeStr?: string;
 }
 
 export interface CourtState {
@@ -18,6 +20,9 @@ export interface CourtState {
   status: 'free' | 'busy' | 'interdicted';
   activeMatch?: TournamentMatch;
   activeMatchCategory?: EventCategory;
+  startedAt?: string;
+  estimatedRemainingMinutes?: number;
+  estimatedFinishTimeStr?: string;
 }
 
 export interface QueueCalculationResult {
@@ -32,6 +37,74 @@ export interface QueueCalculationResult {
   visibleMatches: QueueMatchItem[];
   totalPendingCount: number;
   visibleLimit: number;
+  averageMatchDurationMinutes: number;
+  isDurationEstimated: boolean;
+  finishedMatchesCountWithDuration: number;
+  nextCourtFreeWaitMinutes?: number;
+  nextCourtFreeTimeStr?: string;
+}
+
+export interface MatchDurationStats {
+  averageMinutes: number;
+  sampleCount: number;
+  isEstimated: boolean;
+}
+
+/**
+ * Calcula a duração média real das partidas finalizadas do evento ou infere pelo formato
+ */
+export function calculateAverageMatchDuration(
+  matches: TournamentMatch[],
+  event?: TournamentEvent
+): MatchDurationStats {
+  const finishedWithDuration = matches.filter((m) => {
+    if (m.status !== 'finished') return false;
+    if (typeof m.durationMinutes === 'number' && m.durationMinutes > 0) return true;
+    if (m.startedAt && m.finishedAt) {
+      const s = new Date(m.startedAt).getTime();
+      const f = new Date(m.finishedAt).getTime();
+      return !isNaN(s) && !isNaN(f) && f > s;
+    }
+    return false;
+  });
+
+  if (finishedWithDuration.length > 0) {
+    const totalMinutes = finishedWithDuration.reduce((acc, m) => {
+      if (typeof m.durationMinutes === 'number' && m.durationMinutes > 0) {
+        return acc + m.durationMinutes;
+      }
+      const s = new Date(m.startedAt!).getTime();
+      const f = new Date(m.finishedAt!).getTime();
+      return acc + Math.max(1, Math.round((f - s) / 60000));
+    }, 0);
+
+    return {
+      averageMinutes: Math.max(5, Math.round(totalMinutes / finishedWithDuration.length)),
+      sampleCount: finishedWithDuration.length,
+      isEstimated: false,
+    };
+  }
+
+  // Duração estimada padrão conforme formato
+  const sets = event?.setsCount || event?.config?.sets || 1;
+  const isSuper8 = event?.eventType === 'Super 8' || event?.config?.sportType === 'Super 8';
+
+  let defaultDuration = 25;
+  if (isSuper8) {
+    defaultDuration = 20;
+  } else if (sets === 1) {
+    defaultDuration = 25;
+  } else if (sets === 3) {
+    defaultDuration = 45;
+  } else if (sets >= 5) {
+    defaultDuration = 75;
+  }
+
+  return {
+    averageMinutes: defaultDuration,
+    sampleCount: 0,
+    isEstimated: true,
+  };
 }
 
 /**
@@ -168,6 +241,9 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     }
   }
 
+  const now = new Date();
+  const durationStats = calculateAverageMatchDuration(allMatches, event);
+
   // 2. Monta o estado de cada quadra
   const courtStates: CourtState[] = courtList.map((courtName) => {
     if (interdictedSet.has(courtName)) {
@@ -178,11 +254,27 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     }
     const liveMatch = courtLiveMatchMap.get(courtName);
     if (liveMatch) {
+      let remainingMinutes = durationStats.averageMinutes;
+      let finishTimeStr: string | undefined = undefined;
+      const startedAt = liveMatch.startedAt;
+      if (startedAt) {
+        const startMs = new Date(startedAt).getTime();
+        if (!isNaN(startMs)) {
+          const elapsedMins = Math.floor((now.getTime() - startMs) / 60000);
+          remainingMinutes = Math.max(2, durationStats.averageMinutes - elapsedMins);
+        }
+      }
+      const finishDate = new Date(now.getTime() + remainingMinutes * 60000);
+      finishTimeStr = finishDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
       return {
         courtName,
         status: 'busy',
         activeMatch: liveMatch,
         activeMatchCategory: liveMatch.categoryId ? categoryMap.get(liveMatch.categoryId) : undefined,
+        startedAt,
+        estimatedRemainingMinutes: remainingMinutes,
+        estimatedFinishTimeStr: finishTimeStr,
       };
     }
     return {
@@ -412,7 +504,65 @@ function isMatchBlockedByPreviousPhase(match: TournamentMatch, allMatches: Tourn
     return colorDiff;
   });
 
-  // 7. Limite de partidas visíveis: 4 * (Q_total - Q_interditadas)
+  // 7. Estimativa de chamada para as partidas da fila com base nas quadras disponíveis e duração média
+  interface CourtSimSlot {
+    courtName: string;
+    availableAt: Date;
+  }
+
+  const courtSimSlots: CourtSimSlot[] = [];
+
+  courtStates.forEach((cs) => {
+    if (cs.status === 'interdicted') return;
+
+    if (cs.status === 'free') {
+      courtSimSlots.push({
+        courtName: cs.courtName,
+        availableAt: new Date(now.getTime()),
+      });
+    } else if (cs.status === 'busy') {
+      const remaining = cs.estimatedRemainingMinutes ?? durationStats.averageMinutes;
+      courtSimSlots.push({
+        courtName: cs.courtName,
+        availableAt: new Date(now.getTime() + remaining * 60000),
+      });
+    }
+  });
+
+  let nextCourtFreeWaitMinutes: number | undefined = undefined;
+  let nextCourtFreeTimeStr: string | undefined = undefined;
+
+  if (courtSimSlots.length > 0) {
+    const sortedSlots = [...courtSimSlots].sort((a, b) => a.availableAt.getTime() - b.availableAt.getTime());
+    const nextSlot = sortedSlots[0];
+    nextCourtFreeWaitMinutes = Math.max(0, Math.round((nextSlot.availableAt.getTime() - now.getTime()) / 60000));
+    nextCourtFreeTimeStr = nextSlot.availableAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Simula a fila de chamada para partidas elegíveis (verde, amarela, cinza)
+  const simSlots = courtSimSlots.map((s) => ({
+    courtName: s.courtName,
+    availableAt: new Date(s.availableAt.getTime()),
+  }));
+
+  orderedQueue.forEach((item) => {
+    if (simSlots.length === 0) return;
+    if (item.queueStatus === 'red') return;
+
+    simSlots.sort((a, b) => a.availableAt.getTime() - b.availableAt.getTime());
+    const earliest = simSlots[0];
+
+    const callDate = new Date(earliest.availableAt.getTime());
+    const waitMins = Math.max(0, Math.round((callDate.getTime() - now.getTime()) / 60000));
+
+    item.estimatedWaitMinutes = waitMins;
+    item.estimatedCallTimeStr = callDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Atualiza o slot com a duração média estimada
+    earliest.availableAt = new Date(callDate.getTime() + durationStats.averageMinutes * 60000);
+  });
+
+  // 8. Limite de partidas visíveis: 4 * (Q_total - Q_interditadas)
   const effectiveCourts = Math.max(1, courtList.length - interdictedCourtsCount);
   const visibleLimit = 4 * effectiveCourts;
   const visibleMatches = orderedQueue.slice(0, visibleLimit);
@@ -429,5 +579,10 @@ function isMatchBlockedByPreviousPhase(match: TournamentMatch, allMatches: Tourn
     visibleMatches,
     totalPendingCount: orderedQueue.length,
     visibleLimit,
+    averageMatchDurationMinutes: durationStats.averageMinutes,
+    isDurationEstimated: durationStats.isEstimated,
+    finishedMatchesCountWithDuration: durationStats.sampleCount,
+    nextCourtFreeWaitMinutes,
+    nextCourtFreeTimeStr,
   };
 }

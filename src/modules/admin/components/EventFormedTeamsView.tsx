@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Layers,
   AlertCircle,
@@ -14,6 +14,8 @@ import {
   ArrowLeft,
   ShieldOff,
   ShieldAlert,
+  Clock,
+  Zap,
 } from 'lucide-react';
 import type { TournamentEvent, TournamentMatch, MatchSetScore } from '@modules/events/types';
 import { calculateQueueState } from '@modules/events/services/queueManager';
@@ -98,6 +100,49 @@ const getPhaseLabel = (phase?: string) => {
   return phase || 'Jogo';
 };
 
+const MatchTimer: React.FC<{ startedAt?: string; averageMinutes?: number }> = ({ startedAt, averageMinutes }) => {
+  const [elapsed, setElapsed] = useState<number>(() => {
+    if (!startedAt) return 0;
+    const diff = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+    return Math.max(0, isNaN(diff) ? 0 : diff);
+  });
+
+  useEffect(() => {
+    if (!startedAt) return;
+    const tick = () => {
+      const diff = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+      setElapsed(Math.max(0, isNaN(diff) ? 0 : diff));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  const isOvertime = averageMinutes && mins >= averageMinutes;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black font-mono border transition-all ${
+        isOvertime
+          ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse'
+          : 'bg-amber-100 text-amber-900 border-amber-300'
+      }`}
+      title={startedAt ? `Iniciado às ${new Date(startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Cronômetro'}
+    >
+      <Clock size={11} className={isOvertime ? 'text-rose-600' : 'text-amber-700'} />
+      <span>{timeStr}</span>
+      {averageMinutes && (
+        <span className="text-[9px] font-sans font-bold opacity-75">
+          (~{averageMinutes}m)
+        </span>
+      )}
+    </span>
+  );
+};
+
 export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) => {
   const [selectedCourtForMatch, setSelectedCourtForMatch] = useState<string | null>(null);
   const [activeSelectMatchId, setActiveSelectMatchId] = useState<string | null>(null);
@@ -117,6 +162,11 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     interdictedCourtsCount,
     busyCourtsCount,
     freeCourtsCount,
+    averageMatchDurationMinutes,
+    isDurationEstimated,
+    finishedMatchesCountWithDuration,
+    nextCourtFreeWaitMinutes,
+    nextCourtFreeTimeStr,
   } = queueState;
 
   const pairs = event.pairs || [];
@@ -366,6 +416,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
   // Vincula partida a uma quadra livre (Regra E: Fluxo de Entrada em Quadra)
   const handleAssignMatchToCourt = async (matchId: string, courtName: string) => {
     const allMatches = event.matches || [];
+    const nowIso = new Date().toISOString();
     const nextMatches = allMatches.map((m) => {
       if (m.id === matchId) {
         return {
@@ -373,6 +424,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
           status: 'live' as const,
           court: courtName,
           frozen: false,
+          startedAt: m.startedAt || nowIso,
         };
       }
       return m;
@@ -386,6 +438,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
   const handleFreeCourtMatch = async (matchId: string, finish = false) => {
     const allMatches = event.matches || [];
     const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+    const nowIso = new Date().toISOString();
     const nextMatches = allMatches.map((m) => {
       if (m.id === matchId) {
         if (finish) {
@@ -411,18 +464,30 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
             }
           }
 
+          let durationMinutes: number | undefined = undefined;
+          if (m.startedAt) {
+            const startMs = new Date(m.startedAt).getTime();
+            const endMs = new Date(nowIso).getTime();
+            if (!isNaN(startMs) && !isNaN(endMs) && endMs >= startMs) {
+              durationMinutes = Math.max(1, Math.round((endMs - startMs) / 60000));
+            }
+          }
+
           return {
             ...m,
             status: 'finished' as const,
             winnerPairId: winnerPairId || m.pair1Id,
             loserPairId: loserPairId || m.pair2Id,
             court: undefined,
+            finishedAt: nowIso,
+            durationMinutes: durationMinutes ?? m.durationMinutes,
           };
         }
         return {
           ...m,
           status: 'waiting' as const,
           court: undefined,
+          startedAt: undefined,
         };
       }
       return m;
@@ -632,10 +697,14 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
 
       {/* SEÇÃO A: Status das Quadras (Uma quadra por linha, 100% dentro do container) */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex items-center justify-between px-1 flex-wrap gap-2">
           <h3 className="text-sm font-black text-slate-800 tracking-wider whitespace-nowrap">
             Quadras do evento ({totalCourtsCount})
           </h3>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
+            <Clock size={11} className="text-slate-500" />
+            Duração média: {averageMatchDurationMinutes} min {isDurationEstimated ? '(estimada)' : `(${finishedMatchesCountWithDuration} jogos)`}
+          </span>
         </div>
 
         {totalCourtsCount === 0 ? (
@@ -720,6 +789,12 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                             Ocupada (Ao vivo)
                           </span>
                         )}
+                        {isBusy && activeMatch && (
+                          <MatchTimer
+                            startedAt={activeMatch.startedAt}
+                            averageMinutes={averageMatchDurationMinutes}
+                          />
+                        )}
                         {isInterdicted && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black border bg-red-100 text-red-800 border-red-300 whitespace-nowrap">
                             <Ban size={10} />
@@ -781,13 +856,20 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                   {/* Linha Inferior da Quadra: Dados da Partida em Andamento e Placar Editável */}
                   {isBusy && activeMatch && (
                     <div className="mt-1 p-3 bg-white/95 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
-                      {/* a) Abreviação da categoria + fase */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center text-[10px] font-black text-slate-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg whitespace-nowrap">
-                          {activeCat?.abbreviation || activeCat?.name || ''}
-                          {activeCat && ' · '}
-                          {phaseLabel}
-                        </span>
+                      {/* a) Abreviação da categoria + fase + início */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="inline-flex items-center text-[10px] font-black text-slate-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg whitespace-nowrap">
+                            {activeCat?.abbreviation || activeCat?.name || ''}
+                            {activeCat && ' · '}
+                            {phaseLabel}
+                          </span>
+                          {activeMatch.startedAt && (
+                            <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                              Início: {new Date(activeMatch.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-xs font-black text-slate-800 whitespace-nowrap">
                             [{matchCodeLabel}] {phaseLabel ? `[${phaseLabel}]` : ''}
@@ -1016,7 +1098,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
               Ordenação por status de cor (Verde, Amarela, Vermelha) e prioridade de categorias.
             </p>
 
-            {/* c) Legenda dos Status da Fila abaixo do texto "Ordenação por..." */}
+            {/* c) Legenda dos Status da Fila e Estimativas de Tempo */}
             <div className="flex items-center gap-2 flex-wrap mt-2">
               <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -1030,6 +1112,21 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                 <span className="w-2 h-2 rounded-full bg-red-500" />
                 Bloqueada / Congelada
               </span>
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
+                <Clock size={11} className="text-slate-500" />
+                Duração média: {averageMatchDurationMinutes} min {isDurationEstimated ? '(estimada)' : `(${finishedMatchesCountWithDuration} partidas)`}
+              </span>
+              {freeCourtsCount > 0 ? (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">
+                  <Zap size={11} className="fill-emerald-600 text-emerald-600" />
+                  {freeCourtsCount} quadra{freeCourtsCount > 1 ? 's livres' : ' livre'} agora
+                </span>
+              ) : nextCourtFreeWaitMinutes !== undefined ? (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-xl bg-sky-50 text-sky-800 border border-sky-200 whitespace-nowrap">
+                  <Clock size={11} className="text-sky-600" />
+                  Próxima liberação: em ~{nextCourtFreeWaitMinutes} min (~{nextCourtFreeTimeStr})
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1119,6 +1216,21 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                               : 'Conflito de Jogador'
                             : 'Congelada'}
                         </span>
+                      )}
+
+                      {/* Estimativa de Chamada para Jogar */}
+                      {!isRed && (
+                        item.estimatedWaitMinutes === 0 ? (
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 whitespace-nowrap shrink-0">
+                            <Zap size={10} className="fill-emerald-600 text-emerald-600" />
+                            Chamada Imediata
+                          </span>
+                        ) : item.estimatedWaitMinutes !== undefined ? (
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-300 flex items-center gap-1 whitespace-nowrap shrink-0">
+                            <Clock size={10} />
+                            Previsão: em ~{item.estimatedWaitMinutes} min (~{item.estimatedCallTimeStr})
+                          </span>
+                        ) : null
                       )}
                     </div>
 

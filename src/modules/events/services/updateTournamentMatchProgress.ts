@@ -16,8 +16,11 @@ export const markTournamentMatchLive = async (
     sourceMatches = ((event?.matches || []) as TournamentMatch[]);
   }
 
+  const nowIso = new Date().toISOString();
   const updatedMatches = sourceMatches.map((match) => (
-    match.id === matchId ? { ...match, status: 'live' as const, ownerPin } : match
+    match.id === matchId
+      ? { ...match, status: 'live' as const, ownerPin, startedAt: match.startedAt || nowIso }
+      : match
   ));
   await updateEventMatches(db, eventPin, updatedMatches);
 };
@@ -56,10 +59,20 @@ export const markTournamentMatchFinished = async (
   const event = await fetchEventByPin(db, eventPin);
   if (!event) return;
 
+  const nowIso = new Date().toISOString();
+
   const updatedMatches: TournamentMatch[] = ((event.matches || []) as TournamentMatch[]).map((match) => {
     if (match.id !== matchId) return match;
     const winnerPairId = winnerTeam === 1 ? match.pair1Id : match.pair2Id;
     const loserPairId = winnerTeam === 1 ? match.pair2Id : match.pair1Id;
+    let durationMinutes: number | undefined = undefined;
+    if (match.startedAt) {
+      const startMs = new Date(match.startedAt).getTime();
+      const endMs = new Date(nowIso).getTime();
+      if (!isNaN(startMs) && !isNaN(endMs) && endMs >= startMs) {
+        durationMinutes = Math.max(1, Math.round((endMs - startMs) / 60000));
+      }
+    }
     return {
       ...match,
       status: 'finished' as const,
@@ -68,6 +81,8 @@ export const markTournamentMatchFinished = async (
       loserPairId,
       court: undefined,
       ownerPin: undefined,
+      finishedAt: nowIso,
+      durationMinutes: durationMinutes ?? match.durationMinutes,
     };
   });
 

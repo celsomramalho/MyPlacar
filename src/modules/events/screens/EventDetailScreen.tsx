@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { Partner } from '@modules/partners/types';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
-import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, UserRound, UsersRound, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, AlertTriangle, DollarSign, Eye, Bell, Sparkles } from 'lucide-react';
+import { ArrowLeft, Trophy, Users, Share2, Copy, QrCode, X, User, UserRound, UsersRound, Loader2, RotateCw, Settings, Save, Play, Clock, Target, CheckCircle2, Wifi, Zap, UserPlus, Mail, ChevronUp, ChevronDown, Check, Trash2, Link2, Unlink, ShieldCheck, UserCheck, Edit3, Search, AlertCircle, AlertTriangle, DollarSign, Eye, Bell, Sparkles, Calendar } from 'lucide-react';
 import { formatRegistrationId, orderPairEntriesForMixed, minifyEntryForPair, minifyPairForStorage, type TournamentEvent, type TournamentEntry, type TournamentPair, type TournamentMatch, type MatchSetScore, type TournamentConfig, type PaymentItem, type EventCategory } from '../types';
 import type { UserProfile } from '@modules/auth/types';
 import { deleteEventEntry, deleteUserEventRegistration, ensureEventEntriesRegistrationIds, fetchEventEntries, getDb, saveEventEntry, saveUserEventRegistration, subscribeEventByPin, subscribeEventEntries, subscribeTournamentLiveScores, updateEvent, updateEventEntry, updateEventMatches, updateUserProfileFields } from '@infra/firebase';
@@ -1057,6 +1057,25 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       }, 600);
     };
 
+    const handleMatchDateChange = (matchId: string, dateVal: string) => {
+      const nextMatches = (event.matches || []).map((m) =>
+        m.id !== matchId ? m : { ...m, matchDate: dateVal || undefined }
+      );
+      setEvent((prev) => ({ ...prev, matches: nextMatches }));
+
+      if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+      saveMatchesTimeoutRef.current = setTimeout(async () => {
+        const db = getDb();
+        if (db) {
+          try {
+            await updateEventMatches(db as Firestore, event.pin, nextMatches);
+          } catch (err) {
+            console.error('Erro ao salvar data da partida no Firestore:', err);
+          }
+        }
+      }, 600);
+    };
+
     const handleFinishRankingMatch = async (matchId: string) => {
       const match = (event.matches || []).find((m) => m.id === matchId);
       if (!match) return;
@@ -1100,34 +1119,26 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           loserPairId,
           pair1: pair1Obj ? minifyPairForStorage(pair1Obj) : m.pair1,
           pair2: pair2Obj ? minifyPairForStorage(pair2Obj) : m.pair2,
+          finishedAt: new Date().toISOString(),
         };
       });
 
-      // Uma vez que a partida finalizou, os times devem ser desfeitos, liberando os inscritos
-      const nextPairs = (event.pairs || []).filter(
-        (p) => p.id !== match.pair1Id && p.id !== match.pair2Id
-      );
-
-      setEvent((prev) => ({
-        ...prev,
-        matches: nextMatches,
-        pairs: nextPairs,
-      }));
+      // Times permanecem ativos — NÃO dissolve event.pairs
+      // O histórico de partidas ficará visível na aba Times
+      setEvent((prev) => ({ ...prev, matches: nextMatches }));
       setSelectedEntries(new Set());
       setSelectedPairs(new Set());
 
       const db = getDb();
       if (db) {
         try {
-          await updateEvent(db as Firestore, event.pin, {
-            matches: nextMatches,
-            pairs: nextPairs,
-          });
+          await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
         } catch (err) {
-          console.error('Erro ao finalizar partida e desfazer times no Firestore:', err);
+          console.error('Erro ao finalizar partida no Firestore:', err);
         }
       }
     };
+
 
     const handleReopenMatch = async (matchId: string) => {
       const targetMatch = (event.matches || []).find((m) => m.id === matchId);
@@ -1667,25 +1678,51 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           </div>
 
           {isRanking && !isFinished && (
-            <button
-              type="button"
-              onClick={() => handleFinishRankingMatch(match.id)}
-              className="w-full mt-3 py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
-            >
-              <CheckCircle2 size={15} />
-              Finalizar partida
-            </button>
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
+                  <Calendar size={13} className="text-sky-600" /> Data da partida:
+                </label>
+                <input
+                  type="date"
+                  value={match.matchDate || ''}
+                  onClick={(e) => {
+                    try {
+                      (e.target as any).showPicker?.();
+                    } catch {}
+                  }}
+                  onChange={(e) => handleMatchDateChange(match.id, e.target.value)}
+                  className="flex-1 h-9 text-xs font-bold bg-slate-50 border-2 border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl outline-none px-3 text-slate-700 cursor-pointer"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleFinishRankingMatch(match.id)}
+                className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
+              >
+                <CheckCircle2 size={15} />
+                Finalizar partida
+              </button>
+            </div>
           )}
 
           {isRanking && isFinished && (
-            <div className="mt-2.5 pt-2 border-t border-slate-100 flex justify-center">
-              <button
-                type="button"
-                onClick={() => handleReopenMatch(match.id)}
-                className="text-[10px] font-bold text-slate-400 hover:text-sky-600 flex items-center gap-1 transition-colors"
-              >
-                <RotateCw size={11} /> Reabrir para corrigir placar
-              </button>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
+              {match.matchDate && (
+                <p className="text-[11px] font-bold text-slate-500 text-center flex items-center justify-center gap-1">
+                  <Calendar size={12} className="text-sky-600" />
+                  <span>Data: <strong className="text-slate-700">{new Date(match.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></span>
+                </p>
+              )}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => handleReopenMatch(match.id)}
+                  className="text-[10px] font-bold text-slate-400 hover:text-sky-600 flex items-center gap-1 transition-colors"
+                >
+                  <RotateCw size={11} /> Reabrir para corrigir placar
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1868,19 +1905,27 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                 </p>
                 {categoryPairs.map((pair, index) => {
                   const isSelected = selectedPairs.has(pair.id);
+                  // Histórico de partidas finalizadas deste time
+                  const teamMatches = categoryMatches.filter(
+                    (m) => m.status === 'finished' && (m.pair1Id === pair.id || m.pair2Id === pair.id)
+                  );
+                  const wins = teamMatches.filter((m) => m.winnerPairId === pair.id).length;
+                  const losses = teamMatches.length - wins;
+
                   return (
                     <div
                       key={pair.id}
                       onClick={() => toggleCategoryTeamSelection(pair.id)}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      className={`rounded-2xl border transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-sky-50/80 ring-2 ring-inset ring-sky-400 border-sky-300'
                           : 'bg-white border-slate-100 hover:border-slate-300 shadow-sm'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      {/* Cabeçalho do time */}
+                      <div className="flex items-center justify-between gap-2 p-3.5">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-mono text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg shrink-0">
+                          <span className="font-mono text-xs font-black text-sky-800 bg-sky-100 border border-sky-300 px-2 py-0.5 rounded-lg shrink-0">
                             {pair.teamCode || `Time ${index + 1}`}
                           </span>
                           <p className="text-xs font-black text-slate-800 truncate">
@@ -1888,18 +1933,74 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                           </p>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUndoPair(pair.id);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-all shrink-0"
-                          title="Desfazer time"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {teamMatches.length > 0 && (
+                            <span className="text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">
+                              {wins}V {losses}D
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUndoPair(pair.id);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-all"
+                            title="Desfazer time"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Histórico de partidas do time */}
+                      {teamMatches.length > 0 && (
+                        <div className="border-t border-slate-100 px-3.5 pb-3 pt-2 space-y-1.5">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Histórico de partidas</p>
+                          {teamMatches.map((m) => {
+                            const isWinner = m.winnerPairId === pair.id;
+                            const opponent = m.pair1Id === pair.id
+                              ? (m.pair2 || categoryPairs.find((p) => p.id === m.pair2Id))
+                              : (m.pair1 || categoryPairs.find((p) => p.id === m.pair1Id));
+                            // Formatar resultado do ponto de vista do time
+                            const resultParts = (m.result || '').split('/');
+                            const myScore = m.pair1Id === pair.id ? resultParts[0] : resultParts[1];
+                            const oppScore = m.pair1Id === pair.id ? resultParts[1] : resultParts[0];
+                            return (
+                              <div
+                                key={m.id}
+                                onClick={(e) => e.stopPropagation()}
+                                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-[11px] ${
+                                  isWinner ? 'bg-emerald-50 border border-emerald-100' : 'bg-red-50 border border-red-100'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {isWinner
+                                    ? <Trophy size={11} className="text-emerald-600 shrink-0" />
+                                    : <X size={11} className="text-red-400 shrink-0" />
+                                  }
+                                  <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
+                                    {isWinner ? 'Vitória' : 'Derrota'}
+                                  </span>
+                                  {opponent && (
+                                    <span className="text-slate-500 font-bold truncate">
+                                      vs {opponent.p1.nickname || opponent.p1.name} & {opponent.p2.nickname || opponent.p2.name}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="font-black text-slate-700">{myScore || '?'} x {oppScore || '?'}</span>
+                                  {m.matchDate && (
+                                    <span className="text-slate-400 font-bold">
+                                      {new Date(m.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

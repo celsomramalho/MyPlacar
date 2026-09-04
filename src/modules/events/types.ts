@@ -77,6 +77,10 @@ export interface TournamentMatch {
   court?: string;
   order?: number;
   frozen?: boolean;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMinutes?: number;
+  matchDate?: string; // Data da partida no formato YYYY-MM-DD
 }
 
 export interface TournamentConfig {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2, AlertTriangle, Swords, Sparkles, FileText, Shuffle } from 'lucide-react';
+import { Plus, Layers, Check, X, Trash2, Tag, Users, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2, AlertTriangle, Swords, Sparkles, FileText, Shuffle, Clock, Timer, Calendar } from 'lucide-react';
 import { minifyEntryForPair, minifyPairForStorage, orderPairEntriesForMixed, formatRegistrationId, getNextRegistrationId, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore, type PlayerStanding } from '@modules/events/types';
 import { generateSystemMatchesForCategory, generateSuper8MatchesForCategory, isCategoryMixed, createManualMatch, formatMatchDisplayString, formatMatchNumber, getPhaseLabel } from '@modules/events/services/matchGenerator';
 import { updatePlayoffProgression, calculateBracketStandings, calculateSuper8PlayerStandings, type TeamStanding } from '@modules/events/services/matchProgression';
@@ -1084,6 +1084,62 @@ const validateCategoryGenders = (
                 )}
               </div>
             )}
+
+            {/* Histórico de partidas — apenas para Ranking */}
+            {isRanking && (() => {
+              const teamMatches = allCategoryMatches.filter(
+                (m) => m.status === 'finished' && (m.pair1Id === pair.id || m.pair2Id === pair.id)
+              );
+              if (teamMatches.length === 0) return null;
+              const wins = teamMatches.filter((m) => m.winnerPairId === pair.id).length;
+              const losses = teamMatches.length - wins;
+              return (
+                <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Histórico de partidas</p>
+                    <span className="text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">
+                      {wins}V {losses}D
+                    </span>
+                  </div>
+                  {teamMatches.map((m) => {
+                    const isWinner = m.winnerPairId === pair.id;
+                    const resultParts = (m.result || '').split('/');
+                    const myScore = m.pair1Id === pair.id ? resultParts[0] : resultParts[1];
+                    const oppScore = m.pair1Id === pair.id ? resultParts[1] : resultParts[0];
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-[11px] ${
+                          isWinner ? 'bg-emerald-50 border border-emerald-100' : 'bg-red-50 border border-red-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {isWinner
+                            ? <Trophy size={11} className="text-emerald-600 shrink-0" />
+                            : <X size={11} className="text-red-400 shrink-0" />
+                          }
+                          <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
+                            {isWinner ? 'Vitória' : 'Derrota'}
+                          </span>
+                          <span className="text-slate-500 font-bold truncate">
+                            vs {getOppName(m)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-black text-slate-700">{myScore || '?'} x {oppScore || '?'}</span>
+                          {m.matchDate && (
+                            <span className="text-slate-400 font-bold">
+                              {new Date(m.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex items-center gap-2 shrink-0 pt-0.5">
@@ -1513,10 +1569,30 @@ const validateCategoryGenders = (
     }, 600);
   };
 
+  const handleMatchDateChange = (matchId: string, dateVal: string) => {
+    const nextMatches = matches.map((m) =>
+      m.id !== matchId ? m : { ...m, matchDate: dateVal || undefined }
+    );
+    onUpdateEvent({ ...event, matches: nextMatches });
+
+    if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+    saveMatchesTimeoutRef.current = setTimeout(async () => {
+      const db = getDb();
+      if (db) {
+        try {
+          await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+        } catch (err) {
+          console.error('Erro ao salvar data da partida no Firestore:', err);
+        }
+      }
+    }, 600);
+  };
+
   const handleFinishMatch = async (matchId: string) => {
     const totalSets = (event.setsCount || event.config?.sets || 1) as number;
     const targetMatch = matches.find((m) => m.id === matchId);
 
+    const nowIso = new Date().toISOString();
     const nextMatches = matches.map((m) => {
       if (m.id !== matchId) return m;
       const { setsWon1, setsWon2, scores } = parseMatchSets(m, totalSets);
@@ -1544,6 +1620,15 @@ const validateCategoryGenders = (
       const p1Obj = m.pair1 || (m.pair1Id ? pairs.find((p) => p.id === m.pair1Id) : undefined);
       const p2Obj = m.pair2 || (m.pair2Id ? pairs.find((p) => p.id === m.pair2Id) : undefined);
 
+      let durationMinutes: number | undefined = undefined;
+      if (m.startedAt) {
+        const startMs = new Date(m.startedAt).getTime();
+        const endMs = new Date(nowIso).getTime();
+        if (!isNaN(startMs) && !isNaN(endMs) && endMs >= startMs) {
+          durationMinutes = Math.max(1, Math.round((endMs - startMs) / 60000));
+        }
+      }
+
       return {
         ...m,
         status: 'finished' as const,
@@ -1551,13 +1636,14 @@ const validateCategoryGenders = (
         loserPairId: loserPairId || m.pair2Id,
         pair1: p1Obj ? minifyPairForStorage(p1Obj) : m.pair1,
         pair2: p2Obj ? minifyPairForStorage(p2Obj) : m.pair2,
+        finishedAt: nowIso,
+        durationMinutes: durationMinutes ?? m.durationMinutes,
       };
     });
 
     let nextPairs = pairs;
-    if (isRanking && targetMatch) {
-      nextPairs = pairs.filter((p) => p.id !== targetMatch.pair1Id && p.id !== targetMatch.pair2Id);
-    }
+    // Para Ranking, os times NÃO são desfeitos ao finalizar a partida
+    // Eles permanecem em event.pairs e o histórico fica visível na aba Times
 
     const progressedMatches = isRanking ? nextMatches : updatePlayoffProgression(pairs, nextMatches);
     onUpdateEvent({ ...event, matches: progressedMatches, pairs: nextPairs });
@@ -1714,6 +1800,22 @@ const validateCategoryGenders = (
       const hasAnyScore = scores.some((s) => (s.p1 !== null && s.p1 !== undefined) || (s.p2 !== null && s.p2 !== undefined));
       const isMatchFinished = match.status === 'finished';
       const isMatchLive = !isMatchFinished && (hasAnyScore || match.status === 'live');
+
+      const startDate = match.startedAt ? new Date(match.startedAt) : null;
+      const isValidStart = Boolean(startDate && !isNaN(startDate.getTime()));
+      const startFormatted = isValidStart
+        ? `${startDate!.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às ${startDate!.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        : null;
+
+      let durationMinutes = match.durationMinutes;
+      if (durationMinutes === undefined && match.startedAt && match.finishedAt) {
+        const s = new Date(match.startedAt).getTime();
+        const f = new Date(match.finishedAt).getTime();
+        if (!isNaN(s) && !isNaN(f) && f > s) {
+          durationMinutes = Math.max(1, Math.round((f - s) / 60000));
+        }
+      }
+      const durationFormatted = durationMinutes !== undefined ? `${durationMinutes} min` : null;
 
       const statusLabel =
         isMatchFinished ? 'Finalizado' :
@@ -2010,7 +2112,25 @@ const validateCategoryGenders = (
 
             {/* Botão Finalizar partida igual ao de Gerenciar partidas/Quadras */}
             {!isMatchFinished ? (
-              <div className="pt-3 mt-3 border-t border-slate-100">
+              <div className="pt-3 mt-3 border-t border-slate-100 space-y-2">
+                {isRanking && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
+                      <Calendar size={13} className="text-sky-600" /> Data da partida:
+                    </label>
+                    <input
+                      type="date"
+                      value={match.matchDate || ''}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch {}
+                      }}
+                      onChange={(e) => handleMatchDateChange(match.id, e.target.value)}
+                      className="flex-1 h-9 text-xs font-bold bg-slate-50 border-2 border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl outline-none px-3 text-slate-700 cursor-pointer"
+                    />
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => handleFinishMatchWithValidation(match.id)}
@@ -2022,18 +2142,48 @@ const validateCategoryGenders = (
                 </button>
               </div>
             ) : (
-              <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                  <Check size={13} className="text-emerald-500" /> Partida finalizada
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleReopenMatch(match.id)}
-                  className="text-[11px] font-black text-slate-400 hover:text-blue-600 hover:underline transition-colors"
-                  title="Reabrir partida para alteração de placar"
-                >
-                  Reabrir partida
-                </button>
+              <div className="pt-3 mt-3 border-t border-slate-100 space-y-2">
+                {(startFormatted || durationFormatted || match.matchDate) && (
+                  <div className="flex items-center gap-2 text-[11px] text-slate-600 flex-wrap bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-100">
+                    {match.matchDate && (
+                      <span className="inline-flex items-center gap-1 font-bold">
+                        <Calendar size={12} className="text-sky-600" />
+                        <span>Data: <strong className="font-black text-slate-800">{new Date(match.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></span>
+                      </span>
+                    )}
+                    {match.matchDate && (startFormatted || durationFormatted) && (
+                      <span className="text-slate-300">·</span>
+                    )}
+                    {startFormatted && (
+                      <span className="inline-flex items-center gap-1 font-bold">
+                        <Clock size={12} className="text-slate-400 shrink-0" />
+                        <span>Início: <strong className="font-black text-slate-800">{startFormatted}</strong></span>
+                      </span>
+                    )}
+                    {startFormatted && durationFormatted && (
+                      <span className="text-slate-300">·</span>
+                    )}
+                    {durationFormatted && (
+                      <span className="inline-flex items-center gap-1 font-bold">
+                        <Timer size={12} className="text-slate-400 shrink-0" />
+                        <span>Duração: <strong className="font-black text-slate-800">{durationFormatted}</strong></span>
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                    <Check size={13} className="text-emerald-500" /> Partida finalizada
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleReopenMatch(match.id)}
+                    className="text-[11px] font-black text-slate-400 hover:text-blue-600 hover:underline transition-colors"
+                    title="Reabrir partida para alteração de placar"
+                  >
+                    Reabrir partida
+                  </button>
+                </div>
               </div>
             )}
           </div>
