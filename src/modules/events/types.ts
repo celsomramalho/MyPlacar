@@ -130,6 +130,7 @@ export interface PlayerStanding {
   played: number;
   wins: number;
   losses: number;
+  points?: number;
   gamesWon: number;
   gamesLost: number;
   gamesDiff: number;
@@ -198,6 +199,9 @@ export interface TournamentEvent {
   teamDrawType?: DrawTypeOption;
   bracketDrawType?: DrawTypeOption;
   matchDrawType?: DrawTypeOption;
+  showRegisteredParticipants?: boolean;
+  allowUserScoreEntry?: boolean;
+  rankingMatchesPerTeam?: number;
   categories?: EventCategory[];
   regulationUrl?: string;
   regulationFileName?: string;

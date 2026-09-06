@@ -50,6 +50,21 @@ const formatPhone = (value: string) => {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 };
 
+const getParticipantKey = (entry?: Partial<TournamentEntry> | null) =>
+  (entry?.email || entry?.pin || entry?.name || '').toLowerCase().trim();
+
+const pairHasSameParticipants = (pair: TournamentPair, first: TournamentEntry, second: TournamentEntry) => {
+  const pairP1 = getParticipantKey(pair.p1);
+  const pairP2 = getParticipantKey(pair.p2);
+  const firstKey = getParticipantKey(first);
+  const secondKey = getParticipantKey(second);
+  if (!pairP1 || !pairP2 || !firstKey || !secondKey) return false;
+  return (
+    (pairP1 === firstKey && pairP2 === secondKey) ||
+    (pairP1 === secondKey && pairP2 === firstKey)
+  );
+};
+
 /* ─── Sub-componente: formulário editável completo de inscrição ─── */
 interface EntryExpandedFormProps {
   entry: TournamentEntry;
@@ -551,9 +566,11 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   const [tempNickname, setTempNickname] = useState('');
   const [isSavingNickname, setIsSavingNickname] = useState(false);
 
-  const isAdmin = useMemo(() => {
+  const hasEventAdminAccess = useMemo(() => {
     return isPrimaryAdminEmail(userProfile.email) || canUseEventAdminAccess(event, userProfile.pin);
   }, [event, userProfile.email, userProfile.pin]);
+  const isUserEventView = true;
+  const isAdmin = hasEventAdminAccess && !isUserEventView;
 
   const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
 
@@ -679,20 +696,31 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   }, [currentUserEntry, event.pairs, userProfile.email, userProfile.pin]);
 
   const userCategories = useMemo(() => {
-    if (userCategoryIds.size === 0 || isRanking || isAdmin) {
+    if (userCategoryIds.size === 0 || isRanking) {
       return (event.categories || []).sort((a, b) => a.priority - b.priority);
     }
     return (event.categories || [])
       .filter((cat) => userCategoryIds.has(cat.id))
       .sort((a, b) => a.priority - b.priority);
-  }, [event.categories, userCategoryIds, isRanking, isAdmin]);
+  }, [event.categories, userCategoryIds, isRanking]);
+
+  const canShowCategoryEntriesToUser = useCallback((category?: EventCategory | null) => {
+    return (!isUserEventView && isAdmin) || event.showRegisteredParticipants === true;
+  }, [event.showRegisteredParticipants, isAdmin, isUserEventView]);
+
+  const getInitialUserCategoryView = useCallback((category?: EventCategory | null): 'entries' | 'teams' | 'matches' => {
+    if (!category) return 'teams';
+    if (canShowCategoryEntriesToUser(category)) return 'entries';
+    if (isSuper8) return 'matches';
+    return 'teams';
+  }, [canShowCategoryEntriesToUser, isSuper8]);
 
   useEffect(() => {
     if (userSelectedCategoryId && (event.categories || []).some(c => c.id === userSelectedCategoryId)) return;
     const initialCat = userCategories.find(c => userCategoryIds.has(c.id)) || userCategories[0];
     setUserSelectedCategoryId(initialCat?.id || null);
-    setUserCategoryView(isChaveEvent ? 'teams' : 'entries');
-  }, [userCategories, userCategoryIds, userSelectedCategoryId, isChaveEvent]);
+    setUserCategoryView(getInitialUserCategoryView(initialCat));
+  }, [userCategories, userCategoryIds, userSelectedCategoryId, getInitialUserCategoryView]);
 
   const userVisibleEntries = useMemo(() => {
     if (isAdmin) return sortedEntries;
@@ -722,6 +750,8 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   }, [event.matches, getCategoryPairs]);
 
   const renderUserCategoryPanel = (category: EventCategory) => {
+    const canShowEntries = canShowCategoryEntriesToUser(category);
+    const canUserSubmitScore = isAdmin || event.allowUserScoreEntry === true;
     const categoryEntries = entries.filter((entry) => entry.categoryIds?.includes(category.id));
     const categoryPairs = getCategoryPairs(category.id);
     const categoryMatches = getCategoryMatches(category.id);
@@ -729,7 +759,9 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     const isSuper8 = event.eventType === 'Super 8';
     const isRanking = event.eventType === 'Ranking';
     const isIndividualRanking = isSuper8 || isRanking;
-    const playerStandings = isIndividualRanking ? calculateSuper8PlayerStandings(categoryEntries, categoryMatches) : [];
+    const playerStandings = isIndividualRanking
+      ? calculateSuper8PlayerStandings(categoryEntries, categoryMatches, isRanking ? 'rankingPoints' : 'wins')
+      : [];
     const playerStandingsMap = new Map<string, (typeof playerStandings)[number]>();
 
     playerStandings.forEach((standing) => {
@@ -750,15 +782,6 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
 
     const sortedCategoryEntries = isIndividualRanking
       ? [...categoryEntries].sort((a, b) => {
-          if (isRanking) {
-            const pA = pairForEntry(a);
-            const pB = pairForEntry(b);
-            if (pA && !pB) return -1;
-            if (!pA && pB) return 1;
-            if (pA && pB && pA.id !== pB.id) {
-              return (pA.teamNumber || 0) - (pB.teamNumber || 0);
-            }
-          }
           const aKey = (a.email || a.pin || '').toLowerCase().trim();
           const bKey = (b.email || b.pin || '').toLowerCase().trim();
           const aStanding = playerStandingsMap.get(aKey);
@@ -769,13 +792,6 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           return (a.name || '').localeCompare(b.name || '');
         })
       : categoryEntries;
-
-    const entriesWithTeam = isRanking
-      ? sortedCategoryEntries.filter((e) => Boolean(pairForEntry(e)))
-      : [];
-    const entriesWithoutTeam = isRanking
-      ? sortedCategoryEntries.filter((e) => !pairForEntry(e))
-      : [];
 
     const currentSuper8RoundLabel = (() => {
       if (!isSuper8 || categoryMatches.length === 0) return null;
@@ -802,6 +818,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     })();
 
     const selectedCategoryPair = (() => {
+      if (isRanking) return null;
       if (selectedEntries.size === 0) return null;
       const selectedKey = Array.from(selectedEntries)[0].toLowerCase().trim();
       const found = categoryPairs.find((p) => {
@@ -822,7 +839,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
 
     const toggleCategoryEntrySelection = (entry: TournamentEntry) => {
       const existingPair = pairForEntry(entry);
-      if (existingPair) {
+      if (!isRanking && existingPair) {
         const k1 = existingPair.p1.email || existingPair.p1.pin || '';
         const k2 = existingPair.p2.email || existingPair.p2.pin || '';
         const isAlreadySelected = selectedEntries.has(k1) && selectedEntries.has(k2);
@@ -902,6 +919,17 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
         });
         return;
       }
+      const alreadyFormedPair = categoryPairs.find((pair) =>
+        pairHasSameParticipants(pair, selectedEntriesList[0], selectedEntriesList[1])
+      );
+      if (alreadyFormedPair) {
+        setModalConfig({
+          title: 'Time já formado',
+          message: `Este time já existe em ${alreadyFormedPair.teamCode || 'Times'}. Selecione uma combinação diferente de jogadores.`,
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
 
       const allPairs = event.pairs || [];
       const teamNumber = Math.max(
@@ -952,6 +980,9 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             (m.pair1Id === selectedPairIds[1] && m.pair2Id === selectedPairIds[0])
         )
       : null;
+    const rankingMatchesLimit = Number(event.rankingMatchesPerTeam || 0);
+    const getPairMatchCount = (pairId: string) =>
+      categoryMatches.filter((m) => m.pair1Id === pairId || m.pair2Id === pairId).length;
 
     const handleFormOrUndoMatchForCategory = async () => {
       if (selectedPairIds.length !== 2) return;
@@ -984,6 +1015,17 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       const p1 = categoryPairs.find((p) => p.id === selectedPairIds[0]);
       const p2 = categoryPairs.find((p) => p.id === selectedPairIds[1]);
       if (!p1 || !p2) return;
+      if (isRanking && rankingMatchesLimit > 0) {
+        const blockedPair = [p1, p2].find((pair) => getPairMatchCount(pair.id) >= rankingMatchesLimit);
+        if (blockedPair) {
+          setModalConfig({
+            title: 'Limite de partidas atingido',
+            message: `${blockedPair.teamCode || 'Este time'} já atingiu o limite de ${rankingMatchesLimit} ${rankingMatchesLimit === 1 ? 'partida permitida' : 'partidas permitidas'}.`,
+            onConfirm: () => setModalConfig(null),
+          });
+          return;
+        }
+      }
 
       const newMatch = createManualMatch(p1, p2, category, event.matches || []);
       if (isRanking) {
@@ -1079,6 +1121,15 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     const handleFinishRankingMatch = async (matchId: string) => {
       const match = (event.matches || []).find((m) => m.id === matchId);
       if (!match) return;
+
+      if (!match.matchDate) {
+        setModalConfig({
+          title: 'Data obrigatória',
+          message: 'Informe a data da partida antes de finalizar.',
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
 
       const s1 = match.scores?.[0]?.p1;
       const s2 = match.scores?.[0]?.p2;
@@ -1184,7 +1235,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
         entry.pin?.toLowerCase().trim() === userProfile.pin.toLowerCase().trim();
       const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
       const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
-      const pair = pairForEntry(entry);
+      const pair = isRanking ? null : pairForEntry(entry);
       const isSelected = selectedEntries.has(entry.email || entry.pin || '');
       const partner = pair
         ? ((pair.p1.email && entry.email && pair.p1.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
@@ -1229,13 +1280,18 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                       {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
                     </span>
                   )}
+                  {isRanking && standing && (
+                    <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
+                      {standing.points || 0} pts
+                    </span>
+                  )}
                   {pair ? (
                     <span className="font-mono text-sky-800 bg-sky-100 border border-sky-300 px-2 py-0.5 rounded-lg text-[10px] font-black inline-flex items-center gap-1">
                       <Users size={11} /> {pair.teamCode || 'Time formado'}
                     </span>
                   ) : isRanking ? (
                     <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-lg inline-flex items-center gap-1">
-                      <Sparkles size={11} className="text-emerald-600" /> Disponível
+                      <Sparkles size={11} className="text-emerald-600" /> Disponível para novo time
                     </span>
                   ) : entry.registrationId && !isSuper8 ? (
                     <span className="font-mono text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-lg text-[10px] font-black">
@@ -1276,8 +1332,8 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                  <span className="text-[11px] font-black text-slate-500">Vitórias (Pts):</span>
-                  <span className="font-black text-slate-900 text-xs">{standing.wins}</span>
+                  <span className="text-[11px] font-black text-slate-500">{isRanking ? 'Pontos:' : 'Vitórias:'}</span>
+                  <span className="font-black text-slate-900 text-xs">{isRanking ? (standing.points || 0) : standing.wins}</span>
                 </div>
                 <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
                   <span className="text-[11px] font-black text-slate-500">Saldo de Games:</span>
@@ -1628,9 +1684,9 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
 
             <div className="shrink-0 text-center px-1">
               {isRanking ? (
-                isFinished ? (
+                isFinished || !canUserSubmitScore ? (
                   <span className="bg-slate-900 text-white px-3.5 py-1.5 rounded-xl text-sm font-black shadow-xs">
-                    {match.result || '-'}
+                    {match.result || (s1Val !== '' || s2Val !== '' ? `${s1Val || 0}/${s2Val || 0}` : 'VS')}
                   </span>
                 ) : (
                   <div className="flex items-center gap-1.5">
@@ -1677,7 +1733,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             </div>
           </div>
 
-          {isRanking && !isFinished && (
+          {isRanking && !isFinished && canUserSubmitScore && (
             <div className="mt-3 space-y-2">
               <div className="flex items-center gap-2">
                 <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
@@ -1729,7 +1785,11 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       );
     };
 
-    const activeCategoryView = (isChaveEvent && userCategoryView === 'entries') ? 'teams' : userCategoryView;
+    const activeCategoryView = userCategoryView === 'entries' && !canShowEntries
+      ? (isSuper8 ? 'matches' : 'teams')
+      : userCategoryView === 'teams' && isSuper8
+      ? 'matches'
+      : userCategoryView;
 
     return (
       <>
@@ -1847,7 +1907,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             </p>
           </div>
 
-          {activeCategoryView === 'entries' && isIndividualRanking && (
+          {canShowEntries && activeCategoryView === 'entries' && isIndividualRanking && (
             <div className="flex items-center justify-between gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
               <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-lg">
                 Classificação {isRanking ? 'Ranking' : 'Super 8'}
@@ -1864,29 +1924,18 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             </div>
           )}
 
-          {activeCategoryView === 'entries' && (
+          {canShowEntries && activeCategoryView === 'entries' && (
             sortedCategoryEntries.length === 0
               ? <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum inscrito nesta categoria.</div>
               : isRanking ? (
                 <div>
-                  {entriesWithTeam.length > 0 && (
-                    <div>
-                      <div className="px-4 py-2 bg-sky-50 border-b border-sky-100 flex items-center gap-2">
-                        <Users size={13} className="text-sky-600" />
-                        <span className="text-[11px] font-black text-sky-700">Em time — aguardando partida ({entriesWithTeam.length})</span>
-                      </div>
-                      <div className="divide-y divide-sky-100/60">{entriesWithTeam.map(renderEntryRow)}</div>
-                    </div>
-                  )}
-                  {entriesWithoutTeam.length > 0 && (
-                    <div>
-                      <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 border-t border-t-slate-100 flex items-center gap-2">
-                        <Sparkles size={13} className="text-emerald-600" />
-                        <span className="text-[11px] font-black text-emerald-700">Disponíveis para formar time ({entriesWithoutTeam.length})</span>
-                      </div>
-                      <div className="divide-y divide-emerald-100/40">{entriesWithoutTeam.map(renderEntryRow)}</div>
-                    </div>
-                  )}
+                  <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
+                    <Sparkles size={13} className="text-emerald-600" />
+                    <span className="text-[11px] font-black text-emerald-700">
+                      Disponíveis para formar novos times ({sortedCategoryEntries.length})
+                    </span>
+                  </div>
+                  <div className="divide-y divide-emerald-100/40">{sortedCategoryEntries.map(renderEntryRow)}</div>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">{sortedCategoryEntries.map(renderEntryRow)}</div>
@@ -2621,21 +2670,32 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
               ) : (
                 <div className="space-y-3">
                   {userCategories.map((cat) => {
+                    const canShowEntries = canShowCategoryEntriesToUser(cat);
+                    const showTeamsTab = event.eventType !== 'Super 8';
                     const inscritosCount = entries.filter((entry) => entry.categoryIds?.includes(cat.id)).length;
                     const timesCount = getCategoryPairs(cat.id).length;
                     const partidasCount = getCategoryMatches(cat.id).length;
                     const isSelectedCategory = userSelectedCategoryId === cat.id;
 
-                    const activeViewForCat = (isChaveEvent && userCategoryView === 'entries') ? 'teams' : userCategoryView;
+                    const activeViewForCat = userCategoryView === 'entries' && !canShowEntries
+                      ? (showTeamsTab ? 'teams' : 'matches')
+                      : userCategoryView === 'teams' && !showTeamsTab
+                      ? 'matches'
+                      : userCategoryView;
                     const openUserCategoryPanel = (view: 'entries' | 'teams' | 'matches') => {
                       setSelectedEntries(new Set());
                       setSelectedPairs(new Set());
-                      if (isSelectedCategory && activeViewForCat === view) {
+                      const effectiveView = view === 'entries' && !canShowEntries
+                        ? (showTeamsTab ? 'teams' : 'matches')
+                        : view === 'teams' && !showTeamsTab
+                        ? 'matches'
+                        : view;
+                      if (isSelectedCategory && activeViewForCat === effectiveView) {
                         setUserSelectedCategoryId(null);
                         return;
                       }
                       setUserSelectedCategoryId(cat.id);
-                      setUserCategoryView(view);
+                      setUserCategoryView(effectiveView);
                     };
 
                     return (
@@ -2645,7 +2705,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                             if (isSelectedCategory) {
                               setUserSelectedCategoryId(null);
                             } else {
-                              openUserCategoryPanel(isChaveEvent ? 'teams' : 'entries');
+                              openUserCategoryPanel(getInitialUserCategoryView(cat));
                             }
                           }}
                           className={`p-4 rounded-2xl border text-left transition-all space-y-3 w-full cursor-pointer ${
@@ -2665,9 +2725,6 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                               </div>
                             </div>
 
-                            <div className="p-2 bg-slate-100 text-slate-500 rounded-xl">
-                              {isSelectedCategory ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                            </div>
                           </div>
 
                           <div className="flex items-center gap-1.5">
@@ -2693,7 +2750,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                           </div>
 
                           <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100">
-                            {!isChaveEvent && (
+                            {canShowEntries && (
                               <button
                                 type="button"
                                 onClick={(event) => { event.stopPropagation(); openUserCategoryPanel('entries'); }}
@@ -2703,7 +2760,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                                 <span>{inscritosCount} inscritos</span>
                               </button>
                             )}
-                            {event.eventType !== 'Super 8' && (
+                            {showTeamsTab && (
                               <button
                                 type="button"
                                 onClick={(event) => { event.stopPropagation(); openUserCategoryPanel('teams'); }}

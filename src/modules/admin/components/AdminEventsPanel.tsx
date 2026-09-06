@@ -601,6 +601,32 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             </select>
           </div>
 
+          {editingEvent.eventType === 'Ranking' && (
+            <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-emerald-700 ml-1">Quantas partidas por time</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editingEvent.rankingMatchesPerTeam ?? ''}
+                  disabled={isReadOnlyRegistration}
+                  onChange={(event) => {
+                    const value = event.target.value ? Math.max(0, Number(event.target.value)) : undefined;
+                    handleProtectedChangeEditingEvent({ ...editingEvent, rankingMatchesPerTeam: value });
+                  }}
+                  placeholder="Sem limite"
+                  className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-emerald-200 rounded-xl px-4 font-black text-sm outline-none"
+                />
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3">
+                <p className="text-[10px] font-black text-emerald-700 uppercase">Pontuação do ranking</p>
+                <p className="text-xs font-bold text-slate-600 mt-1">
+                  Vitória = 5 pts + 1 ponto para o saldo de games da partida. Derrota = 2 pts.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 h-12">
             <span className="text-sm font-black text-slate-700">Set melhor de</span>
             <div className={`flex bg-slate-100 rounded-xl p-1 gap-1 ${isReadOnlyRegistration ? 'pointer-events-none opacity-80' : ''}`}>
@@ -686,6 +712,27 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
+              <Toggle
+                id="event-show-registered-participants"
+                label="Categoria com Inscrito"
+                checked={editingEvent.showRegisteredParticipants === true}
+                disabled={isReadOnlyRegistration}
+                onChange={(checked) => handleProtectedChangeEditingEvent({ ...editingEvent, showRegisteredParticipants: checked })}
+              />
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
+              <Toggle
+                id="event-allow-user-score-entry"
+                label="Usuário lança placar"
+                checked={editingEvent.allowUserScoreEntry === true}
+                disabled={isReadOnlyRegistration}
+                onChange={(checked) => handleProtectedChangeEditingEvent({ ...editingEvent, allowUserScoreEntry: checked })}
+              />
+            </div>
           </div>
 
           <div className="space-y-1">

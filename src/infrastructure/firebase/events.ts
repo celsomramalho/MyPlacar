@@ -80,6 +80,7 @@ export interface FirebaseTournamentEvent {
   teamDrawType?: string;
   bracketDrawType?: string;
   matchDrawType?: string;
+  rankingMatchesPerTeam?: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

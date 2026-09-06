@@ -142,6 +142,9 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       teamDrawType: 'Manual',
       bracketDrawType: 'Manual',
       matchDrawType: 'Manual',
+      showRegisteredParticipants: false,
+      allowUserScoreEntry: false,
+      rankingMatchesPerTeam: undefined,
       createdAt: Date.now(),
     };
     handleGuardedAction(() => {

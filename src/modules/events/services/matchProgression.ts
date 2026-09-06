@@ -446,7 +446,8 @@ const getEntryKey = (e?: Partial<TournamentEntry>): string => {
  */
 export const calculateSuper8PlayerStandings = (
   entries: TournamentEntry[],
-  categoryMatches: TournamentMatch[]
+  categoryMatches: TournamentMatch[],
+  scoringMode: 'wins' | 'rankingPoints' = 'wins'
 ): PlayerStanding[] => {
   const playerMap = new Map<string, PlayerStanding>();
 
@@ -458,6 +459,7 @@ export const calculateSuper8PlayerStandings = (
         played: 0,
         wins: 0,
         losses: 0,
+        points: 0,
         gamesWon: 0,
         gamesLost: 0,
         gamesDiff: 0,
@@ -472,6 +474,7 @@ export const calculateSuper8PlayerStandings = (
     if (match.status !== 'finished') return;
 
     const { g1, g2 } = parseScoresFromMatch(match);
+    const gameDiff = Math.abs(g1 - g2);
     const isPair1Winner = match.winnerPairId
       ? match.winnerPairId === match.pair1Id || match.winnerPairId === match.pair1?.id
       : g1 > g2;
@@ -486,8 +489,13 @@ export const calculateSuper8PlayerStandings = (
         st.played += 1;
         st.gamesWon += g1;
         st.gamesLost += g2;
-        if (isPair1Winner) st.wins += 1;
-        else st.losses += 1;
+        if (isPair1Winner) {
+          st.wins += 1;
+          st.points = (st.points || 0) + (scoringMode === 'rankingPoints' ? 5 + gameDiff : 1);
+        } else {
+          st.losses += 1;
+          st.points = (st.points || 0) + (scoringMode === 'rankingPoints' ? 2 : 0);
+        }
       }
     });
 
@@ -498,8 +506,13 @@ export const calculateSuper8PlayerStandings = (
         st.played += 1;
         st.gamesWon += g2;
         st.gamesLost += g1;
-        if (!isPair1Winner) st.wins += 1;
-        else st.losses += 1;
+        if (!isPair1Winner) {
+          st.wins += 1;
+          st.points = (st.points || 0) + (scoringMode === 'rankingPoints' ? 5 + gameDiff : 1);
+        } else {
+          st.losses += 1;
+          st.points = (st.points || 0) + (scoringMode === 'rankingPoints' ? 2 : 0);
+        }
       }
     });
   });
@@ -521,13 +534,14 @@ export const calculateSuper8PlayerStandings = (
     }));
   }
 
-  // Agrupa os atletas pelo número de vitórias
+  // Agrupa os atletas pelo critério principal: pontos no Ranking, vitórias no Super 8.
   const winsGroups: Record<number, PlayerStanding[]> = {};
   standingsList.forEach((st) => {
-    if (!winsGroups[st.wins]) {
-      winsGroups[st.wins] = [];
+    const primaryScore = scoringMode === 'rankingPoints' ? (st.points || 0) : st.wins;
+    if (!winsGroups[primaryScore]) {
+      winsGroups[primaryScore] = [];
     }
-    winsGroups[st.wins].push(st);
+    winsGroups[primaryScore].push(st);
   });
 
   const sortedWinKeys = Object.keys(winsGroups)

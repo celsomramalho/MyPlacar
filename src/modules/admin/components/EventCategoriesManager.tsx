@@ -20,6 +20,21 @@ interface Props {
   onUpdateEvent: (event: TournamentEvent) => void;
 }
 
+const getParticipantKey = (entry?: Partial<TournamentEntry> | null) =>
+  (entry?.email || entry?.pin || entry?.name || '').toLowerCase().trim();
+
+const pairHasSameParticipants = (pair: TournamentPair, first: TournamentEntry, second: TournamentEntry) => {
+  const pairP1 = getParticipantKey(pair.p1);
+  const pairP2 = getParticipantKey(pair.p2);
+  const firstKey = getParticipantKey(first);
+  const secondKey = getParticipantKey(second);
+  if (!pairP1 || !pairP2 || !firstKey || !secondKey) return false;
+  return (
+    (pairP1 === firstKey && pairP2 === secondKey) ||
+    (pairP1 === secondKey && pairP2 === firstKey)
+  );
+};
+
 export const EventCategoriesManager: React.FC<Props> = ({
   event,
   activeSports,
@@ -106,6 +121,10 @@ export const EventCategoriesManager: React.FC<Props> = ({
   };
 
   const handleStartEdit = (cat: EventCategory) => {
+    if (isAdding && editingId === cat.id) {
+      resetForm();
+      return;
+    }
     setName(cat.name);
     setDescription(cat.description || '');
     setFormat(cat.format);
@@ -164,6 +183,183 @@ export const EventCategoriesManager: React.FC<Props> = ({
     resetForm();
   };
 
+  const renderCategoryForm = () => (
+    <form onSubmit={handleSave} className="bg-white p-6 rounded-3xl border-2 border-emerald-500 shadow-md space-y-4 animate-in slide-in-from-top-4">
+      <div className="flex items-center justify-between border-b pb-3">
+        <h3 className="font-black text-slate-700 text-sm flex items-center gap-2">
+          <Layers size={18} className="text-emerald-500" />
+          {editingId ? 'Editar categoria' : 'Nova categoria'}
+        </h3>
+        <div className="flex items-center gap-1">
+          {editingId && (
+            <button
+              type="button"
+              onClick={() => handleDelete(editingId)}
+              className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+              title="Excluir categoria"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={resetForm}
+            className="p-1 text-slate-400 hover:text-slate-600"
+            title="Recolher cadastro"
+          >
+            <ChevronUp size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* 1 Campo por linha */}
+      <div className="space-y-3">
+        {/* Linha 1: Nome */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Nome</label>
+          <input
+            type="text"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex: Duplas Masculino A"
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        {/* Linha 2: Descrição */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Descrição</label>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Ex: Categoria avançada masculina"
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        {/* Linha 3: Formato */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Formato</label>
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value as 'Simples' | 'Duplas')}
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
+          >
+            <option value="Duplas">Duplas</option>
+            <option value="Simples">Simples</option>
+          </select>
+        </div>
+
+        {/* Linha 4: Esporte */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
+          <select
+            value={sportId}
+            onChange={(e) => setSportId(e.target.value)}
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
+          >
+            {activeSports.length === 0 ? (
+              <option value="beach-tennis">Beach Tennis</option>
+            ) : (
+              activeSports.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
+        {/* Linha 5: Abreviação */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Abreviação</label>
+          <input
+            type="text"
+            value={abbreviation}
+            onChange={(e) => setAbbreviation(e.target.value)}
+            placeholder="Ex: DMa_A"
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        {/* Linha 6 (Última linha): Prioridade, Gênero 1, Gênero 2 */}
+        <div className="grid grid-cols-3 gap-3 pt-1">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Prioridade</label>
+            <input
+              type="number"
+              min={1}
+              value={priority}
+              onChange={(e) => setPriority(Number(e.target.value))}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 text-center"
+            />
+          </div>
+
+          {/* Gênero 1 */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 1</label>
+            <button
+              type="button"
+              onClick={() => setGender1(gender1 === 'M' ? 'F' : 'M')}
+              className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
+                gender1 === 'M'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-pink-500 text-white border-pink-500'
+              }`}
+              title="Clique para alternar entre M e F"
+            >
+              {gender1 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
+              {gender1 === 'M' ? 'M' : 'F'}
+            </button>
+          </div>
+
+          {/* Gênero 2 — só para Duplas */}
+          {format === 'Duplas' ? (
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 2</label>
+              <button
+                type="button"
+                onClick={() => setGender2(gender2 === 'M' ? 'F' : 'M')}
+                className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
+                  gender2 === 'M'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-pink-500 text-white border-pink-500'
+                }`}
+                title="Clique para alternar entre M e F"
+              >
+                {gender2 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
+                {gender2 === 'M' ? 'M' : 'F'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1 invisible">
+              <label className="text-[10px]">–</label>
+              <div className="h-11" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-3 pt-3">
+        <button
+          type="submit"
+          className="bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs px-6 py-3.5 rounded-xl transition-all shadow-sm flex items-center gap-2"
+        >
+          <Check size={16} /> Salvar categoria
+        </button>
+        <button
+          type="button"
+          onClick={resetForm}
+          className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-5 py-3.5 rounded-xl transition-all"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+
   const handleDelete = (id: string) => {
     const categoryToDelete = categories.find((c) => c.id === id);
     setModalConfig({
@@ -216,8 +412,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
 
   const playerStandings = React.useMemo(() => {
     if (!isIndividualRanking || !selectedCategory) return [];
-    return calculateSuper8PlayerStandings(categoryEntries, categoryMatches);
-  }, [isIndividualRanking, selectedCategory, categoryEntries, categoryMatches]);
+    return calculateSuper8PlayerStandings(categoryEntries, categoryMatches, isRanking ? 'rankingPoints' : 'wins');
+  }, [isIndividualRanking, isRanking, selectedCategory, categoryEntries, categoryMatches]);
 
   const playerStandingsMap = React.useMemo(() => {
     const map = new Map<string, PlayerStanding>();
@@ -233,25 +429,6 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const sortedCategoryEntries = React.useMemo(() => {
     if (isIndividualRanking) {
       return [...categoryEntries].sort((a, b) => {
-        if (isRanking) {
-          const pA = pairs.find((p) =>
-            ((p.p1.email && a.email && p.p1.email.toLowerCase().trim() === a.email.toLowerCase().trim()) ||
-             (p.p2.email && a.email && p.p2.email.toLowerCase().trim() === a.email.toLowerCase().trim()) ||
-             (p.p1.pin && a.pin && p.p1.pin.toUpperCase().trim() === a.pin.toUpperCase().trim()) ||
-             (p.p2.pin && a.pin && p.p2.pin.toUpperCase().trim() === a.pin.toUpperCase().trim())) &&
-            p.categoryId === selectedCategory?.id
-          );
-          const pB = pairs.find((p) =>
-            ((p.p1.email && b.email && p.p1.email.toLowerCase().trim() === b.email.toLowerCase().trim()) ||
-             (p.p2.email && b.email && p.p2.email.toLowerCase().trim() === b.email.toLowerCase().trim()) ||
-             (p.p1.pin && b.pin && p.p1.pin.toUpperCase().trim() === b.pin.toUpperCase().trim()) ||
-             (p.p2.pin && b.pin && p.p2.pin.toUpperCase().trim() === b.pin.toUpperCase().trim())) &&
-            p.categoryId === selectedCategory?.id
-          );
-          if (pA && !pB) return -1;
-          if (!pA && pB) return 1;
-          if (pA && pB && pA.id !== pB.id) return (pA.teamNumber || 0) - (pB.teamNumber || 0);
-        }
         const kA = (a.email || a.pin || '').toLowerCase().trim();
         const kB = (b.email || b.pin || '').toLowerCase().trim();
         const stA = playerStandingsMap.get(kA);
@@ -271,7 +448,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
       if (pA && pB) return (pA.teamNumber || 0) - (pB.teamNumber || 0);
       return a.name.localeCompare(b.name);
     });
-  }, [categoryEntries, isIndividualRanking, isRanking, playerStandingsMap, sortBy, pairs, selectedCategory?.id]);
+  }, [categoryEntries, isIndividualRanking, playerStandingsMap, sortBy, pairs, selectedCategory?.id]);
 
   const categoryPairs = pairs.filter((p) =>
     selectedCategory
@@ -291,14 +468,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
         (p.categoryId === selectedCategory?.id || !p.categoryId)
     );
 
-  const entriesWithTeam = isRanking
-    ? sortedCategoryEntries.filter((e) => Boolean(pairForEntry(e)))
-    : [];
-  const entriesWithoutTeam = isRanking
-    ? sortedCategoryEntries.filter((e) => !pairForEntry(e))
-    : [];
-
   const selectedPair = React.useMemo(() => {
+    if (isRanking) return null;
     if (selectedEntries.size === 0) return null;
     const selectedEmail = Array.from(selectedEntries)[0];
     const found = pairs.find(
@@ -310,11 +481,11 @@ export const EventCategoriesManager: React.FC<Props> = ({
     const isPairSelected =
       selectedEntries.has(found.p1.email) && selectedEntries.has(found.p2.email);
     return isPairSelected ? found : null;
-  }, [pairs, selectedCategory?.id, selectedEntries]);
+  }, [isRanking, pairs, selectedCategory?.id, selectedEntries]);
 
   const toggleEntrySelection = (entry: TournamentEntry) => {
     const existingPair = pairForEntry(entry);
-    if (existingPair) {
+    if (!isRanking && existingPair) {
       const isAlreadySelected =
         selectedEntries.has(existingPair.p1.email) &&
         selectedEntries.has(existingPair.p2.email);
@@ -477,6 +648,17 @@ const validateCategoryGenders = (
       setModalConfig({
         title: 'Atenção',
         message: validation.message || 'Formação de time incompatível com os requisitos da categoria.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
+    const alreadyFormedPair = categoryPairs.find((pair) =>
+      pairHasSameParticipants(pair, selected[0], selected[1])
+    );
+    if (alreadyFormedPair) {
+      setModalConfig({
+        title: 'Time já formado',
+        message: `Este time já existe em ${alreadyFormedPair.teamCode || 'Times'}. Selecione uma combinação diferente de jogadores.`,
         onConfirm: () => setModalConfig(null),
       });
       return;
@@ -653,6 +835,20 @@ const validateCategoryGenders = (
       .map((id) => pairs.find((p) => p.id === id))
       .filter(Boolean) as TournamentPair[];
     if (selectedPairsList.length !== 2) return;
+    const rankingMatchesLimit = Number(event.rankingMatchesPerTeam || 0);
+    if (isRanking && rankingMatchesLimit > 0) {
+      const blockedPair = selectedPairsList.find((pair) =>
+        categoryMatches.filter((m) => m.pair1Id === pair.id || m.pair2Id === pair.id).length >= rankingMatchesLimit
+      );
+      if (blockedPair) {
+        setModalConfig({
+          title: 'Limite de partidas atingido',
+          message: `${blockedPair.teamCode || 'Este time'} já atingiu o limite de ${rankingMatchesLimit} ${rankingMatchesLimit === 1 ? 'partida permitida' : 'partidas permitidas'}.`,
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
+    }
 
     const newMatch = createManualMatch(
       selectedPairsList[0],
@@ -1666,6 +1862,16 @@ const validateCategoryGenders = (
     const match = matches.find((m) => m.id === matchId);
     if (!match) return;
 
+    if (isRanking && !match.matchDate) {
+      setModalConfig({
+        title: 'Data obrigatória',
+        message: 'Informe a data da partida antes de finalizar.',
+        onConfirm: () => setModalConfig(null),
+        variant: 'info',
+      });
+      return;
+    }
+
     const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets);
 
     // Verifica se algum set tem placar digitado
@@ -2445,265 +2651,20 @@ const validateCategoryGenders = (
           </div>
         ) : isRanking ? (
           <div>
-            {entriesWithTeam.length > 0 && (
-              <div>
-                <div className="px-4 py-2 bg-sky-50 border-b border-sky-100 flex items-center gap-2">
-                  <Users size={13} className="text-sky-600" />
-                  <span className="text-[11px] font-black text-sky-700">Em time — aguardando partida ({entriesWithTeam.length})</span>
-                </div>
-                <div className="divide-y divide-sky-100/60">
-                  {entriesWithTeam.map((entry, entryIndex) => {
-              const entryCategories = categories.filter((c) =>
-                entry.categoryIds?.includes(c.id)
-              );
-              const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
-              const isExpanded = expandedRegistrationEmail === entry.email;
-              const isSelected = !isSuper8 && selectedEntries.has(entry.email);
-              const pair = !isSuper8 ? pairForEntry(entry) : null;
-              const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
-              const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
-              const partner = pair
-                ? (pair.p1.email === entry.email ? pair.p2 : pair.p1)
-                : null;
-
-              return (
-                <div
-                  key={entry.email || entry.pin}
-                  className={`transition-all ${
-                    isSelected
-                      ? isRanking && !pair
-                        ? 'bg-emerald-100/90 ring-2 ring-inset ring-emerald-500 border-l-4 border-l-emerald-600'
-                        : 'bg-sky-100/90 ring-2 ring-inset ring-sky-500 border-l-4 border-l-sky-600'
-                      : isRanking && pair
-                      ? 'bg-sky-50/30 hover:bg-sky-50/60 border-l-4 border-l-sky-400'
-                      : isRanking && !pair
-                      ? 'bg-emerald-50/20 hover:bg-emerald-50/50 border-l-4 border-l-emerald-400'
-                      : isExpanded
-                      ? 'bg-emerald-50/30'
-                      : entryIndex % 2 === 0
-                      ? 'bg-white hover:bg-slate-50/70'
-                      : 'bg-emerald-50/30 hover:bg-emerald-50/50'
-                  }`}
-                >
-                  <div
-                    onClick={() => !isSuper8 && toggleEntrySelection(entry)}
-                    className={`p-3.5 sm:p-4 flex flex-col gap-2.5 ${isSuper8 ? 'cursor-default' : 'cursor-pointer'}`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      {/* Lado Esquerdo: Ícone de Gênero + Informações do Participante */}
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        {/* Ícone de Gênero */}
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            const nextGender = entry.gender === 'F' ? 'M' : 'F';
-                            const db = getDb();
-                            if (db && event.pin) {
-                              try {
-                                const { updateEventEntry } = await import('@infra/firebase/events');
-                                await updateEventEntry(db, event.pin, entry.email, { gender: nextGender });
-                                const { updateUserProfileFields } = await import('@infra/firebase/users');
-                                await updateUserProfileFields(db, entry.email, { gender: nextGender });
-                              } catch (err) {
-                                console.error('Erro ao alternar gênero:', err);
-                              }
-                            }
-                            const updatedEntries = entries.map((item) =>
-                              (item.email === entry.email || item.pin === entry.pin)
-                                ? { ...item, gender: nextGender as 'M' | 'F' }
-                                : item
-                            );
-                            onUpdateEvent({ ...event, entries: updatedEntries });
-                          }}
-                          className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all active:scale-90 ${
-                            entry.gender === 'F'
-                              ? 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'
-                              : 'bg-sky-50 text-sky-500 border-sky-100 hover:bg-sky-100'
-                          }`}
-                          title="Clique para alternar gênero"
-                        >
-                          {entry.gender === 'F' ? <VenusIcon size={20} /> : <MarsIcon size={20} />}
-                        </button>
-
-                        {/* Bloco das Linhas de Informação */}
-                        <div className="space-y-1 min-w-0 flex-1 text-left">
-                          {/* Linha 1: Nome */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {isIndividualRanking && standing?.rank !== undefined && (
-                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
-                                standing.rank === 1
-                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                  : standing.rank === 2
-                                  ? 'bg-slate-200 text-slate-700 border border-slate-300'
-                                  : standing.rank === 3
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}>
-                                {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
-                              </span>
-                            )}
-                            <p className="font-black text-sm text-slate-800 tracking-tight truncate">
-                              {entry.name || entry.nickname}
-                            </p>
-                            {pair ? (
-                              <span className="inline-flex items-center gap-1 bg-sky-100 text-sky-800 px-2 py-0.5 rounded-lg text-[10px] font-black border border-sky-300">
-                                <Users size={11} /> {pair.teamCode || `Time ${pair.teamNumber || ''}`}
-                              </span>
-                            ) : isRanking ? (
-                              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-lg text-[10px] font-black border border-emerald-300">
-                                <Sparkles size={11} className="text-emerald-600" /> Disponível
-                              </span>
-                            ) : null}
-                          </div>
-
-                          {/* Linha 2: Nickname - PIN mascarado (padrão Inscrições) */}
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                            {(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}
-                          </p>
-
-                          {/* Linha 2b: Parceiro (apenas Ranking quando em time) */}
-                          {isRanking && partner && (
-                            <p className="text-[11px] font-bold text-sky-700 flex items-center gap-1">
-                              <UsersRound size={12} /> Parceiro(a): <span className="font-black text-slate-800">{partner.nickname || partner.name}</span>
-                            </p>
-                          )}
-
-                          {/* Linha 3: Categorias */}
-                          {entryCategories.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              {entryCategories.map((c) => (
-                                <span
-                                  key={c.id}
-                                  className="bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60"
-                                >
-                                  {c.abbreviation || c.name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-slate-300 font-bold">Sem categoria</p>
-                          )}
-
-                          {/* Linha 4: Status do Pagamento + Valores — oculto quando inscrição gratuita */}
-                          {((entry.dueAmount ?? 0) > 0 || entryPaid > 0) && (
-                            <div className="flex items-center gap-2 pt-0.5 flex-wrap">
-                              <span
-                                className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                                  entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : entry.paymentStatus === 'Isento'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-amber-100 text-amber-700'
-                                }`}
-                              >
-                                {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
-                              </span>
-                              <span className="text-xs font-bold text-slate-600">
-                                R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Lado Direito: Inscrição_ID + Botão de Ação / Chevron */}
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
-                          {formatRegistrationId(entry.registrationId)}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedRegistrationEmail(isExpanded ? null : entry.email);
-                          }}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-90 shadow-sm"
-                          title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
-                        >
-                          {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Controles de estatísticas do Super 8 / Ranking */}
-                    {isIndividualRanking && standing && categoryMatches.length > 0 && (
-                      <div className="mt-1 pt-2.5 border-t border-slate-100 space-y-1.5">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          {/* Linha 1 */}
-                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="text-[11px] font-black text-slate-500">Vitórias (Pts):</span>
-                            <span className="font-black text-slate-900 text-xs">{standing.wins}</span>
-                          </div>
-                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="text-[11px] font-black text-slate-500">Saldo de Games:</span>
-                            <span className={`font-black text-xs ${standing.gamesDiff > 0 ? 'text-emerald-600' : standing.gamesDiff < 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                              {standing.gamesDiff > 0 ? `+${standing.gamesDiff}` : standing.gamesDiff}
-                            </span>
-                          </div>
-                          {/* Linha 2 */}
-                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="text-[11px] font-black text-slate-500">Games a Favor:</span>
-                            <span className="font-black text-slate-900 text-xs">{standing.gamesWon}</span>
-                          </div>
-                          <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="text-[11px] font-black text-slate-500">Games Sofridos:</span>
-                            <span className="font-black text-slate-900 text-xs">{standing.gamesLost}</span>
-                          </div>
-                        </div>
-                        {standing.tieBreakNote && (
-                          <div className="pt-0.5">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
-                              ⚖️ {standing.tieBreakNote}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Formulário Expandido */}
-                  {isExpanded && (
-                    <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
-                      <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
-                        <EventRegistrationForm
-                          key={`expanded-${entry.email || entry.pin}`}
-                          event={event}
-                          mode="admin"
-                          entry={entry}
-                          onUpdateEvent={onUpdateEvent}
-                          onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
-                          onDelete={() => {
-                            handleDeleteEntry(entry.pin);
-                          }}
-                          onCancel={() => setExpandedRegistrationEmail(null)}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-                </div>
-              </div>
-            )}
-            {entriesWithoutTeam.length > 0 && (
-              <div>
-                <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 border-t border-t-slate-100 flex items-center gap-2">
-                  <Sparkles size={13} className="text-emerald-600" />
-                  <span className="text-[11px] font-black text-emerald-700">Disponíveis para formar time ({entriesWithoutTeam.length})</span>
-                </div>
-                <div className="divide-y divide-emerald-100/40">
-                  {entriesWithoutTeam.map((entry, entryIndex) => {
+            <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
+              <Sparkles size={13} className="text-emerald-600" />
+              <span className="text-[11px] font-black text-emerald-700">
+                Disponíveis para formar novos times ({sortedCategoryEntries.length})
+              </span>
+            </div>
+            <div className="divide-y divide-emerald-100/40">
+                  {sortedCategoryEntries.map((entry, entryIndex) => {
                     const entryCategories = categories.filter((c) => entry.categoryIds?.includes(c.id));
                     const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
                     const isExpanded = expandedRegistrationEmail === entry.email;
                     const isSelected = !isSuper8 && selectedEntries.has(entry.email);
-                    const pair = null;
                     const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
                     const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
-                    const partner = null;
                     return (
                       <div
                         key={entry.email || entry.pin}
@@ -2768,11 +2729,16 @@ const validateCategoryGenders = (
                                       {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
                                     </span>
                                   )}
+                                  {isRanking && standing && (
+                                    <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
+                                      {standing.points || 0} pts
+                                    </span>
+                                  )}
                                   <p className="font-black text-sm text-slate-800 tracking-tight truncate">
                                     {entry.name || entry.nickname}
                                   </p>
                                   <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-lg text-[10px] font-black border border-emerald-300">
-                                    <Sparkles size={11} className="text-emerald-600" /> Disponível
+                                    <Sparkles size={11} className="text-emerald-600" /> Disponível para novo time
                                   </span>
                                 </div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -2844,9 +2810,7 @@ const validateCategoryGenders = (
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -3164,183 +3128,8 @@ const validateCategoryGenders = (
         )}
       </div>
 
-      {/* Category Registration / Edit Form */}
-      {isAdding && (
-        <form onSubmit={handleSave} className="bg-white p-6 rounded-3xl border-2 border-emerald-500 shadow-md space-y-4 animate-in slide-in-from-top-4">
-          <div className="flex items-center justify-between border-b pb-3">
-            <h3 className="font-black text-slate-700 text-sm flex items-center gap-2">
-              <Layers size={18} className="text-emerald-500" />
-              {editingId ? 'Editar categoria' : 'Nova categoria'}
-            </h3>
-            <div className="flex items-center gap-1">
-              {/* Delete button — only shown when editing */}
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(editingId)}
-                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-                  title="Excluir categoria"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={resetForm}
-                className="p-1 text-slate-400 hover:text-slate-600"
-              >
-                <ChevronUp size={20} />
-              </button>
-            </div>
-          </div>
-
-          {/* 1 Campo por linha */}
-          <div className="space-y-3">
-            {/* Linha 1: Nome */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 ml-1">Nome</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Duplas Masculino A"
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            {/* Linha 2: Descrição */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 ml-1">Descrição</label>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Ex: Categoria avançada masculina"
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            {/* Linha 3: Formato */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 ml-1">Formato</label>
-              <select
-                value={format}
-                onChange={(e) => setFormat(e.target.value as 'Simples' | 'Duplas')}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="Duplas">Duplas</option>
-                <option value="Simples">Simples</option>
-              </select>
-            </div>
-
-            {/* Linha 4: Esporte */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
-              <select
-                value={sportId}
-                onChange={(e) => setSportId(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                {activeSports.length === 0 ? (
-                  <option value="beach-tennis">Beach Tennis</option>
-                ) : (
-                  activeSports.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            {/* Linha 5: Abreviação */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 ml-1">Abreviação</label>
-              <input
-                type="text"
-                value={abbreviation}
-                onChange={(e) => setAbbreviation(e.target.value)}
-                placeholder="Ex: DMa_A"
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            {/* Linha 6 (Última linha): Prioridade, Gênero 1, Gênero 2 */}
-            <div className="grid grid-cols-3 gap-3 pt-1">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 ml-1">Prioridade</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={priority}
-                  onChange={(e) => setPriority(Number(e.target.value))}
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 text-center"
-                />
-              </div>
-
-              {/* Gênero 1 */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 1</label>
-                <button
-                  type="button"
-                  onClick={() => setGender1(gender1 === 'M' ? 'F' : 'M')}
-                  className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
-                    gender1 === 'M'
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-pink-500 text-white border-pink-500'
-                  }`}
-                  title="Clique para alternar entre M e F"
-                >
-                  {gender1 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
-                  {gender1 === 'M' ? 'M' : 'F'}
-                </button>
-              </div>
-
-              {/* Gênero 2 — só para Duplas */}
-              {format === 'Duplas' ? (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 2</label>
-                  <button
-                    type="button"
-                    onClick={() => setGender2(gender2 === 'M' ? 'F' : 'M')}
-                    className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
-                      gender2 === 'M'
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'bg-pink-500 text-white border-pink-500'
-                    }`}
-                    title="Clique para alternar entre M e F"
-                  >
-                    {gender2 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
-                    {gender2 === 'M' ? 'M' : 'F'}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-1 invisible">
-                  <label className="text-[10px]">–</label>
-                  <div className="h-11" />
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-3">
-            <button
-              type="submit"
-              className="bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs px-6 py-3.5 rounded-xl transition-all shadow-sm flex items-center gap-2"
-            >
-              <Check size={16} /> Salvar categoria
-            </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-5 py-3.5 rounded-xl transition-all"
-            >
-              Cancelar
-            </button>
-          </div>
-        </form>
-      )}
+      {/* Category Registration Form */}
+      {isAdding && !editingId && renderCategoryForm()}
 
       {/* Category Cards Grid */}
       {categories.length === 0 ? (
@@ -3392,9 +3181,9 @@ const validateCategoryGenders = (
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleStartEdit(cat); }}
                     className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 rounded-xl active:scale-90 transition-all"
-                    title="Abrir cadastro da categoria"
+                    title={isEditing ? 'Recolher cadastro da categoria' : 'Abrir cadastro da categoria'}
                   >
-                    <ChevronDown size={18} />
+                    {isEditing ? <X size={18} /> : <ChevronDown size={18} />}
                   </button>
                 </div>
 
@@ -3451,6 +3240,7 @@ const validateCategoryGenders = (
                   </button>
                 </div>
               </div>
+              {isEditing && renderCategoryForm()}
               {selectedCategoryId === cat.id && renderCategoryPanel()}
               </React.Fragment>
             );
