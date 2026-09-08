@@ -5,6 +5,7 @@ import { generateSystemMatchesForCategory, generateSuper8MatchesForCategory, isC
 import { updatePlayoffProgression, calculateBracketStandings, calculateSuper8PlayerStandings, type TeamStanding } from '@modules/events/services/matchProgression';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
 import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
+import { RankingStandingStatsBlock } from '@modules/events/components/RankingStandingStatsBlock';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { getDb } from '@infra/firebase';
@@ -835,6 +836,27 @@ const validateCategoryGenders = (
       .map((id) => pairs.find((p) => p.id === id))
       .filter(Boolean) as TournamentPair[];
     if (selectedPairsList.length !== 2) return;
+
+    const isSamePlayer = (e1?: TournamentEntry, e2?: TournamentEntry) => {
+      if (!e1 || !e2) return false;
+      if (e1.email && e2.email && e1.email.toLowerCase().trim() === e2.email.toLowerCase().trim()) return true;
+      if (e1.pin && e2.pin && e1.pin.trim() === e2.pin.trim()) return true;
+      return false;
+    };
+    const hasSharedPlayer =
+      isSamePlayer(selectedPairsList[0].p1, selectedPairsList[1].p1) ||
+      isSamePlayer(selectedPairsList[0].p1, selectedPairsList[1].p2) ||
+      isSamePlayer(selectedPairsList[0].p2, selectedPairsList[1].p1) ||
+      isSamePlayer(selectedPairsList[0].p2, selectedPairsList[1].p2);
+
+    if (hasSharedPlayer) {
+      setModalConfig({
+        title: 'Jogador em ambos os times',
+        message: 'Não é possível formar uma partida entre times que possuem o mesmo jogador.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
     const rankingMatchesLimit = Number(event.rankingMatchesPerTeam || 0);
     if (isRanking && rankingMatchesLimit > 0) {
       const blockedPair = selectedPairsList.find((pair) =>
@@ -2716,6 +2738,9 @@ const validateCategoryGenders = (
                               </button>
                               <div className="space-y-1 min-w-0 flex-1 text-left">
                                 <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-black text-sm text-slate-800 tracking-tight truncate">
+                                    {entry.name || entry.nickname}
+                                  </p>
                                   {isIndividualRanking && standing?.rank !== undefined && (
                                     <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
                                       standing.rank === 1
@@ -2734,12 +2759,6 @@ const validateCategoryGenders = (
                                       {standing.points || 0} pts
                                     </span>
                                   )}
-                                  <p className="font-black text-sm text-slate-800 tracking-tight truncate">
-                                    {entry.name || entry.nickname}
-                                  </p>
-                                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-lg text-[10px] font-black border border-emerald-300">
-                                    <Sparkles size={11} className="text-emerald-600" /> Disponível para novo time
-                                  </span>
                                 </div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                                   {(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}
@@ -2790,6 +2809,11 @@ const validateCategoryGenders = (
                               </button>
                             </div>
                           </div>
+                          {isRanking && standing && categoryMatches.length > 0 && (
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <RankingStandingStatsBlock standing={standing} />
+                            </div>
+                          )}
                         </div>
                         {isExpanded && (
                           <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">

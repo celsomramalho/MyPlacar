@@ -14,6 +14,7 @@ import { Toggle } from '@shared/components/Toggle';
 import { Input } from '@shared/components/Input';
 import type { ModalConfig } from '@modules/ui/types';
 import { EventRegistrationForm } from '../components/EventRegistrationForm';
+import { RankingStandingStatsBlock } from '../components/RankingStandingStatsBlock';
 import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 import { getPhaseLabel, createManualMatch, validateCategoryGenders } from '../services/matchGenerator';
 import { calculateSuper8PlayerStandings, calculateBracketStandings, type TeamStanding } from '../services/matchProgression';
@@ -1015,6 +1016,27 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       const p1 = categoryPairs.find((p) => p.id === selectedPairIds[0]);
       const p2 = categoryPairs.find((p) => p.id === selectedPairIds[1]);
       if (!p1 || !p2) return;
+
+      const isSamePlayer = (e1?: TournamentEntry, e2?: TournamentEntry) => {
+        if (!e1 || !e2) return false;
+        if (e1.email && e2.email && e1.email.toLowerCase().trim() === e2.email.toLowerCase().trim()) return true;
+        if (e1.pin && e2.pin && e1.pin.trim() === e2.pin.trim()) return true;
+        return false;
+      };
+      const hasSharedPlayer =
+        isSamePlayer(p1.p1, p2.p1) ||
+        isSamePlayer(p1.p1, p2.p2) ||
+        isSamePlayer(p1.p2, p2.p1) ||
+        isSamePlayer(p1.p2, p2.p2);
+
+      if (hasSharedPlayer) {
+        setModalConfig({
+          title: 'Jogador em ambos os times',
+          message: 'Não é possível formar uma partida entre times que possuem o mesmo jogador.',
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
       if (isRanking && rankingMatchesLimit > 0) {
         const blockedPair = [p1, p2].find((pair) => getPairMatchCount(pair.id) >= rankingMatchesLimit);
         if (blockedPair) {
@@ -1267,6 +1289,10 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
               </div>
               <div className="min-w-0 space-y-1">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <p className="text-sm font-black text-slate-900 truncate">
+                    {entry.name || entry.nickname}
+                    {isCurrentUserEntry && <span className="text-[10px] opacity-40 ml-1">(você)</span>}
+                  </p>
                   {isIndividualRanking && standing?.rank !== undefined && (
                     <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
                       standing.rank === 1
@@ -1289,19 +1315,11 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                     <span className="font-mono text-sky-800 bg-sky-100 border border-sky-300 px-2 py-0.5 rounded-lg text-[10px] font-black inline-flex items-center gap-1">
                       <Users size={11} /> {pair.teamCode || 'Time formado'}
                     </span>
-                  ) : isRanking ? (
-                    <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-lg inline-flex items-center gap-1">
-                      <Sparkles size={11} className="text-emerald-600" /> Disponível para novo time
-                    </span>
-                  ) : entry.registrationId && !isSuper8 ? (
+                  ) : entry.registrationId && !isSuper8 && !isRanking ? (
                     <span className="font-mono text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-lg text-[10px] font-black">
                       {formatRegistrationId(entry.registrationId)}
                     </span>
                   ) : null}
-                  <p className="text-sm font-black text-slate-900 truncate">
-                    {entry.name || entry.nickname}
-                    {isCurrentUserEntry && <span className="text-[10px] opacity-40 ml-1">(você)</span>}
-                  </p>
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase truncate">
                   {(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}
@@ -1329,35 +1347,39 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           </div>
 
           {isIndividualRanking && standing && categoryMatches.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                  <span className="text-[11px] font-black text-slate-500">{isRanking ? 'Pontos:' : 'Vitórias:'}</span>
-                  <span className="font-black text-slate-900 text-xs">{isRanking ? (standing.points || 0) : standing.wins}</span>
+            isRanking ? (
+              <RankingStandingStatsBlock standing={standing} />
+            ) : (
+              <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                    <span className="text-[11px] font-black text-slate-500">Vitórias:</span>
+                    <span className="font-black text-slate-900 text-xs">{standing.wins}</span>
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                    <span className="text-[11px] font-black text-slate-500">Saldo de Games:</span>
+                    <span className={`font-black text-xs ${standing.gamesDiff > 0 ? 'text-emerald-600' : standing.gamesDiff < 0 ? 'text-red-600' : 'text-slate-800'}`}>
+                      {standing.gamesDiff > 0 ? `+${standing.gamesDiff}` : standing.gamesDiff}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                    <span className="text-[11px] font-black text-slate-500">Games a Favor:</span>
+                    <span className="font-black text-slate-900 text-xs">{standing.gamesWon}</span>
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                    <span className="text-[11px] font-black text-slate-500">Games Sofridos:</span>
+                    <span className="font-black text-slate-900 text-xs">{standing.gamesLost}</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                  <span className="text-[11px] font-black text-slate-500">Saldo de Games:</span>
-                  <span className={`font-black text-xs ${standing.gamesDiff > 0 ? 'text-emerald-600' : standing.gamesDiff < 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                    {standing.gamesDiff > 0 ? `+${standing.gamesDiff}` : standing.gamesDiff}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                  <span className="text-[11px] font-black text-slate-500">Games a Favor:</span>
-                  <span className="font-black text-slate-900 text-xs">{standing.gamesWon}</span>
-                </div>
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                  <span className="text-[11px] font-black text-slate-500">Games Sofridos:</span>
-                  <span className="font-black text-slate-900 text-xs">{standing.gamesLost}</span>
-                </div>
+                {standing.tieBreakNote && (
+                  <div className="pt-0.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                      {standing.tieBreakNote}
+                    </span>
+                  </div>
+                )}
               </div>
-              {standing.tieBreakNote && (
-                <div className="pt-0.5">
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
-                    {standing.tieBreakNote}
-                  </span>
-                </div>
-              )}
-            </div>
+            )
           )}
         </div>
       );
