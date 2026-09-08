@@ -51,6 +51,15 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const watchUnsubRef = useRef<(() => void) | null>(null);
 
   const [email, setEmail] = useState(() => getSavedEmail());
+  const handleEmailChange = (val: string) => {
+    setEmail(val);
+    try {
+      const clean = val.trim();
+      if (clean) {
+        rememberEmail(clean);
+      }
+    } catch {}
+  };
   const [pin, setPin] = useState(() => getSavedPin()); 
   const [password, setPassword] = useState('');
   const [authMethod, setAuthMethod] = useState<'pin' | 'password'>(() => {
@@ -188,17 +197,23 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const auth = getAuthInstance();
       if (!auth) return;
 
-      try {
-        const result = await getRedirectResult(auth);
-        if (cancelled || !result?.user?.email) return;
+      const wasPendingRedirect = (() => {
+        try {
+          const val = sessionStorage.getItem('myPlacar_pending_google_redirect');
+          sessionStorage.removeItem('myPlacar_pending_google_redirect');
+          return val === 'true';
+        } catch {
+          return false;
+        }
+      })();
 
+      const processUser = async (user: any) => {
+        if (!user?.email || cancelled) return;
         const db = getDb();
         if (!db) throw new Error('Erro de conexão.');
 
-        const user = result.user;
-        const userEmail = user.email;
-        if (!userEmail) return;
-        const cleanEmail = userEmail.toLowerCase().trim();
+        const cleanEmail = user.email.toLowerCase().trim();
+        rememberEmail(cleanEmail);
         let userData = await fetchUserProfileFromServer(db, cleanEmail).catch(() => fetchUserProfile(db, cleanEmail));
 
         if (userData) {
@@ -223,9 +238,36 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         await saveNewUserProfile(db, cleanEmail, newProfile);
         mirrorUser(newProfile as unknown as UserProfile);
         onAuthSuccess(newProfile, rememberMe);
-      } catch (e) {
+      };
+
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          await processUser(result.user);
+          return;
+        }
+
+        if (auth.currentUser) {
+          await processUser(auth.currentUser);
+          return;
+        }
+
+        if (wasPendingRedirect && isWatchDevice()) {
+          setError(
+            'O navegador do relógio não permitiu o login direto com o Google. Use a opção "Entrar via celular" para conectar facilmente com seu smartphone.'
+          );
+        }
+      } catch (e: any) {
         console.error('Google redirect login error:', e);
-        if (!cancelled) setError('Erro ao autenticar com google.');
+        if (!cancelled) {
+          if (isWatchDevice()) {
+            setError(
+              'O navegador do relógio bloqueou o login do Google. Use a opção "Entrar via celular" para conectar pelo seu smartphone sem precisar digitar.'
+            );
+          } else {
+            setError('Erro ao autenticar com google.');
+          }
+        }
       }
     };
 
@@ -943,12 +985,18 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setError(null);
     setStatusText('Conectando com google...');
     try {
+      if (email.trim()) {
+        rememberEmail(email.trim());
+      }
       const auth = getAuthInstance();
       const db = getDb();
       if (!auth || !db) throw new Error("Erro de conexão.");
       
       const provider = new GoogleAuthProvider();
       if (isWatchDevice()) {
+        try {
+          sessionStorage.setItem('myPlacar_pending_google_redirect', 'true');
+        } catch {}
         await signInWithRedirect(auth, provider);
         return;
       }
@@ -1149,6 +1197,23 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           </div>
         )}
 
+        {mode === 'login' && isWatchDevice() && (
+          <div className="w-full bg-blue-50 border-2 border-blue-200 rounded-3xl p-4 text-center space-y-2 mb-1 animate-in fade-in">
+            <span className="text-[10px] font-black text-blue-900 uppercase tracking-widest block">Recomendado para Relógio</span>
+            <button
+              type="button"
+              onClick={handleStartWatchLogin}
+              disabled={isLoading}
+              className="w-full py-3.5 rounded-2xl font-black bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              📱 Entrar via celular
+            </button>
+            <p className="text-[11px] font-bold text-blue-600 leading-tight">
+              Evite digitar no relógio: gere o código aqui e aprove no celular.
+            </p>
+          </div>
+        )}
+
         {(mode === 'login' || mode === 'register') && (
           <div className="space-y-2 animate-in fade-in duration-500">
             <div className="flex items-center gap-2 ml-1">
@@ -1159,7 +1224,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
               type="email" 
               placeholder="exemplo@email.com" 
               value={email} 
-              onChange={e => setEmail(e.target.value)}
+              onChange={e => handleEmailChange(e.target.value)}
               className="h-16 text-lg font-bold rounded-3xl"
             />
           </div>

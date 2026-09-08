@@ -22,7 +22,7 @@ const parseProfile = (value: string | null): UserProfile | null => {
   }
 };
 
-export const getSavedEmail = () => localStorage.getItem(SAVED_EMAIL_KEY) || '';
+export const getSavedEmail = () => localStorage.getItem(SAVED_EMAIL_KEY) || localStorage.getItem('myPlacarSavedEmail') || localStorage.getItem('myPlacarLastTypedEmail') || '';
 
 export const getSavedPin = () => localStorage.getItem(SAVED_PIN_KEY) || '';
 
@@ -78,6 +78,8 @@ export const clearPendingRegistration = () => {
 
 export const rememberEmail = (email: string) => {
   localStorage.setItem(SAVED_EMAIL_KEY, email);
+  localStorage.setItem('myPlacarSavedEmail', email);
+  localStorage.setItem('myPlacarLastTypedEmail', email);
 };
 
 export const forgetEmail = () => {
