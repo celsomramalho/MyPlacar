@@ -24,6 +24,7 @@ interface Props {
   onDelete?: () => void;
   onCancel?: () => void;
   onPhoneSync?: (phone: string) => void;
+  readOnly?: boolean;
 }
 
 const formatPhone = (value: string) => {
@@ -34,11 +35,11 @@ const formatPhone = (value: string) => {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 };
 
-export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onSave, onUpdateEvent, onDelete, onCancel }) => {
-  const canEdit = true;
+export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onSave, onUpdateEvent, onDelete, onCancel, readOnly = false }) => {
+  const canEdit = !readOnly;
   const isAdmin = mode === 'admin';
   const isNewAdminEntry = isAdmin && (!entry.email || entry.email.trim() === '') && (!entry.name || entry.name.trim() === '');
-  const canEditIdentity = isNewAdminEntry;
+  const canEditIdentity = !readOnly && isNewAdminEntry;
 
   const registrationId = useMemo(
     () => entry.registrationId || getNextRegistrationId(event.entries || []),
@@ -576,7 +577,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
     <div className="flex items-center justify-between pb-2 border-b border-slate-100">
       <h4 className="text-sm font-black text-slate-800">{isAdmin ? 'Editar inscrição' : 'Informações de inscrição'}</h4>
-      {onDelete && (
+      {!readOnly && onDelete && (
         <button
           type="button"
           onClick={handleDeleteWithConfirmation}
@@ -802,31 +803,33 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     )}
 
     <div className="flex gap-3 pt-1">
-      <button
-        type="button"
-        onClick={() => save()}
-        disabled={isSaving}
-        className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
-      >
-        {isSaving ? (
-          <>
-            <Loader2 size={16} className="animate-spin" />
-            <span>Salvando inscrição...</span>
-          </>
-        ) : (
-          <>
-            <CheckCircle2 size={16} />
-            <span>Salvar inscrição</span>
-          </>
-        )}
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={() => save()}
+          disabled={isSaving}
+          className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span>Salvando inscrição...</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 size={16} />
+              <span>Salvar inscrição</span>
+            </>
+          )}
+        </button>
+      )}
       {onCancel && (
         <button
           type="button"
           onClick={onCancel}
-          className="px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-2xl transition-colors active:scale-95"
+          className={`${readOnly ? 'w-full' : 'px-5'} py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-2xl transition-colors active:scale-95`}
         >
-          Cancelar
+          {readOnly ? 'Fechar' : 'Cancelar'}
         </button>
       )}
     </div>

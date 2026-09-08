@@ -569,9 +569,13 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   const [tempNickname, setTempNickname] = useState('');
   const [isSavingNickname, setIsSavingNickname] = useState(false);
 
+  const isPrimary = isPrimaryAdminEmail(userProfile.email);
+  const isEventInactive = event.active !== true;
+  const isReadOnly = isEventInactive && !isPrimary;
+
   const hasEventAdminAccess = useMemo(() => {
-    return isPrimaryAdminEmail(userProfile.email) || canUseEventAdminAccess(event, userProfile.pin);
-  }, [event, userProfile.email, userProfile.pin]);
+    return isPrimary || canUseEventAdminAccess(event, userProfile.pin);
+  }, [event, isPrimary, userProfile.pin]);
   const isUserEventView = true;
   const isAdmin = hasEventAdminAccess && !isUserEventView;
 
@@ -754,7 +758,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
 
   const renderUserCategoryPanel = (category: EventCategory) => {
     const canShowEntries = canShowCategoryEntriesToUser(category);
-    const canUserSubmitScore = isAdmin || event.allowUserScoreEntry === true;
+    const canUserSubmitScore = !isReadOnly && (isAdmin || event.allowUserScoreEntry === true);
     const categoryEntries = entries.filter((entry) => entry.categoryIds?.includes(category.id));
     const categoryPairs = getCategoryPairs(category.id);
     const categoryMatches = getCategoryMatches(category.id);
@@ -883,6 +887,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       : validateCategoryGenders(category, selectedEntriesList);
 
     const handleFormTeamForCategory = async () => {
+      if (isReadOnly) return;
       if (selectedCategoryPair) {
         setModalConfig({
           title: 'Desfazer time?',
@@ -988,6 +993,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       categoryMatches.filter((m) => m.pair1Id === pairId || m.pair2Id === pairId).length;
 
     const handleFormOrUndoMatchForCategory = async () => {
+      if (isReadOnly) return;
       if (selectedPairIds.length !== 2) return;
 
       if (existingMatchBetweenTeams) {
@@ -1077,6 +1083,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       : [];
 
     const handleScoreChange = (matchId: string, player: 'p1' | 'p2', rawVal: string) => {
+      if (isReadOnly) return;
       const parsedNum = rawVal.trim() === '' ? null : parseInt(rawVal, 10);
       const val = isNaN(parsedNum as number) ? null : parsedNum;
 
@@ -1124,6 +1131,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     };
 
     const handleMatchDateChange = (matchId: string, dateVal: string) => {
+      if (isReadOnly) return;
       const nextMatches = (event.matches || []).map((m) =>
         m.id !== matchId ? m : { ...m, matchDate: dateVal || undefined }
       );
@@ -1143,6 +1151,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
     };
 
     const handleFinishRankingMatch = async (matchId: string) => {
+      if (isReadOnly) return;
       const match = (event.matches || []).find((m) => m.id === matchId);
       if (!match) return;
 
@@ -1216,6 +1225,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
 
 
     const handleReopenMatch = async (matchId: string) => {
+      if (isReadOnly) return;
       const targetMatch = (event.matches || []).find((m) => m.id === matchId);
       if (!targetMatch) return;
 
@@ -1727,7 +1737,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             </div>
           )}
 
-          {isRanking && isFinished && (
+          {isRanking && isFinished && !isReadOnly && (
             <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
               {match.matchDate && (
                 <p className="text-[11px] font-bold text-slate-500 text-center flex items-center justify-center gap-1">
@@ -2115,6 +2125,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleToggleGender = async (entryEmail: string, currentGender?: 'M' | 'F') => {
+    if (isReadOnly) return;
     if (!isAdmin && entryEmail !== userProfile.email) return;
     const db = getDb();
     if (!db) return;
@@ -2140,6 +2151,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleToggleCheckIn = async (entryEmail: string, currentStatus?: boolean) => {
+    if (isReadOnly) return;
     if (!isAdmin && entryEmail !== userProfile.email) return;
     const db = getDb();
     if (!db) return;
@@ -2153,6 +2165,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleUpdateNickname = async (email: string) => {
+    if (isReadOnly) return;
     if (!tempNickname.trim()) return;
     setIsSavingNickname(true);
     const db = getDb();
@@ -2174,6 +2187,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleDeleteEntry = async (entryEmail: string, nickname: string) => {
+    if (isReadOnly) return;
     const isSelf = entryEmail === userProfile.email;
     const targetEmailLower = entryEmail.toLowerCase().trim();
     
@@ -2238,6 +2252,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleUndoPair = async (pairId: string) => {
+    if (isReadOnly) return;
     setModalConfig({
       title: "Desfazer time?",
       message: "Deseja realmente desfazer este time? Os atletas ficarão disponíveis novamente.",
@@ -2262,6 +2277,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleUndoMatch = async (matchId: string) => {
+    if (isReadOnly) return;
     setModalConfig({
       title: "Excluir confronto?",
       message: "Deseja realmente excluir este confronto?",
@@ -2285,6 +2301,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleTryStartMatch = (match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair) => {
+    if (isReadOnly) return;
     const hasLiveMatch = event.matches?.some(m => m.status === 'live');
     if (hasLiveMatch) {
        setModalConfig({
@@ -2311,6 +2328,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleSaveManualEntry = async () => {
+    if (isReadOnly) return;
     const { name, nickname, email, gender } = manualEntry;
     if (!name || !nickname || !email) {
        setModalConfig({ title: "Atenção", message: "Preencha todos os campos obrigatórios.", onConfirm: () => setModalConfig(null) });
@@ -2333,6 +2351,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleSaveConfig = async (config: Partial<TournamentConfig>) => {
+    if (isReadOnly) return;
     const db = getDb();
     if (!db) return;
     const currentConfig = event.config || { sportType: 'beach-tennis', sets: 1, gamesPerSet: 6, noAd: true, isLocked: false };
@@ -2348,6 +2367,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleFormPairManual = async () => {
+    if (isReadOnly) return;
     if (selectedEntries.size !== 2) return;
     const db = getDb();
     if (!db) return;
@@ -2365,6 +2385,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
   };
 
   const handleCreateMatchManual = async () => {
+    if (isReadOnly) return;
     if (selectedPairs.size !== 2) return;
     const db = getDb();
     if (!db) return;
@@ -2445,6 +2466,12 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
         )}
 
         <div className="p-5 flex flex-col gap-8">
+          {isReadOnly && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-amber-800 text-xs font-bold shadow-xs">
+              <AlertCircle size={18} className="shrink-0 text-amber-600" />
+              <span>Evento não ativo (somente visualização). Alterações são permitidas apenas pelo organizador principal.</span>
+            </div>
+          )}
           <div className="space-y-4">
             <div className="flex items-center gap-2 px-1 text-blue-500 font-black">
               <Share2 size={18} />
@@ -2607,7 +2634,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                              {match.status === 'finished' && match.winnerPairId === match.pair2Id && <Trophy size={14} className="text-amber-500 mx-auto" fill="currentColor" />}
                           </div>
                        </div>
-                       {isAdmin && match.status === 'waiting' && (
+                       {!isReadOnly && isAdmin && match.status === 'waiting' && (
                          <button 
                             onClick={() => handleTryStartMatch(match, pair1, pair2)}
                             className="w-full py-4 bg-sky-500 text-white rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
@@ -2788,7 +2815,8 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                   const formedTeamLabel = formedPair ? (formedPair.teamCode || (pairCategory ? `${String(formedPair.teamNumber || 1).padStart(3, '0')} - ${pairCategory.abbreviation}` : `Time ${formedPair.teamNumber || ''}`)) : null;
                   const isPairedOrMatched = Boolean(formedPair);
                   const isCurrentUserEntry = entry.email.toLowerCase().trim() === userProfile.email.toLowerCase().trim();
-                  const canManageEntry = isAdmin || isCurrentUserEntry;
+                  const canViewOrManageEntry = isAdmin || isCurrentUserEntry;
+                  const canManageEntry = !isReadOnly && canViewOrManageEntry;
                   // Participante indisponível para seleção visualmente e logicamente se não fez check-in
                   const isUnavailable = !entry.checkedIn;
                   
@@ -2876,7 +2904,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                                   {entry.checkedIn && <Check size={14} strokeWidth={3} className="shrink-0" />}
                                 </button>
 
-                                {canManageEntry && (
+                                {canViewOrManageEntry && (
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -2892,7 +2920,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                               </>
                             ) : (
                               <>
-                                {canManageEntry && (
+                                {canViewOrManageEntry && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -2946,8 +2974,10 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                            entry={entry}
                            event={event}
                            mode="user"
-                           onDelete={() => handleDeleteEntry(entry.email, entry.nickname)}
+                           readOnly={isReadOnly}
+                           onDelete={isReadOnly ? undefined : () => handleDeleteEntry(entry.email, entry.nickname)}
                            onSave={async (updated) => {
+                             if (isReadOnly) return;
                              const db = getDb();
                              if (!db) return;
                              if ((updated as any)._deleteRequested) {

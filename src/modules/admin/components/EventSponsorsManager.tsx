@@ -7,6 +7,7 @@ interface Props {
   event: TournamentEvent;
   onUpdateSponsors: (sponsors: EventSponsor[]) => void;
   onUpdateEvent: (event: TournamentEvent) => void;
+  isReadOnly?: boolean;
 }
 
 // Utilitário para redimensionar/comprimir imagem para Data URL de tamanho otimizado
@@ -55,6 +56,7 @@ interface SponsorFormProps {
   onSave: (sponsorData: EventSponsor) => void;
   onDelete?: () => void;
   onCancel: () => void;
+  readOnly?: boolean;
 }
 
 const EventSponsorForm: React.FC<SponsorFormProps> = ({
@@ -62,6 +64,7 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
   onSave,
   onDelete,
   onCancel,
+  readOnly = false,
 }) => {
   const [name, setName] = useState(sponsor?.name || '');
   const [instagram, setInstagram] = useState(sponsor?.instagram || '');
@@ -96,7 +99,7 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (readOnly || !name.trim()) return;
 
     let cleanInsta = instagram.trim();
     if (cleanInsta && !cleanInsta.startsWith('@') && !cleanInsta.startsWith('http')) {
@@ -121,9 +124,9 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
       {/* Header com título e lixeira */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <h3 className="font-black text-slate-800 text-sm">
-          {sponsor ? 'Editar patrocinador' : 'Cadastrar patrocinador'}
+          {readOnly ? 'Detalhes do patrocinador' : (sponsor ? 'Editar patrocinador' : 'Cadastrar patrocinador')}
         </h3>
-        {sponsor && onDelete && (
+        {sponsor && onDelete && !readOnly && (
           <button
             type="button"
             onClick={onDelete}
@@ -145,10 +148,12 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
             <input
               type="text"
               required
+              disabled={readOnly}
+              readOnly={readOnly}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Empresa / Marca Patrocinadora"
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -157,10 +162,12 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
             <label className="text-[10px] font-black text-slate-400 ml-1">Instagram</label>
             <input
               type="text"
+              disabled={readOnly}
+              readOnly={readOnly}
               value={instagram}
               onChange={(e) => setInstagram(e.target.value)}
               placeholder="Ex: @patrocinador"
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
         </div>
@@ -178,36 +185,38 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
               )}
             </div>
 
-            <div className="flex-1 space-y-1">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={isProcessingImage}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition-all"
-                >
-                  <Upload size={14} />
-                  {logoUrl ? 'Alterar logo' : 'Upload de logo'}
-                </button>
-                {logoUrl && (
+            {!readOnly && (
+              <div className="flex-1 space-y-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={handleRemoveLogo}
-                    className="text-slate-400 hover:text-red-500 text-xs font-bold px-2 py-2 rounded-xl hover:bg-red-50 transition-all"
+                    disabled={isProcessingImage}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition-all"
                   >
-                    Remover
+                    <Upload size={14} />
+                    {logoUrl ? 'Alterar logo' : 'Upload de logo'}
                   </button>
-                )}
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="text-slate-400 hover:text-red-500 text-xs font-bold px-2 py-2 rounded-xl hover:bg-red-50 transition-all"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">PNG, JPG ou WEBP (recomendado fundo transparente)</p>
               </div>
-              <p className="text-[10px] text-slate-400 font-medium">PNG, JPG ou WEBP (recomendado fundo transparente)</p>
-            </div>
+            )}
           </div>
         </div>
 
@@ -217,10 +226,12 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
             <label className="text-[10px] font-black text-slate-400 ml-1">Obs 1</label>
             <input
               type="text"
+              disabled={readOnly}
+              readOnly={readOnly}
               value={obs1}
               onChange={(e) => setObs1(e.target.value)}
               placeholder="Observação 1 (ex: Cota Ouro, Stand 01, etc.)"
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -229,29 +240,43 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
             <label className="text-[10px] font-black text-slate-400 ml-1">Obs 2</label>
             <input
               type="text"
+              disabled={readOnly}
+              readOnly={readOnly}
               value={obs2}
               onChange={(e) => setObs2(e.target.value)}
               placeholder="Observação 2"
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
         </div>
       </div>
 
       <div className="flex gap-2 pt-2 border-t border-slate-100">
-        <button
-          type="submit"
-          className="flex-1 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
-        >
-          <CheckCircle2 size={16} /> Salvar patrocinador
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-5 py-3 rounded-xl transition-all"
-        >
-          Cancelar
-        </button>
+        {!readOnly ? (
+          <>
+            <button
+              type="submit"
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 size={16} /> Salvar patrocinador
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-5 py-3 rounded-xl transition-all"
+            >
+              Cancelar
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs py-3 rounded-xl transition-all"
+          >
+            Fechar
+          </button>
+        )}
       </div>
     </form>
   );
@@ -260,6 +285,7 @@ const EventSponsorForm: React.FC<SponsorFormProps> = ({
 export const EventSponsorsManager: React.FC<Props> = ({
   event,
   onUpdateSponsors,
+  isReadOnly = false,
 }) => {
   const { setModalConfig } = useUI();
   const sponsors = event.sponsors || [];
@@ -267,11 +293,13 @@ export const EventSponsorsManager: React.FC<Props> = ({
   const [expandedSponsorId, setExpandedSponsorId] = useState<string | null>(null);
 
   const handleStartAdd = () => {
+    if (isReadOnly) return;
     setExpandedSponsorId(null);
     setIsAdding(true);
   };
 
   const handleSaveSponsor = (sponsorData: EventSponsor) => {
+    if (isReadOnly) return;
     let updatedList: EventSponsor[];
     const exists = sponsors.some((s) => s.id === sponsorData.id);
     if (exists) {
@@ -285,6 +313,7 @@ export const EventSponsorsManager: React.FC<Props> = ({
   };
 
   const handleDelete = (id: string) => {
+    if (isReadOnly) return;
     const sponsorToDelete = sponsors.find((s) => s.id === id);
     setModalConfig({
       title: 'Excluir patrocinador?',
@@ -315,7 +344,7 @@ export const EventSponsorsManager: React.FC<Props> = ({
             Gerencie os patrocinadores oficiais e apoiadores do evento.
           </p>
         </div>
-        {!isAdding && (
+        {!isAdding && !isReadOnly && (
           <button
             onClick={handleStartAdd}
             className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all self-start sm:self-auto"
@@ -402,8 +431,9 @@ export const EventSponsorsManager: React.FC<Props> = ({
                               <EventSponsorForm
                                 key={`expanded-${sponsor.id}`}
                                 sponsor={sponsor}
+                                readOnly={isReadOnly}
                                 onSave={handleSaveSponsor}
-                                onDelete={() => handleDelete(sponsor.id)}
+                                onDelete={isReadOnly ? undefined : () => handleDelete(sponsor.id)}
                                 onCancel={() => setExpandedSponsorId(null)}
                               />
                             </div>

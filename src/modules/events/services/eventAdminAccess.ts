@@ -24,11 +24,31 @@ export const isDateWithinEventRange = (event: Pick<TournamentEvent, 'startDate' 
   return today.getTime() >= start.getTime() && today.getTime() <= end.getTime();
 };
 
+export const isCoAdminOfEvent = (
+  event: Pick<TournamentEvent, 'coAdminPins'>,
+  userPin?: string | null,
+) => {
+  const pin = normalizePin(userPin);
+  if (!pin) return false;
+  return (event.coAdminPins || []).map(normalizePin).includes(pin);
+};
+
 export const canUseEventAdminAccess = (
   event: Pick<TournamentEvent, 'active' | 'coAdminPins' | 'startDate' | 'endDate'>,
   userPin?: string | null,
 ) => {
   const pin = normalizePin(userPin);
-  if (!pin || event.active !== true) return false;
+  if (!pin) return false;
   return (event.coAdminPins || []).map(normalizePin).includes(pin);
+};
+
+export const canEditTournamentEvent = (
+  event: Pick<TournamentEvent, 'active' | 'coAdminPins'>,
+  userEmail?: string | null,
+  userPin?: string | null,
+) => {
+  if (isPrimaryAdminEmail(userEmail)) return true;
+  // Se o evento não está ativo, somente o admin principal pode fazer alterações
+  if (event.active !== true) return false;
+  return isCoAdminOfEvent(event, userPin);
 };

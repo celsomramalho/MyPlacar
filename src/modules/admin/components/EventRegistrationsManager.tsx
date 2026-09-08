@@ -22,6 +22,7 @@ interface Props {
   onUpdateEvent: (event: TournamentEvent) => void;
   adminEmail?: string;
   initialExpandedPin?: string | null;
+  isReadOnly?: boolean;
 }
 
 export const EventRegistrationsManager: React.FC<Props> = ({
@@ -30,6 +31,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   onUpdateEvent,
   adminEmail,
   initialExpandedPin,
+  isReadOnly = false,
 }) => {
   const { setModalConfig } = useUI();
   const entries = event.entries || [];
@@ -427,7 +429,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
             Gerencie participantes inscritos, dados financeiros e vínculo de categorias.
           </p>
         </div>
-        {!isAdding && (
+        {!isAdding && !isReadOnly && (
           <button
             onClick={handleStartAdd}
             className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all self-start sm:self-auto"
@@ -444,8 +446,9 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         mode="admin"
         entry={editingPin ? entries.find((item) => item.pin === editingPin)! : { name: name.trim(), nickname: nickname.trim(), email: email.trim(), pin: pin.trim(), joinedAt: Date.now(), gender, phone, shirtSize, categoryIds: selectedCategoryIds, dueAmount, paymentStatus, payments }}
         onSave={handleSaveSharedEntry}
-        onDelete={editingPin ? () => { if (editingPin) void handleDelete(editingPin); } : undefined}
+        onDelete={!isReadOnly && editingPin ? () => { if (editingPin) void handleDelete(editingPin); } : undefined}
         onCancel={resetForm}
+        readOnly={isReadOnly}
       />}
 
       {false && isAdding && (
@@ -788,8 +791,10 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                       {/* Ícone de Gênero */}
                       <button
                         type="button"
+                        disabled={isReadOnly}
                         onClick={async (e) => {
                           e.stopPropagation();
+                          if (isReadOnly) return;
                           const nextGender = entry.gender === 'F' ? 'M' : 'F';
                           const db = getDb();
                           if (db && event.pin) {
@@ -809,12 +814,14 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                             )
                           );
                         }}
-                        className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all active:scale-90 ${
+                        className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all ${
+                          isReadOnly ? 'cursor-default opacity-70' : 'active:scale-90'
+                        } ${
                           entry.gender === 'F'
                             ? 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'
                             : 'bg-sky-50 text-sky-500 border-sky-100 hover:bg-sky-100'
                         }`}
-                        title="Clique para alternar gênero"
+                        title={isReadOnly ? '' : 'Clique para alternar gênero'}
                       >
                         {entry.gender === 'F' ? <VenusIcon size={20} /> : <MarsIcon size={20} />}
                       </button>
@@ -899,10 +906,11 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                           entry={entry}
                           onUpdateEvent={onUpdateEvent}
                           onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
-                          onDelete={() => {
+                          onDelete={!isReadOnly ? () => {
                             handleDelete(entry.pin);
-                          }}
+                          } : undefined}
                           onCancel={() => setExpandedRegistrationEmail(null)}
+                          readOnly={isReadOnly}
                         />
                       </div>
                     </div>

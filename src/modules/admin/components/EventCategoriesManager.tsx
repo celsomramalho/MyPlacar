@@ -21,6 +21,7 @@ interface Props {
   activeSports: FirebaseAdminSportIcon[];
   onUpdateCategories: (categories: EventCategory[]) => void;
   onUpdateEvent: (event: TournamentEvent) => void;
+  isReadOnly?: boolean;
 }
 
 const getParticipantKey = (entry?: Partial<TournamentEntry> | null) =>
@@ -43,6 +44,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   activeSports,
   onUpdateCategories,
   onUpdateEvent,
+  isReadOnly = false,
 }) => {
   const { setModalConfig } = useUI();
   type CategoryPanelView = 'entries' | 'teams' | 'matches';
@@ -1509,7 +1511,7 @@ const validateCategoryGenders = (
                   : 'Defina as chaves e use as setas ▲/▼ para ordenar a sequência dos confrontos.'}
               </p>
             </div>
-            {!isRanking && !hasCategoryMatches && isSystemDraw && categoryPairs.length >= 2 && (
+            {!isReadOnly && !isRanking && !hasCategoryMatches && isSystemDraw && categoryPairs.length >= 2 && (
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -2402,14 +2404,16 @@ const validateCategoryGenders = (
             </div>
             {categoryMatches.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleGenerateSystemMatches}
-                  className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-                >
-                  <Sparkles size={16} className="text-emerald-500" />
-                  <span>Regerar partidas</span>
-                </button>
+                {!isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateSystemMatches}
+                    className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                  >
+                    <Sparkles size={16} className="text-emerald-500" />
+                    <span>Regerar partidas</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleGenerateBlankPdf}
@@ -2419,15 +2423,17 @@ const validateCategoryGenders = (
                   <FileText size={16} className="text-orange-500" />
                   <span>Gerar PDF</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteAllCategoryMatches}
-                  className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-                  title="Deletar todas as partidas geradas desta categoria"
-                >
-                  <Trash2 size={16} className="text-red-500" />
-                  <span>Deletar</span>
-                </button>
+                {!isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteAllCategoryMatches}
+                    className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+                    title="Deletar todas as partidas geradas desta categoria"
+                  >
+                    <Trash2 size={16} className="text-red-500" />
+                    <span>Deletar</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2435,7 +2441,7 @@ const validateCategoryGenders = (
           {categoryMatches.length === 0 ? (
             <div className="p-10 text-center space-y-3">
               <p className="text-sm font-bold text-slate-400">Nenhuma partida gerada para esta categoria.</p>
-              {!isRanking && (
+              {!isRanking && !isReadOnly && (
                 <button
                   type="button"
                   onClick={handleGenerateSystemMatches}
@@ -2801,8 +2807,9 @@ const validateCategoryGenders = (
                                 entry={entry}
                                 onUpdateEvent={onUpdateEvent}
                                 onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
-                                onDelete={() => { handleDeleteEntry(entry.pin); }}
+                                onDelete={isReadOnly ? undefined : () => { handleDeleteEntry(entry.pin); }}
                                 onCancel={() => setExpandedRegistrationEmail(null)}
+                                readOnly={isReadOnly}
                               />
                             </div>
                           </div>
@@ -2984,10 +2991,11 @@ const validateCategoryGenders = (
                           entry={entry}
                           onUpdateEvent={onUpdateEvent}
                           onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
-                          onDelete={() => {
+                          onDelete={isReadOnly ? undefined : () => {
                             handleDeleteEntry(entry.pin);
                           }}
                           onCancel={() => setExpandedRegistrationEmail(null)}
+                          readOnly={isReadOnly}
                         />
                       </div>
                     </div>
@@ -3020,34 +3028,36 @@ const validateCategoryGenders = (
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {selectedPair ? (
-              <button
-                type="button"
-                onClick={handleFormTeam}
-                className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
-                title="Desfazer time"
-              >
-                <UserRound size={16} />
-                <span>Desfazer time</span>
-              </button>
-            ) : selectedEntries.size === 2 ? (
-              <button
-                type="button"
-                onClick={handleFormTeam}
-                className={`flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all ${
-                  genderValidation.valid
-                    ? 'bg-emerald-500 hover:bg-emerald-600'
-                    : 'bg-amber-500 hover:bg-amber-600'
-                }`}
-                title={genderValidation.valid ? 'Formar time' : genderValidation.message}
-              >
-                {genderValidation.valid ? <UsersRound size={16} /> : <AlertTriangle size={16} />}
-                <span>Formar time</span>
-              </button>
-            ) : (
-              <span className="text-xs font-bold text-sky-100 bg-sky-700/60 px-3 py-2 rounded-xl">
-                Selecione +1
-              </span>
+            {!isReadOnly && (
+              selectedPair ? (
+                <button
+                  type="button"
+                  onClick={handleFormTeam}
+                  className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
+                  title="Desfazer time"
+                >
+                  <UserRound size={16} />
+                  <span>Desfazer time</span>
+                </button>
+              ) : selectedEntries.size === 2 ? (
+                <button
+                  type="button"
+                  onClick={handleFormTeam}
+                  className={`flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all ${
+                    genderValidation.valid
+                      ? 'bg-emerald-500 hover:bg-emerald-600'
+                      : 'bg-amber-500 hover:bg-amber-600'
+                  }`}
+                  title={genderValidation.valid ? 'Formar time' : genderValidation.message}
+                >
+                  {genderValidation.valid ? <UsersRound size={16} /> : <AlertTriangle size={16} />}
+                  <span>Formar time</span>
+                </button>
+              ) : (
+                <span className="text-xs font-bold text-sky-100 bg-sky-700/60 px-3 py-2 rounded-xl">
+                  Selecione +1
+                </span>
+              )
             )}
           </div>
         </header>
@@ -3080,35 +3090,37 @@ const validateCategoryGenders = (
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              {selectedTeamIds.size === 2 ? (
-                existingMatchBetweenSelectedTeams ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleDeleteMatch(existingMatchBetweenSelectedTeams.id);
-                      setSelectedTeamIds(new Set());
-                    }}
-                    className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
-                    title="Desfazer partida entre os times selecionados"
-                  >
-                    <Trash2 size={16} />
-                    <span>Desfazer partida</span>
-                  </button>
+              {!isReadOnly && (
+                selectedTeamIds.size === 2 ? (
+                  existingMatchBetweenSelectedTeams ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDeleteMatch(existingMatchBetweenSelectedTeams.id);
+                        setSelectedTeamIds(new Set());
+                      }}
+                      className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
+                      title="Desfazer partida entre os times selecionados"
+                    >
+                      <Trash2 size={16} />
+                      <span>Desfazer partida</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleCreateManualMatch}
+                      className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
+                      title="Formar partida com os 2 times selecionados"
+                    >
+                      <UsersRound size={16} />
+                      <span>{isRanking ? 'Formar partida' : 'Gerar partida'}</span>
+                    </button>
+                  )
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleCreateManualMatch}
-                    className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
-                    title="Formar partida com os 2 times selecionados"
-                  >
-                    <UsersRound size={16} />
-                    <span>{isRanking ? 'Formar partida' : 'Gerar partida'}</span>
-                  </button>
+                  <span className="text-xs font-bold text-sky-100 bg-sky-700/60 px-3 py-2 rounded-xl">
+                    Selecione +1 time
+                  </span>
                 )
-              ) : (
-                <span className="text-xs font-bold text-sky-100 bg-sky-700/60 px-3 py-2 rounded-xl">
-                  Selecione +1 time
-                </span>
               )}
             </div>
           </header>
@@ -3123,7 +3135,7 @@ const validateCategoryGenders = (
             Defina formato, descrição e prioridade de cada disputa do evento.
           </p>
         </div>
-        {!isAdding && (
+        {!isAdding && !isReadOnly && (
           <button
             onClick={handleStartAdd}
             className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all self-start sm:self-auto"
@@ -3182,14 +3194,16 @@ const validateCategoryGenders = (
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); handleStartEdit(cat); }}
-                    className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 rounded-xl active:scale-90 transition-all"
-                    title={isEditing ? 'Recolher cadastro da categoria' : 'Abrir cadastro da categoria'}
-                  >
-                    {isEditing ? <X size={18} /> : <ChevronDown size={18} />}
-                  </button>
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleStartEdit(cat); }}
+                      className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 rounded-xl active:scale-90 transition-all"
+                      title={isEditing ? 'Recolher cadastro da categoria' : 'Abrir cadastro da categoria'}
+                    >
+                      {isEditing ? <X size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                  )}
                 </div>
 
                 {/* Gender badges */}

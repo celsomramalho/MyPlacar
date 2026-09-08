@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Settings,
   Award,
+  ShieldAlert,
 } from 'lucide-react';
 import type { TournamentEvent, EventCategory, TournamentEntry, EventSponsor } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
@@ -106,15 +107,26 @@ export const EventDashboardView: React.FC<Props> = ({
 
   const checkedInCount = entries.filter((e) => e.checkedIn).length;
 
+  const isPrimary = isPrimaryAdminEmail(adminEmail);
+  const isReadOnly = event.active !== true && !isPrimary;
+
+  const safeUpdateEvent = (updated: TournamentEvent) => {
+    if (isReadOnly) return;
+    onUpdateEvent(updated);
+  };
+
   const handleUpdateCategories = (newCategories: EventCategory[]) => {
+    if (isReadOnly) return;
     onUpdateEvent({ ...event, categories: newCategories });
   };
 
   const handleUpdateEntries = (newEntries: TournamentEntry[]) => {
+    if (isReadOnly) return;
     onUpdateEvent({ ...event, entries: newEntries });
   };
 
   const handleUpdateSponsors = (newSponsors: EventSponsor[]) => {
+    if (isReadOnly) return;
     onUpdateEvent({ ...event, sponsors: newSponsors });
   };
 
@@ -122,6 +134,13 @@ export const EventDashboardView: React.FC<Props> = ({
     <div className="space-y-6 animate-in fade-in">
       {/* Event Header Banner */}
       <div className="bg-white p-5 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-4">
+        {isReadOnly && (
+          <div className="flex items-center gap-2.5 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-bold animate-in fade-in">
+            <ShieldAlert size={20} className="text-amber-600 shrink-0" />
+            <span>Evento não ativo (somente visualização). Alterações são permitidas apenas pelo organizador principal.</span>
+          </div>
+        )}
+
         {/* Header layout according to Image 4:
             Line 1: Tournament Title (left) + Chevron edit button (top right)
             Line 2: PIN & Status Badges (left) + Voltar button (bottom right) */}
@@ -450,7 +469,8 @@ export const EventDashboardView: React.FC<Props> = ({
           event={event}
           activeSports={activeSports}
           onUpdateCategories={handleUpdateCategories}
-          onUpdateEvent={onUpdateEvent}
+          onUpdateEvent={safeUpdateEvent}
+          isReadOnly={isReadOnly}
         />
       )}
 
@@ -458,9 +478,10 @@ export const EventDashboardView: React.FC<Props> = ({
         <EventRegistrationsManager
           event={event}
           onUpdateEntries={handleUpdateEntries}
-          onUpdateEvent={onUpdateEvent}
+          onUpdateEvent={safeUpdateEvent}
           adminEmail={adminEmail}
           initialExpandedPin={targetRegistrationEmail}
+          isReadOnly={isReadOnly}
         />
       )}
 
@@ -468,11 +489,18 @@ export const EventDashboardView: React.FC<Props> = ({
         <EventSponsorsManager
           event={event}
           onUpdateSponsors={handleUpdateSponsors}
-          onUpdateEvent={onUpdateEvent}
+          onUpdateEvent={safeUpdateEvent}
+          isReadOnly={isReadOnly}
         />
       )}
 
-      {activeTab === 'formed-teams' && <EventFormedTeamsView event={event} onUpdateEvent={onUpdateEvent} />}
+      {activeTab === 'formed-teams' && (
+        <EventFormedTeamsView
+          event={event}
+          onUpdateEvent={safeUpdateEvent}
+          isReadOnly={isReadOnly}
+        />
+      )}
 
       {activeTab === 'pending-payments' && (
         <EventPaymentsView
@@ -506,24 +534,26 @@ export const EventDashboardView: React.FC<Props> = ({
               <span className="text-xs font-black text-slate-700">Travar regras para as partidas</span>
               <input
                 type="checkbox"
+                disabled={isReadOnly}
                 checked={event.config?.isLocked || false}
                 onChange={(e) =>
-                  onUpdateEvent({
+                  safeUpdateEvent({
                     ...event,
                     config: { ...event.config, sets: event.config?.sets || 1, gamesPerSet: event.config?.gamesPerSet || 6, noAd: event.config?.noAd ?? true, sportType: event.config?.sportType || 'beach-tennis', isLocked: e.target.checked },
                   })
                 }
-                className="w-5 h-5 accent-purple-600 rounded cursor-pointer"
+                className="w-5 h-5 accent-purple-600 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
-            <div className={`space-y-4 transition-all ${event.config?.isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`space-y-4 transition-all ${event.config?.isLocked || isReadOnly ? 'opacity-50 pointer-events-none' : ''}`}>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
                 <select
+                  disabled={isReadOnly}
                   value={event.config?.sportType || 'beach-tennis'}
                   onChange={(e) =>
-                    onUpdateEvent({
+                    safeUpdateEvent({
                       ...event,
                       config: { ...event.config, sets: event.config?.sets || 1, gamesPerSet: event.config?.gamesPerSet || 6, noAd: event.config?.noAd ?? true, isLocked: event.config?.isLocked || false, sportType: e.target.value },
                     })
@@ -546,9 +576,10 @@ export const EventDashboardView: React.FC<Props> = ({
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 ml-1">Sets</label>
                   <select
+                    disabled={isReadOnly}
                     value={event.config?.sets || 1}
                     onChange={(e) =>
-                      onUpdateEvent({
+                      safeUpdateEvent({
                         ...event,
                         config: { ...event.config, gamesPerSet: event.config?.gamesPerSet || 6, noAd: event.config?.noAd ?? true, isLocked: event.config?.isLocked || false, sportType: event.config?.sportType || 'beach-tennis', sets: Number(e.target.value) as 1 | 3 | 5 },
                       })
@@ -563,9 +594,10 @@ export const EventDashboardView: React.FC<Props> = ({
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 ml-1">Games por set</label>
                   <select
+                    disabled={isReadOnly}
                     value={event.config?.gamesPerSet || 6}
                     onChange={(e) =>
-                      onUpdateEvent({
+                      safeUpdateEvent({
                         ...event,
                         config: { ...event.config, sets: event.config?.sets || 1, noAd: event.config?.noAd ?? true, isLocked: event.config?.isLocked || false, sportType: event.config?.sportType || 'beach-tennis', gamesPerSet: Number(e.target.value) },
                       })
@@ -582,9 +614,10 @@ export const EventDashboardView: React.FC<Props> = ({
                 <span className="text-xs font-black text-slate-700">Sistema sem vantagem (No-ad)</span>
                 <input
                   type="checkbox"
+                  disabled={isReadOnly}
                   checked={event.config?.noAd ?? true}
                   onChange={(e) =>
-                    onUpdateEvent({
+                    safeUpdateEvent({
                       ...event,
                       config: { ...event.config, sets: event.config?.sets || 1, gamesPerSet: event.config?.gamesPerSet || 6, isLocked: event.config?.isLocked || false, sportType: event.config?.sportType || 'beach-tennis', noAd: e.target.checked },
                     })

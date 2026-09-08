@@ -31,6 +31,7 @@ import { guessPartnerGender } from '@modules/partners/services/guessPartnerGende
 interface Props {
   event: TournamentEvent;
   onUpdateEvent?: (event: TournamentEvent) => void;
+  isReadOnly?: boolean;
 }
 
 const getMatchCodeLabel = (match: TournamentMatch) =>
@@ -144,7 +145,7 @@ const MatchTimer: React.FC<{ startedAt?: string; averageMinutes?: number }> = ({
   );
 };
 
-export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) => {
+export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false }) => {
   const [selectedCourtForMatch, setSelectedCourtForMatch] = useState<string | null>(null);
   const [activeSelectMatchId, setActiveSelectMatchId] = useState<string | null>(null);
   const [refreshingMatchId, setRefreshingMatchId] = useState<string | null>(null);
@@ -272,6 +273,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     updatedMatches?: TournamentMatch[],
     updatedInterdictedCourts?: string[]
   ) => {
+    if (isReadOnly) return;
     const nextEvent: TournamentEvent = {
       ...event,
       matches: updatedMatches ?? event.matches,
@@ -335,6 +337,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
   };
 
   const handleScoreBlur = async () => {
+    if (isReadOnly) return;
     if (saveMatchesTimeoutRef.current) {
       clearTimeout(saveMatchesTimeoutRef.current);
       saveMatchesTimeoutRef.current = null;
@@ -357,6 +360,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
     player: 'p1' | 'p2',
     rawVal: string
   ) => {
+    if (isReadOnly) return;
     const totalSets = (event.setsCount || event.config?.sets || 1) as number;
     const setsToWin = Math.ceil(totalSets / 2);
     const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
@@ -447,6 +451,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
 
   // Alterna o status de interdição de uma quadra (Regra A: Vermelha)
   const handleToggleInterdictCourt = async (courtName: string) => {
+    if (isReadOnly) return;
     const current = new Set(event.interdictedCourts || []);
     if (current.has(courtName)) {
       current.delete(courtName);
@@ -459,6 +464,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
 
   // Alterna o congelamento manual de uma partida (Regra D: Vermelha/Congelada)
   const handleToggleFreezeMatch = async (matchId: string) => {
+    if (isReadOnly) return;
     const allMatches = event.matches || [];
     const nextMatches = allMatches.map((m) => {
       if (m.id === matchId) {
@@ -474,6 +480,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
 
   // Vincula partida a uma quadra livre (Regra E: Fluxo de Entrada em Quadra)
   const handleAssignMatchToCourt = async (matchId: string, courtName: string) => {
+    if (isReadOnly) return;
     const allMatches = event.matches || [];
     const nowIso = new Date().toISOString();
     const nextMatches = allMatches.map((m) => {
@@ -495,6 +502,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
 
   // Desvincula/libera uma quadra ocupada voltando a partida para 'waiting' ou finalizando
   const handleFreeCourtMatch = async (matchId: string, finish = false) => {
+    if (isReadOnly) return;
     const allMatches = event.matches || [];
     const totalSets = (event.setsCount || event.config?.sets || 1) as number;
     const nowIso = new Date().toISOString();
@@ -557,6 +565,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
 
   // Valida o placar e exibe confirmação se inválido antes de finalizar
   const handleFinishCourtMatchWithValidation = (matchId: string) => {
+    if (isReadOnly) return;
     const allMatches = event.matches || [];
     const totalSets = (event.setsCount || event.config?.sets || 1) as number;
     const setsToWin = Math.ceil(totalSets / 2);
@@ -631,6 +640,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
   };
 
   const handleOpenMatchRules = (match: TournamentMatch) => {
+    if (isReadOnly) return;
     const pair1 = match.pair1 || (match.pair1Id ? pairsById[match.pair1Id] : undefined);
     const pair2 = match.pair2 || (match.pair2Id ? pairsById[match.pair2Id] : undefined);
 
@@ -933,8 +943,9 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                         {isBusy && activeMatch && (
                           <button
                             type="button"
+                            disabled={isReadOnly}
                             onClick={() => handleFreeCourtMatch(activeMatch.id, false)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 active:scale-95 text-slate-600 font-black text-xs rounded-xl border border-slate-200 transition-all whitespace-nowrap"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 active:scale-95 text-slate-600 font-black text-xs rounded-xl border border-slate-200 transition-all whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
                             title="Desvincular da quadra e devolver para a fila de espera"
                           >
                             <ArrowLeft size={13} />
@@ -948,8 +959,9 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                         {isBusy && activeMatch && (
                           <button
                             type="button"
+                            disabled={isReadOnly}
                             onClick={() => handleOpenMatchRules(activeMatch)}
-                            className="w-9 h-9 bg-[#fff8e6] hover:bg-emerald-50 active:scale-95 text-emerald-500 rounded-xl transition-all flex items-center justify-center"
+                            className="w-9 h-9 bg-[#fff8e6] hover:bg-emerald-50 active:scale-95 text-emerald-500 rounded-xl transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
                             title="Abrir regras com os jogadores desta partida"
                           >
                             <Play size={18} className="fill-emerald-500" />
@@ -961,8 +973,9 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                       <div className="flex-1 flex justify-end">
                         <button
                           type="button"
+                          disabled={isReadOnly}
                           onClick={() => handleToggleInterdictCourt(court.courtName)}
-                          className={`flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl border transition-all active:scale-95 whitespace-nowrap ${
+                          className={`flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl border transition-all active:scale-95 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none ${
                             isInterdicted
                               ? 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'
                               : 'bg-white text-slate-500 border-slate-200 hover:text-red-600 hover:border-red-200'
@@ -1030,10 +1043,12 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                                 maxLength={2}
+                                disabled={isReadOnly}
+                                readOnly={isReadOnly}
                                 value={scores[0]?.p1 !== null && scores[0]?.p1 !== undefined ? scores[0].p1 : ''}
                                 onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p1', e.target.value)}
                                 onBlur={handleScoreBlur}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                                   !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) >= gamesPerSet && Number(scores[0].p1) > Number(scores[0].p2)
                                     ? t1Style.wonInput
                                     : t1Style.input
@@ -1060,10 +1075,12 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                                 maxLength={2}
+                                disabled={isReadOnly}
+                                readOnly={isReadOnly}
                                 value={scores[0]?.p2 !== null && scores[0]?.p2 !== undefined ? scores[0].p2 : ''}
                                 onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p2', e.target.value)}
                                 onBlur={handleScoreBlur}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                                   !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) >= gamesPerSet && Number(scores[0].p2) > Number(scores[0].p1)
                                     ? t2Style.wonInput
                                     : t2Style.input
@@ -1108,12 +1125,14 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                     inputMode="numeric"
                                     pattern="[0-9]*"
                                     maxLength={2}
+                                    disabled={isReadOnly}
+                                    readOnly={isReadOnly}
                                     value={setScore.p1 !== null && setScore.p1 !== undefined ? setScore.p1 : ''}
                                     onChange={(e) =>
                                       handleScoreInputChange(activeMatch.id, setIdx, 'p1', e.target.value)
                                     }
                                     onBlur={handleScoreBlur}
-                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                                       isSetWon
                                         ? t1Style.wonInput
                                         : t1Style.input
@@ -1157,12 +1176,14 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                                     inputMode="numeric"
                                     pattern="[0-9]*"
                                     maxLength={2}
+                                    disabled={isReadOnly}
+                                    readOnly={isReadOnly}
                                     value={setScore.p2 !== null && setScore.p2 !== undefined ? setScore.p2 : ''}
                                     onChange={(e) =>
                                       handleScoreInputChange(activeMatch.id, setIdx, 'p2', e.target.value)
                                     }
                                     onBlur={handleScoreBlur}
-                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                                       isSetWon
                                         ? t2Style.wonInput
                                         : t2Style.input
@@ -1179,8 +1200,9 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                       <div className="pt-1 border-t border-amber-100">
                         <button
                           type="button"
+                          disabled={isReadOnly}
                           onClick={() => handleFinishCourtMatchWithValidation(activeMatch.id)}
-                          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm"
+                          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
                           title="Registrar placar final e liberar a quadra"
                         >
                           <Check size={14} />
@@ -1361,8 +1383,9 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                       {/* Botão Congelar / Descongelar */}
                       <button
                         type="button"
+                        disabled={isReadOnly}
                         onClick={() => handleToggleFreezeMatch(match.id)}
-                        className={`px-3 py-1.5 rounded-2xl text-xs font-black border transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                        className={`px-3 py-1.5 rounded-2xl text-xs font-black border transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none ${
                           match.frozen
                             ? 'bg-red-500 text-white border-red-600 shadow-xs'
                             : 'bg-white text-slate-600 border-slate-200 hover:border-red-300 hover:text-red-600'
@@ -1377,7 +1400,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                       <button
                         type="button"
                         onClick={() => {
-                          if (isRed) return;
+                          if (isReadOnly || isRed) return;
                           if (freeCourts.length === 0) {
                             window.alert('Não há quadras livres disponíveis no momento.');
                             return;
@@ -1388,11 +1411,11 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent }) 
                             setActiveSelectMatchId(isSelectingCourt ? null : match.id);
                           }
                         }}
-                        disabled={freeCourts.length === 0 || isRed}
+                        disabled={isReadOnly || freeCourts.length === 0 || isRed}
                         className={`px-3.5 py-1.5 rounded-2xl text-xs font-black transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap ${
                           isSelectingCourt
                             ? 'bg-slate-200 text-slate-700 border border-slate-300'
-                            : isRed
+                            : (isReadOnly || isRed)
                             ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 opacity-60'
                             : freeCourts.length > 0
                             ? isGreen
