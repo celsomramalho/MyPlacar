@@ -371,8 +371,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const scoreProgressIntervalRef = useRef<number | null>(null);
   const hasDraggedRef = useRef(false);
 
-  const [isLogsOpen, setIsLogsOpen] = useState(effectiveGameState.matchConfig.isHistoryEnabled);
-  const [isTimelineOpen, setIsTimelineOpen] = useState(effectiveGameState.matchConfig.isHistoryEnabled);
+  const [isLogsOpen, setIsLogsOpen] = useState(effectiveGameState?.matchConfig?.isHistoryEnabled ?? false);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(effectiveGameState?.matchConfig?.isHistoryEnabled ?? false);
   const [isAudioLocked, setIsAudioLocked] = useState(false);
   const [remoteActionFeedback, setRemoteActionFeedback] = useState<string | null>(null);
   const [isWaitingAck, setIsWaitingAck] = useState(false);
@@ -383,7 +383,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const isLongPressActive = useRef(false);
   const touchStartPos = useRef({ x: 0, y: 0 });
   const lastRemoteCommandTimestamp = useRef(0);
-  const lastHistoryLengthOnWatch = useRef(effectiveGameState.pointHistory?.length ?? 0);
+  const lastHistoryLengthOnWatch = useRef(effectiveGameState?.pointHistory?.length ?? 0);
   const [isPinging, setIsPinging] = useState(false);
   const [isMirrorExpanded, setIsMirrorExpanded] = useState(false);
   const [isLiveExpanded, setIsLiveExpanded] = useState(false);
@@ -434,9 +434,9 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
   // Reset log ao iniciar nova partida — APENAS quando a nova partida realmente começa
   // Em vez de depender de matchId (que pode não estar definido), usamos o estado anterior
-  const prevMatchIdRef = useRef<string | undefined>(effectiveGameState.matchId);
+  const prevMatchIdRef = useRef<string | undefined>(effectiveGameState?.matchId);
   useEffect(() => {
-    if (effectiveGameState.matchId && prevMatchIdRef.current !== effectiveGameState.matchId) {
+    if (effectiveGameState?.matchId && prevMatchIdRef.current !== effectiveGameState.matchId) {
       // Partida realmente mudou
       const wasReset = !!prevMatchIdRef.current; // true = foi um reset (não o primeiro load)
       prevMatchIdRef.current = effectiveGameState.matchId;
@@ -447,15 +447,16 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           participantRole: 'owner',
           isController: true,
         });
-        addLiveLog('score', `${effectiveGameState.p1.name} 0 × 0 ${effectiveGameState.p2.name}`, true);
+        addLiveLog('score', `${effectiveGameState.p1?.name || 'Jogador 1'} 0 × 0 ${effectiveGameState.p2?.name || 'Jogador 2'}`, true);
       }
     }
-  }, [effectiveGameState.matchId, effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
+  }, [effectiveGameState?.matchId, effectiveGameState?.isMirroringActive, (effectiveGameState?.isMirroringActive && effectiveGameState?.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
 
   // ── Live criada ────────────────────────────────────────────────────────────
-  const prevIsMirroringRef = useRef(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed));
+  const prevIsMirroringRef = useRef(Boolean(effectiveGameState?.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)));
   useEffect(() => {
-    const isNowActive = effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
+    if (!effectiveGameState) return;
+    const isNowActive = Boolean(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed));
     if (!prevIsMirroringRef.current && isNowActive) {
       const label = currentDeviceFullLabel || 'Dispositivo';
       addLiveLog('live_created', `${label}: criou a live às ${nowTime()}`, true, {
@@ -465,26 +466,28 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
       });
     }
     prevIsMirroringRef.current = isNowActive;
-  }, [effectiveGameState.isMirroringActive, (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
+  }, [effectiveGameState?.isMirroringActive, (effectiveGameState?.isMirroringActive && effectiveGameState?.isLiveClosed), currentDeviceFullLabel, addLiveLog]);
 
   // ── Partida iniciada (primeiro ponto) ─────────────────────────────────────
-  const prevHistLenRef = useRef(effectiveGameState.pointHistory?.length ?? 0);
+  const prevHistLenRef = useRef(effectiveGameState?.pointHistory?.length ?? 0);
   useEffect(() => {
+    if (!effectiveGameState) return;
     const cur = effectiveGameState.pointHistory?.length ?? 0;
     const prev = prevHistLenRef.current;
     if (prev === 0 && cur === 1 && effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) {
       addLiveLog('match_started', `Partida iniciada às ${nowTime()}`, true);
-      addLiveLog('score', `${effectiveGameState.p1.name} ${effectiveGameState.p1.score} × ${effectiveGameState.p2.score} ${effectiveGameState.p2.name}`, true);
+      addLiveLog('score', `${effectiveGameState.p1?.name || 'Jogador 1'} ${effectiveGameState.p1?.score} × ${effectiveGameState.p2?.score} ${effectiveGameState.p2?.name || 'Jogador 2'}`, true);
     }
     prevHistLenRef.current = cur;
-  }, [effectiveGameState.pointHistory?.length, addLiveLog]);
+  }, [effectiveGameState?.pointHistory?.length, addLiveLog]);
 
   // ── Mudança de placar: FB enviando → FB ok → Observadores ok ──────────────
-  const prevScoreRef = useRef(`${effectiveGameState.p1.score}-${effectiveGameState.p2.score}-${effectiveGameState.p1.games}-${effectiveGameState.p2.games}`);
+  const prevScoreRef = useRef(effectiveGameState ? `${effectiveGameState.p1?.score}-${effectiveGameState.p2?.score}-${effectiveGameState.p1?.games}-${effectiveGameState.p2?.games}` : '');
   const pendingScoreLogIdRef = useRef<string | null>(null);
   const pendingScoreSentAtRef = useRef<number>(0);
   useEffect(() => {
-    const curKey = `${effectiveGameState.p1.score}-${effectiveGameState.p2.score}-${effectiveGameState.p1.games}-${effectiveGameState.p2.games}`;
+    if (!effectiveGameState) return;
+    const curKey = `${effectiveGameState.p1?.score}-${effectiveGameState.p2?.score}-${effectiveGameState.p1?.games}-${effectiveGameState.p2?.games}`;
     if (!effectiveGameState.isMirroringActive || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || curKey === prevScoreRef.current) {
       prevScoreRef.current = curKey;
       return;
@@ -1197,9 +1200,16 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   // este componente quando gameState != null, mas protege contra edge cases)
   if (!effectiveGameState || !effectiveGameState.p1 || !effectiveGameState.p2 || !effectiveGameState.matchConfig) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">
-        <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
-        <p className="text-slate-500 font-bold">Sincronizando partida...</p>
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center text-white">
+        <Loader2 className="animate-spin text-blue-400 mb-4" size={40} />
+        <p className="text-slate-300 font-bold text-sm mb-4">Sincronizando partida...</p>
+        <button
+          type="button"
+          onClick={onBack || onHome}
+          className="px-6 py-3 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-2xl text-xs font-black transition-all"
+        >
+          Voltar
+        </button>
       </div>
     );
   }
@@ -1261,6 +1271,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           onToggleWatchMode={onToggleWatchMode}
           onToggleScoreboardMode={onToggleScoreboardMode}
           onOpenRules={() => onNavigateToTab?.('regras')}
+          onExitOffline={onExitOffline}
         />
       </>
     );

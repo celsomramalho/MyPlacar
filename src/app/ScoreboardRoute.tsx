@@ -125,6 +125,15 @@ export function ScoreboardRoute({
     }
   };
 
+  if (!gameState) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center text-white">
+        <div className="w-10 h-10 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mb-4" />
+        <p className="text-xs font-black uppercase tracking-widest text-slate-400">Sincronizando partida...</p>
+      </div>
+    );
+  }
+
   return (
     <ScoreboardScreen
       appUrl={appUrl}

@@ -59,6 +59,7 @@ interface WatchBoardProps {
   onToggleWatchMode?: () => void;
   onToggleScoreboardMode?: () => void;
   onOpenRules?: () => void;
+  onExitOffline?: () => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -95,7 +96,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { setMatchSettings } = useGame();
@@ -896,6 +897,23 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                   </div>
                 );
               })()}
+
+              {/* Sair do modo offline */}
+              {isOfflineMode && onExitOffline && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onExitOffline();
+                  }}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-amber-500/20 active:bg-amber-500/30 text-amber-400 transition-colors cursor-pointer"
+                >
+                  <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-amber-500/30 rounded-xl">
+                    <WifiOff size={18} />
+                  </div>
+                  <span className="font-black text-sm">Sair do modo offline</span>
+                </button>
+              )}
 
               {/* Zerar partida — só se commandOwner */}
               {isCommandOwner && onResetMatch && (

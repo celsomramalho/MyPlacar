@@ -8,7 +8,7 @@ import { isWatchDevice } from '@shared/utils/device';
 
 /** Modo offline local (sem histórico na nuvem). */
 export function useAppOfflineMode() {
-  const { matchSettings, setMatchSettings, setGameState, startGame } = useGame();
+  const { matchSettings, setMatchSettings, setGameState, startGame, userProfile } = useGame();
   const { setCurrentScreen, setIsRecoveryFromMatchOver, setIsWaitingSync } = useUI();
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
 
@@ -69,10 +69,18 @@ export function useAppOfflineMode() {
   }, [matchSettings, startGame, setMatchSettings, setCurrentScreen, setIsRecoveryFromMatchOver, setIsWaitingSync]);
 
   const handleExitOffline = useCallback(() => {
+    try {
+      localStorage.removeItem('myPlacarActiveGameState');
+    } catch { /* best effort */ }
+
     setIsOfflineMode(false);
     setGameState(null);
-    setCurrentScreen('auth');
-  }, [setGameState, setCurrentScreen]);
+    setIsWaitingSync(false);
+    setIsRecoveryFromMatchOver(false);
+
+    const hasProfile = Boolean(userProfile?.email && userProfile?.pin && userProfile?.isProfileComplete);
+    setCurrentScreen(hasProfile ? 'home' : 'auth');
+  }, [setGameState, setCurrentScreen, setIsWaitingSync, setIsRecoveryFromMatchOver, userProfile]);
 
   return { isOfflineMode, setIsOfflineMode, handleOfflineMode, handleExitOffline };
 }
