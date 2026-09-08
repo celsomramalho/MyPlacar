@@ -24,7 +24,7 @@ const StatCell: React.FC<StatCellProps> = ({
   formatValue = defaultFormat,
 }) => (
   <div
-    className={`flex flex-col items-center justify-center min-w-0 ${
+    className={`flex flex-col items-center justify-center min-w-0 py-1.5 ${
       !isLast ? 'border-r border-slate-300' : ''
     }`}
   >
@@ -37,7 +37,7 @@ const StatCell: React.FC<StatCellProps> = ({
   </div>
 );
 
-export const RankingStandingStatsBlock: React.FC<Props> = ({ standing }) => {
+export const Super8StandingStatsBlock: React.FC<Props> = ({ standing }) => {
   const partidas = standing.played ?? 0;
   const vitorias = standing.wins ?? 0;
   const derrotas = standing.losses ?? 0;

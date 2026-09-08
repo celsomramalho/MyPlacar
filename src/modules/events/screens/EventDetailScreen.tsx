@@ -15,6 +15,8 @@ import { Input } from '@shared/components/Input';
 import type { ModalConfig } from '@modules/ui/types';
 import { EventRegistrationForm } from '../components/EventRegistrationForm';
 import { RankingStandingStatsBlock } from '../components/RankingStandingStatsBlock';
+import { Super8StandingStatsBlock } from '../components/Super8StandingStatsBlock';
+import { BracketTeamStatsBlock } from '../components/BracketTeamStatsBlock';
 import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 import { getPhaseLabel, createManualMatch, validateCategoryGenders } from '../services/matchGenerator';
 import { calculateSuper8PlayerStandings, calculateBracketStandings, type TeamStanding } from '../services/matchProgression';
@@ -1283,11 +1285,16 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
           } ${!isSuper8 ? 'cursor-pointer' : ''}`}
         >
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${isCurrentUserEntry ? 'bg-[#4B0082] text-white' : entry.gender === 'F' ? 'bg-pink-50 text-pink-500' : 'bg-sky-50 text-sky-500'}`}>
-                <User size={20} fill={isCurrentUserEntry ? 'currentColor' : 'none'} />
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <div className="flex flex-col items-center gap-1.5 shrink-0">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${isCurrentUserEntry ? 'bg-[#4B0082] text-white' : entry.gender === 'F' ? 'bg-pink-50 text-pink-500' : 'bg-sky-50 text-sky-500'}`}>
+                  <User size={20} fill={isCurrentUserEntry ? 'currentColor' : 'none'} />
+                </div>
+                <div className={`p-1.5 rounded-xl border flex items-center justify-center shrink-0 ${entry.gender === 'F' ? 'bg-pink-50 text-pink-500 border-pink-100' : 'bg-sky-50 text-sky-500 border-sky-100'}`}>
+                  {entry.gender === 'F' ? <VenusIcon size={16} /> : <MarsIcon size={16} />}
+                </div>
               </div>
-              <div className="min-w-0 space-y-1">
+              <div className="min-w-0 space-y-1 flex-1">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
                   <p className="text-sm font-black text-slate-900 truncate">
                     {entry.name || entry.nickname}
@@ -1334,51 +1341,20 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
-              {isSuper8 && (
+            {isSuper8 && (
+              <div className="flex items-center gap-3 shrink-0">
                 <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
                   {formatRegistrationId(entry.registrationId)}
                 </span>
-              )}
-              <div className={`p-2 rounded-xl border ${entry.gender === 'F' ? 'bg-pink-50 text-pink-500 border-pink-100' : 'bg-sky-50 text-sky-500 border-sky-100'}`}>
-                {entry.gender === 'F' ? <VenusIcon /> : <MarsIcon />}
               </div>
-            </div>
+            )}
           </div>
 
           {isIndividualRanking && standing && categoryMatches.length > 0 && (
             isRanking ? (
               <RankingStandingStatsBlock standing={standing} />
             ) : (
-              <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                    <span className="text-[11px] font-black text-slate-500">Vitórias:</span>
-                    <span className="font-black text-slate-900 text-xs">{standing.wins}</span>
-                  </div>
-                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                    <span className="text-[11px] font-black text-slate-500">Saldo de Games:</span>
-                    <span className={`font-black text-xs ${standing.gamesDiff > 0 ? 'text-emerald-600' : standing.gamesDiff < 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                      {standing.gamesDiff > 0 ? `+${standing.gamesDiff}` : standing.gamesDiff}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                    <span className="text-[11px] font-black text-slate-500">Games a Favor:</span>
-                    <span className="font-black text-slate-900 text-xs">{standing.gamesWon}</span>
-                  </div>
-                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                    <span className="text-[11px] font-black text-slate-500">Games Sofridos:</span>
-                    <span className="font-black text-slate-900 text-xs">{standing.gamesLost}</span>
-                  </div>
-                </div>
-                {standing.tieBreakNote && (
-                  <div className="pt-0.5">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
-                      {standing.tieBreakNote}
-                    </span>
-                  </div>
-                )}
-              </div>
+              <Super8StandingStatsBlock standing={standing} />
             )
           )}
         </div>
@@ -1573,41 +1549,8 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                     )}
                   </div>
 
-                  <div className="space-y-1 text-xs font-bold text-slate-700">
-                    <p>
-                      Qtde Vitórias: <strong className="font-black text-slate-900">{standing?.wins ?? 0}</strong>
-                    </p>
-                    <p>
-                      Saldo games:{' '}
-                      <strong
-                        className={`font-black ${
-                          (standing?.gamesDiff ?? 0) > 0
-                            ? 'text-emerald-600'
-                            : (standing?.gamesDiff ?? 0) < 0
-                            ? 'text-rose-600'
-                            : 'text-slate-800'
-                        }`}
-                      >
-                        {(standing?.gamesDiff ?? 0) > 0 ? `+${standing?.gamesDiff}` : (standing?.gamesDiff ?? 0)}
-                        {standing ? ` (${standing.gamesWon} - ${standing.gamesLost})` : ' (0 - 0)'}
-                      </strong>
-                    </p>
-                    {standing && standing.setsWon + standing.setsLost > 0 && (
-                      <p>
-                        Saldo sets:{' '}
-                        <strong className="font-black text-slate-800">
-                          {standing.setsDiff > 0 ? `+${standing.setsDiff}` : standing.setsDiff} ({standing.setsWon} - {standing.setsLost})
-                        </strong>
-                      </p>
-                    )}
-                  </div>
-
-                  {standing?.tieBreakNote && (
-                    <div className="pt-0.5 w-full">
-                      <p className="w-full text-xs font-bold text-amber-800 bg-amber-50/90 border border-amber-200/80 rounded-xl px-3 py-2 leading-snug">
-                        ⚖️ {standing.tieBreakNote}
-                      </p>
-                    </div>
+                  {standing && standing.played > 0 && (
+                    <BracketTeamStatsBlock standing={standing} />
                   )}
 
                   {/* Placar da semifinal */}
@@ -2026,50 +1969,52 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
 
                       {/* Histórico de partidas do time */}
                       {teamMatches.length > 0 && (
-                        <div className="border-t border-slate-100 px-3.5 pb-3 pt-2 space-y-1.5">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Histórico de partidas</p>
-                          {teamMatches.map((m) => {
-                            const isWinner = m.winnerPairId === pair.id;
-                            const opponent = m.pair1Id === pair.id
-                              ? (m.pair2 || categoryPairs.find((p) => p.id === m.pair2Id))
-                              : (m.pair1 || categoryPairs.find((p) => p.id === m.pair1Id));
-                            // Formatar resultado do ponto de vista do time
-                            const resultParts = (m.result || '').split('/');
-                            const myScore = m.pair1Id === pair.id ? resultParts[0] : resultParts[1];
-                            const oppScore = m.pair1Id === pair.id ? resultParts[1] : resultParts[0];
-                            return (
-                              <div
-                                key={m.id}
-                                onClick={(e) => e.stopPropagation()}
-                                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-[11px] ${
-                                  isWinner ? 'bg-emerald-50 border border-emerald-100' : 'bg-red-50 border border-red-100'
-                                }`}
-                              >
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  {isWinner
-                                    ? <Trophy size={11} className="text-emerald-600 shrink-0" />
-                                    : <X size={11} className="text-red-400 shrink-0" />
-                                  }
-                                  <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
-                                    {isWinner ? 'Vitória' : 'Derrota'}
-                                  </span>
-                                  {opponent && (
-                                    <span className="text-slate-500 font-bold truncate">
-                                      vs {opponent.p1.nickname || opponent.p1.name} & {opponent.p2.nickname || opponent.p2.name}
+                        <div className="border-t border-slate-100 px-3.5 pb-3 pt-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1.5">Histórico de partidas</p>
+                          <div className="rounded-xl border border-slate-200/80 overflow-hidden divide-y divide-slate-200/60">
+                            {teamMatches.map((m) => {
+                              const isWinner = m.winnerPairId === pair.id;
+                              const opponent = m.pair1Id === pair.id
+                                ? (m.pair2 || categoryPairs.find((p) => p.id === m.pair2Id))
+                                : (m.pair1 || categoryPairs.find((p) => p.id === m.pair1Id));
+                              // Formatar resultado do ponto de vista do time
+                              const resultParts = (m.result || '').split('/');
+                              const myScore = m.pair1Id === pair.id ? resultParts[0] : resultParts[1];
+                              const oppScore = m.pair1Id === pair.id ? resultParts[1] : resultParts[0];
+                              return (
+                                <div
+                                  key={m.id}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] transition-colors ${
+                                    isWinner ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'bg-red-50/50 hover:bg-red-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    {isWinner
+                                      ? <Trophy size={11} className="text-emerald-600 shrink-0" />
+                                      : <X size={11} className="text-red-400 shrink-0" />
+                                    }
+                                    <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
+                                      {isWinner ? 'Vitória' : 'Derrota'}
                                     </span>
-                                  )}
+                                    {opponent && (
+                                      <span className="text-slate-500 font-bold truncate">
+                                        vs {opponent.p1.nickname || opponent.p1.name} & {opponent.p2.nickname || opponent.p2.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="font-black text-slate-700">{myScore || '?'} x {oppScore || '?'}</span>
+                                    {m.matchDate && (
+                                      <span className="text-slate-400 font-bold">
+                                        {new Date(m.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="font-black text-slate-700">{myScore || '?'} x {oppScore || '?'}</span>
-                                  {m.matchDate && (
-                                    <span className="text-slate-400 font-bold">
-                                      {new Date(m.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>
