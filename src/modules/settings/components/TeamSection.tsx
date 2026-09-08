@@ -92,6 +92,15 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   const prevScoringModeRef = useRef(settings.pickleballScoringMode);
 
   useEffect(() => {
+    setGenders({
+      p1: settings.p1Gender || 'M',
+      p1Partner: settings.p1PartnerGender || 'M',
+      p2: settings.p2Gender || 'M',
+      p2Partner: settings.p2PartnerGender || 'M',
+    });
+  }, [settings.p1Gender, settings.p1PartnerGender, settings.p2Gender, settings.p2PartnerGender]);
+
+  useEffect(() => {
     const fetchIcons = async () => {
       const db = getDb();
       if (!db) return;
@@ -138,11 +147,16 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
 
   const canShowMixed = useMemo(() => {
     if (!settings.isDoubles) return false;
-    const gendersValues = [genders.p1, genders.p1Partner, genders.p2, genders.p2Partner];
+    const gendersValues = [
+      settings.p1Gender || genders.p1,
+      settings.p1PartnerGender || genders.p1Partner,
+      settings.p2Gender || genders.p2,
+      settings.p2PartnerGender || genders.p2Partner
+    ];
     const males = gendersValues.filter(v => v === 'M').length;
     const females = gendersValues.filter(v => v === 'F').length;
     return males === 2 && females === 2;
-  }, [settings.isDoubles, genders]);
+  }, [settings.isDoubles, settings.p1Gender, settings.p1PartnerGender, settings.p2Gender, settings.p2PartnerGender, genders]);
 
   useImperativeHandle(ref, () => ({
     triggerStart: () => {
@@ -152,7 +166,8 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
 
   const toggleGender = (key: string) => {
     if (isReadOnly) return;
-    const newGender: Gender = genders[key] === 'M' ? 'F' : 'M';
+    const currentGender = (settings[`${key}Gender` as keyof MatchSettings] as Gender) || genders[key] || 'M';
+    const newGender: Gender = currentGender === 'M' ? 'F' : 'M';
     setGenders(prev => ({ ...prev, [key]: newGender }));
     const settingsKey = `${key}Gender` as keyof MatchSettings;
     setSettings(prev => ({ ...prev, [settingsKey]: newGender }));
@@ -404,6 +419,8 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     const teamColor = field.startsWith('p1') ? settings.p1Color : settings.p2Color;
     const colorStyles = TEAM_IDENTITY_STYLES[teamColor] || TEAM_IDENTITY_STYLES.azul;
 
+    const currentGender = (settings[`${genderKey}Gender` as keyof MatchSettings] as Gender) || genders[genderKey] || 'M';
+
     return (
       <div className={`flex gap-2 items-end transition-all duration-300 ${isShuffling ? 'opacity-50 scale-[0.97]' : 'opacity-100'}`}>
         <div className="flex-1">
@@ -435,7 +452,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
             ) : null)} 
           />
         </div>
-        <button disabled={isReadOnly} onClick={() => toggleGender(genderKey)} className={`w-[42px] h-[44px] rounded-2xl border-2 flex items-center justify-center shrink-0 transition-all active:scale-90 ${genders[genderKey] === 'M' ? 'bg-sky-50 text-sky-600 border-sky-100' : 'bg-pink-50 text-pink-600 border-pink-100'} ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`} > {genders[genderKey] === 'M' ? <MarsIcon /> : <VenusIcon />} </button>
+        <button disabled={isReadOnly} onClick={() => toggleGender(genderKey)} className={`w-[42px] h-[44px] rounded-2xl border-2 flex items-center justify-center shrink-0 transition-all active:scale-90 ${currentGender === 'M' ? 'bg-sky-50 text-sky-600 border-sky-100' : 'bg-pink-50 text-pink-600 border-pink-100'} ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`} > {currentGender === 'M' ? <MarsIcon /> : <VenusIcon />} </button>
       </div>
     );
   };

@@ -729,6 +729,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             p2Partner: cloudState.p2.partnerName || '', 
             p1Color: cloudState.p1.color || 'azul', 
             p2Color: cloudState.p2.color || 'vermelho', 
+            // Gêneros: primeiro tenta o objeto do jogador (mais confiável), depois o matchConfig
+            p1Gender: cloudState.p1.gender || cloudState.matchConfig.p1Gender,
+            p1PartnerGender: cloudState.p1.partnerGender || cloudState.matchConfig.p1PartnerGender,
+            p2Gender: cloudState.p2.gender || cloudState.matchConfig.p2Gender,
+            p2PartnerGender: cloudState.p2.partnerGender || cloudState.matchConfig.p2PartnerGender,
             isDoubles: cloudState.matchConfig.isDoubles, 
             sets: cloudState.matchConfig.sets, 
             gamesPerSet: cloudState.matchConfig.gamesPerSet, 
