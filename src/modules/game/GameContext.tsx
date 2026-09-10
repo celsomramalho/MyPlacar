@@ -1310,6 +1310,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
     if (isWatchDevice()) {
       configToUse = { ...configToUse, isWatchMode: true, isScoreboardMode: false };
+    } else {
+      configToUse = { ...configToUse, isWatchMode: false, isScoreboardMode: false };
     }
 
     if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
@@ -1461,7 +1463,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     URL.revokeObjectURL(url);
   }, [userProfile, matchSettings, partners, playerQueue]);
 
-  const value: GameContextValue = {
+  const value: GameContextValue = useMemo(() => ({
     gameState,
     setGameState,
     gameStateRef,
@@ -1494,7 +1496,35 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     initGameState,
     canStartMatch,
     handleExportData,
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    gameState,
+    gameStateRef,
+    matchSettings,
+    userProfile,
+    matchHistory,
+    matchHistoryRef,
+    partners,
+    historyStack,
+    persistHistory,
+    finalizeMatchInternal,
+    handleLeaveLive,
+    handleCloseCloudLive,
+    handleDeleteJudge,
+    handleControlLive,
+    handleObserveLive,
+    handleSyncScoreboard,
+    handleAddJudge,
+    handleSaveProfile,
+    handleScoreUpdate,
+    handleCorrectScore,
+    handleUndo,
+    startGame,
+    handleResetMatch,
+    initGameState,
+    canStartMatch,
+    handleExportData,
+  ]);
 
   return (
     <GameContext.Provider value={value}>

@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   Clock,
   Zap,
+  Calendar,
 } from 'lucide-react';
 import type { TournamentEvent, TournamentMatch, MatchSetScore } from '@modules/events/types';
 import { calculateQueueState } from '@modules/events/services/queueManager';
@@ -483,6 +484,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
     if (isReadOnly) return;
     const allMatches = event.matches || [];
     const nowIso = new Date().toISOString();
+    const todayDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
     const nextMatches = allMatches.map((m) => {
       if (m.id === matchId) {
         return {
@@ -491,6 +493,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
           court: courtName,
           frozen: false,
           startedAt: m.startedAt || nowIso,
+          matchDate: m.matchDate || todayDate,
         };
       }
       return m;
@@ -574,6 +577,16 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
     const match = allMatches.find((m) => m.id === matchId);
     if (!match) return;
 
+    if (!match.matchDate) {
+      setModalConfig({
+        title: 'Data obrigatória',
+        message: 'Informe a data da partida antes de finalizar.',
+        onConfirm: () => setModalConfig(null),
+        variant: 'info',
+      });
+      return;
+    }
+
     const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets);
 
     // Verifica se algum set tem placar digitado
@@ -637,6 +650,28 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
 
     // Placar válido, finaliza direto
     handleFreeCourtMatch(matchId, true);
+  };
+
+  // Salva a data da partida nas quadras
+  const handleMatchDateChange = (matchId: string, dateVal: string) => {
+    if (isReadOnly) return;
+    const allMatches = event.matches || [];
+    const nextMatches = allMatches.map((m) =>
+      m.id !== matchId ? m : { ...m, matchDate: dateVal || undefined }
+    );
+    if (onUpdateEvent) onUpdateEvent({ ...event, matches: nextMatches });
+    if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+    saveMatchesTimeoutRef.current = setTimeout(async () => {
+      const db = getDb();
+      if (db && event.pin) {
+        try {
+          const { updateEvent } = await import('@infra/firebase/events');
+          await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+        } catch (err) {
+          console.error('Erro ao salvar data da partida no Firestore:', err);
+        }
+      }
+    }, 600);
   };
 
   const handleOpenMatchRules = (match: TournamentMatch) => {
@@ -720,6 +755,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
       gamesPerSet: event.gamesPerSet || event.config?.gamesPerSet || prev.gamesPerSet,
       noAd: event.config?.noAd ?? prev.noAd,
       isDoubles,
+      isScoreboardMode: false,
+      isWatchMode: false,
       pendingTournamentMatchId: match.id,
       pendingTournamentPin: event.pin,
       pendingTournamentMatchCode: getMatchCodeLabel(match),
@@ -1196,8 +1233,23 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
                         </div>
                       )}
 
-                      {/* Botão Finalizar partida — abaixo do placar, largura total */}
-                      <div className="pt-1 border-t border-amber-100">
+                      {/* Campo de data + Botão Finalizar partida — abaixo do placar, largura total */}
+                      <div className="pt-2 border-t border-amber-100 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
+                            <Calendar size={13} className="text-sky-600" /> Data da partida:
+                          </label>
+                          <input
+                            type="date"
+                            value={activeMatch.matchDate || ''}
+                            disabled={isReadOnly}
+                            onClick={(e) => {
+                              try { (e.target as any).showPicker?.(); } catch {}
+                            }}
+                            onChange={(e) => handleMatchDateChange(activeMatch.id, e.target.value)}
+                            className="flex-1 h-9 text-xs font-bold bg-slate-50 border-2 border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl outline-none px-3 text-slate-700 cursor-pointer disabled:opacity-40"
+                          />
+                        </div>
                         <button
                           type="button"
                           disabled={isReadOnly}

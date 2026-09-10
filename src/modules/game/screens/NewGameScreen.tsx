@@ -263,7 +263,13 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
               <WifiOff size={22} className="relative z-10" />
             </button>
           ) : (
-            <div className="w-10" />
+            <button
+              onClick={onPlayShortcut}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-emerald-500 shadow-md active:scale-95 transition-transform"
+              title="Iniciar partida"
+            >
+              <Play size={20} className="fill-white translate-x-0.5" />
+            </button>
           )}
         </div>
       </header>

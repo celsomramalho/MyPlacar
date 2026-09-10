@@ -258,13 +258,22 @@ export function useLiveFirestoreSync(params: {
           setCloudLiveExists(false);
           setActiveLives(prev => prev.filter(l => (l.ownerPin?.toUpperCase() || '') !== listenPin));
           setGameState(prev => {
-            if (!prev) return null;
-            return {
-              ...prev,
+            const base = prev || cloudData;
+            const updated = {
+              ...base,
+              ...cloudData,
               isMirroringActive: false,
               isLiveClosed: true,
-              isConfirmedFinished: cloudData.isConfirmedFinished || prev.isConfirmedFinished,
+              isConfirmedFinished: cloudData.isConfirmedFinished ?? prev?.isConfirmedFinished ?? true,
+              isMatchOver: cloudData.isMatchOver ?? prev?.isMatchOver ?? true,
+              p1: cloudData.p1 || base.p1,
+              p2: cloudData.p2 || base.p2,
+              pointHistory: cloudData.pointHistory || base.pointHistory,
             };
+            try {
+              localStorage.setItem('myPlacarActiveGameState', JSON.stringify(updated));
+            } catch {}
+            return updated;
           });
 
           // E1: notifica observers/juiz sobre encerramento da partida
@@ -421,10 +430,10 @@ export function useLiveFirestoreSync(params: {
               ? true
               : baseConfig.isWatchMode;
             const resolvedScoreboardMode = justLostControl
-              ? true
+              ? false
               : justGainedControl && isWatchDevice()
               ? false
-              : baseConfig.isScoreboardMode; // demais: preserva preferência local (inclui relógio em modo placar)
+              : (isWatchDevice() ? false : baseConfig.isScoreboardMode ?? false);
             return {
               ...cloudData,
               matchDuration: Math.max(prev?.matchDuration || 0, cloudData.matchDuration || 0),
@@ -450,12 +459,16 @@ export function useLiveFirestoreSync(params: {
               },
             };
           });
-          // Sincroniza matchSettings local quando device perde controle → volta a ser observer
+          // Atualiza lastSentStateRef com cloudData para que este observer não trate dados recebidos como alterações locais pendentes
+          try {
+            lastSentStateRef.current = JSON.stringify(sanitizeForFirestore(cloudData));
+          } catch {}
+          // Sincroniza matchSettings local quando device perde controle → volta a ser observer mantendo o placar principal
           if (
             gameStateRef.current?.commandOwnerId === deviceId &&
             cloudData.commandOwnerId !== deviceId
           ) {
-            setMatchSettings(prev => ({ ...prev, isScoreboardMode: true, isWatchMode: false }));
+            setMatchSettings(prev => ({ ...prev, isScoreboardMode: false, isWatchMode: false }));
           }
           if (
             isWatchDevice() &&
@@ -1200,18 +1213,62 @@ export function useLiveFirestoreSync(params: {
           // ── Determina papel deste device ────────────────────────────────
           const isThisDeviceController = gameState.commandOwnerId === deviceId;
 
-          // Guard duplo (escrita de estado de partida — apenas o controller):
-          // Só escreve placar/histórico se AMBOS local e Firebase confirmam este
-          // device como controller, ou se acabou de assumir (grace period).
-          const isConfirmedControllerInCloud = activeLives.some(l => l.commandOwnerId === deviceId);
-          const isConfirmedControllerLocal = isThisDeviceController;
-          const justTookControl = Date.now() - tookControlAtRef.current < 15000;
-          const controllerGuardOk =
-            isConfirmedControllerInCloud || isConfirmedControllerLocal || justTookControl;
+          // Se este dispositivo NÃO é o controlador ativo:
+          // NUNCA escreve estado de jogo (pontos, games, sets, histórico, liveVersion).
+          // Se for o dono e houve mudança de regras/nomes, atualiza apenas os campos de configuração.
+          if (!isThisDeviceController) {
+            const isOwnerByDeviceId = gameState.ownerDeviceId === deviceId;
+            const canWriteConfig = isOriginalOwner || isOwnerByDeviceId;
+            if (canWriteConfig) {
+              const prevStateStr = lastSentStateRef.current;
+              const prevState = prevStateStr ? JSON.parse(prevStateStr) : null;
+              const isConfigChange =
+                !prevState ||
+                prevState.p1?.name !== gameState.p1?.name ||
+                prevState.p2?.name !== gameState.p2?.name ||
+                prevState.p1?.color !== gameState.p1?.color ||
+                prevState.p2?.color !== gameState.p2?.color ||
+                prevState.matchConfig?.sportType !== gameState.matchConfig?.sportType ||
+                prevState.matchConfig?.sets !== gameState.matchConfig?.sets ||
+                prevState.matchConfig?.gamesPerSet !== gameState.matchConfig?.gamesPerSet ||
+                prevState.matchConfig?.noAd !== gameState.matchConfig?.noAd ||
+                prevState.matchConfig?.tieBreak !== gameState.matchConfig?.tieBreak ||
+                prevState.matchConfig?.tieBreakAt !== gameState.matchConfig?.tieBreakAt ||
+                prevState.matchConfig?.tieBreakPoints !== gameState.matchConfig?.tieBreakPoints ||
+                prevState.matchConfig?.tieBreakWinByTwo !== gameState.matchConfig?.tieBreakWinByTwo ||
+                prevState.matchConfig?.switchSidesOdd !== gameState.matchConfig?.switchSidesOdd ||
+                prevState.matchConfig?.tieBreakSideSwitchMode !==
+                  gameState.matchConfig?.tieBreakSideSwitchMode ||
+                prevState.matchConfig?.pickleballScoringMode !==
+                  gameState.matchConfig?.pickleballScoringMode ||
+                prevState.matchConfig?.pickleballServiceMode !==
+                  gameState.matchConfig?.pickleballServiceMode ||
+                prevState.matchConfig?.winnersStay !== gameState.matchConfig?.winnersStay ||
+                prevState.matchConfig?.isDoubles !== gameState.matchConfig?.isDoubles;
 
-          // Owner sempre pode escrever mudanças de configuração/regras,
-          // independentemente de ser ou não o controller atual.
-          const now = Date.now();
+              if (isConfigChange) {
+                const targetPin = resolveTargetPin('write');
+                if (targetPin) {
+                  const configUpdate = sanitizeForFirestore({
+                    matchConfig: gameState.matchConfig,
+                    'p1.name': gameState.p1.name,
+                    'p1.partnerName': gameState.p1.partnerName,
+                    'p1.color': gameState.p1.color,
+                    'p2.name': gameState.p2.name,
+                    'p2.partnerName': gameState.p2.partnerName,
+                    'p2.color': gameState.p2.color,
+                    lastActivityAt: Date.now(),
+                  });
+                  if (configUpdate) {
+                    updateDoc(doc(db, 'live_matches', targetPin), configUpdate).catch(() => {});
+                    lastSyncTimeRef.current = now;
+                  }
+                }
+              }
+            }
+            return;
+          }
+
           const prevStateStr = lastSentStateRef.current;
           const prevState = prevStateStr ? JSON.parse(prevStateStr) : null;
 
@@ -1250,17 +1307,6 @@ export function useLiveFirestoreSync(params: {
               gameState.matchConfig?.pickleballServiceMode ||
             prevState.matchConfig?.winnersStay !== gameState.matchConfig?.winnersStay ||
             prevState.matchConfig?.isDoubles !== gameState.matchConfig?.isDoubles;
-
-          // Owner OU controller ativo podem escrever mudanças de config (tela inicial e regras).
-          // isOwnerByDeviceId: verificação direta via ownerDeviceId, sem depender da latência
-          // do activeLives (que pode demorar segundos para confirmar isOriginalOwner).
-          const isOwnerByDeviceId = gameState.ownerDeviceId === deviceId;
-          const canWriteConfig = isOriginalOwner || isOwnerByDeviceId || controllerGuardOk;
-
-          // Controller escreve mudanças de partida; owner ou controller ativo escrevem config.
-          if (isMatchStateChange && !controllerGuardOk) return;
-          if (!isMatchStateChange && isConfigChange && !canWriteConfig) return;
-          if (!isMatchStateChange && !isConfigChange && !isThisDeviceController) return;
 
           const isCriticalChange = isMatchStateChange || isConfigChange;
           const timeSinceLastSync = now - lastSyncTimeRef.current;
@@ -1410,7 +1456,7 @@ export function useLiveFirestoreSync(params: {
       setMatchSettings(prev => ({
         ...prev,
         isWatchMode: false,
-        isScoreboardMode: true,
+        isScoreboardMode: false,
       }));
       setGameState(prev => {
         if (!prev) return prev;
@@ -1419,7 +1465,7 @@ export function useLiveFirestoreSync(params: {
           matchConfig: {
             ...prev.matchConfig,
             isWatchMode: false,
-            isScoreboardMode: true,
+            isScoreboardMode: false,
           },
         };
       });

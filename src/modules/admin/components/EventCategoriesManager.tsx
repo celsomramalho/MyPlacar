@@ -1857,7 +1857,7 @@ const validateCategoryGenders = (
     const match = matches.find((m) => m.id === matchId);
     if (!match) return;
 
-    if (isRanking && !match.matchDate) {
+    if (!match.matchDate) {
       setModalConfig({
         title: 'Data obrigatória',
         message: 'Informe a data da partida antes de finalizar.',
@@ -2314,24 +2314,22 @@ const validateCategoryGenders = (
             {/* Botão Finalizar partida igual ao de Gerenciar partidas/Quadras */}
             {!isMatchFinished ? (
               <div className="pt-3 mt-3 border-t border-slate-100 space-y-2">
-                {isRanking && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
-                      <Calendar size={13} className="text-sky-600" /> Data da partida:
-                    </label>
-                    <input
-                      type="date"
-                      value={match.matchDate || ''}
-                      onClick={(e) => {
-                        try {
-                          (e.target as any).showPicker?.();
-                        } catch {}
-                      }}
-                      onChange={(e) => handleMatchDateChange(match.id, e.target.value)}
-                      className="flex-1 h-9 text-xs font-bold bg-slate-50 border-2 border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl outline-none px-3 text-slate-700 cursor-pointer"
-                    />
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
+                    <Calendar size={13} className="text-sky-600" /> Data da partida:
+                  </label>
+                  <input
+                    type="date"
+                    value={match.matchDate || ''}
+                    onClick={(e) => {
+                      try {
+                        (e.target as any).showPicker?.();
+                      } catch {}
+                    }}
+                    onChange={(e) => handleMatchDateChange(match.id, e.target.value)}
+                    className="flex-1 h-9 text-xs font-bold bg-slate-50 border-2 border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl outline-none px-3 text-slate-700 cursor-pointer"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => handleFinishMatchWithValidation(match.id)}

@@ -391,7 +391,7 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
   // evitando que o handler seja recriado (e o exitTimer cancelado) a cada ponto marcado.
   }, [userProfile.pin, userProfile.email, deviceId, isOriginalOwner, gameStateRef]);
 
-  const value: LiveContextValue = {
+  const value: LiveContextValue = useMemo(() => ({
     activeLives, setActiveLives,
     cloudLiveExists, setCloudLiveExists,
     liveLogs, setLiveLogs,
@@ -414,7 +414,24 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
     isJudgeOnline,
     isOwnerOnline,
     resolveTargetPin,
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    activeLives,
+    cloudLiveExists,
+    liveLogs,
+    fbSyncStatus,
+    lastFirebaseAckAt,
+    livePapel,
+    liveStatus,
+    isOriginalOwner,
+    isActiveController,
+    isCurrentController,
+    isCommandOwner,
+    indicatorRole,
+    isJudgeOnline,
+    isOwnerOnline,
+    resolveTargetPin,
+  ]);
 
   return (
     <LiveContext.Provider value={value}>

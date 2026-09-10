@@ -1708,7 +1708,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             </div>
           </div>
 
-          {isRanking && !isFinished && canUserSubmitScore && (
+          {!isFinished && canUserSubmitScore && (
             <div className="mt-3 space-y-2">
               <div className="flex items-center gap-2">
                 <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
@@ -1737,7 +1737,7 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
             </div>
           )}
 
-          {isRanking && isFinished && !isReadOnly && (
+          {isFinished && !isReadOnly && (
             <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
               {match.matchDate && (
                 <p className="text-[11px] font-bold text-slate-500 text-center flex items-center justify-center gap-1">
