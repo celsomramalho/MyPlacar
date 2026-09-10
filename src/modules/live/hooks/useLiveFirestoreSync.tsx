@@ -1210,6 +1210,7 @@ export function useLiveFirestoreSync(params: {
       ) {
         const db = getDb();
         if (db) {
+          const now = Date.now();
           // ── Determina papel deste device ────────────────────────────────
           const isThisDeviceController = gameState.commandOwnerId === deviceId;
 

@@ -17,6 +17,10 @@ import { generateEmailVerificationCode, generateUserPin, generateWatchCode } fro
 import { clearPasswordResetSession, clearPendingRegistration, forgetEmail, forgetPin, getOfflineProfile, getPendingName, getPendingPassword, getPendingVerifyCode, getSavedAuthMethod, getSavedEmail, getSavedPin, rememberEmail, rememberPin, savePendingRegistration, saveUrlVerificationCode, saveWatchLoginCache } from '../services/authSession';
 import { buildPasswordResetActionCodeSettings, buildPasswordResetContinueUrl, clearAuthUrlParams, getPasswordResetParams, getPublicAuthOrigin } from '../services/authUrls';
 import { validatePassword } from '../services/passwordPolicy';
+import { useInstallPwa } from '@pwa/installPrompt';
+import { copyToClipboard } from '@shared/utils/clipboard';
+import { InstallSafariModal } from '../components/InstallSafariModal';
+import { InstallAndroidModal } from '../components/InstallAndroidModal';
 
 interface Props {
   onAuthSuccess: (profile: UserProfile, stayConnected: boolean) => void;
@@ -29,6 +33,22 @@ interface Props {
 
 export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, onOfflineMode, initialReferralPin = '', appUrl }) => {
   const isNativeApp = Capacitor.isNativePlatform();
+  const { isInstalled, isAndroid, isApple, isSafari, triggerInstall } = useInstallPwa();
+  const [showSafariInstallModal, setShowSafariInstallModal] = useState(false);
+  const [showAndroidInstallModal, setShowAndroidInstallModal] = useState(false);
+
+  const handleInstallAndroid = async () => {
+    const outcome = await triggerInstall();
+    if (outcome === 'unavailable') {
+      setShowAndroidInstallModal(true);
+    }
+  };
+
+  const handleInstallSafari = async () => {
+    await copyToClipboard('https://www.myplacar.app.br/');
+    setShowSafariInstallModal(true);
+  };
+
   const [showSplash, setShowSplash] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
@@ -1589,21 +1609,26 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
             {!isNativeApp && (
               <>
-                <a
-                  href="/MyPlacar.apk"
-                  download="MyPlacar.apk"
-                  className="w-full py-4 rounded-4xl font-black border-2 border-red-200 text-red-500 text-lg gap-3 flex items-center justify-center active:scale-95 transition-transform"
-                >
-                  <Download size={20} /> Instalar app Android
-                </a>
-                <a
-                  href={appUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-4 rounded-4xl font-black border-2 border-sky-200 text-sky-600 text-lg gap-3 flex items-center justify-center active:scale-95 transition-transform"
-                >
-                  <Smartphone size={20} /> Abrir MyPlacar no Safari
-                </a>
+                {isAndroid && !isInstalled && (
+                  <Button
+                    onClick={handleInstallAndroid}
+                    variant="secondary"
+                    className="w-full py-4 rounded-4xl font-black border-2 border-emerald-200 text-emerald-600 text-lg gap-3 shadow-sm hover:border-emerald-300 active:scale-95 transition-all"
+                  >
+                    <Download size={20} /> Instalar MyPlacar
+                  </Button>
+                )}
+
+                {isApple && !isInstalled && (
+                  <Button
+                    onClick={handleInstallSafari}
+                    variant="secondary"
+                    className="w-full py-4 rounded-4xl font-black border-2 border-sky-200 text-sky-600 text-lg gap-3 shadow-sm hover:border-sky-300 active:scale-95 transition-all"
+                  >
+                    <Smartphone size={20} /> Instalar MyPlacar no Safari
+                  </Button>
+                )}
+
                 <div className="w-full rounded-[2rem] bg-[#0f172a] p-5 shadow-xl border border-white/10 flex flex-col items-center gap-3">
                   <div className="flex items-center gap-2 text-amber-400">
                     <span className="text-sm font-black">{loginQrIsReferral ? 'Indique e ganhe' : 'Compartilhe o MyPlacar'}</span>
@@ -1686,6 +1711,18 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           </div>
         </div>
       )}
+
+      <InstallSafariModal
+        isOpen={showSafariInstallModal}
+        onClose={() => setShowSafariInstallModal(false)}
+        isSafari={isSafari}
+        targetUrl="https://www.myplacar.app.br/"
+      />
+
+      <InstallAndroidModal
+        isOpen={showAndroidInstallModal}
+        onClose={() => setShowAndroidInstallModal(false)}
+      />
     </div>
   );
 };
