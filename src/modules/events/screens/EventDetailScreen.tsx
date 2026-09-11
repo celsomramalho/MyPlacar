@@ -20,6 +20,7 @@ import { BracketTeamStatsBlock } from '../components/BracketTeamStatsBlock';
 import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 import { getPhaseLabel, createManualMatch, validateCategoryGenders } from '../services/matchGenerator';
 import { calculateSuper8PlayerStandings, calculateBracketStandings, type TeamStanding } from '../services/matchProgression';
+import { calculateQueueState } from '../services/queueManager';
 
 interface Props {
   event: TournamentEvent;
@@ -710,6 +711,15 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       .filter((cat) => userCategoryIds.has(cat.id))
       .sort((a, b) => a.priority - b.priority);
   }, [event.categories, userCategoryIds, isRanking]);
+
+  // Posição na fila: calcula o estado global da fila para exibir a posição de espera em cada card de partida
+  const orderedQueue = useMemo(() => {
+    try {
+      return calculateQueueState(event).orderedQueue;
+    } catch {
+      return [];
+    }
+  }, [event]);
 
   const canShowCategoryEntriesToUser = useCallback((category?: EventCategory | null) => {
     return (!isUserEventView && isAdmin) || event.showRegisteredParticipants === true;
@@ -1622,14 +1632,26 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
       const s1Val = match.scores?.[0]?.p1 !== null && match.scores?.[0]?.p1 !== undefined ? match.scores[0].p1 : '';
       const s2Val = match.scores?.[0]?.p2 !== null && match.scores?.[0]?.p2 !== undefined ? match.scores[0].p2 : '';
 
+      // Posição na fila global (apenas para partidas aguardando)
+      const queuePos = match.status === 'waiting'
+        ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1
+        : 0;
+      const isInQueue = queuePos > 0;
+
       return (
         <div key={match.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-100">
             <p className="text-sm font-black text-slate-800">
               [{code}] {isRanking ? 'Ranking' : match.phase ? getPhaseLabel(match.phase) : ''}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>{statusLabel}</span>
+              {isInQueue && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black border bg-sky-50 text-sky-700 border-sky-200 whitespace-nowrap">
+                  <Clock size={10} />
+                  #{queuePos} na fila
+                </span>
+              )}
               <button
                 type="button"
                 onClick={(e) => {
@@ -2579,11 +2601,14 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                   if (!pair1 || !pair2) return null;
                   const p1Idx = event.pairs?.findIndex(p => p.id === pair1.id) ?? 0;
                   const p2Idx = event.pairs?.findIndex(p => p.id === pair2.id) ?? 0;
+                  const matchQueuePos = match.status === 'waiting'
+                    ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1
+                    : 0;
                   return (
                     <div key={match.id} className={`bg-white rounded-[2.5rem] p-6 shadow-sm border-2 transition-all ${match.status === 'live' ? 'border-sky-500 ring-4 ring-sky-50' : 'border-gray-100'} relative`}>
                        <div className="flex items-center justify-between mb-6">
                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Jogo #{idx + 1}</span>
-                         <div className="flex items-center gap-4">
+                         <div className="flex items-center gap-2 flex-wrap justify-end">
                            {match.status === 'live' ? (
                               <div className="flex items-center gap-1.5 bg-red-50 px-3 py-1 rounded-full border border-red-100 animate-pulse">
                                 <Wifi size={12} className="text-red-500" />
@@ -2596,6 +2621,12 @@ export const EventDetailScreen: React.FC<Props> = ({ event: initialEvent, onBack
                               </div>
                            ) : (
                               <span className="text-[9px] font-black text-slate-400 bg-gray-100 px-3 py-1 rounded-full">Aguardando</span>
+                           )}
+                           {matchQueuePos > 0 && (
+                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black border bg-sky-50 text-sky-700 border-sky-200 whitespace-nowrap">
+                               <Clock size={10} />
+                               #{matchQueuePos} na fila
+                             </span>
                            )}
                            {isAdmin && (
                              <button 

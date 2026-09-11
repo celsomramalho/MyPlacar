@@ -3,6 +3,7 @@ import { Plus, Layers, Check, X, Trash2, Tag, Users, User, Trophy, ChevronDown, 
 import { minifyEntryForPair, minifyPairForStorage, orderPairEntriesForMixed, formatRegistrationId, getNextRegistrationId, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore, type PlayerStanding } from '@modules/events/types';
 import { generateSystemMatchesForCategory, generateSuper8MatchesForCategory, isCategoryMixed, createManualMatch, formatMatchDisplayString, formatMatchNumber, getPhaseLabel } from '@modules/events/services/matchGenerator';
 import { updatePlayoffProgression, calculateBracketStandings, calculateSuper8PlayerStandings, type TeamStanding } from '@modules/events/services/matchProgression';
+import { calculateQueueState } from '@modules/events/services/queueManager';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
 import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
 import { RankingStandingStatsBlock } from '@modules/events/components/RankingStandingStatsBlock';
@@ -82,6 +83,15 @@ export const EventCategoriesManager: React.FC<Props> = ({
     });
     return map;
   }, [pairs]);
+
+  // Posição na fila: reativo ao evento (quadras, partidas finalizadas)
+  const orderedQueue = React.useMemo(() => {
+    try {
+      return calculateQueueState(event).orderedQueue;
+    } catch {
+      return [];
+    }
+  }, [event]);
 
   // Sincroniza e corrige os confrontos de playoffs caso placares anteriores tenham sido zerados
   useEffect(() => {
@@ -2041,6 +2051,12 @@ const validateCategoryGenders = (
           }
         }
 
+        // Posição na fila global (apenas para partidas aguardando)
+        const queuePos = (!isMatchFinished && !isMatchLive)
+          ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1
+          : 0;
+        const isInQueue = queuePos > 0;
+
         return (
           <div key={match.id} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:border-slate-200">
             {/* Top row: Match Code & Phase on Left, Status Badge & Delete on Right */}
@@ -2048,10 +2064,16 @@ const validateCategoryGenders = (
               <p className="text-sm font-black text-slate-800 tracking-tight">
                 [{code}]{phaseStr}
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
                 <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>
                   {statusLabel}
                 </span>
+                {isInQueue && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black border bg-sky-50 text-sky-700 border-sky-200 whitespace-nowrap">
+                    <Clock size={10} />
+                    #{queuePos} na fila
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => handleDeleteMatch(match.id)}
