@@ -40,28 +40,12 @@ export function getBaseUrl(req) {
   return `${proto}://${host}`.replace(/\/$/, "");
 }
 
-export async function mercadoPagoRequest(path, options = {}) {
+import { MercadoPagoConfig } from "mercadopago";
+
+export function getMercadoPagoClient() {
   const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
   if (!accessToken) throw new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado");
-
-  const response = await fetch(`https://api.mercadopago.com${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = body?.message || body?.error || `Mercado Pago respondeu HTTP ${response.status}`;
-    const error = new Error(message);
-    error.status = response.status;
-    error.body = body;
-    throw error;
-  }
-  return body;
+  return new MercadoPagoConfig({ accessToken });
 }
 
 export function getHeader(req, name) {

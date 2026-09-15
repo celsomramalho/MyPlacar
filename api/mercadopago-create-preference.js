@@ -1,7 +1,8 @@
+import { Preference } from "mercadopago";
 import {
   getBaseUrl,
+  getMercadoPagoClient,
   initFirebaseAdmin,
-  mercadoPagoRequest,
   sanitize,
 } from "./_mercadopago.js";
 
@@ -101,9 +102,11 @@ export default async function handler(req, res) {
     // Pix expira em 24 horas
     const pixExpiration = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    const preference = await mercadoPagoRequest("/checkout/preferences", {
-      method: "POST",
-      body: JSON.stringify({
+    const client = getMercadoPagoClient();
+    const preferenceClient = new Preference(client);
+
+    const preference = await preferenceClient.create({
+      body: {
         items: [
           {
             id: `event-${cleanEventPin}`,
@@ -143,7 +146,7 @@ export default async function handler(req, res) {
         },
         auto_return: "approved",
         notification_url: `${baseUrl}/api/mercadopago-webhook`,
-      }),
+      },
     });
 
     const checkout = {

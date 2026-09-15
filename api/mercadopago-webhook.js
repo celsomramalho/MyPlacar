@@ -1,9 +1,10 @@
 import process from "node:process";
+import { Payment } from "mercadopago";
 import {
   getHeader,
+  getMercadoPagoClient,
   initFirebaseAdmin,
   mapMercadoPagoStatus,
-  mercadoPagoRequest,
   parseExternalReference,
   sanitize,
   validateMercadoPagoSignature,
@@ -33,9 +34,9 @@ export default async function handler(req, res) {
 
   try {
     const db = initFirebaseAdmin();
-    const payment = await mercadoPagoRequest(`/v1/payments/${encodeURIComponent(String(dataId))}`, {
-      method: "GET",
-    });
+    const client = getMercadoPagoClient();
+    const paymentClient = new Payment(client);
+    const payment = await paymentClient.get({ id: String(dataId) });
 
     const parsedReference = parseExternalReference(payment.external_reference);
     if (!parsedReference) {
