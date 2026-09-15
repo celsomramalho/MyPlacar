@@ -31,7 +31,7 @@ interface PaymentData {
   payments?: PaymentItem[];
   dueAmount?: number;
   paidAmount?: number;
-  paymentStatus?: 'Pendente' | 'Pago' | 'Isento';
+  paymentStatus?: 'Pendente' | 'Pago' | 'Isento' | 'Confirmado' | 'Recusado' | 'Cancelado';
 }
 
 export const joinTournamentEvent = async (

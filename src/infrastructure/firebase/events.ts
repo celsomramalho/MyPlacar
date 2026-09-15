@@ -35,8 +35,29 @@ interface FirebaseTournamentEntry {
   categoryIds?: string[];
   dueAmount?: number;
   paidAmount?: number;
-  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento';
-  payments?: Array<{ id: string; amount: number; date: number; receiptUrl?: string; receiptName?: string }>;
+  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
+  payments?: Array<{
+    id: string;
+    amount: number;
+    date: number;
+    receiptUrl?: string;
+    receiptName?: string;
+    provider?: 'manual' | 'mercadopago';
+    providerPaymentId?: string;
+    status?: string;
+  }>;
+  mercadoPagoCheckout?: {
+    provider: 'mercadopago';
+    preferenceId?: string;
+    initPoint?: string;
+    sandboxInitPoint?: string;
+    externalReference?: string;
+    amount?: number;
+    status?: string;
+    createdAt?: number;
+    updatedAt?: number;
+    lastPaymentId?: string;
+  };
   phone: string;
   shirtSize: 'P' | 'M' | 'G';
   partnerName?: string;
@@ -81,6 +102,7 @@ export interface FirebaseTournamentEvent {
   bracketDrawType?: string;
   matchDrawType?: string;
   rankingMatchesPerTeam?: number;
+  paymentType?: 'manual' | 'mercadopago';
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

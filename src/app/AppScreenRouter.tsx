@@ -48,7 +48,7 @@ export interface AppScreenRouterProps {
   activeEvent: TournamentEvent | null;
   userEntryDate: number | null;
   registeredEvents: EventRegistration[];
-  handleJoinTournament: (pin: string, silent?: boolean, profileOverride?: UserProfile, paymentData?: { payments?: import('@modules/events/types').PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }, entryOverride?: Partial<import('@modules/events/types').TournamentEntry>) => Promise<void>;
+  handleJoinTournament: (pin: string, silent?: boolean, profileOverride?: UserProfile, paymentData?: { payments?: import('@modules/events/types').PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' | 'Confirmado' | 'Recusado' | 'Cancelado' }, entryOverride?: Partial<import('@modules/events/types').TournamentEntry>) => Promise<void>;
   handleExitTournament: () => void;
   handleSelectEvent: (ev: TournamentEvent) => void;
   handleLogout: () => void;

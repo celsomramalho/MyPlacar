@@ -62,7 +62,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const [nickname, setNickname] = useState('');
   const [gender, setGender] = useState<'M' | 'F'>('M');
   const [dueAmount, setDueAmount] = useState<number>(event.registrationFee || 0);
-  const [paymentStatus, setPaymentStatus] = useState<'Pendente' | 'Confirmado' | 'Pago' | 'Isento'>('Pendente');
+  const [paymentStatus, setPaymentStatus] = useState<NonNullable<TournamentEntry['paymentStatus']>>('Pendente');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [payments, setPayments] = useState<PaymentItem[]>([]);
 
@@ -557,12 +557,14 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                 <label className="text-[10px] font-black text-slate-400 ml-1">Status do pagamento</label>
                 <select
                   value={paymentStatus === 'Pago' ? 'Confirmado' : paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value as 'Pendente' | 'Confirmado' | 'Pago' | 'Isento')}
+                  onChange={(e) => setPaymentStatus(e.target.value as 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado')}
                   className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
                 >
                   <option value="Pendente">Pendente</option>
                   <option value="Confirmado">Confirmado</option>
                   <option value="Isento">Isento</option>
+                  <option value="Recusado">Recusado</option>
+                  <option value="Cancelado">Cancelado</option>
                 </select>
               </div>
 

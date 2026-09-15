@@ -468,7 +468,11 @@ export function useLiveFirestoreSync(params: {
             gameStateRef.current?.commandOwnerId === deviceId &&
             cloudData.commandOwnerId !== deviceId
           ) {
-            setMatchSettings(prev => ({ ...prev, isScoreboardMode: false, isWatchMode: false }));
+            setMatchSettings(prev => ({
+              ...prev,
+              isScoreboardMode: false,
+              isWatchMode: isWatchDevice() ? true : false,
+            }));
           }
           if (
             isWatchDevice() &&
@@ -1214,59 +1218,10 @@ export function useLiveFirestoreSync(params: {
           // ── Determina papel deste device ────────────────────────────────
           const isThisDeviceController = gameState.commandOwnerId === deviceId;
 
-          // Se este dispositivo NÃO é o controlador ativo:
-          // NUNCA escreve estado de jogo (pontos, games, sets, histórico, liveVersion).
-          // Se for o dono e houve mudança de regras/nomes, atualiza apenas os campos de configuração.
+          // Se este dispositivo NÃO é o controlador ativo, nunca escreve estado
+          // nem configuração da partida na live. A prioridade é local apenas
+          // fora da live ou quando este device é o controlador atual.
           if (!isThisDeviceController) {
-            const isOwnerByDeviceId = gameState.ownerDeviceId === deviceId;
-            const canWriteConfig = isOriginalOwner || isOwnerByDeviceId;
-            if (canWriteConfig) {
-              const prevStateStr = lastSentStateRef.current;
-              const prevState = prevStateStr ? JSON.parse(prevStateStr) : null;
-              const isConfigChange =
-                !prevState ||
-                prevState.p1?.name !== gameState.p1?.name ||
-                prevState.p2?.name !== gameState.p2?.name ||
-                prevState.p1?.color !== gameState.p1?.color ||
-                prevState.p2?.color !== gameState.p2?.color ||
-                prevState.matchConfig?.sportType !== gameState.matchConfig?.sportType ||
-                prevState.matchConfig?.sets !== gameState.matchConfig?.sets ||
-                prevState.matchConfig?.gamesPerSet !== gameState.matchConfig?.gamesPerSet ||
-                prevState.matchConfig?.noAd !== gameState.matchConfig?.noAd ||
-                prevState.matchConfig?.tieBreak !== gameState.matchConfig?.tieBreak ||
-                prevState.matchConfig?.tieBreakAt !== gameState.matchConfig?.tieBreakAt ||
-                prevState.matchConfig?.tieBreakPoints !== gameState.matchConfig?.tieBreakPoints ||
-                prevState.matchConfig?.tieBreakWinByTwo !== gameState.matchConfig?.tieBreakWinByTwo ||
-                prevState.matchConfig?.switchSidesOdd !== gameState.matchConfig?.switchSidesOdd ||
-                prevState.matchConfig?.tieBreakSideSwitchMode !==
-                  gameState.matchConfig?.tieBreakSideSwitchMode ||
-                prevState.matchConfig?.pickleballScoringMode !==
-                  gameState.matchConfig?.pickleballScoringMode ||
-                prevState.matchConfig?.pickleballServiceMode !==
-                  gameState.matchConfig?.pickleballServiceMode ||
-                prevState.matchConfig?.winnersStay !== gameState.matchConfig?.winnersStay ||
-                prevState.matchConfig?.isDoubles !== gameState.matchConfig?.isDoubles;
-
-              if (isConfigChange) {
-                const targetPin = resolveTargetPin('write');
-                if (targetPin) {
-                  const configUpdate = sanitizeForFirestore({
-                    matchConfig: gameState.matchConfig,
-                    'p1.name': gameState.p1.name,
-                    'p1.partnerName': gameState.p1.partnerName,
-                    'p1.color': gameState.p1.color,
-                    'p2.name': gameState.p2.name,
-                    'p2.partnerName': gameState.p2.partnerName,
-                    'p2.color': gameState.p2.color,
-                    lastActivityAt: Date.now(),
-                  });
-                  if (configUpdate) {
-                    updateDoc(doc(db, 'live_matches', targetPin), configUpdate).catch(() => {});
-                    lastSyncTimeRef.current = now;
-                  }
-                }
-              }
-            }
             return;
           }
 
@@ -1445,6 +1400,7 @@ export function useLiveFirestoreSync(params: {
   }, [fbSyncStatus, fbSyncTimerRef, setFbSyncStatus]);
 
   // ── Observer: entra em modo placar por padrão a cada nova live ───────────────
+  // No relógio, preserva o layout próprio do relógio mesmo quando está observando.
   // Aplica uma vez por live/entrada para não desfazer mudança manual do usuário.
   useEffect(() => {
     const observerLiveKey = targetListenPin || gameState?.ownerPin || null;
@@ -1454,9 +1410,10 @@ export function useLiveFirestoreSync(params: {
     if (livePapel === 'observer' && !thisDeviceIsController && cloudLiveExists && observerLiveKey) {
       if (observerScoreboardAppliedKeyRef.current === observerLiveKey) return;
       observerScoreboardAppliedKeyRef.current = observerLiveKey;
+      const watchObserver = isWatchDevice();
       setMatchSettings(prev => ({
         ...prev,
-        isWatchMode: false,
+        isWatchMode: watchObserver,
         isScoreboardMode: false,
       }));
       setGameState(prev => {
@@ -1465,7 +1422,7 @@ export function useLiveFirestoreSync(params: {
           ...prev,
           matchConfig: {
             ...prev.matchConfig,
-            isWatchMode: false,
+            isWatchMode: watchObserver,
             isScoreboardMode: false,
           },
         };

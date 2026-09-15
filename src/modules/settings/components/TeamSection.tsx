@@ -70,7 +70,7 @@ interface Props {
 
 export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ settings, setSettings, onStartMatch, onOpenPartners, onAutoRegisterPartner, userProfile, onJoinTournament }, ref) => {
   const { gameState } = useGame();
-  const { isOriginalOwner, isCurrentController, cloudLiveExists } = useLive();
+  const { isCurrentController, cloudLiveExists } = useLive();
   const { setModalConfig } = useUI();
 
   const isLiveActive = useMemo(() => {
@@ -78,8 +78,8 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
   }, [gameState?.isMirroringActive, cloudLiveExists]);
 
   const isReadOnly = useMemo(() => {
-    return isLiveActive && !isOriginalOwner && !isCurrentController;
-  }, [isLiveActive, isOriginalOwner, isCurrentController]);
+    return isLiveActive && !isCurrentController;
+  }, [isLiveActive, isCurrentController]);
 
   const [genders, setGenders] = useState<Record<string, Gender>>({
     p1: settings.p1Gender || 'M',

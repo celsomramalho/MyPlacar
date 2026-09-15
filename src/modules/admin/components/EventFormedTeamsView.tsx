@@ -28,6 +28,7 @@ import type { Firestore } from 'firebase/firestore';
 import type { FirebaseTournamentEvent } from '@infra/firebase/events';
 import { getCourtColors } from '../../../constants.ts';
 import { guessPartnerGender } from '@modules/partners/services/guessPartnerGender';
+import { QueueHeaderStats, CourtCard, QueueMatchCard } from './queue';
 
 interface Props {
   event: TournamentEvent;
@@ -35,116 +36,14 @@ interface Props {
   isReadOnly?: boolean;
 }
 
-const getMatchCodeLabel = (match: TournamentMatch) =>
-  match.matchCode || String(match.matchNumber || 1).padStart(2, '0');
-
-const COURT_TEAM_STYLES: Record<string, { bar: string; input: string; text: string; subText: string; wonInput: string }> = {
-  azul: {
-    bar: 'bg-[#0095ff] text-white',
-    input: 'bg-[#0055ff] text-white placeholder-white/50 border-2 border-black focus:bg-blue-600',
-    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
-    text: 'text-white',
-    subText: 'text-white/80',
-  },
-  vermelho: {
-    bar: 'bg-[#ff0055] text-white',
-    input: 'bg-[#cc0044] text-white placeholder-white/50 border-2 border-black focus:bg-red-600',
-    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
-    text: 'text-white',
-    subText: 'text-white/80',
-  },
-  amarelo: {
-    bar: 'bg-yellow-400 text-slate-900',
-    input: 'bg-yellow-300 text-slate-900 placeholder-slate-600 border-2 border-black focus:bg-yellow-200',
-    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
-    text: 'text-slate-900',
-    subText: 'text-slate-700',
-  },
-  lilas: {
-    bar: 'bg-violet-500 text-white',
-    input: 'bg-violet-700 text-white placeholder-white/50 border-2 border-black focus:bg-violet-600',
-    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
-    text: 'text-white',
-    subText: 'text-white/80',
-  },
-  laranja: {
-    bar: 'bg-orange-500 text-white',
-    input: 'bg-orange-700 text-white placeholder-white/50 border-2 border-black focus:bg-orange-600',
-    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
-    text: 'text-white',
-    subText: 'text-white/80',
-  },
-  verde: {
-    bar: 'bg-emerald-500 text-white',
-    input: 'bg-emerald-700 text-white placeholder-white/50 border-2 border-black focus:bg-emerald-600',
-    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
-    text: 'text-white',
-    subText: 'text-white/80',
-  },
-  marrom: {
-    bar: 'bg-amber-800 text-white',
-    input: 'bg-amber-950 text-white placeholder-white/50 border-2 border-black focus:bg-amber-900',
-    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
-    text: 'text-white',
-    subText: 'text-white/80',
-  },
-  roxo: {
-    bar: 'bg-purple-600 text-white',
-    input: 'bg-purple-800 text-white placeholder-white/50 border-2 border-black focus:bg-purple-700',
-    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
-    text: 'text-white',
-    subText: 'text-white/80',
-  },
-};
-
 const getPhaseLabel = (phase?: string) => {
   if (phase === 'chave1') return 'Chave 1';
   if (phase === 'chave2') return 'Chave 2';
   return phase || 'Jogo';
 };
 
-const MatchTimer: React.FC<{ startedAt?: string; averageMinutes?: number }> = ({ startedAt, averageMinutes }) => {
-  const [elapsed, setElapsed] = useState<number>(() => {
-    if (!startedAt) return 0;
-    const diff = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
-    return Math.max(0, isNaN(diff) ? 0 : diff);
-  });
-
-  useEffect(() => {
-    if (!startedAt) return;
-    const tick = () => {
-      const diff = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
-      setElapsed(Math.max(0, isNaN(diff) ? 0 : diff));
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [startedAt]);
-
-  const mins = Math.floor(elapsed / 60);
-  const secs = elapsed % 60;
-  const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  const isOvertime = averageMinutes && mins >= averageMinutes;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black font-mono border transition-all ${
-        isOvertime
-          ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse'
-          : 'bg-amber-100 text-amber-900 border-amber-300'
-      }`}
-      title={startedAt ? `Iniciado às ${new Date(startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Cronômetro'}
-    >
-      <Clock size={11} className={isOvertime ? 'text-rose-600' : 'text-amber-700'} />
-      <span>{timeStr}</span>
-      {averageMinutes && (
-        <span className="text-[9px] font-sans font-bold opacity-75">
-          (~{averageMinutes}m)
-        </span>
-      )}
-    </span>
-  );
-};
+const getMatchCodeLabel = (match: TournamentMatch) =>
+  match.matchCode || String(match.matchNumber || 1).padStart(2, '0');
 
 export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false }) => {
   const [selectedCourtForMatch, setSelectedCourtForMatch] = useState<string | null>(null);
@@ -818,53 +717,21 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
       {/* Header Geral do Gerenciamento de Fila */}
-      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="flex items-start gap-2.5 min-w-0">
-          <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-sm shrink-0 mt-0.5">
-            <Layers size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-black text-slate-800 tracking-tight whitespace-nowrap truncate">Gerenciar fila</h2>
-            <p className="text-xs text-slate-400 font-bold mt-0.5 whitespace-nowrap truncate">
-              Controle de quadras ao vivo e fila única dinâmica de partidas.
-            </p>
+      <QueueHeaderStats
+        visibleMatchesCount={visibleMatches.length}
+        totalPendingCount={totalPendingCount}
+        freeCourtsCount={freeCourtsCount}
+        busyCourtsCount={busyCourtsCount}
+        interdictedCourtsCount={interdictedCourtsCount}
+        totalCourtsCount={totalCourtsCount}
+        averageMatchDurationMinutes={averageMatchDurationMinutes}
+        isDurationEstimated={isDurationEstimated}
+        finishedMatchesCountWithDuration={finishedMatchesCountWithDuration}
+        nextCourtFreeWaitMinutes={nextCourtFreeWaitMinutes}
+        nextCourtFreeTimeStr={nextCourtFreeTimeStr}
+      />
 
-            {/* a) Volumetria logo abaixo do subtítulo */}
-            <p className="text-xs font-bold text-slate-500 mt-1.5">
-              Exibindo{' '}
-              <span className="font-black text-slate-700">{visibleMatches.length}</span>
-              {' '}de{' '}
-              <span className="font-black text-slate-700">{totalPendingCount}</span>
-              {' '}partidas pendentes na fila
-              {totalPendingCount > visibleMatches.length && (
-                <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
-                  +{totalPendingCount - visibleMatches.length} não exibidas
-                </span>
-              )}
-            </p>
-
-            {/* b) Indicativos de status das quadras abaixo da volumetria */}
-            <div className="flex items-center gap-2 flex-wrap mt-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                {freeCourtsCount} {freeCourtsCount === 1 ? 'Livre' : 'Livres'}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                {busyCourtsCount} {busyCourtsCount === 1 ? 'Ocupada' : 'Ocupadas'}
-              </span>
-              {interdictedCourtsCount > 0 && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-red-50 text-red-700 border border-red-200 whitespace-nowrap">
-                  <span className="w-2 h-2 rounded-full bg-red-500" />
-                  {interdictedCourtsCount} {interdictedCourtsCount === 1 ? 'Interditada' : 'Interditadas'}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SEÇÃO A: Status das Quadras (Uma quadra por linha, 100% dentro do container) */}
+      {/* SEÇÃO A: Status das Quadras */}
       <section className="space-y-3">
         <div className="flex items-center justify-between px-1 flex-wrap gap-2">
           <h3 className="text-sm font-black text-slate-800 tracking-wider whitespace-nowrap">
@@ -888,401 +755,34 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
-            {courtStates.map((court, index) => {
-              const isFree = court.status === 'free';
-              const isBusy = court.status === 'busy';
-              const isInterdicted = court.status === 'interdicted';
-
-              const activeMatch = court.activeMatch;
-              const activeCat = court.activeMatchCategory;
-
-              const p1 = activeMatch ? activeMatch.pair1 || (activeMatch.pair1Id && pairsById ? pairsById[activeMatch.pair1Id] : undefined) : undefined;
-              const p2 = activeMatch ? activeMatch.pair2 || (activeMatch.pair2Id && pairsById ? pairsById[activeMatch.pair2Id] : undefined) : undefined;
-
-              const team1P1Name = p1?.p1 ? getPlayerNick(p1.p1) : '';
-              const team1P2Name = p1?.p2 ? getPlayerNick(p1.p2) : undefined;
-              const team1Name = p1 ? (team1P2Name ? `${team1P1Name} & ${team1P2Name}` : team1P1Name) : activeMatch?.pair1Label || 'Time 1';
-              const team1Code = p1 ? (p1.teamCode || `Time ${p1.teamNumber || ''}`) : '';
-
-              const team2P1Name = p2?.p1 ? getPlayerNick(p2.p1) : '';
-              const team2P2Name = p2?.p2 ? getPlayerNick(p2.p2) : undefined;
-              const team2Name = p2 ? (team2P2Name ? `${team2P1Name} & ${team2P2Name}` : team2P1Name) : activeMatch?.pair2Label || 'Time 2';
-              const team2Code = p2 ? (p2.teamCode || `Time ${p2.teamNumber || ''}`) : '';
-
-              const parsedSets = activeMatch ? parseMatchSets(activeMatch, totalSets) : { scores: [], setsWon1: 0, setsWon2: 0 };
-              const { scores, setsWon1, setsWon2 } = parsedSets;
-              const matchCodeLabel = activeMatch ? getMatchCodeLabel(activeMatch) : '';
-              const phaseLabel = activeMatch ? getPhaseLabel(activeMatch.phase) : '';
-
-              const courtColors = getCourtColors(court.courtName || index);
-              const t1Style = COURT_TEAM_STYLES[courtColors.p1Color] || COURT_TEAM_STYLES.azul;
-              const t2Style = COURT_TEAM_STYLES[courtColors.p2Color] || COURT_TEAM_STYLES.vermelho;
-
-              return (
-                <div
-                  key={index}
-                  className={`rounded-3xl border shadow-sm p-4 flex flex-col gap-2.5 transition-all overflow-hidden ${
-                    isFree
-                      ? 'bg-white border-emerald-200 hover:border-emerald-400'
-                      : isBusy
-                      ? 'bg-amber-50/40 border-amber-200 hover:border-amber-400'
-                      : 'bg-red-50/40 border-red-200'
-                  }`}
-                >
-                  {/* Linha Superior da Quadra: Identificação e Status */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                          isFree
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : isBusy
-                            ? 'bg-amber-200 text-amber-800'
-                            : 'bg-red-200 text-red-700'
-                        }`}
-                      >
-                        <Layers size={16} />
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <h4 className="text-sm font-black text-slate-800 tracking-tight whitespace-nowrap">
-                          {court.courtName}
-                        </h4>
-                        {isFree && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black border bg-emerald-100 text-emerald-800 border-emerald-300 whitespace-nowrap">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Livre
-                          </span>
-                        )}
-                        {isBusy && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black border bg-amber-100 text-amber-900 border-amber-300 whitespace-nowrap">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                            Ocupada (Ao vivo)
-                          </span>
-                        )}
-                        {isBusy && activeMatch && (
-                          <MatchTimer
-                            startedAt={activeMatch.startedAt}
-                            averageMinutes={averageMatchDurationMinutes}
-                          />
-                        )}
-                        {isInterdicted && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black border bg-red-100 text-red-800 border-red-300 whitespace-nowrap">
-                            <Ban size={10} />
-                            Interditada
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Botões de Ação: layout em 3 colunas (esq | centro | dir) */}
-                    <div className="flex items-center w-full mt-2 gap-2">
-                      {/* Esquerda: Voltar para fila (só quando ocupada) */}
-                      <div className="flex-1 flex justify-start">
-                        {isBusy && activeMatch && (
-                          <button
-                            type="button"
-                            disabled={isReadOnly}
-                            onClick={() => handleFreeCourtMatch(activeMatch.id, false)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 active:scale-95 text-slate-600 font-black text-xs rounded-xl border border-slate-200 transition-all whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                            title="Desvincular da quadra e devolver para a fila de espera"
-                          >
-                            <ArrowLeft size={13} />
-                            Voltar para fila
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Centro: Play (só quando ocupada) */}
-                      <div className="flex justify-center shrink-0">
-                        {isBusy && activeMatch && (
-                          <button
-                            type="button"
-                            disabled={isReadOnly}
-                            onClick={() => handleOpenMatchRules(activeMatch)}
-                            className="w-9 h-9 bg-[#fff8e6] hover:bg-emerald-50 active:scale-95 text-emerald-500 rounded-xl transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                            title="Abrir regras com os jogadores desta partida"
-                          >
-                            <Play size={18} className="fill-emerald-500" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Direita: Interditar */}
-                      <div className="flex-1 flex justify-end">
-                        <button
-                          type="button"
-                          disabled={isReadOnly}
-                          onClick={() => handleToggleInterdictCourt(court.courtName)}
-                          className={`flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl border transition-all active:scale-95 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none ${
-                            isInterdicted
-                              ? 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'
-                              : 'bg-white text-slate-500 border-slate-200 hover:text-red-600 hover:border-red-200'
-                          }`}
-                          title={isInterdicted ? 'Liberar quadra para jogos' : 'Interditar esta quadra'}
-                        >
-                          {isInterdicted ? <ShieldOff size={13} /> : <ShieldAlert size={13} />}
-                          {isInterdicted ? 'Desinterditar' : 'Interditar'}
-                        </button>
-                      </div>
-                    </div>
-
-                  {/* Linha Inferior da Quadra: Dados da Partida em Andamento e Placar Editável */}
-                  {isBusy && activeMatch && (
-                    <div className="mt-1 p-3 bg-white/95 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
-                      {/* a) Abreviação da categoria + fase + início */}
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="inline-flex items-center text-[10px] font-black text-slate-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg whitespace-nowrap">
-                            {activeCat?.abbreviation || activeCat?.name || ''}
-                            {activeCat && ' · '}
-                            {phaseLabel}
-                          </span>
-                          {activeMatch.startedAt && (
-                            <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
-                              Início: {new Date(activeMatch.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs font-black text-slate-800 whitespace-nowrap">
-                            [{matchCodeLabel}] {phaseLabel ? `[${phaseLabel}]` : ''}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRefreshEventScore(activeMatch.id)}
-                            disabled={refreshingMatchId === activeMatch.id}
-                            className="w-8 h-8 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-blue-600 active:scale-95 transition-all flex items-center justify-center disabled:opacity-60"
-                            title="Atualizar placar"
-                          >
-                            <RefreshCw size={14} className={refreshingMatchId === activeMatch.id ? 'animate-spin' : ''} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Placar e Nomes dos Times: Com destaque nas cores da quadra (Time 1 e Time 2) */}
-                      {totalSets === 1 ? (
-                        /* Layout para 1 Set com Destaque nas Cores dos Times */
-                        <div className="space-y-2">
-                          {/* Time 1 Bar */}
-                          <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar}`}>
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
-                                {team1Name}
-                              </p>
-                              {team1Code && (
-                                <p className={`text-xs font-bold ${t1Style.subText}`}>
-                                  [{team1Code}]
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                maxLength={2}
-                                disabled={isReadOnly}
-                                readOnly={isReadOnly}
-                                value={scores[0]?.p1 !== null && scores[0]?.p1 !== undefined ? scores[0].p1 : ''}
-                                onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p1', e.target.value)}
-                                onBlur={handleScoreBlur}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-                                  !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) >= gamesPerSet && Number(scores[0].p1) > Number(scores[0].p2)
-                                    ? t1Style.wonInput
-                                    : t1Style.input
-                                }`}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Time 2 Bar */}
-                          <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar}`}>
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
-                                {team2Name}
-                              </p>
-                              {team2Code && (
-                                <p className={`text-xs font-bold ${t2Style.subText}`}>
-                                  [{team2Code}]
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                maxLength={2}
-                                disabled={isReadOnly}
-                                readOnly={isReadOnly}
-                                value={scores[0]?.p2 !== null && scores[0]?.p2 !== undefined ? scores[0].p2 : ''}
-                                onChange={(e) => handleScoreInputChange(activeMatch.id, 0, 'p2', e.target.value)}
-                                onBlur={handleScoreBlur}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-                                  !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) >= gamesPerSet && Number(scores[0].p2) > Number(scores[0].p1)
-                                    ? t2Style.wonInput
-                                    : t2Style.input
-                                }`}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        /* Layout para Mais de 1 Set com Destaque nas Cores dos Times */
-                        <div className="space-y-2">
-                          {/* Time 1 Bar */}
-                          <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar}`}>
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
-                                {team1Name}
-                              </p>
-                              {team1Code && (
-                                <p className={`text-xs font-bold ${t1Style.subText}`}>
-                                  [{team1Code}]
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className={`w-5 text-center text-sm font-black ${t1Style.text}`}>
-                                {setsWon1}
-                              </span>
-                              {scores.map((setScore, setIdx) => {
-                                const isSetWon =
-                                  !setScore.inProgress &&
-                                  setScore.p1 !== null &&
-                                  setScore.p1 !== undefined &&
-                                  setScore.p2 !== null &&
-                                  setScore.p2 !== undefined &&
-                                  Number(setScore.p1) >= gamesPerSet &&
-                                  Number(setScore.p1) > Number(setScore.p2);
-
-                                return (
-                                  <input
-                                    key={`p1_set_${setIdx}`}
-                                    type="text"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    maxLength={2}
-                                    disabled={isReadOnly}
-                                    readOnly={isReadOnly}
-                                    value={setScore.p1 !== null && setScore.p1 !== undefined ? setScore.p1 : ''}
-                                    onChange={(e) =>
-                                      handleScoreInputChange(activeMatch.id, setIdx, 'p1', e.target.value)
-                                    }
-                                    onBlur={handleScoreBlur}
-                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-                                      isSetWon
-                                        ? t1Style.wonInput
-                                        : t1Style.input
-                                    }`}
-                                  />
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Time 2 Bar */}
-                          <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar}`}>
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
-                                {team2Name}
-                              </p>
-                              {team2Code && (
-                                <p className={`text-xs font-bold ${t2Style.subText}`}>
-                                  [{team2Code}]
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className={`w-5 text-center text-sm font-black ${t2Style.text}`}>
-                                {setsWon2}
-                              </span>
-                              {scores.map((setScore, setIdx) => {
-                                const isSetWon =
-                                  !setScore.inProgress &&
-                                  setScore.p1 !== null &&
-                                  setScore.p1 !== undefined &&
-                                  setScore.p2 !== null &&
-                                  setScore.p2 !== undefined &&
-                                  Number(setScore.p2) >= gamesPerSet &&
-                                  Number(setScore.p2) > Number(setScore.p1);
-
-                                return (
-                                  <input
-                                    key={`p2_set_${setIdx}`}
-                                    type="text"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    maxLength={2}
-                                    disabled={isReadOnly}
-                                    readOnly={isReadOnly}
-                                    value={setScore.p2 !== null && setScore.p2 !== undefined ? setScore.p2 : ''}
-                                    onChange={(e) =>
-                                      handleScoreInputChange(activeMatch.id, setIdx, 'p2', e.target.value)
-                                    }
-                                    onBlur={handleScoreBlur}
-                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-                                      isSetWon
-                                        ? t2Style.wonInput
-                                        : t2Style.input
-                                    }`}
-                                  />
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Campo de data + Botão Finalizar partida — abaixo do placar, largura total */}
-                      <div className="pt-2 border-t border-amber-100 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
-                            <Calendar size={13} className="text-sky-600" /> Data da partida:
-                          </label>
-                          <input
-                            type="date"
-                            value={activeMatch.matchDate || ''}
-                            disabled={isReadOnly}
-                            onClick={(e) => {
-                              try { (e.target as any).showPicker?.(); } catch {}
-                            }}
-                            onChange={(e) => handleMatchDateChange(activeMatch.id, e.target.value)}
-                            className="flex-1 h-9 text-xs font-bold bg-slate-50 border-2 border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl outline-none px-3 text-slate-700 cursor-pointer disabled:opacity-40"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          disabled={isReadOnly}
-                          onClick={() => handleFinishCourtMatchWithValidation(activeMatch.id)}
-                          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                          title="Registrar placar final e liberar a quadra"
-                        >
-                          <Check size={14} />
-                          Finalizar partida
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {isFree && (
-                    <p className="text-xs font-bold text-slate-400 whitespace-nowrap truncate">
-                      Aguardando chamada de jogos · Quadra pronta para receber a próxima partida.
-                    </p>
-                  )}
-
-                  {isInterdicted && (
-                    <p className="text-xs font-black text-red-700 whitespace-nowrap truncate">
-                      Quadra interditada para manutenção ou indisponível para jogos.
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+            {courtStates.map((court, index) => (
+              <CourtCard
+                key={court.courtName || index}
+                court={court}
+                index={index}
+                isReadOnly={isReadOnly}
+                pairsById={pairsById}
+                totalSets={totalSets}
+                gamesPerSet={gamesPerSet}
+                averageMatchDurationMinutes={averageMatchDurationMinutes}
+                refreshingMatchId={refreshingMatchId}
+                getPlayerNick={getPlayerNick}
+                parseMatchSets={parseMatchSets}
+                onFreeCourtMatch={handleFreeCourtMatch}
+                onOpenMatchRules={handleOpenMatchRules}
+                onToggleInterdictCourt={handleToggleInterdictCourt}
+                onRefreshEventScore={handleRefreshEventScore}
+                onScoreInputChange={handleScoreInputChange}
+                onScoreBlur={handleScoreBlur}
+                onMatchDateChange={handleMatchDateChange}
+                onFinishCourtMatch={handleFinishCourtMatchWithValidation}
+              />
+            ))}
           </div>
         )}
       </section>
 
-      {/* SEÇÃO B, C, D: Fila Única Dinâmica de Partidas (Ordenada por cor: Verde -> Amarela -> Vermelha) */}
+      {/* SEÇÃO B, C, D: Fila Única Dinâmica de Partidas */}
       <section className="space-y-4 pt-4 border-t border-slate-200">
         <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           <div>
@@ -1294,7 +794,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
               Ordenação por status de cor (Verde, Amarela, Vermelha) e prioridade de categorias.
             </p>
 
-            {/* c) Legenda dos Status da Fila e Estimativas de Tempo */}
+            {/* Legenda dos Status da Fila e Estimativas de Tempo */}
             <div className="flex items-center gap-2 flex-wrap mt-2">
               <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -1338,223 +838,25 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
           </div>
         ) : (
           <div className="space-y-3">
-            {visibleMatches.map((item, queueIndex) => {
-              const { match, category, queueStatus, conflictReason, pair1Name, pair2Name, phaseLabel } = item;
-
-              const isGreen = queueStatus === 'green';
-              const isYellow = queueStatus === 'yellow';
-              const isRed = queueStatus === 'red';
-
-              const isSelectingCourt = activeSelectMatchId === match.id;
-
-              return (
-                <div
-                  key={match.id}
-                  className={`p-4 rounded-3xl border-2 transition-all shadow-xs space-y-3 overflow-hidden ${
-                    isGreen
-                      ? 'bg-emerald-50/40 border-emerald-300'
-                      : isYellow
-                      ? 'bg-amber-50/30 border-amber-300'
-                      : isRed
-                      ? 'bg-red-50/30 border-red-300'
-                      : 'bg-white border-slate-200'
-                  }`}
-                >
-                  {/* Linha do TOPO: Número da partida, Badges e BOTÕES à direita */}
-                  <div className="flex items-center justify-between gap-3 w-full flex-wrap">
-                    {/* Informações da Partida no Topo */}
-                    <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                      {/* Posição na Fila */}
-                      <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 whitespace-nowrap ${
-                          isGreen
-                            ? 'bg-emerald-500 text-white shadow-xs'
-                            : isYellow
-                            ? 'bg-amber-500 text-white shadow-xs'
-                            : isRed
-                            ? 'bg-red-500 text-white shadow-xs'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        #{queueIndex + 1}
-                      </div>
-
-                      {/* Código e Fase */}
-                      <span className="text-xs font-black text-slate-800 whitespace-nowrap shrink-0">
-                        [{match.matchCode || String(match.matchNumber || queueIndex + 1).padStart(2, '0')}]
-                        {phaseLabel ? ` [${phaseLabel}]` : ''}
-                      </span>
-
-                      {/* Categoria e Prioridade */}
-                      {category && (
-                        <span className="text-[10px] font-black text-slate-600 bg-white/90 border border-slate-200 px-2 py-0.5 rounded-lg whitespace-nowrap shrink-0">
-                          {category.name} (Prio {category.priority ?? 1})
-                        </span>
-                      )}
-
-                      {/* Badge de Status da Fila (Regra D) */}
-                      {isGreen && (
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap shrink-0">
-                          Pronta para Quadra
-                        </span>
-                      )}
-                      {isYellow && (
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap shrink-0">
-                          Aguardando Chamada
-                        </span>
-                      )}
-                      {isRed && (
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 whitespace-nowrap shrink-0">
-                          <AlertTriangle size={10} />
-                          {conflictReason
-                            ? conflictReason.includes('fase anterior')
-                              ? 'Aguardando Fase'
-                              : 'Conflito de Jogador'
-                            : 'Congelada'}
-                        </span>
-                      )}
-
-                      {/* Estimativa de Chamada para Jogar */}
-                      {!isRed && (
-                        item.estimatedWaitMinutes === 0 ? (
-                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 whitespace-nowrap shrink-0">
-                            <Zap size={10} className="fill-emerald-600 text-emerald-600" />
-                            Chamada Imediata
-                          </span>
-                        ) : item.estimatedWaitMinutes !== undefined ? (
-                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-300 flex items-center gap-1 whitespace-nowrap shrink-0">
-                            <Clock size={10} />
-                            Previsão: em ~{item.estimatedWaitMinutes} min (~{item.estimatedCallTimeStr})
-                          </span>
-                        ) : null
-                      )}
-                    </div>
-
-                    {/* BOTÕES NO TOPO: Congelar acima, Quadra abaixo (coluna) */}
-                    <div className="flex flex-col items-stretch gap-1.5 shrink-0 min-w-[100px]">
-                      {/* Botão Congelar / Descongelar */}
-                      <button
-                        type="button"
-                        disabled={isReadOnly}
-                        onClick={() => handleToggleFreezeMatch(match.id)}
-                        className={`px-3 py-1.5 rounded-2xl text-xs font-black border transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none ${
-                          match.frozen
-                            ? 'bg-red-500 text-white border-red-600 shadow-xs'
-                            : 'bg-white text-slate-600 border-slate-200 hover:border-red-300 hover:text-red-600'
-                        }`}
-                        title={match.frozen ? 'Descongelar esta partida' : 'Congelar esta partida'}
-                      >
-                        <Snowflake size={13} />
-                        <span>{match.frozen ? 'Congelado' : 'Congelar'}</span>
-                      </button>
-
-                      {/* Botão Quadra */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isReadOnly || isRed) return;
-                          if (freeCourts.length === 0) {
-                            window.alert('Não há quadras livres disponíveis no momento.');
-                            return;
-                          }
-                          if (freeCourts.length === 1) {
-                            handleAssignMatchToCourt(match.id, freeCourts[0]);
-                          } else {
-                            setActiveSelectMatchId(isSelectingCourt ? null : match.id);
-                          }
-                        }}
-                        disabled={isReadOnly || freeCourts.length === 0 || isRed}
-                        className={`px-3.5 py-1.5 rounded-2xl text-xs font-black transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap ${
-                          isSelectingCourt
-                            ? 'bg-slate-200 text-slate-700 border border-slate-300'
-                            : (isReadOnly || isRed)
-                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 opacity-60'
-                            : freeCourts.length > 0
-                            ? isGreen
-                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                              : 'bg-blue-600 hover:bg-blue-700 text-white'
-                            : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                        }`}
-                        title={
-                          isRed
-                            ? (conflictReason || 'Partida bloqueada ou congelada')
-                            : freeCourts.length > 0
-                            ? 'Vincular esta partida a uma quadra livre'
-                            : 'Nenhuma quadra livre disponível'
-                        }
-                      >
-                        <Play size={12} className="fill-current" />
-                        <span>Quadra</span>
-                        {!isRed && freeCourts.length > 1 && (
-                          <ChevronDown
-                            size={12}
-                            className={isSelectingCourt ? 'rotate-180 transition-transform' : 'transition-transform'}
-                          />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Dropdown de seleção de quadra — expande abaixo do cabeçalho do card */}
-                  {isSelectingCourt && (
-                    <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden">
-                      {freeCourts.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => handleAssignMatchToCourt(match.id, c)}
-                          className="w-full text-left px-4 py-2.5 text-xs font-black text-slate-800 hover:bg-emerald-50 hover:text-emerald-800 transition-colors border-b border-slate-100 last:border-b-0 flex items-center gap-2"
-                        >
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                          {c}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setActiveSelectMatchId(null)}
-                        className="w-full text-center px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Linha Abaixo do Topo: Nomes dos Times ocupando toda a linha */}
-                  <div className="text-xs font-black text-slate-800 space-y-1 w-full">
-                    <p className="whitespace-nowrap truncate w-full">
-                      {pair1Name}{' '}
-                      {match.pair1?.teamCode && (
-                        <span className="text-[10px] text-slate-400 font-bold">
-                          [{match.pair1.teamCode}]
-                        </span>
-                      )}
-                    </p>
-                    <p className="whitespace-nowrap truncate w-full">
-                      {pair2Name}{' '}
-                      {match.pair2?.teamCode && (
-                        <span className="text-[10px] text-slate-400 font-bold">
-                          [{match.pair2.teamCode}]
-                        </span>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Alerta de Conflito de Jogador sem quebra de linha */}
-                  {conflictReason && (
-                    <div className="pt-1 border-t border-red-200/60">
-                      <p className="text-[11px] text-red-700 font-black flex items-center gap-1.5 whitespace-nowrap truncate w-full">
-                        <AlertCircle size={13} className="shrink-0 text-red-600" />
-                        <span>{conflictReason}</span>
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {visibleMatches.map((item, queueIndex) => (
+              <QueueMatchCard
+                key={item.match.id}
+                item={item}
+                queueIndex={queueIndex}
+                freeCourts={freeCourts}
+                isReadOnly={isReadOnly}
+                isSelectingCourt={activeSelectMatchId === item.match.id}
+                onToggleFreezeMatch={handleToggleFreezeMatch}
+                onToggleSelectCourt={(matchId) =>
+                  setActiveSelectMatchId((prev) => (prev === matchId ? null : matchId))
+                }
+                onAssignMatchToCourt={handleAssignMatchToCourt}
+              />
+            ))}
           </div>
         )}
 
-        {/* Indicador de Volumetria (Regra C) */}
+        {/* Indicador de Volumetria */}
         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-wrap items-center justify-center gap-3">
           <span className="text-xs font-bold text-slate-500">
             Exibindo{' '}
@@ -1568,13 +870,9 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
               +{totalPendingCount - visibleMatches.length} não exibidas (limite de visualização)
             </span>
           )}
-          {totalPendingCount === 0 && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-              Fila limpa ✓
-            </span>
-          )}
         </div>
       </section>
-    </div>
+
+      </div>
   );
 };

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, Trash2, Upload, Users } from 'lucide-react';
+import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, QrCode, Trash2, Upload, Users } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { findUserByPin, getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
+import { createMercadoPagoPreference } from '../services/mercadoPagoCheckout';
 import {
   formatRegistrationId,
   getNextRegistrationId,
@@ -133,6 +134,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const isRanking = event.eventType === 'Ranking';
   const isSinglePlayer = isSuper8 || isRanking;
   const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
+  const usesAutomaticPayment = event.paymentType === 'mercadopago';
+  const [isPayingPix, setIsPayingPix] = useState(false);
+  const [showManualAdminPayment, setShowManualAdminPayment] = useState(false);
+  const canUseManualPaymentForm = !usesAutomaticPayment || (isAdmin && showManualAdminPayment);
 
   React.useEffect(() => {
     if (!canEditIdentity) return;
@@ -190,11 +195,13 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const pendingAmount = Math.max(0, effectiveDueAmount - totalPaid);
 
   React.useEffect(() => {
-    if (!editingPaymentId) {
+    if (!editingPaymentId && canUseManualPaymentForm) {
       const diff = Math.max(0, effectiveDueAmount - totalPaid);
       setNewAmount(diff > 0 ? diff.toFixed(2) : '');
+    } else if (!canUseManualPaymentForm) {
+      setNewAmount('');
     }
-  }, [categoryIds, payments, effectiveDueAmount, totalPaid, editingPaymentId]);
+  }, [categoryIds, payments, effectiveDueAmount, totalPaid, editingPaymentId, canUseManualPaymentForm]);
 
   const pairForCategory = (categoryId: string) => event.pairs?.find((pair) => {
     const isEntryPair = pair.p1.email === entry.email || pair.p2.email === entry.email || pair.p1.pin === entry.pin || pair.p2.pin === entry.pin;
@@ -333,7 +340,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const initialCategoryIds = useMemo(() => entry.categoryIds || [], [entry.categoryIds]);
 
-  const save = async (nextPayments: PaymentItem[] = payments) => {
+  const save = async (nextPayments: PaymentItem[] = payments, skipFeedback = false): Promise<TournamentEntry | null> => {
     const trimmedName = name.trim();
     const trimmedNickname = nickname.trim();
     const trimmedEmail = email.trim();
@@ -341,19 +348,19 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
     if (isAdmin && !trimmedName) {
       setFeedback('Informe o nome do jogador antes de salvar.');
-      return;
+      return null;
     }
     if (!trimmedNickname) {
       setFeedback('Informe como quer ser chamado (apelido) antes de salvar.');
-      return;
+      return null;
     }
     if (!trimmedEmail) {
       setFeedback('Informe o e-mail antes de salvar.');
-      return;
+      return null;
     }
     if (!cleanPhone) {
       setFeedback('Informe o telefone.');
-      return;
+      return null;
     }
     // Validação de duplicidade: não permitir que o mesmo usuário se inscreva 2 vezes no mesmo evento
     if (canEditIdentity) {
@@ -367,14 +374,14 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
       if (alreadyRegistered) {
         setFeedback('Este participante já está inscrito neste evento.');
-        return;
+        return null;
       }
     }
 
     const effectiveCategoryIds = categoryIds.filter((catId) => availableCategories.some((c) => c.id === catId));
     if (effectiveCategoryIds.length === 0) {
       setFeedback('É obrigatório selecionar pelo menos uma categoria para a inscrição.');
-      return;
+      return null;
     }
 
     for (const catId of effectiveCategoryIds) {
@@ -388,22 +395,22 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         const msg = `Informe os dados do parceiro para ${cat.abbreviation || cat.name}.`;
         setFeedback(msg);
         setExpandedPartnerCategoryIds((prev) => new Set(prev).add(cat.id));
-        return;
+        return null;
       }
     }
 
     const parsedAmount = Number(newAmount.replace(',', '.'));
-    const willAddPayment = Boolean(parsedAmount && parsedAmount > 0);
+    const willAddPayment = canUseManualPaymentForm && Boolean(parsedAmount && parsedAmount > 0);
     const hasReceipt = Boolean(newReceipt?.url || (editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.receiptUrl));
 
-    if (willAddPayment && !hasReceipt) {
+    if (willAddPayment && !hasReceipt && !isAdmin) {
       setFeedback('O comprovante é obrigatório para registrar o pagamento.');
-      return;
+      return null;
     }
 
     let paymentsToSave = nextPayments;
     let addedPaymentItem: PaymentItem | null = null;
-    if (willAddPayment && hasReceipt) {
+    if (willAddPayment && (hasReceipt || isAdmin)) {
       const date = new Date(`${newDate}T12:00:00`).getTime();
       if (editingPaymentId) {
         paymentsToSave = paymentsToSave.map((payment) => {
@@ -430,15 +437,16 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     }
 
     const totalPaymentsCount = paymentsToSave.length;
-    if (effectiveDueAmount > 0 && paymentStatus !== 'Isento' && totalPaymentsCount === 0) {
+    // Comprovante manual só é obrigatório para eventos manuais; evento Pix do Mercado Pago é gerado online
+    if (!usesAutomaticPayment && canUseManualPaymentForm && effectiveDueAmount > 0 && paymentStatus !== 'Isento' && totalPaymentsCount === 0) {
       setFeedback('É obrigatório informar o pagamento e anexar o comprovante para realizar a inscrição.');
-      return;
+      return null;
     }
 
     setIsSaving(true);
     setFeedback(null);
     try {
-      if (willAddPayment && hasReceipt) {
+      if (willAddPayment && (hasReceipt || isAdmin)) {
         setPayments(paymentsToSave);
         setNewAmount('');
         setNewReceipt(null);
@@ -448,7 +456,9 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       const cleanEntry = buildEntry(paymentsToSave, effectiveCategoryIds);
       const jsonClean = JSON.parse(JSON.stringify(cleanEntry));
       await onSave(jsonClean);
-      setFeedback('✓ Inscrição salva com sucesso!');
+      if (!skipFeedback) {
+        setFeedback('✓ Inscrição salva com sucesso!');
+      }
 
       // Sincroniza o telefone e o gênero com o cadastro do usuário (perfil)
       if (cleanEntry.email) {
@@ -507,6 +517,8 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           void eventNotificationService.notifyRegistrationConfirmed(db as Firestore, event, cleanEntry);
         }
       }
+
+      return jsonClean;
     } catch (error) {
       console.error('Erro ao salvar inscrição:', error);
       const failure = error as { code?: string; message?: string };
@@ -516,8 +528,42 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           ? 'Já existe uma inscrição com este PIN ou e-mail.'
           : failure.message || 'Não foi possível salvar a inscrição. Confira os campos obrigatórios.';
       setFeedback(message);
+      return null;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePayViaPix = async () => {
+    if (isSaving || isPayingPix) return;
+    setIsPayingPix(true);
+    setFeedback(null);
+    try {
+      // 1. Salva a inscrição (com validação completa) antes de gerar o pagamento
+      const savedEntry = await save(payments, true);
+      if (!savedEntry) {
+        setIsPayingPix(false);
+        return;
+      }
+
+      // 2. Chama a API do Mercado Pago para gerar a preferência do Pix
+      const targetEmail = (savedEntry.email || email).toLowerCase().trim();
+      const checkout = await createMercadoPagoPreference({
+        eventPin: event.pin,
+        entryEmail: targetEmail,
+      });
+
+      const redirectUrl = checkout.initPoint || checkout.sandboxInitPoint;
+      if (redirectUrl) {
+        window.location.href = redirectUrl;
+      } else {
+        throw new Error('Não foi possível gerar o link de pagamento do Pix.');
+      }
+    } catch (err) {
+      console.error('Erro ao iniciar pagamento Pix:', err);
+      const msg = err instanceof Error ? err.message : 'Erro ao iniciar pagamento Pix.';
+      setFeedback(msg);
+      setIsPayingPix(false);
     }
   };
 
@@ -659,13 +705,9 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     {!isFreeEvent && (
       <div className="grid grid-cols-2 gap-2">
         <Field label="Valor devido">
-          <input
-            type="number"
-            value={effectiveDueAmount}
-            disabled={!isAdmin}
-            onChange={(e) => setDueAmount(Number(e.target.value))}
-            className="event-registration-field"
-          />
+          <div className="event-registration-readonly">
+            R$ {effectiveDueAmount.toFixed(2)}
+          </div>
         </Field>
         <Field label="Valor pendente">
           <div className="event-registration-readonly text-amber-600">
@@ -756,16 +798,116 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       );
     })}</div></Field>
 
-    {!isFreeEvent && (
+    {/* Bloco de Pagamento Automático Pix (Mercado Pago) */}
+    {!isFreeEvent && usesAutomaticPayment && (
+      <div className="border border-emerald-200 rounded-3xl p-5 bg-gradient-to-b from-emerald-50/80 to-white space-y-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-sm shrink-0">
+              <QrCode size={18} />
+            </div>
+            <div>
+              <span className="text-xs font-black text-slate-800 block">Pagamento da Inscrição</span>
+              <span className="text-[10px] font-bold text-emerald-700">Exclusivo via Pix (Mercado Pago)</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] font-bold text-slate-400 block">Total a pagar</span>
+            <span className="text-sm font-black text-emerald-600">R$ {pendingAmount.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {pendingAmount > 0 ? (
+          <div className="space-y-3">
+            <p className="text-[11px] font-medium text-slate-600 leading-relaxed bg-white/90 p-3 rounded-2xl border border-emerald-100">
+              ⚡ O pagamento é confirmado <strong>automaticamente</strong> em segundos após a leitura do Pix. Não precisa anexar comprovante.
+            </p>
+
+            <button
+              type="button"
+              onClick={handlePayViaPix}
+              disabled={isSaving || isPayingPix}
+              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-60"
+            >
+              {isPayingPix ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Iniciando pagamento Pix...</span>
+                </>
+              ) : (
+                <>
+                  <QrCode size={16} />
+                  <span>Pagar R$ {pendingAmount.toFixed(2)} via PIX</span>
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="p-3.5 bg-emerald-100/70 border border-emerald-200 rounded-2xl flex items-center gap-2.5 text-xs font-black text-emerald-800">
+            <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+            <span>Inscrição com pagamento quitado (R$ {totalPaid.toFixed(2)})</span>
+          </div>
+        )}
+
+        {/* Histórico de pagamentos já registrados */}
+        {payments.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-slate-100">
+            <p className="text-[10px] font-black text-slate-400">Histórico de pagamentos confirmados</p>
+            {payments.map((payment) => (
+              <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold">
+                <div className="flex items-center gap-2.5 text-left">
+                  <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-700">{new Date(payment.date).toLocaleDateString('pt-BR')}</span>
+                      <span className="text-emerald-600 font-black">R$ {payment.amount.toFixed(2)}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {payment.receiptFileName || (payment.provider === 'mercadopago' ? 'Pix Mercado Pago' : 'Comprovante')}
+                    </span>
+                  </div>
+                </div>
+                {isAdmin && (
+                  <button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500 p-1 hover:bg-red-50 rounded-lg" title="Excluir pagamento">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Opção administrativa para lançar pagamento manual se o admin desejar */}
+        {isAdmin && !showManualAdminPayment && (
+          <div className="text-center pt-1">
+            <button
+              type="button"
+              onClick={() => setShowManualAdminPayment(true)}
+              className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer"
+            >
+              + Registrar pagamento manual em dinheiro (Admin)
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Bloco de Pagamento Manual (Eventos manuais ou lançamento de admin) */}
+    {!isFreeEvent && canUseManualPaymentForm && (
       <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-4">
-        <div className="flex items-center justify-between"><span className="text-xs font-black text-slate-700">Pagamentos</span><span className="text-xs font-black text-emerald-600">Total pago: R$ {totalPaid.toFixed(2)}</span></div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black text-slate-700">
+            {usesAutomaticPayment ? 'Lançamento Manual de Pagamento (Admin)' : 'Pagamentos'}
+          </span>
+          <span className="text-xs font-black text-emerald-600">Total pago: R$ {totalPaid.toFixed(2)}</span>
+        </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black text-slate-500">{editingPaymentId ? 'Editar pagamento' : 'Novo pagamento'}</span>
             <button
               type="button"
               onClick={addPayment}
-              disabled={!newAmount || (!newReceipt && (!editingPaymentId || !payments.find((p) => p.id === editingPaymentId)?.receiptUrl)) || isSaving}
+              disabled={!newAmount || (!newReceipt && (!editingPaymentId || !payments.find((p) => p.id === editingPaymentId)?.receiptUrl) && !isAdmin) || isSaving}
               className="px-4 py-2 bg-emerald-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 disabled:opacity-50 active:scale-95 transition-all"
             >
               <DollarSign size={14} /> {editingPaymentId ? 'Salvar pagamento' : 'Adicionar pagamento'}
@@ -785,11 +927,32 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             />
           </Field>
           <Field label="Data do pagamento"><input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="event-registration-field" /></Field>
-          <Field label="Comprovante *"><label className="event-registration-field flex items-center justify-between cursor-pointer"><span className="flex items-center gap-2 truncate"><Upload size={16} className="text-slate-400" />{newReceipt?.name || 'Anexar comprovante (obrigatório)...'}</span><span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg">Buscar</span><input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setNewReceipt({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file); }} className="hidden" /></label></Field>
+          <Field label={isAdmin ? 'Comprovante (opcional para admin)' : 'Comprovante *'}>
+            <label className="event-registration-field flex items-center justify-between cursor-pointer">
+              <span className="flex items-center gap-2 truncate">
+                <Upload size={16} className="text-slate-400" />
+                {newReceipt?.name || (isAdmin ? 'Anexar comprovante (opcional)...' : 'Anexar comprovante (obrigatório)...')}
+              </span>
+              <span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg">Buscar</span>
+              <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setNewReceipt({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file); }} className="hidden" />
+            </label>
+          </Field>
         </div>
         {payments.length > 0 && <div className="space-y-2"><p className="text-[10px] font-black text-slate-400">Histórico de pagamentos</p>{payments.map((payment) => <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setEditingPaymentId(payment.id); setNewAmount(String(payment.amount)); const date = new Date(payment.date); setNewDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`); setNewReceipt(payment.receiptUrl ? { url: payment.receiptUrl, name: payment.receiptFileName || 'Comprovante' } : null); }} className="flex items-center gap-3 text-left"><span>{new Date(payment.date).toLocaleDateString('pt-BR')}</span><span>R$ {payment.amount.toFixed(2)}</span></button><div className="flex items-center gap-2"><button type="button" disabled={!payment.receiptUrl} onClick={() => payment.receiptUrl && window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')} className="text-sky-600 disabled:text-slate-300" title="Abrir comprovante"><Eye size={16} /></button><button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500" title="Excluir pagamento"><Trash2 size={16} /></button></div></div>)}</div>}
+        {usesAutomaticPayment && showManualAdminPayment && (
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => setShowManualAdminPayment(false)}
+              className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline"
+            >
+              Ocultar lançamento manual
+            </button>
+          </div>
+        )}
       </div>
     )}
+
     {/* Alerta de Feedback no Rodapé */}
     {feedback && (
       <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-bottom-1 ${
@@ -802,26 +965,60 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
-    <div className="flex gap-3 pt-1">
+    <div className="flex flex-wrap gap-2.5 pt-1">
       {!readOnly && (
-        <button
-          type="button"
-          onClick={() => save()}
-          disabled={isSaving}
-          className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
-        >
-          {isSaving ? (
+        <>
+          {usesAutomaticPayment && pendingAmount > 0 ? (
             <>
-              <Loader2 size={16} className="animate-spin" />
-              <span>Salvando inscrição...</span>
+              <button
+                type="button"
+                onClick={handlePayViaPix}
+                disabled={isSaving || isPayingPix}
+                className="flex-1 min-w-[170px] py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isPayingPix ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Iniciando Pix...</span>
+                  </>
+                ) : (
+                  <>
+                    <QrCode size={16} />
+                    <span>Pagar via PIX</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => void save()}
+                disabled={isSaving || isPayingPix}
+                className="px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition-colors active:scale-95 cursor-pointer"
+                title="Salvar inscrição para pagar depois"
+              >
+                Salvar e pagar depois
+              </button>
             </>
           ) : (
-            <>
-              <CheckCircle2 size={16} />
-              <span>Salvar inscrição</span>
-            </>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={isSaving}
+              className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Salvando inscrição...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} />
+                  <span>Salvar inscrição</span>
+                </>
+              )}
+            </button>
           )}
-        </button>
+        </>
       )}
       {onCancel && (
         <button

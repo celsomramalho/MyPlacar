@@ -62,7 +62,7 @@ export function useTournamentSession() {
   }, []);
 
   const handleJoinTournament = useCallback(
-    async (pin: string, silent = false, profileOverride?: UserProfile & { phone?: string; shirtSize?: 'P' | 'M' | 'G'; partnerName?: string; partnerEmail?: string; partnerPhone?: string; categoryPartners?: Record<string, import('@modules/events/types').CategoryPartnerInfo>; payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }, paymentData?: { payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' }, entryOverride?: Partial<TournamentEntry>) => {
+    async (pin: string, silent = false, profileOverride?: UserProfile & { phone?: string; shirtSize?: 'P' | 'M' | 'G'; partnerName?: string; partnerEmail?: string; partnerPhone?: string; categoryPartners?: Record<string, import('@modules/events/types').CategoryPartnerInfo>; payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' | 'Confirmado' | 'Recusado' | 'Cancelado' }, paymentData?: { payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' | 'Confirmado' | 'Recusado' | 'Cancelado' }, entryOverride?: Partial<TournamentEntry>) => {
       const db = getDb();
       const activeProfile = profileOverride || userProfile;
       if (!db || !navigator.onLine) {

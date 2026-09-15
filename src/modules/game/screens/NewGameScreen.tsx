@@ -87,7 +87,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
     setResetPressProgress(0);
   };
 
-  const { isOriginalOwner, isCurrentController, cloudLiveExists: liveExistsFromContext } = useLive();
+  const { isCurrentController, cloudLiveExists: liveExistsFromContext } = useLive();
   const effectiveLiveExists = cloudLiveExists ?? liveExistsFromContext;
 
   const isLiveActive = useMemo(() => {
@@ -95,8 +95,8 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
   }, [gameState?.isMirroringActive, effectiveLiveExists]);
 
   const isReadOnly = useMemo(() => {
-    return isLiveActive && !isOriginalOwner && !isCurrentController;
-  }, [isLiveActive, isOriginalOwner, isCurrentController]);
+    return isLiveActive && !isCurrentController;
+  }, [isLiveActive, isCurrentController]);
 
   useEffect(() => {
     if (isOfflineMode || !userProfile?.email) {
@@ -140,20 +140,22 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
   }, [userProfile?.email, isOfflineMode]);
 
   useEffect(() => {
+    if (isReadOnly) return;
     if (settings.gamesPerSet === 4 && settings.tieBreakAt !== '3-3') {
       setSettings(prev => prev.tieBreakAt !== '3-3' ? { ...prev, tieBreakAt: '3-3' } : prev);
     } else if (settings.gamesPerSet === 6 && settings.tieBreakAt === '3-3') {
       setSettings(prev => prev.tieBreakAt === '3-3' ? { ...prev, tieBreakAt: '6-6' } : prev);
     }
-  }, [settings.gamesPerSet, settings.tieBreakAt, setSettings]);
+  }, [isReadOnly, settings.gamesPerSet, settings.tieBreakAt, setSettings]);
 
   // Zera tie-break automaticamente quando sets muda para 1 (apenas para esportes que não são tênis/beach-tênis)
   useEffect(() => {
+    if (isReadOnly) return;
     const isTennisSport = settings.sportType === 'tennis' || settings.sportType === 'beach-tennis';
     if (settings.sets === 1 && settings.tieBreak && !isTennisSport) {
       setSettings(prev => ({ ...prev, tieBreak: false }));
     }
-  }, [settings.sets, settings.tieBreak, settings.sportType, setSettings]);
+  }, [isReadOnly, settings.sets, settings.tieBreak, settings.sportType, setSettings]);
 
   const handleSportSelect = (sportId: string) => {
     if (isReadOnly) return;
@@ -282,7 +284,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
               id="toggle-watchmode" 
               label="Modo relógio" 
               checked={isOfflineMode ? true : (settings.isWatchMode || false)} 
-              disabled={isWatchDevice() && !!isOfflineMode}
+              disabled={isReadOnly || (isWatchDevice() && !!isOfflineMode)}
               onChange={v => { 
                 const next = {...settings, isWatchMode: v, isScoreboardMode: v ? false : settings.isScoreboardMode};
                 setSettings(next); 
@@ -293,7 +295,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
               id="toggle-scoreboardmode" 
               label="Modo placar" 
               checked={settings.isScoreboardMode || false} 
-              disabled={isWatchDevice()}
+              disabled={isReadOnly || isWatchDevice()}
               onChange={v => { 
                 const next = {...settings, isScoreboardMode: v, isWatchMode: v ? false : settings.isWatchMode};
                 setSettings(next); 
@@ -438,7 +440,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           <div className="space-y-3">
             <div className="flex items-center gap-2 px-2"><Sparkles size={20} className="text-blue-500" /><h2 className="text-sm font-black text-black">Narrador contextual (ia)</h2></div>
             <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
-              <Toggle id="toggle-gemini-voice" label="Ativar inteligência artificial" checked={settings.useGeminiVoice} onChange={v => setSettings({...settings, useGeminiVoice: v})} />
+              <Toggle disabled={isReadOnly} id="toggle-gemini-voice" label="Ativar inteligência artificial" checked={settings.useGeminiVoice} onChange={v => setSettings({...settings, useGeminiVoice: v})} />
               <p className="text-[10px] font-bold text-black leading-tight px-1">Voz humana e inteligente que narra os pontos com emoção e contexto real.</p>
             </div>
           </div>
@@ -448,8 +450,8 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           <div className="space-y-3">
             <div className="flex items-center gap-2 px-2"><Mic size={20} className="text-blue-500" /><h2 className="text-sm font-black text-black">Voz e narração</h2></div>
             <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
-              <Toggle id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
-              <Toggle id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
+              <Toggle disabled={isReadOnly} id="toggle-voice-cmd" label="Comandos de voz" checked={settings.voiceEnabled} onChange={v => setSettings({...settings, voiceEnabled: v})} />
+              <Toggle disabled={isReadOnly} id="toggle-voice-scoring" label="Narrar placar" checked={settings.voiceScoring} onChange={v => setSettings({...settings, voiceScoring: v})} />
             </div>
           </div>
         )}

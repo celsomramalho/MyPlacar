@@ -17,6 +17,7 @@ scripts
 *.local
 *.zip
 .tmp.driveupload
+.env.local
 
 # Editor directories and files
 .vscode/*

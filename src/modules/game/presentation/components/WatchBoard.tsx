@@ -122,10 +122,19 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   const s1 = String(gameState?.p1?.score ?? '').trim();
   const s2 = String(gameState?.p2?.score ?? '').trim();
   const isZeroZero = (s1 === '0' || s1 === '00' || s1 === '') && (s2 === '0' || s2 === '00' || s2 === '');
-  const courtRaw = gameState.tournamentCourt || (gameState.matchConfig.deviceLabel?.toLowerCase().startsWith('quadra') ? gameState.matchConfig.deviceLabel : '');
+  const hasTournamentContext = !!(
+    gameState.tournamentPin ||
+    gameState.tournamentMatchId ||
+    gameState.tournamentMatchCode ||
+    gameState.tournamentPhaseLabel ||
+    gameState.tournamentCourt
+  );
+  const courtRaw = hasTournamentContext
+    ? gameState.tournamentCourt || (gameState.matchConfig.deviceLabel?.toLowerCase().startsWith('quadra') ? gameState.matchConfig.deviceLabel : '')
+    : '';
   const courtBadge = courtRaw
     ? `[${courtRaw.toLowerCase().startsWith('quadra') ? courtRaw : `Quadra ${courtRaw}`}]`
-    : (gameState.matchConfig.deviceLabel && !gameState.tournamentMatchCode ? `[${gameState.matchConfig.deviceLabel}]` : '');
+    : '';
   const matchCodeBadge = gameState.tournamentMatchCode
     ? `[${gameState.tournamentMatchCode}]`
     : '';

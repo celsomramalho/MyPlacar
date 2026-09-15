@@ -5,4 +5,12 @@ export { getActiveEventEntryDate } from './services/getActiveEventEntryDate';
 export { joinTournamentEvent } from './services/joinTournamentEvent';
 export { markTournamentMatchFinished, markTournamentMatchLive, markTournamentMatchScore } from './services/updateTournamentMatchProgress';
 export { useTournamentSession } from './hooks/useTournamentSession';
+export { useEventPermissions, type EventPermissions } from './domain/access/useEventPermissions';
+export { useEventRealtime, type UseEventRealtimeResult } from './domain/realtime/useEventRealtime';
+export { MatchCard, type MatchCardProps } from './components/matches/MatchCard';
+export { TeamCard, type TeamCardProps } from './components/teams/TeamCard';
+export { ParticipantRow, type ParticipantRowProps } from './components/registration/ParticipantRow';
+export { EventRegistrationForm } from './components/EventRegistrationForm';
 export type { EventRegistration, TournamentConfig, TournamentEntry, TournamentEvent, TournamentMatch, TournamentPair } from './types';
+
+

@@ -31,7 +31,12 @@ export function useGameRules() {
       setIsSettingsInicialSaved(true);
       setIsSettingsRegrasSaved(true);
 
-      if (gameState && !gameState.isConfirmedFinished) {
+      const canApplyLocalSettingsToGame =
+        gameState &&
+        !gameState.isConfirmedFinished &&
+        (!gameState.isMirroringActive || gameState.commandOwnerId === deviceId);
+
+      if (canApplyLocalSettingsToGame) {
         setGameState(prevG => {
           if (!prevG) return prevG;
           return {

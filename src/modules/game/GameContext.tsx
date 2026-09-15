@@ -282,7 +282,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       localStorage.setItem('myPlacar_LocalScreenDimTimeout', (matchSettings.screenDimTimeout || 10).toString());
     } catch {}
 
-    if (gameState && !gameState.isConfirmedFinished) {
+    const canApplyLocalSettingsToGame =
+      gameState &&
+      !gameState.isConfirmedFinished &&
+      (!gameState.isMirroringActive || gameState.commandOwnerId === deviceId);
+
+    if (canApplyLocalSettingsToGame) {
         setGameState(prevG => {
             if (!prevG) return prevG;
             return {
@@ -295,7 +300,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     }
     prevSettingsRef.current = { ...matchSettings };
     try { localStorage.setItem('myPlacarSettings', JSON.stringify(matchSettings)); } catch {}
-  }, [matchSettings, gameState?.matchId, gameState?.isConfirmedFinished, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState]);
+  }, [matchSettings, gameState?.matchId, gameState?.isConfirmedFinished, deviceId, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, setGameState]);
 
   // ── BACK-SYNC OBSERVER SETTINGS FROM CLOUD GAME STATE ─────────────────────
   // Se o dispositivo não for o controlador ativo (gameState.commandOwnerId !== deviceId)
@@ -867,7 +872,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           }
           const myCommandName = currentFullDeviceName;
           const myNickname = userProfile.nickname || userProfile.name.split(' ')[0];
-          const isSecondaryDevice = cloudData.ownerPin?.toUpperCase() === myPin && cloudData.ownerDeviceId && cloudData.ownerDeviceId !== deviceId;
           // joinRole: proprietário é determinado por ownerDeviceId (imutável), nunca pelo campo gravado.
           // Juiz só é reconhecido se foi formalmente convidado via judgePin — não por role gravado anteriormente.
           // Qualquer outro caso é sempre 'observer'.
@@ -893,11 +897,22 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             }
           });
           
+          const keepWatchLayout = isWatchDevice() && !cloudData.matchConfig?.isScoreboardMode;
+          const watchModeForEntry = keepWatchLayout
+            ? true
+            : enterAsObserver
+              ? false
+              : resolveWatchMode(matchSettings.isWatchMode ?? false);
+          const scoreboardModeForEntry = enterAsObserver && !keepWatchLayout;
+
           if (cloudData.matchConfig) {
             setMatchSettings(prev => ({
               ...prev,
               ...cloudData.matchConfig,
-              ...(enterAsObserver ? { isWatchMode: false, isScoreboardMode: true } : {}),
+              isWatchMode: watchModeForEntry,
+              isScoreboardMode: scoreboardModeForEntry,
+              // Narrar placar nunca faz sentido no relógio — forçado como desativado.
+              voiceScoring: isWatchDevice() ? false : (cloudData.matchConfig.voiceScoring ?? prev.voiceScoring),
             }));
           }
 
@@ -905,8 +920,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             ...(cloudData.controllers || {}),
             [deviceId]: { label: myCommandName, nickname: myNickname, lastSeen: Date.now(), role: joinRole, status: initialStatus, deviceType: getDeviceType(), isOwner: joinRole === 'owner' }
           };
-          const watchModeForEntry = enterAsObserver ? false : resolveWatchMode(matchSettings.isWatchMode ?? false);
-          const scoreboardModeForEntry = enterAsObserver ? true : false;
           setGameState({ ...cloudData, isMirroringActive: true, isLiveClosed: false, commandOwnerId: resolvedCommandOwnerId, controllers: nextControllers, matchConfig: { ...cloudData.matchConfig, isWatchMode: watchModeForEntry, isScoreboardMode: scoreboardModeForEntry, brightness: matchSettings.brightness, volume: matchSettings.volume, deviceLabel: matchSettings.deviceLabel, selectedVoiceURI: matchSettings.selectedVoiceURI, voiceEnabled: matchSettings.voiceEnabled, voiceScoring: isWatchDevice() ? false : matchSettings.voiceScoring, actionCooldown: matchSettings.actionCooldown, stateLockout: matchSettings.stateLockout } });
           if (enterAsObserver || isWatchDevice()) setMatchSettings(prev => ({ ...prev, isScoreboardMode: scoreboardModeForEntry, isWatchMode: watchModeForEntry }));
           overlayAcceptedRef.current = pinUpper;
@@ -1174,7 +1187,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       confirmLabel: "Sim, zerar",
       onConfirm: () => {
         const current = gameState;
-        const initialServer = current.matchConfig.initialServer ?? 1;
+        const localResetConfig = {
+          ...matchSettings,
+          setsToWin: matchSettings.sets,
+          isWatchMode: !!matchSettings.isWatchMode,
+          isScoreboardMode: isWatchDevice() ? false : !!matchSettings.isScoreboardMode,
+        };
+        const initialServer = localResetConfig.initialServer ?? 1;
 
         const resetState: GameState = {
           ...current,
@@ -1182,18 +1201,22 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           startTime: Date.now(),
           p1: {
             ...current.p1,
-            name: current.matchConfig.p1Name,
-            partnerName: current.matchConfig.p1Partner,
-            color: current.matchConfig.p1Color,
+            name: localResetConfig.p1Name,
+            partnerName: localResetConfig.p1Partner,
+            gender: localResetConfig.p1Gender,
+            partnerGender: localResetConfig.p1PartnerGender,
+            color: localResetConfig.p1Color,
             score: '0',
             games: 0,
             sets: []
           },
           p2: {
             ...current.p2,
-            name: current.matchConfig.p2Name,
-            partnerName: current.matchConfig.p2Partner,
-            color: current.matchConfig.p2Color,
+            name: localResetConfig.p2Name,
+            partnerName: localResetConfig.p2Partner,
+            gender: localResetConfig.p2Gender,
+            partnerGender: localResetConfig.p2PartnerGender,
+            color: localResetConfig.p2Color,
             score: '0',
             games: 0,
             sets: []
@@ -1208,9 +1231,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           matchDuration: 0,
           isPaused: false,
           isLiveClosed: false,
+          matchConfig: localResetConfig,
           pickleball: undefined,
-          // Preserva o motor original — reset não muda de esporte
-          scoringEngine: current.scoringEngine ?? getEngineForSport(current.matchConfig.sportType),
+          scoringEngine: getEngineForSport(localResetConfig.sportType),
         };
 
         if (resetState.matchConfig.sportType === 'pickleball') {
@@ -1228,7 +1251,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       },
       onCancel: () => setModalConfig(null)
     });
-  }, [gameState, setModalConfig, setIsRecoveryFromMatchOver, setIsWaitingSync, startGame]);
+  }, [gameState, matchSettings, setModalConfig, setIsRecoveryFromMatchOver, setIsWaitingSync, startGame]);
 
   const canStartMatch = useMemo(() => {
     const s = matchSettings;

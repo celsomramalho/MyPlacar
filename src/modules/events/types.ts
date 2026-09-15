@@ -148,6 +148,13 @@ export const DRAW_TYPE_OPTIONS: DrawTypeOption[] = [
   'Sistema',
 ];
 
+export type EventPaymentTypeOption = 'manual' | 'mercadopago';
+
+export const EVENT_PAYMENT_TYPE_OPTIONS: Array<{ value: EventPaymentTypeOption; label: string }> = [
+  { value: 'manual', label: 'Manual' },
+  { value: 'mercadopago', label: 'Automático (Mercado Pago)' },
+];
+
 export interface EventCategory {
   id: string;
   name: string;
@@ -157,6 +164,7 @@ export interface EventCategory {
   sportId: string;
   sportName?: string;
   abbreviation: string;
+  gamesPerSet?: number;
   gender1?: 'M' | 'F';
   gender2?: 'M' | 'F';
 }
@@ -192,6 +200,7 @@ export interface TournamentEvent {
   interdictedCourts?: string[];
   registrationFee?: number;
   extraCategoryFee?: number;
+  paymentType?: EventPaymentTypeOption;
   eventStatus?: EventStatusOption;
   eventType?: EventTypeOption;
   setsCount?: 1 | 3 | 5;
@@ -214,6 +223,24 @@ export interface PaymentItem {
   amount: number;
   receiptUrl?: string;
   receiptFileName?: string;
+  provider?: 'manual' | 'mercadopago';
+  providerPaymentId?: string;
+  status?: 'approved' | 'pending' | 'rejected' | 'cancelled' | 'refunded' | string;
+}
+
+export interface MercadoPagoCheckoutInfo {
+  provider: 'mercadopago';
+  preferenceId: string;
+  initPoint: string;
+  sandboxInitPoint?: string;
+  externalReference: string;
+  amount: number;
+  paymentMethod?: 'pix' | string;
+  status: 'created' | 'pending' | 'approved' | 'rejected' | 'cancelled' | 'refunded';
+  expiresAt?: string;
+  createdAt: number;
+  updatedAt?: number;
+  lastPaymentId?: string;
 }
 
 export interface CategoryPartnerInfo {
@@ -232,9 +259,10 @@ export interface TournamentEntry {
   gender?: 'M' | 'F';
   checkedIn?: boolean;
   dueAmount?: number;
-  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento';
+  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
   paidAmount?: number;
   payments?: PaymentItem[];
+  mercadoPagoCheckout?: MercadoPagoCheckoutInfo;
   categoryIds?: string[];
   phone: string;
   shirtSize: 'P' | 'M' | 'G';

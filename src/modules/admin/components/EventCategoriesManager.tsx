@@ -1,21 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Layers, Check, X, Trash2, Tag, Users, User, Trophy, ChevronDown, ChevronUp, ArrowUpDown, UserCheck, UserRound, UsersRound, Columns2, AlertTriangle, Swords, Sparkles, FileText, Shuffle, Clock, Timer, Calendar } from 'lucide-react';
-import { minifyEntryForPair, minifyPairForStorage, orderPairEntriesForMixed, formatRegistrationId, getNextRegistrationId, type EventCategory, type TournamentEntry, type TournamentEvent, type TournamentPair, type TournamentMatch, type MatchSetScore, type PlayerStanding } from '@modules/events/types';
-import { generateSystemMatchesForCategory, generateSuper8MatchesForCategory, isCategoryMixed, createManualMatch, formatMatchDisplayString, formatMatchNumber, getPhaseLabel } from '@modules/events/services/matchGenerator';
-import { updatePlayoffProgression, calculateBracketStandings, calculateSuper8PlayerStandings, type TeamStanding } from '@modules/events/services/matchProgression';
-import { calculateQueueState } from '@modules/events/services/queueManager';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, Tag, X, Trash2, UsersRound, AlertTriangle } from 'lucide-react';
+import {
+  minifyEntryForPair,
+  minifyPairForStorage,
+  orderPairEntriesForMixed,
+  type EventCategory,
+  type TournamentEntry,
+  type TournamentEvent,
+  type TournamentPair,
+  type TournamentMatch,
+  type MatchSetScore,
+  type PlayerStanding,
+} from '@modules/events/types';
+import {
+  generateSystemMatchesForCategory,
+  generateSuper8MatchesForCategory,
+  createManualMatch,
+} from '@modules/events/services/matchGenerator';
+import {
+  updatePlayoffProgression,
+  calculateBracketStandings,
+  calculateSuper8PlayerStandings,
+  type TeamStanding,
+} from '@modules/events/services/matchProgression';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
-import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
-import { RankingStandingStatsBlock } from '@modules/events/components/RankingStandingStatsBlock';
-import { Super8StandingStatsBlock } from '@modules/events/components/Super8StandingStatsBlock';
-import { BracketTeamStatsBlock } from '@modules/events/components/BracketTeamStatsBlock';
+import { calculateQueueState } from '@modules/events/services/queueManager';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
-import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { getDb } from '@infra/firebase';
-import { updateEvent } from '@infra/firebase/events';
+import { updateEvent, saveEventEntry, deleteEventEntry } from '@infra/firebase/events';
 import type { Firestore } from 'firebase/firestore';
 import { useUI } from '@modules/ui';
-import { maskPin } from '@shared/utils/formatters';
+
+import {
+  CategoryAccordionItem,
+  CategoryEntriesTab,
+  CategoryFormModal,
+  CategoryMatchesTab,
+  CategoryTeamsTab,
+} from './category';
 
 interface Props {
   event: TournamentEvent;
@@ -74,24 +96,15 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [gender1, setGender1] = useState<'M' | 'F'>('M');
   const [gender2, setGender2] = useState<'M' | 'F'>('M');
 
-  const saveMatchesTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pairsById = React.useMemo(() => {
+  const pairsById = useMemo(() => {
     const map: Record<string, TournamentPair> = {};
     pairs.forEach((p) => {
       map[p.id] = p;
     });
     return map;
   }, [pairs]);
-
-  // Posição na fila: reativo ao evento (quadras, partidas finalizadas)
-  const orderedQueue = React.useMemo(() => {
-    try {
-      return calculateQueueState(event).orderedQueue;
-    } catch {
-      return [];
-    }
-  }, [event]);
 
   // Sincroniza e corrige os confrontos de playoffs caso placares anteriores tenham sido zerados
   useEffect(() => {
@@ -198,183 +211,6 @@ export const EventCategoriesManager: React.FC<Props> = ({
     resetForm();
   };
 
-  const renderCategoryForm = () => (
-    <form onSubmit={handleSave} className="bg-white p-6 rounded-3xl border-2 border-emerald-500 shadow-md space-y-4 animate-in slide-in-from-top-4">
-      <div className="flex items-center justify-between border-b pb-3">
-        <h3 className="font-black text-slate-700 text-sm flex items-center gap-2">
-          <Layers size={18} className="text-emerald-500" />
-          {editingId ? 'Editar categoria' : 'Nova categoria'}
-        </h3>
-        <div className="flex items-center gap-1">
-          {editingId && (
-            <button
-              type="button"
-              onClick={() => handleDelete(editingId)}
-              className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-              title="Excluir categoria"
-            >
-              <Trash2 size={18} />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={resetForm}
-            className="p-1 text-slate-400 hover:text-slate-600"
-            title="Recolher cadastro"
-          >
-            <ChevronUp size={20} />
-          </button>
-        </div>
-      </div>
-
-      {/* 1 Campo por linha */}
-      <div className="space-y-3">
-        {/* Linha 1: Nome */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Nome</label>
-          <input
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: Duplas Masculino A"
-            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
-          />
-        </div>
-
-        {/* Linha 2: Descrição */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Descrição</label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Ex: Categoria avançada masculina"
-            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
-          />
-        </div>
-
-        {/* Linha 3: Formato */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Formato</label>
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value as 'Simples' | 'Duplas')}
-            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
-          >
-            <option value="Duplas">Duplas</option>
-            <option value="Simples">Simples</option>
-          </select>
-        </div>
-
-        {/* Linha 4: Esporte */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
-          <select
-            value={sportId}
-            onChange={(e) => setSportId(e.target.value)}
-            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
-          >
-            {activeSports.length === 0 ? (
-              <option value="beach-tennis">Beach Tennis</option>
-            ) : (
-              activeSports.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
-
-        {/* Linha 5: Abreviação */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Abreviação</label>
-          <input
-            type="text"
-            value={abbreviation}
-            onChange={(e) => setAbbreviation(e.target.value)}
-            placeholder="Ex: DMa_A"
-            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
-          />
-        </div>
-
-        {/* Linha 6 (Última linha): Prioridade, Gênero 1, Gênero 2 */}
-        <div className="grid grid-cols-3 gap-3 pt-1">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Prioridade</label>
-            <input
-              type="number"
-              min={1}
-              value={priority}
-              onChange={(e) => setPriority(Number(e.target.value))}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 text-center"
-            />
-          </div>
-
-          {/* Gênero 1 */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 1</label>
-            <button
-              type="button"
-              onClick={() => setGender1(gender1 === 'M' ? 'F' : 'M')}
-              className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
-                gender1 === 'M'
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'bg-pink-500 text-white border-pink-500'
-              }`}
-              title="Clique para alternar entre M e F"
-            >
-              {gender1 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
-              {gender1 === 'M' ? 'M' : 'F'}
-            </button>
-          </div>
-
-          {/* Gênero 2 — só para Duplas */}
-          {format === 'Duplas' ? (
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 2</label>
-              <button
-                type="button"
-                onClick={() => setGender2(gender2 === 'M' ? 'F' : 'M')}
-                className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
-                  gender2 === 'M'
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-pink-500 text-white border-pink-500'
-                }`}
-                title="Clique para alternar entre M e F"
-              >
-                {gender2 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
-                {gender2 === 'M' ? 'M' : 'F'}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-1 invisible">
-              <label className="text-[10px]">–</label>
-              <div className="h-11" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="flex gap-3 pt-3">
-        <button
-          type="submit"
-          className="bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs px-6 py-3.5 rounded-xl transition-all shadow-sm flex items-center gap-2"
-        >
-          <Check size={16} /> Salvar categoria
-        </button>
-        <button
-          type="button"
-          onClick={resetForm}
-          className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-5 py-3.5 rounded-xl transition-all"
-        >
-          Cancelar
-        </button>
-      </div>
-    </form>
-  );
-
   const handleDelete = (id: string) => {
     const categoryToDelete = categories.find((c) => c.id === id);
     setModalConfig({
@@ -398,39 +234,69 @@ export const EventCategoriesManager: React.FC<Props> = ({
 
   const isSuper8 = event.eventType === 'Super 8';
   const isRanking = event.eventType === 'Ranking';
+  const isIndividualRanking = isSuper8 || isRanking;
+  const isManualMatchDraw = event.matchDrawType === 'Manual';
+  const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;
+  const totalSets = (event.setsCount || event.config?.sets || 1) as number;
 
   const openCategoryPanel = (categoryId: string, view: CategoryPanelView) => {
     setSelectedEntries(new Set());
     setSelectedTeamIds(new Set());
-    const effectiveView = isSuper8 && view === 'teams' ? 'entries' : view;
-    if (selectedCategoryId === categoryId && categoryPanelView === effectiveView) {
+    if (selectedCategoryId === categoryId && categoryPanelView === view) {
       setSelectedCategoryId(null);
       return;
     }
     setSelectedCategoryId(categoryId);
-    setCategoryPanelView(effectiveView);
+    setCategoryPanelView(view);
   };
 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
-  const categoryEntries = entries.filter((e) =>
-    selectedCategory ? e.categoryIds?.includes(selectedCategory.id) : false
-  );
+  const categoryEntries = useMemo(() => {
+    return entries.filter((e) =>
+      selectedCategory ? e.categoryIds?.includes(selectedCategory.id) : false
+    );
+  }, [entries, selectedCategory]);
 
-  const categoryMatches = matches.filter(
-    (m) =>
-      selectedCategory &&
-      (m.categoryId === selectedCategory.id ||
-        (!m.categoryId && pairs.some((p) => (p.id === m.pair1Id || p.id === m.pair2Id) && p.categoryId === selectedCategory.id)))
-  );
+  const categoryMatches = useMemo(() => {
+    return matches.filter(
+      (m) =>
+        selectedCategory &&
+        (m.categoryId === selectedCategory.id ||
+          (!m.categoryId && pairs.some((p) => (p.id === m.pair1Id || p.id === m.pair2Id) && p.categoryId === selectedCategory.id)))
+    );
+  }, [matches, pairs, selectedCategory]);
 
-  const isIndividualRanking = isSuper8 || isRanking;
+  const categoryPairs = useMemo(() => {
+    if (!selectedCategory) return [];
+    return pairs.filter(
+      (p) =>
+        p.categoryId === selectedCategory.id ||
+        (!p.categoryId && (p.p1.categoryIds?.includes(selectedCategory.id) || p.p2.categoryIds?.includes(selectedCategory.id)))
+    );
+  }, [pairs, selectedCategory]);
 
-  const playerStandings = React.useMemo(() => {
+  const orderedQueue = useMemo(() => {
+    try {
+      return calculateQueueState(event).orderedQueue;
+    } catch {
+      return [];
+    }
+  }, [event]);
+
+  const queuePosByMatchId = useMemo(() => {
+    const map = new Map<string, number>();
+    orderedQueue.forEach((item, idx) => {
+      map.set(item.match.id, idx + 1);
+    });
+    return map;
+  }, [orderedQueue]);
+
+  const playerStandings = useMemo(() => {
     if (!isIndividualRanking || !selectedCategory) return [];
     return calculateSuper8PlayerStandings(categoryEntries, categoryMatches, isRanking ? 'rankingPoints' : 'wins');
   }, [isIndividualRanking, isRanking, selectedCategory, categoryEntries, categoryMatches]);
 
-  const playerStandingsMap = React.useMemo(() => {
+  const playerStandingsMap = useMemo(() => {
     const map = new Map<string, PlayerStanding>();
     playerStandings.forEach((st) => {
       const k1 = (st.entry.email || '').toLowerCase().trim();
@@ -441,56 +307,55 @@ export const EventCategoriesManager: React.FC<Props> = ({
     return map;
   }, [playerStandings]);
 
-  const sortedCategoryEntries = React.useMemo(() => {
+  const sortedCategoryEntries = useMemo(() => {
     if (isIndividualRanking) {
       return [...categoryEntries].sort((a, b) => {
         const kA = (a.email || a.pin || '').toLowerCase().trim();
         const kB = (b.email || b.pin || '').toLowerCase().trim();
-        const stA = playerStandingsMap.get(kA);
-        const stB = playerStandingsMap.get(kB);
-        if (stA?.rank !== undefined && stB?.rank !== undefined && stA.rank !== stB.rank) {
-          return stA.rank - stB.rank;
-        }
+        const rA = playerStandingsMap.get(kA)?.rank ?? 9999;
+        const rB = playerStandingsMap.get(kB)?.rank ?? 9999;
+        if (rA !== rB) return rA - rB;
         return (a.name || '').localeCompare(b.name || '');
       });
     }
+    if (sortBy === 'name') {
+      return [...categoryEntries].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }
     return [...categoryEntries].sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      const pA = pairs.find((p) => (p.p1.email === a.email || p.p2.email === a.email) && p.categoryId === selectedCategory?.id);
-      const pB = pairs.find((p) => (p.p1.email === b.email || p.p2.email === b.email) && p.categoryId === selectedCategory?.id);
-      if (pA && !pB) return -1;
-      if (!pA && pB) return 1;
-      if (pA && pB) return (pA.teamNumber || 0) - (pB.teamNumber || 0);
-      return a.name.localeCompare(b.name);
+      const pairA = pairs.find((p) =>
+        p.categoryId === selectedCategory?.id &&
+        (p.p1.email === a.email || p.p2.email === a.email || p.p1.pin === a.pin || p.p2.pin === a.pin)
+      );
+      const pairB = pairs.find((p) =>
+        p.categoryId === selectedCategory?.id &&
+        (p.p1.email === b.email || p.p2.email === b.email || p.p1.pin === b.pin || p.p2.pin === b.pin)
+      );
+      if (pairA && pairB) {
+        const numA = pairA.teamNumber || 0;
+        const numB = pairB.teamNumber || 0;
+        if (numA !== numB) return numA - numB;
+      }
+      if (pairA && !pairB) return -1;
+      if (!pairA && pairB) return 1;
+      return (a.name || '').localeCompare(b.name || '');
     });
-  }, [categoryEntries, isIndividualRanking, playerStandingsMap, sortBy, pairs, selectedCategory?.id]);
+  }, [isIndividualRanking, categoryEntries, sortBy, playerStandingsMap, pairs, selectedCategory?.id]);
 
-  const categoryPairs = pairs.filter((p) =>
-    selectedCategory
-      ? p.categoryId === selectedCategory.id ||
-        (!p.categoryId && (p.p1.categoryIds?.includes(selectedCategory.id) || p.p2.categoryIds?.includes(selectedCategory.id)))
-      : false
-  );
-
-  const sortedCategoryPairs = [...categoryPairs].sort(
-    (a, b) => (a.teamNumber || 0) - (b.teamNumber || 0)
-  );
-
-  const pairForEntry = (entry: TournamentEntry) =>
-    pairs.find(
+  const pairForEntry = (entry: TournamentEntry) => {
+    return pairs.find(
       (p) =>
-        (p.p1.email === entry.email || p.p2.email === entry.email) &&
-        (p.categoryId === selectedCategory?.id || !p.categoryId)
+        (p.categoryId === selectedCategory?.id || !p.categoryId) &&
+        (p.p1.email === entry.email || p.p2.email === entry.email || p.p1.pin === entry.pin || p.p2.pin === entry.pin)
     );
+  };
 
-  const selectedPair = React.useMemo(() => {
-    if (isRanking) return null;
-    if (selectedEntries.size === 0) return null;
-    const selectedEmail = Array.from(selectedEntries)[0];
+  const selectedPair = useMemo(() => {
+    if (isRanking || selectedEntries.size !== 2) return null;
+    const [e1, e2] = Array.from(selectedEntries);
     const found = pairs.find(
       (p) =>
-        (p.p1.email === selectedEmail || p.p2.email === selectedEmail) &&
-        (p.categoryId === selectedCategory?.id || !p.categoryId)
+        (p.categoryId === selectedCategory?.id || !p.categoryId) &&
+        ((p.p1.email === e1 && p.p2.email === e2) || (p.p1.email === e2 && p.p2.email === e1))
     );
     if (!found) return null;
     const isPairSelected =
@@ -526,8 +391,6 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setSelectedEntries(next);
   };
 
-  const isManualMatchDraw = event.matchDrawType === 'Manual';
-
   const toggleTeamSelection = (pair: TournamentPair) => {
     if (!isManualMatchDraw && !isRanking) return;
     const next = new Set(selectedTeamIds);
@@ -542,86 +405,88 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setSelectedTeamIds(next);
   };
 
-const validateCategoryGenders = (
-  cat: EventCategory,
-  selectedPlayers: TournamentEntry[]
-): { valid: boolean; message?: string } => {
-  if (selectedPlayers.length !== 2) {
-    return { valid: false, message: 'Selecione exatamente 2 jogadores.' };
-  }
-
-  const mCount = selectedPlayers.filter((p) => p.gender === 'M').length;
-  const fCount = selectedPlayers.filter((p) => p.gender === 'F').length;
-
-  const catNameLower = (cat.name || '').toLowerCase();
-  const catDescLower = (cat.description || '').toLowerCase();
-  const isExplicitMixed =
-    (cat.gender1 === 'M' && cat.gender2 === 'F') ||
-    (cat.gender1 === 'F' && cat.gender2 === 'M');
-  const isTextMixed =
-    catNameLower.includes('misto') ||
-    catNameLower.includes('mista') ||
-    catNameLower.includes('mix') ||
-    catDescLower.includes('misto') ||
-    catDescLower.includes('mista');
-
-  if (isExplicitMixed || isTextMixed) {
-    if (mCount !== 1 || fCount !== 1) {
-      return {
-        valid: false,
-        message: `A categoria "${cat.name}" é mista e exige 1 atleta masculino e 1 jogadora feminina.`,
-      };
+  const validateCategoryGenders = (
+    cat: EventCategory,
+    selectedPlayers: TournamentEntry[]
+  ): { valid: boolean; message?: string } => {
+    if (selectedPlayers.length !== 2) {
+      return { valid: false, message: 'Selecione exatamente 2 jogadores.' };
     }
+
+    const mCount = selectedPlayers.filter((p) => p.gender === 'M').length;
+    const fCount = selectedPlayers.filter((p) => p.gender === 'F').length;
+
+    const catNameLower = (cat.name || '').toLowerCase();
+    const catDescLower = (cat.description || '').toLowerCase();
+    const isExplicitMixed =
+      (cat.gender1 === 'M' && cat.gender2 === 'F') ||
+      (cat.gender1 === 'F' && cat.gender2 === 'M');
+    const isTextMixed =
+      catNameLower.includes('misto') ||
+      catNameLower.includes('mista') ||
+      catNameLower.includes('mix') ||
+      catDescLower.includes('misto') ||
+      catDescLower.includes('mista');
+
+    if (isExplicitMixed || isTextMixed) {
+      if (mCount !== 1 || fCount !== 1) {
+        return {
+          valid: false,
+          message: `A categoria "${cat.name}" é mista e exige 1 atleta masculino e 1 jogadora feminina.`,
+        };
+      }
+      return { valid: true };
+    }
+
+    const isExplicitFemale = cat.gender1 === 'F' && cat.gender2 === 'F';
+    const isTextFemale =
+      (catNameLower.includes('fem') || catDescLower.includes('fem')) &&
+      !isTextMixed;
+
+    if (isExplicitFemale || isTextFemale) {
+      if (fCount !== 2) {
+        return {
+          valid: false,
+          message: `A categoria "${cat.name}" é feminina e exige 2 atletas do gênero feminino.`,
+        };
+      }
+      return { valid: true };
+    }
+
+    const isExplicitMale = cat.gender1 === 'M' && cat.gender2 === 'M';
+    const isTextMale =
+      (catNameLower.includes('masc') || catDescLower.includes('masc')) &&
+      !isTextMixed;
+
+    if (isExplicitMale || isTextMale) {
+      if (mCount !== 2) {
+        return {
+          valid: false,
+          message: `A categoria "${cat.name}" é masculina e exige 2 atletas do gênero masculino.`,
+        };
+      }
+      return { valid: true };
+    }
+
+    if (cat.gender1 && cat.gender2) {
+      const requiredM = (cat.gender1 === 'M' ? 1 : 0) + (cat.gender2 === 'M' ? 1 : 0);
+      const requiredF = (cat.gender1 === 'F' ? 1 : 0) + (cat.gender2 === 'F' ? 1 : 0);
+      if (mCount !== requiredM || fCount !== requiredF) {
+        return {
+          valid: false,
+          message: `Os atletas selecionados (${mCount} masc / ${fCount} fem) não correspondem à categoria "${cat.name}".`,
+        };
+      }
+    }
+
     return { valid: true };
-  }
+  };
 
-  const isExplicitFemale = cat.gender1 === 'F' && cat.gender2 === 'F';
-  const isTextFemale =
-    (catNameLower.includes('fem') || catDescLower.includes('fem')) &&
-    !isTextMixed;
-
-  if (isExplicitFemale || isTextFemale) {
-    if (fCount !== 2) {
-      return {
-        valid: false,
-        message: `A categoria "${cat.name}" é feminina e exige 2 atletas do gênero feminino.`,
-      };
-    }
-    return { valid: true };
-  }
-
-  const isExplicitMale = cat.gender1 === 'M' && cat.gender2 === 'M';
-  const isTextMale =
-    (catNameLower.includes('masc') || catDescLower.includes('masc')) &&
-    !isTextMixed;
-
-  if (isExplicitMale || isTextMale) {
-    if (mCount !== 2) {
-      return {
-        valid: false,
-        message: `A categoria "${cat.name}" é masculina e exige 2 atletas do gênero masculino.`,
-      };
-    }
-    return { valid: true };
-  }
-
-  if (cat.gender1 && cat.gender2) {
-    const requiredM = (cat.gender1 === 'M' ? 1 : 0) + (cat.gender2 === 'M' ? 1 : 0);
-    const requiredF = (cat.gender1 === 'F' ? 1 : 0) + (cat.gender2 === 'F' ? 1 : 0);
-    if (mCount !== requiredM || fCount !== requiredF) {
-      return {
-        valid: false,
-        message: `Os atletas selecionados (${mCount} masc / ${fCount} fem) não correspondem à categoria "${cat.name}".`,
-      };
-    }
-  }
-
-  return { valid: true };
-};
-
-  const selectedEntriesList = Array.from(selectedEntries)
-    .map((email) => categoryEntries.find((entry) => entry.email === email))
-    .filter(Boolean) as TournamentEntry[];
+  const selectedEntriesList = useMemo(() => {
+    return Array.from(selectedEntries)
+      .map((email) => categoryEntries.find((entry) => entry.email === email))
+      .filter(Boolean) as TournamentEntry[];
+  }, [selectedEntries, categoryEntries]);
 
   const genderValidation = selectedCategory && selectedEntriesList.length === 2 && !selectedPair
     ? validateCategoryGenders(selectedCategory, selectedEntriesList)
@@ -727,81 +592,56 @@ const validateCategoryGenders = (
     const db = getDb();
     if (db) {
       try {
-        await updateEvent(db as Firestore, event.pin, { pairs: nextPairs.map(minifyPairForStorage) });
+        await updateEvent(db as Firestore, event.pin, { pairs: nextPairs });
       } catch (err) {
-        console.error('Erro ao atualizar bracket no Firestore:', err);
+        console.error('Erro ao alternar chave no Firestore:', err);
       }
     }
   };
 
   const handleRandomizeCategoryDraw = async () => {
     if (!selectedCategory) return;
-    if (categoryPairs.length < 2) {
-      setModalConfig({
-        title: 'Atenção',
-        message: 'É necessário ter pelo menos 2 times formados nesta categoria para realizar o sorteio.',
-        onConfirm: () => setModalConfig(null),
-      });
-      return;
-    }
-
-    const hasCatMatches = matches.some((m) => m.categoryId === selectedCategory.id);
+    const hasCatMatches = matches.some(
+      (m) =>
+        m.categoryId === selectedCategory.id ||
+        (!m.categoryId && pairs.some((p) => (p.id === m.pair1Id || p.id === m.pair2Id) && p.categoryId === selectedCategory.id))
+    );
     if (hasCatMatches) {
-      setModalConfig({
-        title: 'Atenção',
-        message: 'As partidas desta categoria já foram geradas. Para sortear novamente, exclua as partidas na aba Partidas.',
-        onConfirm: () => setModalConfig(null),
-      });
+      window.alert('As chaves estão bloqueadas pois as partidas já foram geradas.');
       return;
     }
 
-    // 1. Embaralha todos os times da categoria aleatoriamente (Fisher-Yates)
-    const shuffled = [...categoryPairs];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    // 2. Divide entre Chave 1 e Chave 2 e define a ordem sequencial das posições
+    const shuffled = [...categoryPairs].sort(() => Math.random() - 0.5);
     const half = Math.ceil(shuffled.length / 2);
-    const updatedCatPairs = shuffled.map((pair, index) => {
-      const bracket: 1 | 2 = index < half ? 1 : 2;
-      const bracketOrder = index < half ? index + 1 : index - half + 1;
-      return {
-        ...pair,
-        bracket,
-        bracketOrder,
-      };
+    const bracket1Pairs = shuffled.slice(0, half);
+    const bracket2Pairs = shuffled.slice(half);
+
+    const updatedPairs = pairs.map((p) => {
+      const idx1 = bracket1Pairs.findIndex((b1) => b1.id === p.id);
+      if (idx1 !== -1) {
+        return { ...p, bracket: 1 as const, bracketOrder: idx1 + 1 };
+      }
+      const idx2 = bracket2Pairs.findIndex((b2) => b2.id === p.id);
+      if (idx2 !== -1) {
+        return { ...p, bracket: 2 as const, bracketOrder: idx2 + 1 };
+      }
+      return p;
     });
 
-    const updatedMap = new Map(updatedCatPairs.map((p) => [p.id, p]));
-    const nextPairs = pairs.map((p) => updatedMap.get(p.id) || p);
-
-    onUpdateEvent({ ...event, pairs: nextPairs });
-
+    onUpdateEvent({ ...event, pairs: updatedPairs });
     const db = getDb();
     if (db) {
       try {
-        await updateEvent(db as Firestore, event.pin, { pairs: nextPairs.map(minifyPairForStorage) });
+        await updateEvent(db as Firestore, event.pin, { pairs: updatedPairs });
       } catch (err) {
-        console.error('Erro ao salvar sorteio no Firestore:', err);
+        console.error('Erro ao sortear chaves no Firestore:', err);
       }
     }
-
-    setModalConfig({
-      title: 'Sorteio realizado!',
-      message: `Os ${categoryPairs.length} times foram sorteados com sucesso entre a Chave 1 (${half} times) e Chave 2 (${shuffled.length - half} times).`,
-      onConfirm: () => setModalConfig(null),
-    });
   };
 
   const handleMoveTeamPosition = async (pair: TournamentPair, direction: 'up' | 'down') => {
-    if (!selectedCategory) return;
-    const hasCatMatches = matches.some((m) => m.categoryId === selectedCategory.id);
-    if (hasCatMatches) return;
-
-    const currentBracket = (pair.bracket ?? 1) === 1 ? 1 : 2;
-    const inSameBracket = categoryPairs
+    const currentBracket = pair.bracket ?? 1;
+    const bracketPairs = categoryPairs
       .filter((p) => (p.bracket ?? 1) === currentBracket)
       .sort((a, b) => {
         if (a.bracketOrder !== undefined && b.bracketOrder !== undefined) {
@@ -812,68 +652,45 @@ const validateCategoryGenders = (
         return (a.teamNumber || 0) - (b.teamNumber || 0);
       });
 
-    const currentIndex = inSameBracket.findIndex((p) => p.id === pair.id);
+    const currentIndex = bracketPairs.findIndex((p) => p.id === pair.id);
     if (currentIndex === -1) return;
 
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= inSameBracket.length) return;
+    if (targetIndex < 0 || targetIndex >= bracketPairs.length) return;
 
-    const reordered = [...inSameBracket];
-    const temp = reordered[currentIndex];
-    reordered[currentIndex] = reordered[targetIndex];
-    reordered[targetIndex] = temp;
+    const targetPair = bracketPairs[targetIndex];
 
-    const updatedInBracket = reordered.map((p, idx) => ({
-      ...p,
-      bracket: currentBracket as 1 | 2,
-      bracketOrder: idx + 1,
-    }));
+    const updatedPairs = pairs.map((p) => {
+      if (p.id === pair.id) {
+        return { ...p, bracketOrder: targetIndex + 1 };
+      }
+      if (p.id === targetPair.id) {
+        return { ...p, bracketOrder: currentIndex + 1 };
+      }
+      return p;
+    });
 
-    const updatedMap = new Map(updatedInBracket.map((p) => [p.id, p]));
-    const nextPairs = pairs.map((p) => updatedMap.get(p.id) || p);
-
-    onUpdateEvent({ ...event, pairs: nextPairs });
-
+    onUpdateEvent({ ...event, pairs: updatedPairs });
     const db = getDb();
     if (db) {
       try {
-        await updateEvent(db as Firestore, event.pin, { pairs: nextPairs.map(minifyPairForStorage) });
+        await updateEvent(db as Firestore, event.pin, { pairs: updatedPairs });
       } catch (err) {
-        console.error('Erro ao reordenar posição no Firestore:', err);
+        console.error('Erro ao mover posição do time no Firestore:', err);
       }
     }
   };
 
   const handleCreateManualMatch = async () => {
-    if (!selectedCategory || selectedTeamIds.size !== 2) return;
-    const selectedPairsList = Array.from(selectedTeamIds)
-      .map((id) => pairs.find((p) => p.id === id))
-      .filter(Boolean) as TournamentPair[];
-    if (selectedPairsList.length !== 2) return;
+    if (selectedTeamIds.size !== 2 || !selectedCategory) return;
+    const [t1Id, t2Id] = Array.from(selectedTeamIds);
+    const p1 = pairs.find((p) => p.id === t1Id);
+    const p2 = pairs.find((p) => p.id === t2Id);
+    if (!p1 || !p2) return;
 
-    const isSamePlayer = (e1?: TournamentEntry, e2?: TournamentEntry) => {
-      if (!e1 || !e2) return false;
-      if (e1.email && e2.email && e1.email.toLowerCase().trim() === e2.email.toLowerCase().trim()) return true;
-      if (e1.pin && e2.pin && e1.pin.trim() === e2.pin.trim()) return true;
-      return false;
-    };
-    const hasSharedPlayer =
-      isSamePlayer(selectedPairsList[0].p1, selectedPairsList[1].p1) ||
-      isSamePlayer(selectedPairsList[0].p1, selectedPairsList[1].p2) ||
-      isSamePlayer(selectedPairsList[0].p2, selectedPairsList[1].p1) ||
-      isSamePlayer(selectedPairsList[0].p2, selectedPairsList[1].p2);
-
-    if (hasSharedPlayer) {
-      setModalConfig({
-        title: 'Jogador em ambos os times',
-        message: 'Não é possível formar uma partida entre times que possuem o mesmo jogador.',
-        onConfirm: () => setModalConfig(null),
-      });
-      return;
-    }
     const rankingMatchesLimit = Number(event.rankingMatchesPerTeam || 0);
     if (isRanking && rankingMatchesLimit > 0) {
-      const blockedPair = selectedPairsList.find((pair) =>
+      const blockedPair = [p1, p2].find((pair) =>
         categoryMatches.filter((m) => m.pair1Id === pair.id || m.pair2Id === pair.id).length >= rankingMatchesLimit
       );
       if (blockedPair) {
@@ -886,20 +703,14 @@ const validateCategoryGenders = (
       }
     }
 
-    const newMatch = createManualMatch(
-      selectedPairsList[0],
-      selectedPairsList[1],
-      selectedCategory,
-      matches
-    );
+    const newMatch = createManualMatch(p1, p2, selectedCategory, matches);
     if (isRanking) {
       newMatch.phase = 'ranking';
     }
-
     const nextMatches = [...matches, newMatch];
+
     onUpdateEvent({ ...event, matches: nextMatches });
     setSelectedTeamIds(new Set());
-    setCategoryPanelView('matches');
 
     const db = getDb();
     if (db) {
@@ -913,94 +724,37 @@ const validateCategoryGenders = (
 
   const handleGenerateSystemMatches = async () => {
     if (!selectedCategory) return;
+    let newCategoryMatches: TournamentMatch[] = [];
 
     if (isSuper8) {
-      const isMixedCat = isCategoryMixed(selectedCategory);
-      if (isMixedCat) {
-        const mEntries = categoryEntries.filter((e) => e.gender === 'M');
-        const fEntries = categoryEntries.filter((e) => e.gender === 'F');
-        if (mEntries.length < 4 || fEntries.length < 4) {
-          setModalConfig({
-            title: 'Atenção — Super 8 Misto',
-            message: `Para gerar partidas do Super 8 Misto Puro, são necessários 4 homens e 4 mulheres inscritos nesta categoria (atualmente: ${mEntries.length} ${mEntries.length === 1 ? 'homem' : 'homens'} e ${fEntries.length} ${fEntries.length === 1 ? 'mulher' : 'mulheres'}).`,
-            onConfirm: () => setModalConfig(null),
-          });
-          return;
-        }
-      } else {
-        if (categoryEntries.length < 4) {
-          setModalConfig({
-            title: 'Atenção',
-            message: 'É necessário ter pelo menos 4 inscritos (ideal 8) nesta categoria para gerar partidas do Super 8.',
-            onConfirm: () => setModalConfig(null),
-          });
-          return;
-        }
-      }
+      newCategoryMatches = generateSuper8MatchesForCategory(selectedCategory, categoryEntries, matches);
     } else {
-      const catPairs = pairs.filter(
-        (p) =>
-          p.categoryId === selectedCategory.id ||
-          (!p.categoryId && (p.p1?.categoryIds?.includes(selectedCategory.id) || p.p2?.categoryIds?.includes(selectedCategory.id)))
-      );
-
-      if (catPairs.length < 2) {
-        setModalConfig({
-          title: 'Atenção',
-          message: 'É necessário ter pelo menos 2 times formados nesta categoria para gerar partidas.',
-          onConfirm: () => setModalConfig(null),
-        });
-        return;
-      }
+      newCategoryMatches = generateSystemMatchesForCategory(selectedCategory, categoryPairs, matches);
     }
 
-    const executeGenerateMatches = async () => {
-      let generated: TournamentMatch[] = [];
-      if (isSuper8) {
-        generated = generateSuper8MatchesForCategory(selectedCategory, categoryEntries, matches);
-      } else {
-        generated = generateSystemMatchesForCategory(selectedCategory, pairs, matches);
+    const otherMatches = matches.filter(
+      (m) =>
+        m.categoryId !== selectedCategory.id &&
+        !pairs.some((p) => (p.id === m.pair1Id || p.id === m.pair2Id) && p.categoryId === selectedCategory.id)
+    );
+
+    const nextMatches = [...otherMatches, ...newCategoryMatches];
+    onUpdateEvent({ ...event, matches: nextMatches });
+
+    const db = getDb();
+    if (db) {
+      try {
+        await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+      } catch (err) {
+        console.error('Erro ao gerar partidas pelo sistema no Firestore:', err);
       }
-      const otherMatches = matches.filter((m) => m.categoryId !== selectedCategory.id);
-      const nextMatches = [...otherMatches, ...generated];
-
-      onUpdateEvent({ ...event, matches: nextMatches });
-      setSelectedTeamIds(new Set());
-      setCategoryPanelView('matches');
-
-      const db = getDb();
-      if (db) {
-        try {
-          await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
-        } catch (err) {
-          console.error('Erro ao gerar partidas por sistema no Firestore:', err);
-        }
-      }
-    };
-
-    const existingCatMatches = matches.filter((m) => m.categoryId === selectedCategory.id);
-    if (existingCatMatches.length > 0) {
-      setModalConfig({
-        title: 'Regerar partidas?',
-        message: `A categoria "${selectedCategory.name}" já possui ${existingCatMatches.length} partidas geradas. Deseja regerar todas as partidas desta categoria?`,
-        confirmLabel: 'Regerar',
-        variant: 'danger',
-        onConfirm: () => {
-          setModalConfig(null);
-          void executeGenerateMatches();
-        },
-        onCancel: () => setModalConfig(null),
-      });
-      return;
     }
-
-    await executeGenerateMatches();
   };
 
   const handleDeleteMatch = (matchId: string) => {
     setModalConfig({
       title: 'Excluir partida?',
-      message: 'Deseja excluir esta partida?',
+      message: 'Tem certeza que deseja excluir esta partida?',
       confirmLabel: 'Excluir',
       variant: 'danger',
       onConfirm: async () => {
@@ -1022,25 +776,25 @@ const validateCategoryGenders = (
 
   const handleDeleteAllCategoryMatches = () => {
     if (!selectedCategory) return;
-    const catMatches = categoryMatches;
-    if (catMatches.length === 0) return;
-
     setModalConfig({
-      title: 'Excluir partidas?',
-      message: `Tem certeza que deseja excluir todas as ${catMatches.length} partidas da categoria "${selectedCategory.name}"?`,
-      confirmLabel: 'Excluir',
+      title: 'Limpar todos os confrontos?',
+      message: `Deseja apagar todos os jogos gerados da categoria "${selectedCategory.name}"?`,
+      confirmLabel: 'Limpar tudo',
       variant: 'danger',
       onConfirm: async () => {
         setModalConfig(null);
-        const catMatchIds = new Set(catMatches.map((m) => m.id));
-        const nextMatches = matches.filter((m) => !catMatchIds.has(m.id));
-        onUpdateEvent({ ...event, matches: nextMatches });
+        const remainingMatches = matches.filter(
+          (m) =>
+            m.categoryId !== selectedCategory.id &&
+            !pairs.some((p) => (p.id === m.pair1Id || p.id === m.pair2Id) && p.categoryId === selectedCategory.id)
+        );
+        onUpdateEvent({ ...event, matches: remainingMatches });
         const db = getDb();
         if (db) {
           try {
-            await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+            await updateEvent(db as Firestore, event.pin, { matches: remainingMatches });
           } catch (err) {
-            console.error('Erro ao excluir todas as partidas da categoria no Firestore:', err);
+            console.error('Erro ao limpar partidas da categoria no Firestore:', err);
           }
         }
       },
@@ -1049,584 +803,50 @@ const validateCategoryGenders = (
   };
 
   const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
+    const updatedEntries = entries.map((e) =>
+      e.pin === originalPin || e.email === entryData.email ? { ...e, ...entryData } : e
+    );
+    onUpdateEvent({ ...event, entries: updatedEntries });
+    setExpandedRegistrationEmail(null);
     const db = getDb();
-    const finalEntry: TournamentEntry = {
-      ...entryData,
-      registrationId: entryData.registrationId || entries.find((e) => e.pin === originalPin)?.registrationId || getNextRegistrationId(entries),
-    };
-    if (db && event.pin) {
+    if (db && event.pin && entryData.email) {
       try {
-        const { saveAdminEventEntry, saveUserEventRegistration } = await import('@infra/firebase/events');
-        await saveAdminEventEntry(db, event.pin, finalEntry);
-        try {
-          await saveUserEventRegistration(db, finalEntry.email, event.pin, {
-            pin: event.pin,
-            name: event.name,
-            joinedAt: finalEntry.joinedAt,
-            bannerUrl: event.bannerUrl || null,
-          });
-        } catch (error) {
-          console.warn('Inscrição salva, mas não foi possível criar o índice auxiliar do usuário:', error);
-        }
+        await saveEventEntry(db as Firestore, event.pin, entryData as any);
       } catch (err) {
-        console.error('Erro ao salvar inscrição no Firestore:', err);
+        console.error('Erro ao salvar inscrição expandida no Firestore:', err);
       }
     }
-    const updatedEntries = entries.map((item) => (item.pin === originalPin ? finalEntry : item));
-    onUpdateEvent({ ...event, entries: updatedEntries });
   };
 
   const handleDeleteEntry = (targetPin: string) => {
     const targetEntry = entries.find((e) => e.pin === targetPin);
-    if (!targetEntry) return;
-
     setModalConfig({
       title: 'Excluir inscrição?',
-      message: `Deseja excluir a inscrição de "${targetEntry.name}"?`,
+      message: targetEntry
+        ? `Deseja excluir a inscrição de "${targetEntry.name}"?`
+        : 'Tem certeza que deseja excluir esta inscrição?',
       confirmLabel: 'Excluir',
       variant: 'danger',
       onConfirm: async () => {
         setModalConfig(null);
-        setExpandedRegistrationEmail(null);
+        const updatedEntries = entries.filter((e) => e.pin !== targetPin);
+        onUpdateEvent({ ...event, entries: updatedEntries });
         const db = getDb();
-        const targetEmailLower = targetEntry.email?.toLowerCase().trim();
-
-        const updatedPairs = pairs.filter((p) => {
-          const p1Email = p.p1.email?.toLowerCase().trim();
-          const p2Email = p.p2.email?.toLowerCase().trim();
-          return p1Email !== targetEmailLower && p2Email !== targetEmailLower;
-        });
-
-        if (db && event.pin) {
+        if (db && event.pin && targetEntry?.email) {
           try {
-            const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
-            await deleteEventEntry(db, event.pin, targetEntry.email);
-            try {
-              await deleteUserEventRegistration(db, targetEntry.email, event.pin);
-            } catch (error) {
-              console.warn('Inscrição removida, mas não foi possível remover o índice do usuário:', error);
-            }
+            await deleteEventEntry(db as Firestore, event.pin, targetEntry.email);
           } catch (err) {
-            console.error('Erro ao deletar inscrição no Firestore:', err);
+            console.error('Erro ao excluir inscrição no Firestore:', err);
           }
         }
-
-        const updatedEntries = entries.filter((e) => e.pin !== targetPin);
-        onUpdateEvent({ ...event, entries: updatedEntries, pairs: updatedPairs });
       },
       onCancel: () => setModalConfig(null),
     });
   };
 
-  const renderTeamCard = (
-    pair: TournamentPair,
-    showBracketToggle = true,
-    hasMatches = false,
-    standing?: TeamStanding,
-    isChaveFinished = false,
-    allCategoryMatches: TournamentMatch[] = [],
-    positionIndex?: number,
-    totalInBracket?: number,
-    isRanking?: boolean
-  ) => {
-    const isSelected = (isManualMatchDraw || isRanking) && selectedTeamIds.has(pair.id);
-
-    // Posição final no torneio (quando todas as partidas da categoria estiverem encerradas)
-    const finalMatch = allCategoryMatches.find((m) => m.phase === 'final' && m.status === 'finished');
-    const thirdMatch = allCategoryMatches.find((m) => m.phase === '3lugar' && m.status === 'finished');
-    const allCatFinished = allCategoryMatches.length > 0 && allCategoryMatches.every((m) => m.status === 'finished');
-
-    let finalPositionBadge: string | null = null;
-    if (allCatFinished) {
-      if (finalMatch?.winnerPairId === pair.id) finalPositionBadge = '🏆 Campeão';
-      else if (finalMatch && (finalMatch.pair1Id === pair.id || finalMatch.pair2Id === pair.id)) finalPositionBadge = '🥈 Vice-campeão';
-      else if (thirdMatch?.winnerPairId === pair.id) finalPositionBadge = '🥉 3º lugar';
-      else if (thirdMatch && (thirdMatch.pair1Id === pair.id || thirdMatch.pair2Id === pair.id)) finalPositionBadge = '4º lugar';
-    }
-
-    // Helper: formata o placar de uma partida do ponto de vista deste time
-    const formatMatchScore = (match: TournamentMatch): string => {
-      if (!match.result) return '';
-      const isP1 = match.pair1Id === pair.id;
-      const parts = match.result.trim().split(/[\s,]+/);
-      return parts.map((part) => {
-        const m = part.match(/(\d+)[\/xX\-](\d+)/);
-        if (!m) return part;
-        return isP1 ? `${m[1]} x ${m[2]}` : `${m[2]} x ${m[1]}`;
-      }).join('  ');
-    };
-
-    const getOppName = (match: TournamentMatch): string => {
-      const isP1 = match.pair1Id === pair.id;
-      const opp = isP1
-        ? (match.pair2 || (match.pair2Id ? pairsById[match.pair2Id] : null))
-        : (match.pair1 || (match.pair1Id ? pairsById[match.pair1Id] : null));
-      if (!opp) return 'A definir';
-      return `${opp.p1.nickname || opp.p1.name} & ${opp.p2.nickname || opp.p2.name}`;
-    };
-
-    const semiMatch = allCategoryMatches.find(
-      (m) => m.phase === 'semifinal' && m.status === 'finished' &&
-      (m.pair1Id === pair.id || m.pair2Id === pair.id)
-    );
-    const wonSemi = semiMatch?.winnerPairId === pair.id;
-    const nextMatch = allCategoryMatches.find(
-      (m) => (m.phase === 'final' || m.phase === '3lugar') && m.status === 'finished' &&
-      (m.pair1Id === pair.id || m.pair2Id === pair.id)
-    );
-
-    return (
-      <div
-        key={pair.id}
-        onClick={() => {
-          if (isManualMatchDraw || isRanking) toggleTeamSelection(pair);
-        }}
-        className={`rounded-2xl border bg-white p-4 shadow-sm transition-all ${
-          (isManualMatchDraw || isRanking) ? 'cursor-pointer select-none' : ''
-        } ${
-          isSelected
-            ? 'border-sky-500 bg-sky-50/60 ring-2 ring-sky-300'
-            : 'border-slate-100 hover:border-slate-200'
-        }`}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              {!hasMatches && positionIndex !== undefined && (
-                <span
-                  className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-slate-100 text-slate-700 border border-slate-200 shrink-0"
-                  title={`Posição ${positionIndex + 1} na chave (determina a ordem dos confrontos)`}
-                >
-                  #{positionIndex + 1}
-                </span>
-              )}
-              <p className="text-[15px] font-black text-slate-800 leading-tight">
-                {pair.p1.nickname || pair.p1.name} & {pair.p2.nickname || pair.p2.name}
-              </p>
-              {/* Badge de classificação geral final (quando todo o torneio estiver finalizado) */}
-              {finalPositionBadge && (
-                <span
-                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
-                    finalPositionBadge.includes('🏆')
-                      ? 'bg-amber-100 text-amber-900 border-amber-300'
-                      : finalPositionBadge.includes('🥈')
-                      ? 'bg-slate-100 text-slate-600 border-slate-300'
-                      : finalPositionBadge.includes('🥉')
-                      ? 'bg-orange-100 text-orange-800 border-orange-300'
-                      : 'bg-slate-50 text-slate-500 border-slate-200'
-                  }`}
-                >
-                  {finalPositionBadge}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-xs font-bold text-slate-400 truncate">
-              {pair.teamCode || `Time ${pair.teamNumber || ''}`}
-            </p>
-
-            {/* Informações da fase de chaves */}
-            {hasMatches && (
-              <div className="mt-2.5 pt-2 border-t border-slate-100/90 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-bold text-slate-500">
-                  <span className="text-xs font-bold text-slate-500">
-                    Fase de chaves:
-                  </span>
-                  {standing && standing.played > 0 && (
-                    <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
-                        standing.rank === 1
-                          ? 'bg-amber-100 text-amber-900 border-amber-300'
-                          : standing.rank === 2
-                          ? 'bg-sky-100 text-sky-900 border-sky-300'
-                          : 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}
-                      title={
-                        isChaveFinished
-                          ? `${standing.rank}º lugar - ${standing.rank <= 2 ? 'Classificado para semifinal' : 'Fase de chaves finalizada'}`
-                          : `${standing.rank}º lugar parcial`
-                      }
-                    >
-                      {standing.rank === 1 ? '🥇 1º lugar' : standing.rank === 2 ? '🥈 2º lugar' : `${standing.rank}º lugar`}
-                      {isChaveFinished && (standing.rank === 1 || standing.rank === 2) && ' (Classificado)'}
-                    </span>
-                  )}
-                </div>
-
-                {standing && standing.played > 0 && (
-                  <BracketTeamStatsBlock standing={standing} />
-                )}
-
-                {/* Placar da semifinal */}
-                {semiMatch && (
-                  <div className="pt-1 space-y-0.5">
-                    <p className="text-xs font-bold text-slate-400">Semifinal:</p>
-                    <p className={`text-xs font-bold leading-snug ${wonSemi ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {getOppName(semiMatch)}{'  '}
-                      <strong>{formatMatchScore(semiMatch)}</strong>
-                      <span className="ml-1 font-black">{wonSemi ? '✓' : '✗'}</span>
-                    </p>
-                  </div>
-                )}
-
-                {/* Placar da final ou 3º lugar */}
-                {nextMatch && (
-                  <div className="pt-1 space-y-0.5">
-                    <p className="text-xs font-bold text-slate-400">
-                      {nextMatch.phase === 'final' ? 'Final:' : '3º lugar:'}
-                    </p>
-                    <p className={`text-xs font-bold leading-snug ${nextMatch.winnerPairId === pair.id ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {getOppName(nextMatch)}{'  '}
-                      <strong>{formatMatchScore(nextMatch)}</strong>
-                      <span className="ml-1 font-black">{nextMatch.winnerPairId === pair.id ? '✓' : '✗'}</span>
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Histórico de partidas — apenas para Ranking */}
-            {isRanking && (() => {
-              const teamMatches = allCategoryMatches.filter(
-                (m) => m.status === 'finished' && (m.pair1Id === pair.id || m.pair2Id === pair.id)
-              );
-              if (teamMatches.length === 0) return null;
-              const wins = teamMatches.filter((m) => m.winnerPairId === pair.id).length;
-              const losses = teamMatches.length - wins;
-              return (
-                <div className="mt-2.5 pt-2 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Histórico de partidas</p>
-                    <span className="text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">
-                      {wins}V {losses}D
-                    </span>
-                  </div>
-                  <div className="rounded-xl border border-slate-200/80 overflow-hidden divide-y divide-slate-200/60">
-                    {teamMatches.map((m) => {
-                      const isWinner = m.winnerPairId === pair.id;
-                      const resultParts = (m.result || '').split('/');
-                      const myScore = m.pair1Id === pair.id ? resultParts[0] : resultParts[1];
-                      const oppScore = m.pair1Id === pair.id ? resultParts[1] : resultParts[0];
-                      return (
-                        <div
-                          key={m.id}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] transition-colors ${
-                            isWinner ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'bg-red-50/50 hover:bg-red-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {isWinner
-                              ? <Trophy size={11} className="text-emerald-600 shrink-0" />
-                              : <X size={11} className="text-red-400 shrink-0" />
-                            }
-                            <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
-                              {isWinner ? 'Vitória' : 'Derrota'}
-                            </span>
-                            <span className="text-slate-500 font-bold truncate">
-                              vs {getOppName(m)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="font-black text-slate-700">{myScore || '?'} x {oppScore || '?'}</span>
-                            {m.matchDate && (
-                              <span className="text-slate-400 font-bold">
-                                {new Date(m.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 pt-0.5">
-            {!hasMatches && positionIndex !== undefined && totalInBracket !== undefined && totalInBracket > 1 && (
-              <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-200 rounded-xl p-0.5">
-                <button
-                  type="button"
-                  disabled={positionIndex === 0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoveTeamPosition(pair, 'up');
-                  }}
-                  className="p-1 rounded-lg hover:bg-white text-slate-600 disabled:opacity-20 disabled:hover:bg-transparent transition-all active:scale-90"
-                  title="Mover time para cima nesta chave"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  disabled={positionIndex === totalInBracket - 1}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoveTeamPosition(pair, 'down');
-                  }}
-                  className="p-1 rounded-lg hover:bg-white text-slate-600 disabled:opacity-20 disabled:hover:bg-transparent transition-all active:scale-90"
-                  title="Mover time para baixo nesta chave"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            )}
-            {showBracketToggle && (
-              hasMatches ? (
-                <span
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold border shadow-xs cursor-default ${
-                    (pair.bracket ?? 1) === 1
-                      ? 'bg-emerald-50/70 text-emerald-700 border-emerald-200'
-                      : 'bg-blue-50/70 text-blue-700 border-blue-200'
-                  }`}
-                  title="Chave bloqueada (partidas já geradas)"
-                >
-                  Chave {pair.bracket ?? 1}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleTeamBracket(pair);
-                  }}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 shadow-xs ${
-                    (pair.bracket ?? 1) === 1
-                      ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200'
-                      : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
-                  }`}
-                  title="Clique para alternar a chave deste time"
-                >
-                  Chave {pair.bracket ?? 1}
-                </button>
-              )
-            )}
-            {isManualMatchDraw && (
-              <span
-                className={`inline-flex w-5 h-5 rounded-full border-2 transition-colors ${
-                  isSelected ? 'bg-sky-500 border-sky-500' : 'border-slate-300'
-                }`}
-              >
-                {isSelected && <Check size={14} className="text-white m-auto" />}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderCategoryPanel = () => {
-    if (!selectedCategory) return null;
-
-    const categoryMatches = matches.filter(
-      (m) =>
-        m.categoryId === selectedCategory.id ||
-        (!m.categoryId && pairs.some((p) => (p.id === m.pair1Id || p.id === m.pair2Id) && p.categoryId === selectedCategory.id))
-    );
-
-    const hasCategoryMatches = categoryMatches.length > 0;
-    const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;
-
-    const handleGenerateBlankPdf = () => {
-      if (!selectedCategory) return;
-      exportCategoryMatchesBlankPdf(event, selectedCategory, categoryMatches, pairsById);
-    };
-
-    if (categoryPanelView === 'teams') {
-      const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
-      const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
-      const totalSets = (event.setsCount || event.config?.sets || 1) as number;
-
-      const bracketOnePairs = categoryPairs
-        .filter((pair) => (pair.bracket ?? 1) === 1)
-        .sort((a, b) => {
-          if (a.bracketOrder !== undefined && b.bracketOrder !== undefined) {
-            return a.bracketOrder - b.bracketOrder;
-          }
-          if (a.bracketOrder !== undefined) return -1;
-          if (b.bracketOrder !== undefined) return 1;
-          return (a.teamNumber || 0) - (b.teamNumber || 0);
-        });
-
-      const bracketTwoPairs = categoryPairs
-        .filter((pair) => pair.bracket === 2)
-        .sort((a, b) => {
-          if (a.bracketOrder !== undefined && b.bracketOrder !== undefined) {
-            return a.bracketOrder - b.bracketOrder;
-          }
-          if (a.bracketOrder !== undefined) return -1;
-          if (b.bracketOrder !== undefined) return 1;
-          return (a.teamNumber || 0) - (b.teamNumber || 0);
-        });
-
-      const b1Standings = calculateBracketStandings(bracketOnePairs, b1Matches, totalSets);
-      const b2Standings = calculateBracketStandings(bracketTwoPairs, b2Matches, totalSets);
-
-      const b1StandingsMap = new Map<string, TeamStanding>(b1Standings.map((s) => [s.pair.id, s]));
-      const b2StandingsMap = new Map<string, TeamStanding>(b2Standings.map((s) => [s.pair.id, s]));
-
-      const b1Finished = b1Matches.length > 0 && b1Matches.every((m) => m.status === 'finished');
-      const b2Finished = b2Matches.length > 0 && b2Matches.every((m) => m.status === 'finished');
-
-      const b1FinishedCount = b1Matches.filter((m) => m.status === 'finished').length;
-      const b2FinishedCount = b2Matches.filter((m) => m.status === 'finished').length;
-
-      const finalMatch = categoryMatches.find((m) => m.phase === 'final' && m.status === 'finished');
-      const thirdMatch = categoryMatches.find((m) => m.phase === '3lugar' && m.status === 'finished');
-      const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished');
-
-      const getOverallRank = (pairId: string, standing?: TeamStanding): number => {
-        if (allCatFinished) {
-          if (finalMatch?.winnerPairId === pairId) return 1;
-          if (finalMatch && (finalMatch.pair1Id === pairId || finalMatch.pair2Id === pairId)) return 2;
-          if (thirdMatch?.winnerPairId === pairId) return 3;
-          if (thirdMatch && (thirdMatch.pair1Id === pairId || thirdMatch.pair2Id === pairId)) return 4;
-          return 4 + (standing?.rank ?? 99);
-        }
-        return (standing?.rank ?? 99);
-      };
-
-      const bracketOneList = hasCategoryMatches && b1Matches.length > 0
-        ? [...b1Standings]
-            .sort((a, b) => getOverallRank(a.pair.id, a) - getOverallRank(b.pair.id, b))
-            .map((s) => s.pair)
-        : bracketOnePairs;
-
-      const bracketTwoList = hasCategoryMatches && b2Matches.length > 0
-        ? [...b2Standings]
-            .sort((a, b) => getOverallRank(a.pair.id, a) - getOverallRank(b.pair.id, b))
-            .map((s) => s.pair)
-        : bracketTwoPairs;
-
-      const rankingStandings = isRanking ? calculateBracketStandings(categoryPairs, categoryMatches, totalSets) : [];
-      const rankingStandingsMap = new Map<string, TeamStanding>(rankingStandings.map((s) => [s.pair.id, s]));
-      const rankingPairsList = categoryMatches.length > 0
-        ? [...rankingStandings].sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map((s) => s.pair)
-        : [...categoryPairs].sort((a, b) => (a.teamNumber || 0) - (b.teamNumber || 0));
-
-      return (
-        <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
-          <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
-            <div>
-              <h3 className="text-base font-black text-slate-800">
-                Times ({selectedCategory.name})
-              </h3>
-              <p className="text-xs text-slate-400 font-bold mt-0.5">
-                {isRanking
-                  ? 'Classificação do ranking e times formados nesta categoria.'
-                  : hasCategoryMatches
-                  ? 'Times formados (chaves e posições bloqueadas pois as partidas já foram geradas).'
-                  : 'Defina as chaves e use as setas ▲/▼ para ordenar a sequência dos confrontos.'}
-              </p>
-            </div>
-            {!isReadOnly && !isRanking && !hasCategoryMatches && isSystemDraw && categoryPairs.length >= 2 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleRandomizeCategoryDraw}
-                  className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-                  title="Sortear aleatoriamente os times entre a Chave 1 e a Chave 2 e suas posições"
-                >
-                  <Shuffle size={16} className="text-emerald-500" />
-                  <span>Sortear chaves</span>
-                </button>
-              </div>
-            )}
-          </div>
-          {isRanking ? (
-            categoryPairs.length === 0 ? (
-              <div className="p-10 text-center text-sm font-bold text-slate-400">
-                Nenhum time formado no momento. Na aba "Inscritos", selecione 2 atletas disponíveis para formar um time para a partida.
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3 p-4">
-                <p className="text-[11px] font-bold text-slate-400">
-                  Selecione 2 times para formar partida ou desfazer confronto existente.
-                </p>
-                {categoryPairs.map((pair, index) =>
-                  renderTeamCard(
-                    pair,
-                    false,
-                    false,
-                    undefined,
-                    false,
-                    categoryMatches,
-                    index,
-                    categoryPairs.length,
-                    true
-                  )
-                )}
-              </div>
-            )
-          ) : sortedCategoryPairs.length === 0 ? (
-            <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhum time formado nesta categoria.</div>
-          ) : (
-            <div className="flex flex-col gap-4 p-4">
-              {[
-                {
-                  label: 'Chave 1',
-                  list: bracketOneList,
-                  standingsMap: b1StandingsMap,
-                  isFinished: b1Finished,
-                  matchesCount: b1Matches.length,
-                  finishedCount: b1FinishedCount,
-                },
-                {
-                  label: 'Chave 2',
-                  list: bracketTwoList,
-                  standingsMap: b2StandingsMap,
-                  isFinished: b2Finished,
-                  matchesCount: b2Matches.length,
-                  finishedCount: b2FinishedCount,
-                },
-              ].map((bracket) => (
-                <div key={bracket.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 space-y-3">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h4 className="text-xs font-black text-slate-800">{bracket.label}</h4>
-                      {hasCategoryMatches && bracket.matchesCount > 0 && (
-                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                          {bracket.isFinished
-                            ? '✅ 1ª Fase finalizada'
-                            : `⏱️ ${bracket.finishedCount} de ${bracket.matchesCount} partidas finalizadas`}
-                        </p>
-                      )}
-                    </div>
-                    <span className="text-[10px] font-black text-slate-400 self-start sm:self-auto">
-                      {bracket.list.length} times
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {bracket.list.length === 0 ? (
-                      <p className="py-6 text-center text-xs font-bold text-slate-300">Sem times nesta chave.</p>
-                    ) : (
-                      bracket.list.map((pair, index) =>
-                        renderTeamCard(
-                          pair,
-                          true,
-                          hasCategoryMatches,
-                          bracket.standingsMap.get(pair.id),
-                          bracket.isFinished,
-                          categoryMatches,
-                          index,
-                          bracket.list.length
-                        )
-                      )
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      );
-    }
-
-  const parseMatchSets = (match: TournamentMatch, totalSets: number) => {
+  const parseMatchSets = (match: TournamentMatch, totalSetsCount: number) => {
     const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
-    const scores: MatchSetScore[] = Array.from({ length: totalSets }, (_, i) => {
+    const scores: MatchSetScore[] = Array.from({ length: totalSetsCount }, (_, i) => {
       if (match.scores && match.scores[i]) {
         return match.scores[i];
       }
@@ -1661,28 +881,12 @@ const validateCategoryGenders = (
     return { scores, setsWon1, setsWon2 };
   };
 
-  const handleScoreBlur = async () => {
-    if (saveMatchesTimeoutRef.current) {
-      clearTimeout(saveMatchesTimeoutRef.current);
-      saveMatchesTimeoutRef.current = null;
-    }
-    const db = getDb();
-    if (db) {
-      try {
-        await updateEvent(db as Firestore, event.pin, { matches });
-      } catch (err) {
-        console.error('Erro ao salvar placar no Firestore onBlur:', err);
-      }
-    }
-  };
-
   const handleScoreInputChange = (
     matchId: string,
     setIndex: number,
     player: 'p1' | 'p2',
     rawVal: string
   ) => {
-    const totalSets = (event.setsCount || event.config?.sets || 1) as number;
     const setsToWin = Math.ceil(totalSets / 2);
     const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
 
@@ -1750,24 +954,19 @@ const validateCategoryGenders = (
       };
     });
 
-    const progressedMatches = updatePlayoffProgression(pairs, nextMatches);
+    onUpdateEvent({ ...event, matches: nextMatches });
 
-    onUpdateEvent({ ...event, matches: progressedMatches });
-
-    if (saveMatchesTimeoutRef.current) {
-      clearTimeout(saveMatchesTimeoutRef.current);
-    }
-
+    if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
     saveMatchesTimeoutRef.current = setTimeout(async () => {
       const db = getDb();
       if (db) {
         try {
-          await updateEvent(db as Firestore, event.pin, { matches: progressedMatches });
+          await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
         } catch (err) {
-          console.error('Erro ao atualizar placar da partida no Firestore:', err);
+          console.error('Erro ao salvar placar no Firestore debounce:', err);
         }
       }
-    }, 600);
+    }, 1000);
   };
 
   const handleMatchDateChange = (matchId: string, dateVal: string) => {
@@ -1790,9 +989,6 @@ const validateCategoryGenders = (
   };
 
   const handleFinishMatch = async (matchId: string) => {
-    const totalSets = (event.setsCount || event.config?.sets || 1) as number;
-    const targetMatch = matches.find((m) => m.id === matchId);
-
     const nowIso = new Date().toISOString();
     const nextMatches = matches.map((m) => {
       if (m.id !== matchId) return m;
@@ -1842,17 +1038,13 @@ const validateCategoryGenders = (
       };
     });
 
-    let nextPairs = pairs;
-    // Para Ranking, os times NÃO são desfeitos ao finalizar a partida
-    // Eles permanecem em event.pairs e o histórico fica visível na aba Times
-
     const progressedMatches = isRanking ? nextMatches : updatePlayoffProgression(pairs, nextMatches);
-    onUpdateEvent({ ...event, matches: progressedMatches, pairs: nextPairs });
+    onUpdateEvent({ ...event, matches: progressedMatches, pairs });
 
     const db = getDb();
     if (db) {
       try {
-        await updateEvent(db as Firestore, event.pin, { matches: progressedMatches, pairs: nextPairs });
+        await updateEvent(db as Firestore, event.pin, { matches: progressedMatches, pairs });
       } catch (err) {
         console.error('Erro ao finalizar partida no Firestore:', err);
       }
@@ -1860,7 +1052,6 @@ const validateCategoryGenders = (
   };
 
   const handleFinishMatchWithValidation = (matchId: string) => {
-    const totalSets = (event.setsCount || event.config?.sets || 1) as number;
     const setsToWin = Math.ceil(totalSets / 2);
     const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
 
@@ -1879,7 +1070,6 @@ const validateCategoryGenders = (
 
     const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets);
 
-    // Verifica se algum set tem placar digitado
     const hasAnyScore = scores.some((s) => s.p1 !== null || s.p2 !== null);
     if (!hasAnyScore) {
       setModalConfig({
@@ -1896,7 +1086,6 @@ const validateCategoryGenders = (
       return;
     }
 
-    // Verifica se o vencedor atingiu o número correto de games por set
     const scoreWarnings: string[] = [];
     scores.forEach((s, idx) => {
       if (s.p1 === null || s.p2 === null) return;
@@ -1911,7 +1100,6 @@ const validateCategoryGenders = (
       }
     });
 
-    // Verifica se a partida tem vencedor claro
     const winnerDefined = setsWon1 >= setsToWin || setsWon2 >= setsToWin;
     if (!winnerDefined && totalSets > 1) {
       scoreWarnings.push(`Nenhum time atingiu ${setsToWin} set(s) para vencer (melhor de ${totalSets})`);
@@ -1941,7 +1129,6 @@ const validateCategoryGenders = (
       return;
     }
 
-    // Placar válido, finaliza direto
     handleFinishMatch(matchId);
   };
 
@@ -1980,1058 +1167,56 @@ const validateCategoryGenders = (
     }
   };
 
-  if (categoryPanelView === 'matches') {
-    const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
-    const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
-    const semiMatches = categoryMatches.filter((m) => m.phase === 'semifinal');
-    const finalMatches = categoryMatches.filter((m) => m.phase === 'final' || m.phase === '3lugar');
-    const otherMatches = categoryMatches.filter(
-      (m) => !['chave1', 'chave2', 'semifinal', 'final', '3lugar'].includes(m.phase || '')
-    );
-
-    const renderMatchItem = (match: TournamentMatch) => {
-      const code = match.matchCode || formatMatchNumber(match.matchNumber || 1);
-      const phase = getPhaseLabel(match.phase);
-      const phaseStr = phase ? `[${phase}]` : '';
-
-      const p1 = match.pair1 || (match.pair1Id && pairsById ? pairsById[match.pair1Id] : undefined);
-      const p2 = match.pair2 || (match.pair2Id && pairsById ? pairsById[match.pair2Id] : undefined);
-
-      const team1Name = p1 ? `${p1.p1.nickname || p1.p1.name} & ${p1.p2.nickname || p1.p2.name}` : match.pair1Label || 'A definir';
-      const team1Code = p1 ? (p1.teamCode || `Time ${p1.teamNumber || ''}`) : '';
-
-      const team2Name = p2 ? `${p2.p1.nickname || p2.p1.name} & ${p2.p2.nickname || p2.p2.name}` : match.pair2Label || 'A definir';
-      const team2Code = p2 ? (p2.teamCode || `Time ${p2.teamNumber || ''}`) : '';
-
-      const totalSets = (event.setsCount || event.config?.sets || 1) as number;
-      const setsToWin = Math.ceil(totalSets / 2);
-      const gamesPerSet = Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6));
-      const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets);
-
-      const hasAnyScore = scores.some((s) => (s.p1 !== null && s.p1 !== undefined) || (s.p2 !== null && s.p2 !== undefined));
-      const isMatchFinished = match.status === 'finished';
-      const isMatchLive = !isMatchFinished && (hasAnyScore || match.status === 'live');
-
-      const startDate = match.startedAt ? new Date(match.startedAt) : null;
-      const isValidStart = Boolean(startDate && !isNaN(startDate.getTime()));
-      const startFormatted = isValidStart
-        ? `${startDate!.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às ${startDate!.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-        : null;
-
-      let durationMinutes = match.durationMinutes;
-      if (durationMinutes === undefined && match.startedAt && match.finishedAt) {
-        const s = new Date(match.startedAt).getTime();
-        const f = new Date(match.finishedAt).getTime();
-        if (!isNaN(s) && !isNaN(f) && f > s) {
-          durationMinutes = Math.max(1, Math.round((f - s) / 60000));
-        }
-      }
-      const durationFormatted = durationMinutes !== undefined ? `${durationMinutes} min` : null;
-
-      const statusLabel =
-        isMatchFinished ? 'Finalizado' :
-        isMatchLive ? 'Ao vivo' : 'Aguardando';
-      const statusColor =
-        isMatchFinished ? 'bg-blue-50 text-blue-700 border-blue-200' :
-        isMatchLive ? 'bg-emerald-50 text-emerald-700 border-emerald-200 animate-pulse' :
-        'bg-slate-100 text-slate-500 border-slate-200';
-
-      const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished');
-
-        // Badges de posição final para partidas de final e 3º lugar já encerradas
-        let p1FinalBadge: string | null = null;
-        let p2FinalBadge: string | null = null;
-        if (allCatFinished && match.status === 'finished' && match.winnerPairId) {
-          if (match.phase === 'final') {
-            p1FinalBadge = match.winnerPairId === match.pair1Id ? '🏆 Campeão' : '🥈 Vice-campeão';
-            p2FinalBadge = match.winnerPairId === match.pair2Id ? '🏆 Campeão' : '🥈 Vice-campeão';
-          } else if (match.phase === '3lugar') {
-            p1FinalBadge = match.winnerPairId === match.pair1Id ? '🥉 3º lugar' : '4º lugar';
-            p2FinalBadge = match.winnerPairId === match.pair2Id ? '🥉 3º lugar' : '4º lugar';
-          }
-        }
-
-        // Posição na fila global (apenas para partidas aguardando)
-        const queuePos = (!isMatchFinished && !isMatchLive)
-          ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1
-          : 0;
-        const isInQueue = queuePos > 0;
-
-        return (
-          <div key={match.id} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:border-slate-200">
-            {/* Top row: Match Code & Phase on Left, Status Badge & Delete on Right */}
-            <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
-              <p className="text-sm font-black text-slate-800 tracking-tight">
-                [{code}]{phaseStr}
-              </p>
-              <div className="flex items-center gap-2 flex-wrap justify-end">
-                <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>
-                  {statusLabel}
-                </span>
-                {isInQueue && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black border bg-sky-50 text-sky-700 border-sky-200 whitespace-nowrap">
-                    <Clock size={10} />
-                    #{queuePos} na fila
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDeleteMatch(match.id)}
-                  className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-                  title="Excluir partida"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-
-
-            {totalSets === 1 ? (
-              /* Layout for 1 set (Image 2) */
-              <div className="flex items-center justify-between gap-4">
-                {/* Left side: Teams */}
-                <div className="min-w-0 flex-1 space-y-4">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-black text-slate-800 leading-tight">
-                        {team1Name}
-                      </p>
-                      {p1FinalBadge && (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
-                          p1FinalBadge.includes('🏆') ? 'bg-amber-100 text-amber-900 border-amber-300'
-                          : p1FinalBadge.includes('🥈') ? 'bg-slate-100 text-slate-600 border-slate-300'
-                          : p1FinalBadge.includes('🥉') ? 'bg-orange-100 text-orange-800 border-orange-300'
-                          : 'bg-slate-50 text-slate-400 border-slate-200'
-                        }`}>{p1FinalBadge}</span>
-                      )}
-                    </div>
-                    {team1Code && (
-                      <p className="text-xs font-bold text-slate-500">
-                        [{team1Code}]
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-black text-slate-800 leading-tight">
-                        {team2Name}
-                      </p>
-                      {p2FinalBadge && (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
-                          p2FinalBadge.includes('🏆') ? 'bg-amber-100 text-amber-900 border-amber-300'
-                          : p2FinalBadge.includes('🥈') ? 'bg-slate-100 text-slate-600 border-slate-300'
-                          : p2FinalBadge.includes('🥉') ? 'bg-orange-100 text-orange-800 border-orange-300'
-                          : 'bg-slate-50 text-slate-400 border-slate-200'
-                        }`}>{p2FinalBadge}</span>
-                      )}
-                    </div>
-                    {team2Code && (
-                      <p className="text-xs font-bold text-slate-500">
-                        [{team2Code}]
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right side: 1 Set Score */}
-                <div className="flex flex-col items-center shrink-0">
-                  {/* Row 1: Team 1 score */}
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 text-center text-sm font-black text-slate-800">
-                      {setsWon1}
-                    </span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={2}
-                      value={scores[0]?.p1 !== null && scores[0]?.p1 !== undefined ? scores[0].p1 : ''}
-                      onChange={(e) => handleScoreInputChange(match.id, 0, 'p1', e.target.value)}
-                      onBlur={handleScoreBlur}
-                      className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
-                        scores[0]?.p1 !== null &&
-                        scores[0]?.p1 !== undefined &&
-                        scores[0]?.p2 !== null &&
-                        scores[0]?.p2 !== undefined &&
-                        Number(scores[0].p1) >= gamesPerSet &&
-                        Number(scores[0].p1) > Number(scores[0].p2)
-                          ? 'bg-[#22c55e] text-white'
-                          : 'bg-white text-slate-900 focus:bg-slate-50'
-                      }`}
-                    />
-                  </div>
-
-                  {/* Row 2: set1 label */}
-                  <div className="flex items-center gap-2 py-1">
-                    <span className="w-5" />
-                    <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-600">
-                      set1
-                    </span>
-                  </div>
-
-                  {/* Row 3: Team 2 score */}
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 text-center text-sm font-black text-slate-800">
-                      {setsWon2}
-                    </span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={2}
-                      value={scores[0]?.p2 !== null && scores[0]?.p2 !== undefined ? scores[0].p2 : ''}
-                      onChange={(e) => handleScoreInputChange(match.id, 0, 'p2', e.target.value)}
-                      onBlur={handleScoreBlur}
-                      className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
-                        scores[0]?.p1 !== null &&
-                        scores[0]?.p1 !== undefined &&
-                        scores[0]?.p2 !== null &&
-                        scores[0]?.p2 !== undefined &&
-                        Number(scores[0].p2) >= gamesPerSet &&
-                        Number(scores[0].p2) > Number(scores[0].p1)
-                          ? 'bg-[#22c55e] text-white'
-                          : 'bg-white text-slate-900 focus:bg-slate-50'
-                      }`}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Layout for 3 or 5 sets (Image 3) */
-              <div className="space-y-3">
-                {/* Team 1 */}
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-black text-slate-800 leading-tight">
-                      {team1Name}
-                    </p>
-                    {p1FinalBadge && (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
-                        p1FinalBadge.includes('🏆') ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : p1FinalBadge.includes('🥈') ? 'bg-slate-100 text-slate-600 border-slate-300'
-                        : p1FinalBadge.includes('🥉') ? 'bg-orange-100 text-orange-800 border-orange-300'
-                        : 'bg-slate-50 text-slate-400 border-slate-200'
-                      }`}>{p1FinalBadge}</span>
-                    )}
-                  </div>
-                  {team1Code && (
-                    <p className="text-xs font-bold text-slate-500">
-                      [{team1Code}]
-                    </p>
-                  )}
-                </div>
-
-                {/* Sets Grid (Middle) */}
-                <div className="flex flex-col items-start pl-0.5">
-                  {/* Row 1: Team 1 score input */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-5 text-center text-sm font-black text-slate-800">
-                      {setsWon1}
-                    </span>
-                    {scores.map((setScore, setIdx) => {
-                      const isSetWon =
-                        setScore.p1 !== null &&
-                        setScore.p1 !== undefined &&
-                        setScore.p2 !== null &&
-                        setScore.p2 !== undefined &&
-                        Number(setScore.p1) >= gamesPerSet &&
-                        Number(setScore.p1) > Number(setScore.p2);
-
-                      return (
-                        <input
-                          key={`p1_set_${setIdx}`}
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={2}
-                          value={setScore.p1 !== null && setScore.p1 !== undefined ? setScore.p1 : ''}
-                          onChange={(e) =>
-                            handleScoreInputChange(match.id, setIdx, 'p1', e.target.value)
-                          }
-                          onBlur={handleScoreBlur}
-                          className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
-                            isSetWon
-                              ? 'bg-[#22c55e] text-white'
-                              : 'bg-white text-slate-900 focus:bg-slate-50'
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-
-                  {/* Row 2: Set labels (set1, set2, ...) */}
-                  <div className="flex items-center gap-1.5 py-1">
-                    <span className="w-5" />
-                    {scores.map((_, setIdx) => (
-                      <span
-                        key={`label_set_${setIdx}`}
-                        className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-600"
-                      >
-                        set{setIdx + 1}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Row 3: Team 2 score input */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-5 text-center text-sm font-black text-slate-800">
-                      {setsWon2}
-                    </span>
-                    {scores.map((setScore, setIdx) => {
-                      const isSetWon =
-                        setScore.p1 !== null &&
-                        setScore.p1 !== undefined &&
-                        setScore.p2 !== null &&
-                        setScore.p2 !== undefined &&
-                        Number(setScore.p2) >= gamesPerSet &&
-                        Number(setScore.p2) > Number(setScore.p1);
-
-                      return (
-                        <input
-                          key={`p2_set_${setIdx}`}
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={2}
-                          value={setScore.p2 !== null && setScore.p2 !== undefined ? setScore.p2 : ''}
-                          onChange={(e) =>
-                            handleScoreInputChange(match.id, setIdx, 'p2', e.target.value)
-                          }
-                          onBlur={handleScoreBlur}
-                          className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
-                            isSetWon
-                              ? 'bg-[#22c55e] text-white'
-                              : 'bg-white text-slate-900 focus:bg-slate-50'
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Team 2 */}
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-black text-slate-800 leading-tight">
-                      {team2Name}
-                    </p>
-                    {p2FinalBadge && (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
-                        p2FinalBadge.includes('🏆') ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : p2FinalBadge.includes('🥈') ? 'bg-slate-100 text-slate-600 border-slate-300'
-                        : p2FinalBadge.includes('🥉') ? 'bg-orange-100 text-orange-800 border-orange-300'
-                        : 'bg-slate-50 text-slate-400 border-slate-200'
-                      }`}>{p2FinalBadge}</span>
-                    )}
-                  </div>
-                  {team2Code && (
-                    <p className="text-xs font-bold text-slate-500">
-                      [{team2Code}]
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Botão Finalizar partida igual ao de Gerenciar partidas/Quadras */}
-            {!isMatchFinished ? (
-              <div className="pt-3 mt-3 border-t border-slate-100 space-y-2">
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] font-black text-slate-500 shrink-0 flex items-center gap-1">
-                    <Calendar size={13} className="text-sky-600" /> Data da partida:
-                  </label>
-                  <input
-                    type="date"
-                    value={match.matchDate || ''}
-                    onClick={(e) => {
-                      try {
-                        (e.target as any).showPicker?.();
-                      } catch {}
-                    }}
-                    onChange={(e) => handleMatchDateChange(match.id, e.target.value)}
-                    className="flex-1 h-9 text-xs font-bold bg-slate-50 border-2 border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl outline-none px-3 text-slate-700 cursor-pointer"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleFinishMatchWithValidation(match.id)}
-                  className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm"
-                  title="Registrar placar final e concluir partida"
-                >
-                  <Check size={14} />
-                  Finalizar partida
-                </button>
-              </div>
-            ) : (
-              <div className="pt-3 mt-3 border-t border-slate-100 space-y-2">
-                {(startFormatted || durationFormatted || match.matchDate) && (
-                  <div className="flex items-center gap-2 text-[11px] text-slate-600 flex-wrap bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-100">
-                    {match.matchDate && (
-                      <span className="inline-flex items-center gap-1 font-bold">
-                        <Calendar size={12} className="text-sky-600" />
-                        <span>Data: <strong className="font-black text-slate-800">{new Date(match.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></span>
-                      </span>
-                    )}
-                    {match.matchDate && (startFormatted || durationFormatted) && (
-                      <span className="text-slate-300">·</span>
-                    )}
-                    {startFormatted && (
-                      <span className="inline-flex items-center gap-1 font-bold">
-                        <Clock size={12} className="text-slate-400 shrink-0" />
-                        <span>Início: <strong className="font-black text-slate-800">{startFormatted}</strong></span>
-                      </span>
-                    )}
-                    {startFormatted && durationFormatted && (
-                      <span className="text-slate-300">·</span>
-                    )}
-                    {durationFormatted && (
-                      <span className="inline-flex items-center gap-1 font-bold">
-                        <Timer size={12} className="text-slate-400 shrink-0" />
-                        <span>Duração: <strong className="font-black text-slate-800">{durationFormatted}</strong></span>
-                      </span>
-                    )}
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                    <Check size={13} className="text-emerald-500" /> Partida finalizada
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleReopenMatch(match.id)}
-                    className="text-[11px] font-black text-slate-400 hover:text-blue-600 hover:underline transition-colors"
-                    title="Reabrir partida para alteração de placar"
-                  >
-                    Reabrir partida
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      };
-
-      return (
-        <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in space-y-4">
-          <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
-            <div>
-              <h3 className="text-base font-black text-slate-800">
-                Partidas ({selectedCategory.name})
-              </h3>
-              <p className="text-xs text-slate-400 font-bold mt-0.5">
-                {categoryMatches.length} {categoryMatches.length === 1 ? 'partida configurada' : 'partidas configuradas'} nesta categoria.
-              </p>
-            </div>
-            {categoryMatches.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                {!isReadOnly && (
-                  <button
-                    type="button"
-                    onClick={handleGenerateSystemMatches}
-                    className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-                  >
-                    <Sparkles size={16} className="text-emerald-500" />
-                    <span>Regerar partidas</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleGenerateBlankPdf}
-                  className="flex items-center justify-center gap-2 border-2 border-orange-400 text-orange-600 bg-white hover:bg-orange-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-                  title="Gerar PDF com todas as partidas em branco para anotações manuais"
-                >
-                  <FileText size={16} className="text-orange-500" />
-                  <span>Gerar PDF</span>
-                </button>
-                {!isReadOnly && (
-                  <button
-                    type="button"
-                    onClick={handleDeleteAllCategoryMatches}
-                    className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
-                    title="Deletar todas as partidas geradas desta categoria"
-                  >
-                    <Trash2 size={16} className="text-red-500" />
-                    <span>Deletar</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {categoryMatches.length === 0 ? (
-            <div className="p-10 text-center space-y-3">
-              <p className="text-sm font-bold text-slate-400">Nenhuma partida gerada para esta categoria.</p>
-              {!isRanking && !isReadOnly && (
-                <button
-                  type="button"
-                  onClick={handleGenerateSystemMatches}
-                  className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
-                >
-                  <Sparkles size={16} />
-                  <span>Gerar partidas</span>
-                </button>
-              )}
-            </div>
-          ) : isRanking ? (
-            <div className="p-4 space-y-3">
-              <div className="grid grid-cols-1 gap-2.5">
-                {categoryMatches.map(renderMatchItem)}
-              </div>
-            </div>
-          ) : isSuper8 ? (
-            <div className="p-4 space-y-6">
-              {(() => {
-                const roundMap = new Map<string, { label: string; matches: TournamentMatch[] }>();
-                categoryMatches.forEach((m) => {
-                  const phase = m.phase || 'rodada1';
-                  const num = phase.replace(/\D/g, '') || '1';
-                  const roundKey = `rodada${num}`;
-                  if (!roundMap.has(roundKey)) {
-                    roundMap.set(roundKey, { label: `Rodada ${num}`, matches: [] });
-                  }
-                  roundMap.get(roundKey)!.matches.push(m);
-                });
-                const rounds = Array.from(roundMap.entries())
-                  .sort(([k1], [k2]) => {
-                    const n1 = Number(k1.replace(/\D/g, '')) || 0;
-                    const n2 = Number(k2.replace(/\D/g, '')) || 0;
-                    return n1 - n2;
-                  })
-                  .map(([, v]) => v);
-
-                return rounds.map((round) => (
-                  <div key={round.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-slate-800">{round.label}</h4>
-                      <span className="text-[10px] font-black text-slate-400">{round.matches.length} {round.matches.length === 1 ? 'jogo' : 'jogos'}</span>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2.5">
-                      {round.matches.map(renderMatchItem)}
-                    </div>
-                  </div>
-                ));
-              })()}
-            </div>
-          ) : (
-            <div className="p-4 space-y-6">
-              {b1Matches.length > 0 && (
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-slate-800">Primeira fase — Chave 1</h4>
-                    <span className="text-[10px] font-black text-slate-400">{b1Matches.length} jogos</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {b1Matches.map(renderMatchItem)}
-                  </div>
-                </div>
-              )}
-              {b2Matches.length > 0 && (
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-slate-800">Primeira fase — Chave 2</h4>
-                    <span className="text-[10px] font-black text-slate-400">{b2Matches.length} jogos</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {b2Matches.map(renderMatchItem)}
-                  </div>
-                </div>
-              )}
-              {semiMatches.length > 0 && (
-                <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-amber-900">Semifinais</h4>
-                    <span className="text-[10px] font-black text-amber-600">{semiMatches.length} jogos</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {semiMatches.map(renderMatchItem)}
-                  </div>
-                </div>
-              )}
-              {finalMatches.length > 0 && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-emerald-900">Finais & 3º lugar</h4>
-                    <span className="text-[10px] font-black text-emerald-600">{finalMatches.length} jogos</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {finalMatches.map(renderMatchItem)}
-                  </div>
-                </div>
-              )}
-              {otherMatches.length > 0 && (
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-slate-800">Outras Partidas</h4>
-                    <span className="text-[10px] font-black text-slate-400">{otherMatches.length} jogos</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {otherMatches.map(renderMatchItem)}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-      );
-    }
-
-    return (
-      <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-black text-slate-800">Inscritos ({selectedCategory.name})</h3>
-            <p className="text-xs text-slate-400 font-bold mt-0.5">
-              {isSuper8
-                ? 'Classificação individual e estatísticas dos atletas.'
-                : 'Clique nos participantes para formar ou desfazer times.'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center justify-between gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
-          {isSuper8 ? (
-            <>
-              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-lg">
-                Classificação Super 8
-              </span>
-              {(() => {
-                if (categoryMatches.length === 0) return null;
-
-                const totalSets = (event.setsCount || event.config?.sets || 1) as number;
-                const setsToWin = Math.ceil(totalSets / 2);
-
-                const isMatchDone = (m: TournamentMatch) => {
-                  if (m.status === 'finished') return true;
-                  const { setsWon1, setsWon2 } = parseMatchSets(m, totalSets);
-                  return setsWon1 >= setsToWin || setsWon2 >= setsToWin;
-                };
-
-                const roundMap = new Map<number, TournamentMatch[]>();
-                categoryMatches.forEach((m) => {
-                  const num = Number((m.phase || 'rodada1').replace(/\D/g, '')) || 1;
-                  if (!roundMap.has(num)) {
-                    roundMap.set(num, []);
-                  }
-                  roundMap.get(num)!.push(m);
-                });
-
-                const sortedRoundNumbers = Array.from(roundMap.keys()).sort((a, b) => a - b);
-                if (sortedRoundNumbers.length === 0) return null;
-
-                // Encontra a primeira rodada que ainda não foi 100% finalizada
-                const currentRoundNum = sortedRoundNumbers.find((rNum) => {
-                  const rMatches = roundMap.get(rNum) || [];
-                  return !rMatches.every(isMatchDone);
-                });
-
-                if (currentRoundNum === undefined) {
-                  // Todas as rodadas foram finalizadas
-                  const maxRound = sortedRoundNumbers[sortedRoundNumbers.length - 1];
-                  return (
-                    <span className="text-[10px] font-black px-2.5 py-1 rounded-lg border text-emerald-700 bg-emerald-50 border-emerald-200">
-                      Rodada: {maxRound} — finalizada
-                    </span>
-                  );
-                }
-
-                const currentRoundMatches = roundMap.get(currentRoundNum) || [];
-                const hasStarted = currentRoundMatches.some((m) =>
-                  m.status === 'live' ||
-                  isMatchDone(m) ||
-                  (m.scores && m.scores.some((s) => s.p1 !== null || s.p2 !== null))
-                );
-
-                return (
-                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${
-                    hasStarted
-                      ? 'text-sky-700 bg-sky-50 border-sky-200'
-                      : 'text-slate-600 bg-slate-100 border-slate-200'
-                  }`}>
-                    Rodada: {currentRoundNum} — {hasStarted ? 'em andamento' : 'aguardando'}
-                  </span>
-                );
-              })()}
-            </>
-          ) : (
-            <>
-              <span className="text-[10px] font-black text-slate-400">Classificar por</span>
-              <button
-                type="button"
-                onClick={() => setSortBy(sortBy === 'team' ? 'name' : 'team')}
-                className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg transition-all hover:bg-slate-50"
-              >
-                {sortBy === 'team' ? 'Time' : 'Participante'} <ArrowUpDown size={12} />
-              </button>
-            </>
-          )}
-        </div>
-        {sortedCategoryEntries.length === 0 ? (
-          <div className="p-10 text-center text-sm font-bold text-slate-400">
-            Nenhum inscrito nesta categoria.
-          </div>
-        ) : isRanking ? (
-          <div>
-            <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
-              <Sparkles size={13} className="text-emerald-600" />
-              <span className="text-[11px] font-black text-emerald-700">
-                Disponíveis para formar novos times ({sortedCategoryEntries.length})
-              </span>
-            </div>
-            <div className="divide-y divide-emerald-100/40">
-                  {sortedCategoryEntries.map((entry, entryIndex) => {
-                    const entryCategories = categories.filter((c) => entry.categoryIds?.includes(c.id));
-                    const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
-                    const isExpanded = expandedRegistrationEmail === entry.email;
-                    const isSelected = !isSuper8 && selectedEntries.has(entry.email);
-                    const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
-                    const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
-                    return (
-                      <div
-                        key={entry.email || entry.pin}
-                        className={`transition-all ${
-                          isSelected
-                            ? 'bg-emerald-100/90 ring-2 ring-inset ring-emerald-500 border-l-4 border-l-emerald-600'
-                            : isExpanded
-                            ? 'bg-emerald-50/30 border-l-4 border-l-emerald-400'
-                            : 'bg-emerald-50/20 hover:bg-emerald-50/50 border-l-4 border-l-emerald-400'
-                        }`}
-                      >
-                        <div
-                          onClick={() => !isSuper8 && toggleEntrySelection(entry)}
-                          className={`p-3.5 sm:p-4 flex flex-col gap-2.5 ${isSuper8 ? 'cursor-default' : 'cursor-pointer'}`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-start gap-3 min-w-0 flex-1">
-                              <div className="flex flex-col items-center gap-1.5 shrink-0">
-                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${entry.gender === 'F' ? 'bg-pink-50 text-pink-500' : 'bg-sky-50 text-sky-500'}`}>
-                                  <User size={20} />
-                                </div>
-                                <button
-                                  type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const nextGender = entry.gender === 'F' ? 'M' : 'F';
-                                  const db = getDb();
-                                  if (db && event.pin) {
-                                    try {
-                                      const { updateEventEntry } = await import('@infra/firebase/events');
-                                      await updateEventEntry(db, event.pin, entry.email, { gender: nextGender });
-                                      const { updateUserProfileFields } = await import('@infra/firebase/users');
-                                      await updateUserProfileFields(db, entry.email, { gender: nextGender });
-                                    } catch (err) {
-                                      console.error('Erro ao alternar gênero:', err);
-                                    }
-                                  }
-                                  const updatedEntries = entries.map((item) =>
-                                    (item.email === entry.email || item.pin === entry.pin)
-                                      ? { ...item, gender: nextGender as 'M' | 'F' }
-                                      : item
-                                  );
-                                  onUpdateEvent({ ...event, entries: updatedEntries });
-                                }}
-                                className={`p-1.5 rounded-xl border flex items-center justify-center shrink-0 transition-all active:scale-90 ${
-                                  entry.gender === 'F'
-                                    ? 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'
-                                    : 'bg-sky-50 text-sky-500 border-sky-100 hover:bg-sky-100'
-                                }`}
-                                title="Clique para alternar gênero"
-                              >
-                                {entry.gender === 'F' ? <VenusIcon size={16} /> : <MarsIcon size={16} />}
-                              </button>
-                            </div>
-                              <div className="space-y-1 min-w-0 flex-1 text-left">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="font-black text-sm text-slate-800 tracking-tight truncate">
-                                    {entry.name || entry.nickname}
-                                  </p>
-                                  {isIndividualRanking && standing?.rank !== undefined && (
-                                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
-                                      standing.rank === 1
-                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                        : standing.rank === 2
-                                        ? 'bg-slate-200 text-slate-700 border border-slate-300'
-                                        : standing.rank === 3
-                                        ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
-                                        : 'bg-slate-100 text-slate-600'
-                                    }`}>
-                                      {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
-                                    </span>
-                                  )}
-                                  {isRanking && standing && (
-                                    <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
-                                      {standing.points || 0} pts
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                  {(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}
-                                </p>
-                                {entryCategories.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                    {entryCategories.map((c) => (
-                                      <span key={c.id} className="bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60">
-                                        {c.abbreviation || c.name}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-[10px] text-slate-300 font-bold">Sem categoria</p>
-                                )}
-                                {((entry.dueAmount ?? 0) > 0 || entryPaid > 0) && (
-                                  <div className="flex items-center gap-2 pt-0.5 flex-wrap">
-                                    <span className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                                      entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
-                                        ? 'bg-emerald-100 text-emerald-700'
-                                        : entry.paymentStatus === 'Isento'
-                                        ? 'bg-blue-100 text-blue-700'
-                                        : 'bg-amber-100 text-amber-700'
-                                    }`}>
-                                      {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-600">
-                                      R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
-                                {formatRegistrationId(entry.registrationId)}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExpandedRegistrationEmail(isExpanded ? null : entry.email);
-                                }}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-90 shadow-sm"
-                                title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
-                              >
-                                {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                              </button>
-                            </div>
-                          </div>
-                          {isRanking && standing && categoryMatches.length > 0 && (
-                            <div onClick={(e) => e.stopPropagation()}>
-                              <RankingStandingStatsBlock standing={standing} />
-                            </div>
-                          )}
-                        </div>
-                        {isExpanded && (
-                          <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
-                            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
-                              <EventRegistrationForm
-                                key={`expanded-${entry.email || entry.pin}`}
-                                event={event}
-                                mode="admin"
-                                entry={entry}
-                                onUpdateEvent={onUpdateEvent}
-                                onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
-                                onDelete={isReadOnly ? undefined : () => { handleDeleteEntry(entry.pin); }}
-                                onCancel={() => setExpandedRegistrationEmail(null)}
-                                readOnly={isReadOnly}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-            </div>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {sortedCategoryEntries.map((entry, entryIndex) => {
-              const entryCategories = categories.filter((c) =>
-                entry.categoryIds?.includes(c.id)
-              );
-              const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
-              const isExpanded = expandedRegistrationEmail === entry.email;
-              const isSelected = !isSuper8 && selectedEntries.has(entry.email);
-              const pair = !isSuper8 ? pairForEntry(entry) : null;
-              const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
-              const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
-              const partner = pair
-                ? (pair.p1.email === entry.email ? pair.p2 : pair.p1)
-                : null;
-
-              return (
-                <div
-                  key={entry.email || entry.pin}
-                  className={`transition-colors ${
-                    isSelected
-                      ? 'bg-sky-50/70 ring-2 ring-inset ring-sky-400'
-                      : isExpanded
-                      ? 'bg-emerald-50/30'
-                      : entryIndex % 2 === 0
-                      ? 'bg-white hover:bg-slate-50/70'
-                      : 'bg-emerald-50/30 hover:bg-emerald-50/50'
-                  }`}
-                >
-                  <div
-                    onClick={() => !isSuper8 && toggleEntrySelection(entry)}
-                    className={`p-3.5 sm:p-4 flex flex-col gap-2.5 ${isSuper8 ? 'cursor-default' : 'cursor-pointer'}`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      {/* Lado Esquerdo: Ícone de Gênero + Informações do Participante */}
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        {/* Ícone de Gênero */}
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            const nextGender = entry.gender === 'F' ? 'M' : 'F';
-                            const db = getDb();
-                            if (db && event.pin) {
-                              try {
-                                const { updateEventEntry } = await import('@infra/firebase/events');
-                                await updateEventEntry(db, event.pin, entry.email, { gender: nextGender });
-                                const { updateUserProfileFields } = await import('@infra/firebase/users');
-                                await updateUserProfileFields(db, entry.email, { gender: nextGender });
-                              } catch (err) {
-                                console.error('Erro ao alternar gênero:', err);
-                              }
-                            }
-                            const updatedEntries = entries.map((item) =>
-                              (item.email === entry.email || item.pin === entry.pin)
-                                ? { ...item, gender: nextGender as 'M' | 'F' }
-                                : item
-                            );
-                            onUpdateEvent({ ...event, entries: updatedEntries });
-                          }}
-                          className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all active:scale-90 ${
-                            entry.gender === 'F'
-                              ? 'bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100'
-                              : 'bg-sky-50 text-sky-500 border-sky-100 hover:bg-sky-100'
-                          }`}
-                          title="Clique para alternar gênero"
-                        >
-                          {entry.gender === 'F' ? <VenusIcon size={20} /> : <MarsIcon size={20} />}
-                        </button>
-
-                        {/* Bloco das Linhas de Informação */}
-                        <div className="space-y-1 min-w-0 flex-1 text-left">
-                          {/* Linha 1: Nome */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {isIndividualRanking && standing?.rank !== undefined && (
-                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
-                                standing.rank === 1
-                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                  : standing.rank === 2
-                                  ? 'bg-slate-200 text-slate-700 border border-slate-300'
-                                  : standing.rank === 3
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}>
-                                {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
-                              </span>
-                            )}
-                            <p className="font-black text-sm text-slate-800 tracking-tight truncate">
-                              {entry.name || entry.nickname}
-                            </p>
-                          </div>
-
-                          {/* Linha 2: Nickname - PIN mascarado (padrão Inscrições) */}
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                            {(entry.nickname || entry.name).toUpperCase()} - {maskPin(entry.pin)}
-                          </p>
-
-                          {/* Linha 3: Categorias */}
-                          {entryCategories.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              {entryCategories.map((c) => (
-                                <span
-                                  key={c.id}
-                                  className="bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60"
-                                >
-                                  {c.abbreviation || c.name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-slate-300 font-bold">Sem categoria</p>
-                          )}
-
-                          {/* Linha 4: Status do Pagamento + Valores — oculto quando inscrição gratuita */}
-                          {((entry.dueAmount ?? 0) > 0 || entryPaid > 0) && (
-                            <div className="flex items-center gap-2 pt-0.5 flex-wrap">
-                              <span
-                                className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                                  entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : entry.paymentStatus === 'Isento'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-amber-100 text-amber-700'
-                                }`}
-                              >
-                                {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
-                              </span>
-                              <span className="text-xs font-bold text-slate-600">
-                                R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Lado Direito: Inscrição_ID + Botão de Ação / Chevron */}
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
-                          {formatRegistrationId(entry.registrationId)}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedRegistrationEmail(isExpanded ? null : entry.email);
-                          }}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-90 shadow-sm"
-                          title={isExpanded ? 'Fechar cadastro de inscrição' : 'Abrir cadastro de inscrição'}
-                        >
-                          {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  {isSuper8 && standing && categoryMatches.length > 0 && (
-                    <div className="px-3.5 sm:px-4 pb-3" onClick={(e) => e.stopPropagation()}>
-                      <Super8StandingStatsBlock standing={standing} />
-                    </div>
-                  )}
-
-                  {/* Formulário Expandido */}
-                  {isExpanded && (
-                    <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
-                      <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
-                        <EventRegistrationForm
-                          key={`expanded-${entry.email || entry.pin}`}
-                          event={event}
-                          mode="admin"
-                          entry={entry}
-                          onUpdateEvent={onUpdateEvent}
-                          onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
-                          onDelete={isReadOnly ? undefined : () => {
-                            handleDeleteEntry(entry.pin);
-                          }}
-                          onCancel={() => setExpandedRegistrationEmail(null)}
-                          readOnly={isReadOnly}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-    );
+  const handleGenerateBlankPdf = () => {
+    if (!selectedCategory) return;
+    exportCategoryMatchesBlankPdf(event, selectedCategory, categoryMatches, pairsById);
   };
+
+  // Prepara dados de chaves para a aba Times
+  const bracketOnePairs = useMemo(() => {
+    return categoryPairs
+      .filter((pair) => (pair.bracket ?? 1) === 1)
+      .sort((a, b) => {
+        if (a.bracketOrder !== undefined && b.bracketOrder !== undefined) {
+          return a.bracketOrder - b.bracketOrder;
+        }
+        if (a.bracketOrder !== undefined) return -1;
+        if (b.bracketOrder !== undefined) return 1;
+        return (a.teamNumber || 0) - (b.teamNumber || 0);
+      });
+  }, [categoryPairs]);
+
+  const bracketTwoPairs = useMemo(() => {
+    return categoryPairs
+      .filter((pair) => pair.bracket === 2)
+      .sort((a, b) => {
+        if (a.bracketOrder !== undefined && b.bracketOrder !== undefined) {
+          return a.bracketOrder - b.bracketOrder;
+        }
+        if (a.bracketOrder !== undefined) return -1;
+        if (b.bracketOrder !== undefined) return 1;
+        return (a.teamNumber || 0) - (b.teamNumber || 0);
+      });
+  }, [categoryPairs]);
+
+  const b1Matches = useMemo(() => categoryMatches.filter((m) => m.phase === 'chave1'), [categoryMatches]);
+  const b2Matches = useMemo(() => categoryMatches.filter((m) => m.phase === 'chave2'), [categoryMatches]);
+
+  const b1Standings = useMemo(() => calculateBracketStandings(bracketOnePairs, b1Matches, totalSets), [bracketOnePairs, b1Matches, totalSets]);
+  const b2Standings = useMemo(() => calculateBracketStandings(bracketTwoPairs, b2Matches, totalSets), [bracketTwoPairs, b2Matches, totalSets]);
+
+  const b1StandingsMap = useMemo(() => new Map<string, TeamStanding>(b1Standings.map((s) => [s.pair.id, s])), [b1Standings]);
+  const b2StandingsMap = useMemo(() => new Map<string, TeamStanding>(b2Standings.map((s) => [s.pair.id, s])), [b2Standings]);
+
+  const b1Finished = b1Matches.length > 0 && b1Matches.every((m) => m.status === 'finished');
+  const b2Finished = b2Matches.length > 0 && b2Matches.every((m) => m.status === 'finished');
+
+  const b1FinishedCount = b1Matches.filter((m) => m.status === 'finished').length;
+  const b2FinishedCount = b2Matches.filter((m) => m.status === 'finished').length;
 
   return (
     <div className="space-y-6">
-      {/* Top Selection Action Bar (Item a / Image 1 style) */}
+      {/* Selection Header (Formar time / Desfazer time) */}
       {!isSuper8 && selectedEntries.size > 0 && (
         <header className="px-6 py-5 flex items-center justify-between bg-sky-600 text-white fixed top-0 left-0 right-0 z-[60] shadow-lg animate-in slide-in-from-top duration-200">
           <div className="flex items-center gap-4">
@@ -3054,9 +1239,9 @@ const validateCategoryGenders = (
                   type="button"
                   onClick={handleFormTeam}
                   className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md active:scale-95 transition-all"
-                  title="Desfazer time"
+                  title="Desfazer time existente"
                 >
-                  <UserRound size={16} />
+                  <Trash2 size={16} />
                   <span>Desfazer time</span>
                 </button>
               ) : selectedEntries.size === 2 ? (
@@ -3158,15 +1343,38 @@ const validateCategoryGenders = (
         {!isAdding && !isReadOnly && (
           <button
             onClick={handleStartAdd}
-            className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all self-start sm:self-auto"
+            className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all self-start sm:self-auto cursor-pointer"
           >
             <Plus size={18} /> Categoria
           </button>
         )}
       </div>
 
-      {/* Category Registration Form */}
-      {isAdding && !editingId && renderCategoryForm()}
+      {/* Category Registration Form Modal (Adicionar) */}
+      {isAdding && !editingId && (
+        <CategoryFormModal
+          editingId={null}
+          name={name}
+          description={description}
+          format={format}
+          sportId={sportId}
+          abbreviation={abbreviation}
+          priority={priority}
+          gender1={gender1}
+          gender2={gender2}
+          activeSports={activeSports}
+          onNameChange={setName}
+          onDescriptionChange={setDescription}
+          onFormatChange={setFormat}
+          onSportIdChange={setSportId}
+          onAbbreviationChange={setAbbreviation}
+          onPriorityChange={setPriority}
+          onGender1Change={setGender1}
+          onGender2Change={setGender2}
+          onSave={handleSave}
+          onCancel={resetForm}
+        />
+      )}
 
       {/* Category Cards Grid */}
       {categories.length === 0 ? (
@@ -3192,95 +1400,128 @@ const validateCategoryGenders = (
 
             return (
               <React.Fragment key={cat.id}>
-              <div
-                onClick={() => openCategoryPanel(cat.id, 'entries')}
-                className={`p-4 rounded-2xl border text-left transition-all space-y-3 w-full cursor-pointer ${
-                  isEditing
-                    ? 'border-emerald-500 bg-emerald-50 shadow-md scale-[1.01]'
-                    : isSelectedCategory
-                    ? 'border-blue-400 bg-blue-50/30 shadow-sm'
-                    : 'bg-white border-slate-100 hover:border-emerald-300 hover:shadow-sm shadow-sm'
-                }`}
-              >
-                {/* Header: priority badge + format badge + Chevron edit button */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-6 h-6 inline-flex items-center justify-center bg-slate-100 rounded-lg text-slate-600 font-black text-[10px]">
-                      {cat.priority}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-black text-slate-800 text-sm leading-tight truncate">{cat.name}</p>
-                      <p className="text-[10px] text-slate-400 font-bold mt-0.5 truncate">{cat.sportName || cat.sportId}{cat.abbreviation && ` · ${cat.abbreviation}`}</p>
-                    </div>
+                <CategoryAccordionItem
+                  cat={cat}
+                  isEditing={isEditing}
+                  isSelectedCategory={isSelectedCategory}
+                  isReadOnly={isReadOnly}
+                  categoryPanelView={categoryPanelView}
+                  inscritosCount={inscritosCount}
+                  timesCount={timesCount}
+                  partidasCount={partidasCount}
+                  onOpenPanel={openCategoryPanel}
+                  onStartEdit={handleStartEdit}
+                />
+
+                {isEditing && (
+                  <CategoryFormModal
+                    editingId={editingId}
+                    name={name}
+                    description={description}
+                    format={format}
+                    sportId={sportId}
+                    abbreviation={abbreviation}
+                    priority={priority}
+                    gender1={gender1}
+                    gender2={gender2}
+                    activeSports={activeSports}
+                    onNameChange={setName}
+                    onDescriptionChange={setDescription}
+                    onFormatChange={setFormat}
+                    onSportIdChange={setSportId}
+                    onAbbreviationChange={setAbbreviation}
+                    onPriorityChange={setPriority}
+                    onGender1Change={setGender1}
+                    onGender2Change={setGender2}
+                    onSave={handleSave}
+                    onDelete={handleDelete}
+                    onCancel={resetForm}
+                  />
+                )}
+
+                {selectedCategoryId === cat.id && (
+                  <div className="mt-2 space-y-4">
+                    {categoryPanelView === 'entries' && (
+                      <CategoryEntriesTab
+                        category={cat}
+                        event={event}
+                        entries={sortedCategoryEntries}
+                        categoryMatches={categoryMatches}
+                        playerStandingsMap={playerStandingsMap}
+                        sortBy={sortBy}
+                        isIndividualRanking={isIndividualRanking}
+                        isRanking={isRanking}
+                        isSuper8={isSuper8}
+                        isReadOnly={isReadOnly}
+                        selectedEntries={selectedEntries}
+                        expandedRegistrationEmail={expandedRegistrationEmail}
+                        onSortChange={setSortBy}
+                        onToggleEntrySelection={toggleEntrySelection}
+                        onToggleExpandedRegistration={setExpandedRegistrationEmail}
+                        onSaveExpandedEntry={handleSaveExpandedEntry}
+                        onDeleteEntry={handleDeleteEntry}
+                        onUpdateEvent={onUpdateEvent}
+                      />
+                    )}
+
+                    {categoryPanelView === 'teams' && (
+                      <CategoryTeamsTab
+                        category={cat}
+                        categoryPairs={categoryPairs}
+                        categoryMatches={categoryMatches}
+                        pairsById={pairsById}
+                        bracketOneList={bracketOnePairs}
+                        bracketTwoList={bracketTwoPairs}
+                        b1StandingsMap={b1StandingsMap}
+                        b2StandingsMap={b2StandingsMap}
+                        b1Finished={b1Finished}
+                        b2Finished={b2Finished}
+                        b1MatchesCount={b1Matches.length}
+                        b2MatchesCount={b2Matches.length}
+                        b1FinishedCount={b1FinishedCount}
+                        b2FinishedCount={b2FinishedCount}
+                        hasCategoryMatches={categoryMatches.length > 0}
+                        isRanking={isRanking}
+                        isSuper8={isSuper8}
+                        isReadOnly={isReadOnly}
+                        isSystemDraw={isSystemDraw}
+                        onRandomizeCategoryDraw={handleRandomizeCategoryDraw}
+                        onUndoPair={(pairId) => {
+                          const updatedPairs = pairs.filter((p) => p.id !== pairId);
+                          const updatedMatches = matches.filter((m) => m.pair1Id !== pairId && m.pair2Id !== pairId);
+                          onUpdateEvent({ ...event, pairs: updatedPairs, matches: updatedMatches });
+                        }}
+                        onToggleTeamBracket={handleToggleTeamBracket}
+                        onMoveTeamPosition={handleMoveTeamPosition}
+                        selectedTeamIds={selectedTeamIds}
+                        canSelectTeams={isManualMatchDraw || Boolean(isRanking)}
+                        onToggleTeamSelection={toggleTeamSelection}
+                      />
+                    )}
+
+                    {categoryPanelView === 'matches' && (
+                      <CategoryMatchesTab
+                        category={cat}
+                        categoryMatches={categoryMatches}
+                        pairsById={pairsById}
+                        isRanking={isRanking}
+                        isSuper8={isSuper8}
+                        isReadOnly={isReadOnly}
+                        totalSets={totalSets}
+                        allCategoryFinished={categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished')}
+                        queuePosByMatchId={queuePosByMatchId}
+                        onScoreChange={handleScoreInputChange}
+                        onMatchDateChange={handleMatchDateChange}
+                        onFinishMatch={handleFinishMatchWithValidation}
+                        onReopenMatch={handleReopenMatch}
+                        onDeleteMatch={handleDeleteMatch}
+                        onGenerateMatches={handleGenerateSystemMatches}
+                        onGenerateBlankPdf={handleGenerateBlankPdf}
+                        onDeleteAllCategoryMatches={handleDeleteAllCategoryMatches}
+                      />
+                    )}
                   </div>
-
-                  {!isReadOnly && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleStartEdit(cat); }}
-                      className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 rounded-xl active:scale-90 transition-all"
-                      title={isEditing ? 'Recolher cadastro da categoria' : 'Abrir cadastro da categoria'}
-                    >
-                      {isEditing ? <X size={18} /> : <ChevronDown size={18} />}
-                    </button>
-                  )}
-                </div>
-
-                {/* Gender badges */}
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${cat.format === 'Duplas' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                    {cat.format}
-                  </span>
-                  {cat.gender1 && (
-                    <span className={`flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full ${
-                      cat.gender1 === 'M' ? 'bg-blue-50 text-blue-600' : 'bg-pink-50 text-pink-600'
-                    }`}>
-                      {cat.gender1 === 'M' ? <MarsIcon size={10} /> : <VenusIcon size={10} />}
-                      {cat.gender1}
-                    </span>
-                  )}
-                  {cat.gender2 && cat.format === 'Duplas' && (
-                    <span className={`flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full ${
-                      cat.gender2 === 'M' ? 'bg-blue-50 text-blue-600' : 'bg-pink-50 text-pink-600'
-                    }`}>
-                      {cat.gender2 === 'M' ? <MarsIcon size={10} /> : <VenusIcon size={10} />}
-                      {cat.gender2}
-                    </span>
-                  )}
-                </div>
-
-                {/* Stats row */}
-                <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={(event) => { event.stopPropagation(); openCategoryPanel(cat.id, 'entries'); }}
-                    className={`flex items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-black transition-colors ${isSelectedCategory && categoryPanelView === 'entries' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:bg-slate-50'}`}
-                  >
-                    <Users size={11} className="text-emerald-500" />
-                    <span>{inscritosCount} inscritos</span>
-                  </button>
-                  {!isSuper8 && (
-                    <button
-                      type="button"
-                      onClick={(event) => { event.stopPropagation(); openCategoryPanel(cat.id, 'teams'); }}
-                      className={`flex items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-black transition-colors ${isSelectedCategory && categoryPanelView === 'teams' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                      <Trophy size={11} className="text-blue-500" />
-                      <span>{timesCount} times</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(event) => { event.stopPropagation(); openCategoryPanel(cat.id, 'matches'); }}
-                    className={`flex items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-black transition-colors ${isSelectedCategory && categoryPanelView === 'matches' ? 'bg-amber-50 text-amber-600' : 'text-slate-500 hover:bg-slate-50'}`}
-                  >
-                    <Swords size={11} className="text-amber-500" />
-                    <span>{partidasCount} partidas</span>
-                  </button>
-                </div>
-              </div>
-              {isEditing && renderCategoryForm()}
-              {selectedCategoryId === cat.id && renderCategoryPanel()}
+                )}
               </React.Fragment>
             );
           })}
