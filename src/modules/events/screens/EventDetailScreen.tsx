@@ -55,7 +55,7 @@ import { useEventRealtime } from '../domain/realtime/useEventRealtime';
 import { calculateSuper8PlayerStandings, calculateBracketStandings } from '../services/matchProgression';
 import { calculateQueueState } from '../services/queueManager';
 import { validateCategoryGenders } from '../services/matchGenerator';
-import { createMercadoPagoPreference } from '../services/mercadoPagoCheckout';
+import { createMercadoPagoPreference, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
 
 interface Props {
   event: TournamentEvent;
@@ -114,6 +114,8 @@ export const EventDetailScreen: React.FC<Props> = ({
   );
   const [showMyRegistrationModal, setShowMyRegistrationModal] = useState(false);
   const [isStartingPayment, setIsStartingPayment] = useState(false);
+  const [pixPaymentData, setPixPaymentData] = useState<PixPaymentResult | null>(null);
+  const pixPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [deleteRequestMatch, setDeleteRequestMatch] = useState<TournamentMatch | null>(null);
   const [deleteRequestReason, setDeleteRequestReason] = useState('');
   const [isSendingDeleteRequest, setIsSendingDeleteRequest] = useState(false);
@@ -147,7 +149,31 @@ export const EventDetailScreen: React.FC<Props> = ({
         eventPin: event.pin,
         entryEmail: currentUserEntry.email,
       });
-      window.location.href = checkout.initPoint || checkout.sandboxInitPoint || '';
+      setPixPaymentData(checkout);
+
+      if (pixPollingRef.current) clearInterval(pixPollingRef.current);
+      pixPollingRef.current = setInterval(async () => {
+        try {
+          const status = await getMercadoPagoPaymentStatus({
+            paymentId: checkout.paymentId,
+            eventPin: event.pin,
+            email: currentUserEntry.email,
+          });
+          if (status.status === 'approved') {
+            if (pixPollingRef.current) clearInterval(pixPollingRef.current);
+            pixPollingRef.current = null;
+            setPixPaymentData(null);
+            await refreshEntries();
+            setModalConfig({
+              title: 'Pagamento Confirmado',
+              message: 'Seu pagamento Pix foi aprovado com sucesso!',
+              onConfirm: () => setModalConfig(null),
+            });
+          }
+        } catch {
+          // Polling silencioso
+        }
+      }, 5000);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Não foi possível iniciar o pagamento.';
       setModalConfig({
@@ -159,6 +185,15 @@ export const EventDetailScreen: React.FC<Props> = ({
       setIsStartingPayment(false);
     }
   };
+
+  React.useEffect(() => {
+    return () => {
+      if (pixPollingRef.current) {
+        clearInterval(pixPollingRef.current);
+        pixPollingRef.current = null;
+      }
+    };
+  }, []);
 
   // Mapa de categorias do usuário
   const userCategoryIds = useMemo(() => {
@@ -1235,6 +1270,80 @@ export const EventDetailScreen: React.FC<Props> = ({
                 onCancel={() => setShowMyRegistrationModal(false)}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Pagamento Pix com QR Code */}
+      {pixPaymentData && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs animate-in fade-in"
+            onClick={() => {
+              if (pixPollingRef.current) clearInterval(pixPollingRef.current);
+              pixPollingRef.current = null;
+              setPixPaymentData(null);
+            }}
+          />
+          <div className="relative bg-white rounded-t-[2.5rem] sm:rounded-3xl shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] w-full sm:max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-sm shrink-0">
+                  <CreditCard size={18} />
+                </div>
+                <div>
+                  <span className="text-sm font-black text-slate-800 block">Pagar via Pix</span>
+                  <span className="text-xs font-bold text-emerald-700">R$ {pixPaymentData.amount.toFixed(2)}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (pixPollingRef.current) clearInterval(pixPollingRef.current);
+                  pixPollingRef.current = null;
+                  setPixPaymentData(null);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {pixPaymentData.qrCodeBase64 && (
+              <div className="flex justify-center my-2">
+                <img
+                  src={`data:image/png;base64,${pixPaymentData.qrCodeBase64}`}
+                  alt="QR Code Pix"
+                  className="w-52 h-52 rounded-2xl border-4 border-slate-100 shadow-md"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-black text-slate-400">PIX COPIA E COLA</p>
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                <span className="text-[10px] font-mono text-slate-600 flex-1 truncate">{pixPaymentData.qrCode}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void copyToClipboard(pixPaymentData.qrCode);
+                    setModalConfig({
+                      title: 'Copiado!',
+                      message: 'Código Pix copiado para a área de transferência.',
+                      onConfirm: () => setModalConfig(null),
+                    });
+                  }}
+                  className="shrink-0 bg-emerald-500 text-white text-xs font-black px-3 py-1.5 rounded-xl hover:bg-emerald-600 active:scale-95 transition-all cursor-pointer"
+                >
+                  Copiar
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs font-medium text-slate-500 text-center bg-emerald-50 border border-emerald-100 rounded-2xl p-3 leading-relaxed">
+              ⏳ Aguardando confirmação do pagamento...<br />
+              <span className="text-[10px] text-slate-400">A confirmação é automática após o pagamento.</span>
+            </p>
           </div>
         </div>
       )}

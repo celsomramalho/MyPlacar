@@ -1,4 +1,4 @@
-import { Preference } from "mercadopago";
+import { Payment } from "mercadopago";
 import {
   getBaseUrl,
   getMercadoPagoClient,
@@ -34,28 +34,18 @@ export default async function handler(req, res) {
     if (!eventSnap.exists && rawPin.toUpperCase() !== rawPin) {
       const upperRef = db.collection("events").doc(rawPin.toUpperCase());
       const upperSnap = await upperRef.get();
-      if (upperSnap.exists) {
-        eventRef = upperRef;
-        eventSnap = upperSnap;
-      }
+      if (upperSnap.exists) { eventRef = upperRef; eventSnap = upperSnap; }
     }
 
     if (!eventSnap.exists && rawPin.toLowerCase() !== rawPin) {
       const lowerRef = db.collection("events").doc(rawPin.toLowerCase());
       const lowerSnap = await lowerRef.get();
-      if (lowerSnap.exists) {
-        eventRef = lowerRef;
-        eventSnap = lowerSnap;
-      }
+      if (lowerSnap.exists) { eventRef = lowerRef; eventSnap = lowerSnap; }
     }
 
-    // Se ainda não achou, faz busca pelo campo 'pin' no documento
     if (!eventSnap.exists) {
       const querySnap = await db.collection("events").where("pin", "==", rawPin).limit(1).get();
-      if (!querySnap.empty) {
-        eventRef = querySnap.docs[0].ref;
-        eventSnap = querySnap.docs[0];
-      }
+      if (!querySnap.empty) { eventRef = querySnap.docs[0].ref; eventSnap = querySnap.docs[0]; }
     }
 
     if (!eventSnap.exists) {
@@ -68,12 +58,8 @@ export default async function handler(req, res) {
     let entrySnap = await entryRef.get();
 
     if (!entrySnap.exists) {
-      // Se não achou pelo ID exato, busca pelo campo 'email' na subcoleção
       const entryQuery = await eventRef.collection("entries").where("email", "==", cleanEntryEmail).limit(1).get();
-      if (!entryQuery.empty) {
-        entryRef = entryQuery.docs[0].ref;
-        entrySnap = entryQuery.docs[0];
-      }
+      if (!entryQuery.empty) { entryRef = entryQuery.docs[0].ref; entrySnap = entryQuery.docs[0]; }
     }
 
     if (!entrySnap.exists) {
@@ -97,67 +83,51 @@ export default async function handler(req, res) {
 
     const baseUrl = getBaseUrl(req);
     const externalReference = `${cleanEventPin}:${cleanEntryEmail}`;
-    const title = `Inscrição - ${event.name || cleanEventPin}`;
+    const description = `Inscrição - ${event.name || cleanEventPin}`;
 
     // Pix expira em 24 horas
-    const pixExpiration = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
     const client = getMercadoPagoClient();
-    const preferenceClient = new Preference(client);
 
-    const preference = await preferenceClient.create({
+    // Checkout Transparente: cria pagamento Pix diretamente
+    const payment = await new Payment(client).create({
       body: {
-        items: [
-          {
-            id: `event-${cleanEventPin}`,
-            title,
-            quantity: 1,
-            currency_id: "BRL",
-            unit_price: amount,
-          },
-        ],
+        transaction_amount: amount,
+        description,
+        payment_method_id: "pix",
+        date_of_expiration: expiresAt,
         payer: {
           email: cleanEntryEmail,
-          name: entry.name || entry.nickname || undefined,
         },
         external_reference: externalReference,
+        notification_url: `${baseUrl}/api/mercadopago-webhook`,
         metadata: {
           event_pin: cleanEventPin,
           entry_email: cleanEntryEmail,
         },
-        // Restringe o checkout apenas para Pix
-        payment_methods: {
-          excluded_payment_types: [
-            { id: "credit_card" },
-            { id: "debit_card" },
-            { id: "prepaid_card" },
-            { id: "ticket" },
-            { id: "atm" },
-          ],
-          installments: 1,
-        },
-        // Expiração do Pix em 24 horas
-        date_of_expiration: pixExpiration,
-        back_urls: {
-          success: `${baseUrl}/?joinEvent=${encodeURIComponent(cleanEventPin)}&payment=success`,
-          failure: `${baseUrl}/?joinEvent=${encodeURIComponent(cleanEventPin)}&payment=failure`,
-          pending: `${baseUrl}/?joinEvent=${encodeURIComponent(cleanEventPin)}&payment=pending`,
-        },
-        auto_return: "approved",
-        notification_url: `${baseUrl}/api/mercadopago-webhook`,
       },
     });
 
+    const txData = payment.point_of_interaction?.transaction_data ?? {};
+    const qrCode = txData.qr_code ?? null;
+    const qrCodeBase64 = txData.qr_code_base64 ?? null;
+
+    if (!qrCode) {
+      console.error("Resposta MP sem QR Code:", JSON.stringify(payment));
+      return res.status(502).json({ error: "Mercado Pago não retornou o QR Code do Pix." });
+    }
+
     const checkout = {
       provider: "mercadopago",
-      preferenceId: preference.id,
-      initPoint: preference.init_point,
-      sandboxInitPoint: preference.sandbox_init_point,
+      paymentId: String(payment.id),
+      qrCode,
+      qrCodeBase64,
       externalReference,
       amount,
       paymentMethod: "pix",
-      status: "created",
-      expiresAt: pixExpiration,
+      status: payment.status || "pending",
+      expiresAt,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -170,16 +140,19 @@ export default async function handler(req, res) {
     }), { merge: true });
 
     return res.status(200).json({
-      preferenceId: preference.id,
-      initPoint: preference.init_point,
-      sandboxInitPoint: preference.sandbox_init_point,
+      paymentId: String(payment.id),
+      status: payment.status || "pending",
+      qrCode,
+      qrCodeBase64,
       amount,
+      expiresAt,
       externalReference,
     });
   } catch (error) {
-    console.error("Erro ao criar preferência Mercado Pago:", error);
-    return res.status(error.status || 500).json({
-      error: error.message || "Erro interno ao criar pagamento",
+    console.error("Erro ao criar pagamento Pix (MP):", error?.message, JSON.stringify(error?.cause ?? {}));
+    const status = typeof error?.status === "number" ? error.status : 500;
+    return res.status(status).json({
+      error: error?.message || "Erro interno ao criar pagamento Pix",
     });
   }
 }

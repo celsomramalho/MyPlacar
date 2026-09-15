@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, QrCode, Trash2, Up
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { findUserByPin, getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
-import { createMercadoPagoPreference } from '../services/mercadoPagoCheckout';
+import { createMercadoPagoPixPayment, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
 import {
   formatRegistrationId,
   getNextRegistrationId,
@@ -136,8 +136,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
   const usesAutomaticPayment = event.paymentType === 'mercadopago';
   const [isPayingPix, setIsPayingPix] = useState(false);
+  const [pixPayment, setPixPayment] = useState<PixPaymentResult | null>(null);
   const [showManualAdminPayment, setShowManualAdminPayment] = useState(false);
   const canUseManualPaymentForm = !usesAutomaticPayment || (isAdmin && showManualAdminPayment);
+  const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   React.useEffect(() => {
     if (!canEditIdentity) return;
@@ -534,31 +536,53 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     }
   };
 
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  };
+
   const handlePayViaPix = async () => {
     if (isSaving || isPayingPix) return;
     setIsPayingPix(true);
     setFeedback(null);
     try {
-      // 1. Salva a inscrição (com validação completa) antes de gerar o pagamento
+      // 1. Salva a inscrição antes de gerar o pagamento
       const savedEntry = await save(payments, true);
       if (!savedEntry) {
         setIsPayingPix(false);
         return;
       }
 
-      // 2. Chama a API do Mercado Pago para gerar a preferência do Pix
+      // 2. Cria o pagamento Pix via Checkout Transparente
       const targetEmail = (savedEntry.email || email).toLowerCase().trim();
-      const checkout = await createMercadoPagoPreference({
+      const result = await createMercadoPagoPixPayment({
         eventPin: event.pin,
         entryEmail: targetEmail,
       });
 
-      const redirectUrl = checkout.initPoint || checkout.sandboxInitPoint;
-      if (redirectUrl) {
-        window.location.href = redirectUrl;
-      } else {
-        throw new Error('Não foi possível gerar o link de pagamento do Pix.');
-      }
+      setPixPayment(result);
+
+      // 3. Inicia polling a cada 5s para verificar confirmação
+      stopPolling();
+      pollingRef.current = setInterval(async () => {
+        try {
+          const status = await getMercadoPagoPaymentStatus({
+            paymentId: result.paymentId,
+            eventPin: event.pin,
+            email: targetEmail,
+          });
+          if (status.status === 'approved') {
+            stopPolling();
+            setPixPayment(null);
+            setFeedback('✅ Pagamento Pix confirmado com sucesso!');
+            setIsPayingPix(false);
+          }
+        } catch {
+          // ignora erros de polling silenciosamente
+        }
+      }, 5000);
     } catch (err) {
       console.error('Erro ao iniciar pagamento Pix:', err);
       const msg = err instanceof Error ? err.message : 'Erro ao iniciar pagamento Pix.';
@@ -566,6 +590,13 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       setIsPayingPix(false);
     }
   };
+
+  const handleCancelPixPayment = () => {
+    stopPolling();
+    setPixPayment(null);
+    setIsPayingPix(false);
+  };
+
 
   const addPayment = async () => {
     const amount = Number(newAmount.replace(',', '.'));
@@ -798,8 +829,63 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       );
     })}</div></Field>
 
+    {/* Modal inline do QR Code Pix */}
+    {pixPayment && (
+      <div className="border-2 border-emerald-400 rounded-3xl p-5 bg-gradient-to-b from-emerald-50 to-white space-y-4 shadow-lg animate-in fade-in slide-in-from-bottom-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-sm shrink-0">
+              <QrCode size={18} />
+            </div>
+            <div>
+              <span className="text-xs font-black text-slate-800 block">Pague via Pix</span>
+              <span className="text-[10px] font-bold text-emerald-700">R$ {pixPayment.amount.toFixed(2)} · Expira em 24h</span>
+            </div>
+          </div>
+          <button type="button" onClick={handleCancelPixPayment} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        {/* QR Code image */}
+        {pixPayment.qrCodeBase64 && (
+          <div className="flex justify-center">
+            <img
+              src={`data:image/png;base64,${pixPayment.qrCodeBase64}`}
+              alt="QR Code Pix"
+              className="w-52 h-52 rounded-2xl border-4 border-white shadow-md"
+            />
+          </div>
+        )}
+
+        {/* Pix Copia e Cola */}
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-black text-slate-400">PIX COPIA E COLA</p>
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl p-3">
+            <span className="text-[10px] font-mono text-slate-600 flex-1 truncate">{pixPayment.qrCode}</span>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(pixPayment.qrCode);
+                setFeedback('✅ Código Pix copiado!');
+                setTimeout(() => setFeedback(null), 3000);
+              }}
+              className="shrink-0 bg-emerald-500 text-white text-[10px] font-black px-3 py-1.5 rounded-xl hover:bg-emerald-600 active:scale-95 transition-all"
+            >
+              Copiar
+            </button>
+          </div>
+        </div>
+
+        <p className="text-[11px] font-medium text-slate-600 text-center bg-emerald-50 border border-emerald-100 rounded-2xl p-3 leading-relaxed">
+          ⏳ Aguardando confirmação do pagamento...<br />
+          <span className="text-[10px] text-slate-400">A confirmação é automática após o pagamento.</span>
+        </p>
+      </div>
+    )}
+
     {/* Bloco de Pagamento Automático Pix (Mercado Pago) */}
-    {!isFreeEvent && usesAutomaticPayment && (
+    {!isFreeEvent && usesAutomaticPayment && !pixPayment && (
       <div className="border border-emerald-200 rounded-3xl p-5 bg-gradient-to-b from-emerald-50/80 to-white space-y-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -968,7 +1054,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     <div className="flex flex-wrap gap-2.5 pt-1">
       {!readOnly && (
         <>
-          {usesAutomaticPayment && pendingAmount > 0 ? (
+          {usesAutomaticPayment && pendingAmount > 0 && !pixPayment ? (
             <>
               <button
                 type="button"
