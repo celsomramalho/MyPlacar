@@ -125,15 +125,14 @@ export default async function handler(req, res) {
           event_pin: cleanEventPin,
           entry_email: cleanEntryEmail,
         },
-        // Restringe o checkout para priorizar Pix e desabilitar cartões
+        // Restringe o checkout apenas para Pix
         payment_methods: {
           excluded_payment_types: [
             { id: "credit_card" },
             { id: "debit_card" },
-          ],
-          excluded_payment_methods: [
-            { id: "bolbradesco" },
-            { id: "pec" },
+            { id: "prepaid_card" },
+            { id: "ticket" },
+            { id: "atm" },
           ],
           installments: 1,
         },
