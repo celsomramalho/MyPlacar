@@ -134,9 +134,6 @@ export default async function handler(req, res) {
             { id: "ticket" },
             { id: "atm" },
           ],
-          excluded_payment_methods: [
-            { id: "account_money" },
-          ],
           installments: 1,
         },
         // Expiração do Pix em 24 horas
