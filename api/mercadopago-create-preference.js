@@ -133,6 +133,8 @@ export default async function handler(req, res) {
             { id: "prepaid_card" },
             { id: "ticket" },
             { id: "atm" },
+          ],
+          excluded_payment_methods: [
             { id: "account_money" },
           ],
           installments: 1,
