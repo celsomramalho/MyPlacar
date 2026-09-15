@@ -18,19 +18,67 @@ export default async function handler(req, res) {
 
   try {
     const { eventPin, entryEmail } = req.body || {};
-    const cleanEventPin = String(eventPin || "").trim().toUpperCase();
+    const rawPin = String(eventPin || "").trim();
     const cleanEntryEmail = String(entryEmail || "").toLowerCase().trim();
-    if (!cleanEventPin || !cleanEntryEmail) {
+    if (!rawPin || !cleanEntryEmail) {
       return res.status(400).json({ error: "Evento e inscrição são obrigatórios" });
     }
 
     const db = initFirebaseAdmin();
-    const eventRef = db.collection("events").doc(cleanEventPin);
-    const entryRef = eventRef.collection("entries").doc(cleanEntryEmail);
-    const [eventSnap, entrySnap] = await Promise.all([eventRef.get(), entryRef.get()]);
 
-    if (!eventSnap.exists) return res.status(404).json({ error: "Evento não encontrado" });
-    if (!entrySnap.exists) return res.status(404).json({ error: "Inscrição não encontrada" });
+    // Busca o evento por ID exato, maiúsculo ou minúsculo
+    let eventRef = db.collection("events").doc(rawPin);
+    let eventSnap = await eventRef.get();
+
+    if (!eventSnap.exists && rawPin.toUpperCase() !== rawPin) {
+      const upperRef = db.collection("events").doc(rawPin.toUpperCase());
+      const upperSnap = await upperRef.get();
+      if (upperSnap.exists) {
+        eventRef = upperRef;
+        eventSnap = upperSnap;
+      }
+    }
+
+    if (!eventSnap.exists && rawPin.toLowerCase() !== rawPin) {
+      const lowerRef = db.collection("events").doc(rawPin.toLowerCase());
+      const lowerSnap = await lowerRef.get();
+      if (lowerSnap.exists) {
+        eventRef = lowerRef;
+        eventSnap = lowerSnap;
+      }
+    }
+
+    // Se ainda não achou, faz busca pelo campo 'pin' no documento
+    if (!eventSnap.exists) {
+      const querySnap = await db.collection("events").where("pin", "==", rawPin).limit(1).get();
+      if (!querySnap.empty) {
+        eventRef = querySnap.docs[0].ref;
+        eventSnap = querySnap.docs[0];
+      }
+    }
+
+    if (!eventSnap.exists) {
+      console.warn("Evento não encontrado no Firestore:", { rawPin, cleanEntryEmail });
+      return res.status(404).json({ error: `Evento com PIN '${rawPin}' não encontrado no banco de dados.` });
+    }
+
+    const cleanEventPin = eventRef.id;
+    let entryRef = eventRef.collection("entries").doc(cleanEntryEmail);
+    let entrySnap = await entryRef.get();
+
+    if (!entrySnap.exists) {
+      // Se não achou pelo ID exato, busca pelo campo 'email' na subcoleção
+      const entryQuery = await eventRef.collection("entries").where("email", "==", cleanEntryEmail).limit(1).get();
+      if (!entryQuery.empty) {
+        entryRef = entryQuery.docs[0].ref;
+        entrySnap = entryQuery.docs[0];
+      }
+    }
+
+    if (!entrySnap.exists) {
+      console.warn("Inscrição não encontrada no Firestore:", { cleanEventPin, cleanEntryEmail });
+      return res.status(404).json({ error: `Inscrição para o e-mail '${cleanEntryEmail}' não encontrada neste evento.` });
+    }
 
     const event = eventSnap.data();
     const entry = entrySnap.data();

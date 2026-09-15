@@ -43,9 +43,53 @@ export default async function handler(req, res) {
       return res.status(200).json({ ignored: true });
     }
 
-    const { eventPin, entryEmail } = parsedReference;
-    const entryRef = db.collection("events").doc(eventPin).collection("entries").doc(entryEmail);
-    const entrySnap = await entryRef.get();
+    const { eventPin: rawEventPin, entryEmail } = parsedReference;
+    let eventRef = db.collection("events").doc(rawEventPin);
+    let eventSnap = await eventRef.get();
+
+    if (!eventSnap.exists && rawEventPin.toUpperCase() !== rawEventPin) {
+      const upperRef = db.collection("events").doc(rawEventPin.toUpperCase());
+      const upperSnap = await upperRef.get();
+      if (upperSnap.exists) {
+        eventRef = upperRef;
+        eventSnap = upperSnap;
+      }
+    }
+
+    if (!eventSnap.exists && rawEventPin.toLowerCase() !== rawEventPin) {
+      const lowerRef = db.collection("events").doc(rawEventPin.toLowerCase());
+      const lowerSnap = await lowerRef.get();
+      if (lowerSnap.exists) {
+        eventRef = lowerRef;
+        eventSnap = lowerSnap;
+      }
+    }
+
+    if (!eventSnap.exists) {
+      const querySnap = await db.collection("events").where("pin", "==", rawEventPin).limit(1).get();
+      if (!querySnap.empty) {
+        eventRef = querySnap.docs[0].ref;
+        eventSnap = querySnap.docs[0];
+      }
+    }
+
+    if (!eventSnap.exists) {
+      console.warn("Evento não encontrado no webhook:", { rawEventPin, entryEmail, paymentId: payment.id });
+      return res.status(200).json({ ignored: true });
+    }
+
+    const eventPin = eventRef.id;
+    let entryRef = eventRef.collection("entries").doc(entryEmail);
+    let entrySnap = await entryRef.get();
+
+    if (!entrySnap.exists) {
+      const entryQuery = await eventRef.collection("entries").where("email", "==", entryEmail).limit(1).get();
+      if (!entryQuery.empty) {
+        entryRef = entryQuery.docs[0].ref;
+        entrySnap = entryQuery.docs[0];
+      }
+    }
+
     if (!entrySnap.exists) {
       console.warn("Inscrição não encontrada para pagamento Mercado Pago:", { eventPin, entryEmail, paymentId: payment.id });
       return res.status(200).json({ ignored: true });
