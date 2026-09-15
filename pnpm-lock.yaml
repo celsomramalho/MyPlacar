@@ -53,6 +53,9 @@ importers:
       lucide-react:
         specifier: 0.460.0
         version: 0.460.0(react@18.3.1)
+      mercadopago:
+        specifier: ^3.6.1
+        version: 3.6.1
       react:
         specifier: 18.x
         version: 18.3.1
@@ -2492,6 +2495,10 @@ packages:
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
+
+  mercadopago@3.6.1:
+    resolution: {integrity: sha512-JFgKCSRHMxkS1p12VMIcpI/Zki739J+5lbpl7PB0O8WHaFl4SFKQnm9paX/gqBQeh211Ozc498D49Fbe3U1jEw==}
+    engines: {node: '>=18'}
 
   mime-db@1.52.0:
     resolution: {integrity: sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==}
@@ -6027,6 +6034,8 @@ snapshots:
 
   math-intrinsics@1.1.0:
     optional: true
+
+  mercadopago@3.6.1: {}
 
   mime-db@1.52.0:
     optional: true
