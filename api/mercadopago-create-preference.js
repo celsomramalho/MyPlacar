@@ -122,18 +122,16 @@ export default async function handler(req, res) {
           event_pin: cleanEventPin,
           entry_email: cleanEntryEmail,
         },
-        // Restringe o checkout exclusivamente ao Pix
+        // Restringe o checkout para priorizar Pix e desabilitar cartões
         payment_methods: {
           excluded_payment_types: [
             { id: "credit_card" },
             { id: "debit_card" },
-            { id: "ticket" },
-            { id: "atm" },
-            { id: "prepaid_card" },
-            { id: "digital_currency" },
-            { id: "digital_wallet" },
           ],
-          default_payment_method_id: "pix",
+          excluded_payment_methods: [
+            { id: "bolbradesco" },
+            { id: "pec" },
+          ],
           installments: 1,
         },
         // Expiração do Pix em 24 horas
