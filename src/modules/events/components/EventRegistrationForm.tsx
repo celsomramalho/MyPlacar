@@ -141,6 +141,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const [showManualAdminPayment, setShowManualAdminPayment] = useState(false);
   const canUseManualPaymentForm = !usesAutomaticPayment || (isAdmin && showManualAdminPayment);
   const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<PaymentItem | null>(null);
 
   React.useEffect(() => {
     if (!canEditIdentity) return;
@@ -1038,27 +1039,34 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         {payments.length > 0 && (
           <div className="space-y-2 pt-2 border-t border-slate-100">
             <p className="text-[10px] font-black text-slate-400">Histórico de pagamentos confirmados</p>
-            {payments.map((payment) => (
-              <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold">
-                <div className="flex items-center gap-2.5 text-left">
-                  <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-700">{new Date(payment.date).toLocaleDateString('pt-BR')}</span>
-                      <span className="text-emerald-600 font-black">R$ {payment.amount.toFixed(2)}</span>
+            {payments.map((payment) => {
+              const isMpPayment = payment.provider === 'mercadopago' || !!payment.providerPaymentId;
+              return (
+                <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setViewingReceipt(payment)}
+                    className="flex items-center gap-2.5 text-left flex-1 min-w-0"
+                  >
+                    <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-700">{new Date(payment.date).toLocaleDateString('pt-BR')}</span>
+                        <span className="text-emerald-600 font-black">R$ {payment.amount.toFixed(2)}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {payment.receiptFileName || (isMpPayment ? 'Pix Mercado Pago' : 'Comprovante')}
+                      </span>
                     </div>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      {payment.receiptFileName || (payment.provider === 'mercadopago' ? 'Pix Mercado Pago' : 'Comprovante')}
-                    </span>
-                  </div>
-                </div>
-                {isAdmin && (
-                  <button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500 p-1 hover:bg-red-50 rounded-lg" title="Excluir pagamento">
-                    <Trash2 size={14} />
                   </button>
-                )}
-              </div>
-            ))}
+                  {isAdmin && !isMpPayment && (
+                    <button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500 p-1 hover:bg-red-50 rounded-lg ml-2 shrink-0" title="Excluir pagamento">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -1123,7 +1131,60 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             </label>
           </Field>
         </div>
-        {payments.length > 0 && <div className="space-y-2"><p className="text-[10px] font-black text-slate-400">Histórico de pagamentos</p>{payments.map((payment) => <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setEditingPaymentId(payment.id); setNewAmount(String(payment.amount)); const date = new Date(payment.date); setNewDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`); setNewReceipt(payment.receiptUrl ? { url: payment.receiptUrl, name: payment.receiptFileName || 'Comprovante' } : null); }} className="flex items-center gap-3 text-left"><span>{new Date(payment.date).toLocaleDateString('pt-BR')}</span><span>R$ {payment.amount.toFixed(2)}</span></button><div className="flex items-center gap-2"><button type="button" disabled={!payment.receiptUrl} onClick={() => payment.receiptUrl && window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')} className="text-sky-600 disabled:text-slate-300" title="Abrir comprovante"><Eye size={16} /></button><button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500" title="Excluir pagamento"><Trash2 size={16} /></button></div></div>)}</div>}
+        {payments.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-black text-slate-400">Histórico de pagamentos</p>
+            {payments.map((payment) => {
+              const isMpPayment = payment.provider === 'mercadopago' || !!payment.providerPaymentId;
+              return (
+                <div key={payment.id} className="w-full bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isMpPayment) {
+                        setViewingReceipt(payment);
+                      } else {
+                        setEditingPaymentId(payment.id);
+                        setNewAmount(String(payment.amount));
+                        const date = new Date(payment.date);
+                        setNewDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`);
+                        setNewReceipt(payment.receiptUrl ? { url: payment.receiptUrl, name: payment.receiptFileName || 'Comprovante' } : null);
+                      }
+                    }}
+                    className="flex items-center gap-3 text-left flex-1 min-w-0"
+                  >
+                    <span>{new Date(payment.date).toLocaleDateString('pt-BR')}</span>
+                    <span>R$ {payment.amount.toFixed(2)}</span>
+                    {isMpPayment && <span className="text-[10px] text-slate-400 font-medium">Pix MP</span>}
+                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!isMpPayment && (
+                      <button
+                        type="button"
+                        disabled={!payment.receiptUrl}
+                        onClick={() => payment.receiptUrl && window.open(payment.receiptUrl, '_blank', 'noopener,noreferrer')}
+                        className="text-sky-600 disabled:text-slate-300"
+                        title="Abrir comprovante"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    )}
+                    {!isMpPayment && (
+                      <button type="button" onClick={() => void removePayment(payment.id)} className="text-red-500" title="Excluir pagamento">
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                    {isMpPayment && (
+                      <button type="button" onClick={() => setViewingReceipt(payment)} className="text-sky-600" title="Ver comprovante">
+                        <Eye size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {usesAutomaticPayment && showManualAdminPayment && (
           <div className="text-center">
             <button
@@ -1215,6 +1276,88 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         </button>
       )}
     </div>
+
+    {/* Modal de Comprovante de Pagamento (Mercado Pago) */}
+    {viewingReceipt && (
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm p-4"
+        onClick={() => setViewingReceipt(null)}
+      >
+        <div
+          className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5 space-y-4 animate-in slide-in-from-bottom-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={20} className="text-emerald-500" />
+              <span className="font-black text-slate-800 text-sm">Comprovante de Pagamento</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setViewingReceipt(null)}
+              className="text-slate-400 hover:text-slate-600 p-1"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Detalhes */}
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500 font-medium">Método</span>
+              <span className="text-xs font-black text-slate-700">
+                {viewingReceipt.provider === 'mercadopago' ? '⚡ Pix via Mercado Pago' : viewingReceipt.provider ?? 'Manual'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500 font-medium">Valor pago</span>
+              <span className="text-sm font-black text-emerald-600">R$ {viewingReceipt.amount.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500 font-medium">Data</span>
+              <span className="text-xs font-black text-slate-700">
+                {new Date(viewingReceipt.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            {viewingReceipt.providerPaymentId && (
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium shrink-0">ID Pagamento</span>
+                <span className="text-[10px] font-mono font-bold text-slate-600 text-right break-all">
+                  {viewingReceipt.providerPaymentId}
+                </span>
+              </div>
+            )}
+            {viewingReceipt.receiptFileName && (
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-slate-500 font-medium">Arquivo</span>
+                <span className="text-xs font-black text-slate-700">{viewingReceipt.receiptFileName}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Se tiver URL de comprovante (pagamento manual), abre em nova aba */}
+          {viewingReceipt.receiptUrl && (
+            <button
+              type="button"
+              onClick={() => window.open(viewingReceipt.receiptUrl!, '_blank', 'noopener,noreferrer')}
+              className="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              <Eye size={14} />
+              Abrir comprovante
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setViewingReceipt(null)}
+            className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-2xl active:scale-95 transition-all"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    )}
   </div>;
 };
 
