@@ -21,10 +21,15 @@ export const createMercadoPagoPixPayment = async ({
   eventPin: string;
   entryEmail: string;
 }): Promise<PixPaymentResult> => {
+  const deviceId =
+    typeof window !== 'undefined'
+      ? (window as unknown as { MP_DEVICE_SESSION_ID?: string }).MP_DEVICE_SESSION_ID || undefined
+      : undefined;
+
   const response = await fetch('/api/mercadopago-create-preference', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ eventPin, entryEmail }),
+    body: JSON.stringify({ eventPin, entryEmail, deviceId }),
   });
 
   const body = await response.json().catch(() => ({}));

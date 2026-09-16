@@ -19,9 +19,10 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Método não permitido" });
 
   try {
-    const { eventPin, entryEmail } = req.body || {};
+    const { eventPin, entryEmail, deviceId } = req.body || {};
     const rawPin = String(eventPin || "").trim();
     const cleanEntryEmail = String(entryEmail || "").toLowerCase().trim();
+    const cleanDeviceId = deviceId ? String(deviceId).trim() : null;
     if (!rawPin || !cleanEntryEmail) {
       return res.status(400).json({ error: "Evento e inscrição são obrigatórios" });
     }
@@ -129,11 +130,25 @@ export default async function handler(req, res) {
       paymentPayload.application_fee = applicationFee;
     }
 
-    console.log(`[Pix] Criando cobrança para ${cleanEntryEmail} no evento ${cleanEventPin}. Modo: ${organizerData ? `Marketplace (Organizador: ${organizerEmail}, fee: R$ ${applicationFee})` : "Global (Legado)"}`);
+    // Header oficial do Mercado Pago para Identificador de Dispositivo Antifraude (Device ID)
+    const requestOptions = {};
+    if (cleanDeviceId) {
+      requestOptions.customHeaders = {
+        "X-Meli-Session-Id": cleanDeviceId,
+      };
+      paymentPayload.metadata.device_id = cleanDeviceId;
+    }
+
+    console.log(
+      `[Pix] Criando cobrança para ${cleanEntryEmail} no evento ${cleanEventPin}. Modo: ${
+        organizerData ? `Marketplace (Organizador: ${organizerEmail}, fee: R$ ${applicationFee})` : "Global (Legado)"
+      }${cleanDeviceId ? ` [Device ID: ${cleanDeviceId.slice(0, 10)}...]` : ""}`
+    );
 
     // Checkout Transparente: cria pagamento Pix diretamente
     const payment = await new Payment(client).create({
       body: paymentPayload,
+      requestOptions,
     });
 
     const txData = payment.point_of_interaction?.transaction_data ?? {};
