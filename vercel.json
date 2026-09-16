@@ -86,6 +86,14 @@
   ],
   "rewrites": [
     {
+      "source": "/mercadopago-webhook",
+      "destination": "/api/mercadopago-webhook"
+    },
+    {
+      "source": "/api/webhook",
+      "destination": "/api/mercadopago-webhook"
+    },
+    {
       "source": "/sw.js",
       "destination": "/sw.js"
     },
