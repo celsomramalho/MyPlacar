@@ -141,6 +141,31 @@ export const EventDetailScreen: React.FC<Props> = ({
       !['Confirmado', 'Pago', 'Isento'].includes(currentUserEntry.paymentStatus || '')
   );
 
+  const checkDetailPixPaymentConfirmation = async (paymentId: string, email: string) => {
+    try {
+      const status = await getMercadoPagoPaymentStatus({
+        paymentId,
+        eventPin: event.pin,
+        email,
+      });
+      if (status.status === 'approved') {
+        if (pixPollingRef.current) clearInterval(pixPollingRef.current);
+        pixPollingRef.current = null;
+        setPixPaymentData(null);
+        await refreshEntries();
+        setModalConfig({
+          title: 'Pagamento Confirmado',
+          message: 'Seu pagamento Pix foi aprovado com sucesso!',
+          onConfirm: () => setModalConfig(null),
+        });
+        return true;
+      }
+    } catch {
+      // Polling silencioso
+    }
+    return false;
+  };
+
   const handleStartMercadoPagoPayment = async () => {
     if (!currentUserEntry || isStartingPayment) return;
     setIsStartingPayment(true);
@@ -152,28 +177,9 @@ export const EventDetailScreen: React.FC<Props> = ({
       setPixPaymentData(checkout);
 
       if (pixPollingRef.current) clearInterval(pixPollingRef.current);
-      pixPollingRef.current = setInterval(async () => {
-        try {
-          const status = await getMercadoPagoPaymentStatus({
-            paymentId: checkout.paymentId,
-            eventPin: event.pin,
-            email: currentUserEntry.email,
-          });
-          if (status.status === 'approved') {
-            if (pixPollingRef.current) clearInterval(pixPollingRef.current);
-            pixPollingRef.current = null;
-            setPixPaymentData(null);
-            await refreshEntries();
-            setModalConfig({
-              title: 'Pagamento Confirmado',
-              message: 'Seu pagamento Pix foi aprovado com sucesso!',
-              onConfirm: () => setModalConfig(null),
-            });
-          }
-        } catch {
-          // Polling silencioso
-        }
-      }, 5000);
+      pixPollingRef.current = setInterval(() => {
+        void checkDetailPixPaymentConfirmation(checkout.paymentId, currentUserEntry.email);
+      }, 4000);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Não foi possível iniciar o pagamento.';
       setModalConfig({
@@ -194,6 +200,22 @@ export const EventDetailScreen: React.FC<Props> = ({
       }
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!pixPaymentData || !currentUserEntry) return;
+    const handleRecheck = () => {
+      void checkDetailPixPaymentConfirmation(pixPaymentData.paymentId, currentUserEntry.email);
+    };
+    window.addEventListener('focus', handleRecheck);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') handleRecheck();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', handleRecheck);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [pixPaymentData, currentUserEntry]);
 
   // Mapa de categorias do usuário
   const userCategoryIds = useMemo(() => {
@@ -1340,10 +1362,20 @@ export const EventDetailScreen: React.FC<Props> = ({
               </div>
             </div>
 
-            <p className="text-xs font-medium text-slate-500 text-center bg-emerald-50 border border-emerald-100 rounded-2xl p-3 leading-relaxed">
-              ⏳ Aguardando confirmação do pagamento...<br />
-              <span className="text-[10px] text-slate-400">A confirmação é automática após o pagamento.</span>
-            </p>
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => currentUserEntry && void checkDetailPixPaymentConfirmation(pixPaymentData.paymentId, currentUserEntry.email)}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <CheckCircle2 size={16} />
+                <span>Já fiz o Pix! Confirmar agora</span>
+              </button>
+              <p className="text-xs font-medium text-slate-500 text-center bg-emerald-50 border border-emerald-100 rounded-2xl p-3 leading-relaxed">
+                ⏳ Aguardando confirmação do pagamento...<br />
+                <span className="text-[10px] text-slate-400">A confirmação é automática após o pagamento.</span>
+              </p>
+            </div>
           </div>
         </div>
       )}

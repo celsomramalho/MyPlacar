@@ -137,6 +137,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const usesAutomaticPayment = event.paymentType === 'mercadopago';
   const [isPayingPix, setIsPayingPix] = useState(false);
   const [pixPayment, setPixPayment] = useState<PixPaymentResult | null>(null);
+  const [isCheckingPaymentStatus, setIsCheckingPaymentStatus] = useState(false);
   const [showManualAdminPayment, setShowManualAdminPayment] = useState(false);
   const canUseManualPaymentForm = !usesAutomaticPayment || (isAdmin && showManualAdminPayment);
   const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
@@ -543,6 +544,70 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     }
   };
 
+  const checkPixPaymentConfirmation = async (paymentId: string, targetEmail: string) => {
+    setIsCheckingPaymentStatus(true);
+    try {
+      const status = await getMercadoPagoPaymentStatus({
+        paymentId,
+        eventPin: event.pin,
+        email: targetEmail,
+      });
+
+      if (status.status === 'approved') {
+        stopPolling();
+        setPixPayment(null);
+        setPaymentStatus('Confirmado');
+
+        const payAmount = pixPayment?.amount || Number(dueAmount) || 0;
+        const newPayItem: PaymentItem = {
+          id: `mp-${paymentId}`,
+          amount: payAmount,
+          date: Date.now(),
+          provider: 'mercadopago',
+          providerPaymentId: paymentId,
+          receiptFileName: `Pix Mercado Pago #${paymentId}`,
+        };
+
+        const alreadyRecorded = payments.some(
+          (p) => p.id === newPayItem.id || String(p.providerPaymentId || '') === String(paymentId)
+        );
+        const nextPayments = alreadyRecorded ? payments : [...payments, newPayItem];
+
+        setPayments(nextPayments);
+        setFeedback('✅ Pagamento Pix confirmado com sucesso!');
+        setIsPayingPix(false);
+
+        // Salva e atualiza o evento e a inscrição automaticamente
+        await save(nextPayments, true);
+        return true;
+      }
+    } catch (err) {
+      console.warn('Erro ao checar status do pagamento Pix:', err);
+    } finally {
+      setIsCheckingPaymentStatus(false);
+    }
+    return false;
+  };
+
+  React.useEffect(() => {
+    if (!pixPayment) return;
+    const targetEmail = (entry.email || email).toLowerCase().trim();
+    const handleRecheck = () => {
+      void checkPixPaymentConfirmation(pixPayment.paymentId, targetEmail);
+    };
+
+    window.addEventListener('focus', handleRecheck);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') handleRecheck();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleRecheck);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [pixPayment, entry.email, email]);
+
   const handlePayViaPix = async () => {
     if (isSaving || isPayingPix) return;
     setIsPayingPix(true);
@@ -564,25 +629,11 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
       setPixPayment(result);
 
-      // 3. Inicia polling a cada 5s para verificar confirmação
+      // 3. Inicia polling a cada 4s para verificar confirmação
       stopPolling();
-      pollingRef.current = setInterval(async () => {
-        try {
-          const status = await getMercadoPagoPaymentStatus({
-            paymentId: result.paymentId,
-            eventPin: event.pin,
-            email: targetEmail,
-          });
-          if (status.status === 'approved') {
-            stopPolling();
-            setPixPayment(null);
-            setFeedback('✅ Pagamento Pix confirmado com sucesso!');
-            setIsPayingPix(false);
-          }
-        } catch {
-          // ignora erros de polling silenciosamente
-        }
-      }, 5000);
+      pollingRef.current = setInterval(() => {
+        void checkPixPaymentConfirmation(result.paymentId, targetEmail);
+      }, 4000);
     } catch (err) {
       console.error('Erro ao iniciar pagamento Pix:', err);
       const msg = err instanceof Error ? err.message : 'Erro ao iniciar pagamento Pix.';
@@ -877,10 +928,31 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           </div>
         </div>
 
-        <p className="text-[11px] font-medium text-slate-600 text-center bg-emerald-50 border border-emerald-100 rounded-2xl p-3 leading-relaxed">
-          ⏳ Aguardando confirmação do pagamento...<br />
-          <span className="text-[10px] text-slate-400">A confirmação é automática após o pagamento.</span>
-        </p>
+        <div className="space-y-2 pt-1">
+          <button
+            type="button"
+            onClick={() => void checkPixPaymentConfirmation(pixPayment.paymentId, (entry.email || email).toLowerCase().trim())}
+            disabled={isCheckingPaymentStatus}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-60"
+          >
+            {isCheckingPaymentStatus ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Consultando confirmação...</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 size={16} />
+                <span>Já fiz o Pix! Confirmar agora</span>
+              </>
+            )}
+          </button>
+
+          <p className="text-[11px] font-medium text-slate-600 text-center bg-emerald-50 border border-emerald-100 rounded-2xl p-3 leading-relaxed">
+            ⏳ Aguardando confirmação do pagamento...<br />
+            <span className="text-[10px] text-slate-400">A confirmação é automática após o pagamento.</span>
+          </p>
+        </div>
       </div>
     )}
 

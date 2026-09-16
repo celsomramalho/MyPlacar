@@ -63,8 +63,11 @@ export default async function handler(req, res) {
             const updates = {
               paymentStatus: "Confirmado",
               paidAmount: (Number(entry.paidAmount ?? 0) + (alreadyRecorded ? 0 : txAmount)) || txAmount,
-              "mercadoPagoCheckout.status": "approved",
-              "mercadoPagoCheckout.updatedAt": Date.now(),
+              mercadoPagoCheckout: {
+                ...(entry.mercadoPagoCheckout || {}),
+                status: "approved",
+                updatedAt: Date.now(),
+              },
             };
 
             if (!alreadyRecorded && txAmount > 0) {
