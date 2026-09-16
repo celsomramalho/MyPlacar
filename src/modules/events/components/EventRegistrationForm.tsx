@@ -366,10 +366,14 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       return null;
     }
     // Validação de duplicidade: não permitir que o mesmo usuário se inscreva 2 vezes no mesmo evento
-    if (canEditIdentity) {
+    if (canEditIdentity && !skipFeedback) {
       const normalizedEmail = trimmedEmail.toLowerCase();
       const normalizedPin = pin.trim().toUpperCase();
       const alreadyRegistered = (event.entries || []).some((e) => {
+        if (entry.registrationId && e.registrationId === entry.registrationId) return false;
+        if (entry.email && e.email?.toLowerCase().trim() === normalizedEmail) return false;
+        if (entry.pin && e.pin?.toUpperCase().trim() === normalizedPin) return false;
+
         const entryEmail = e.email?.toLowerCase().trim();
         const entryPin = e.pin?.toUpperCase().trim();
         return (entryEmail && entryEmail === normalizedEmail) || (normalizedPin && entryPin && entryPin === normalizedPin);
@@ -578,11 +582,34 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         setIsPayingPix(false);
 
         // Salva e atualiza o evento e a inscrição automaticamente
-        await save(nextPayments, true);
+        const saved = await save(nextPayments, true);
+        if (!saved) {
+          const finalEntry: TournamentEntry = {
+            ...entry,
+            name: name.trim(),
+            nickname: nickname.trim() || name.trim(),
+            email: email.trim(),
+            pin: pin.trim().toUpperCase(),
+            phone: phone.replace(/\D/g, '').trim(),
+            shirtSize,
+            gender,
+            categoryIds,
+            dueAmount,
+            paidAmount: payAmount,
+            paymentStatus: 'Confirmado',
+            payments: nextPayments,
+            joinedAt: entry.joinedAt || Date.now(),
+          };
+          await onSave(finalEntry);
+        }
         return true;
+      } else {
+        setFeedback('⏳ Pagamento ainda não identificado como aprovado pelo Mercado Pago. Aguarde alguns segundos e tente novamente.');
       }
     } catch (err) {
       console.warn('Erro ao checar status do pagamento Pix:', err);
+      const msg = err instanceof Error ? err.message : 'Erro ao consultar status do pagamento.';
+      setFeedback(msg);
     } finally {
       setIsCheckingPaymentStatus(false);
     }
