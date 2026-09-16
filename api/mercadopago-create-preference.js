@@ -2,6 +2,7 @@ import { Payment } from "mercadopago";
 import {
   getBaseUrl,
   getMercadoPagoClient,
+  getOrganizerMercadoPagoToken,
   initFirebaseAdmin,
   sanitize,
 } from "./_mercadopago.js";
@@ -88,25 +89,51 @@ export default async function handler(req, res) {
     // Pix expira em 24 horas
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    const client = getMercadoPagoClient();
+    // Verifica se o evento possui um organizador com conta Mercado Pago conectada
+    const organizerEmail = event.organizerEmail ? String(event.organizerEmail).toLowerCase().trim() : null;
+    let organizerData = null;
+    if (organizerEmail) {
+      organizerData = await getOrganizerMercadoPagoToken(db, organizerEmail);
+    }
+
+    // Taxa da plataforma (default 10%)
+    const feePercent = typeof event.marketplaceFeePercent === "number" ? Math.max(0, event.marketplaceFeePercent) : 10;
+    const applicationFee = organizerData ? Number(Math.max(0, (amount * (feePercent / 100))).toFixed(2)) : 0;
+
+    // Cliente MP: usa o token do organizador (split marketplace) ou o token global (modo legado)
+    const client = organizerData?.accessToken
+      ? getMercadoPagoClient(organizerData.accessToken)
+      : getMercadoPagoClient();
+
+    const paymentPayload = {
+      transaction_amount: amount,
+      description,
+      payment_method_id: "pix",
+      date_of_expiration: expiresAt,
+      payer: {
+        email: cleanEntryEmail,
+      },
+      external_reference: externalReference,
+      notification_url: `${baseUrl}/api/mercadopago-webhook`,
+      metadata: {
+        event_pin: cleanEventPin,
+        entry_email: cleanEntryEmail,
+        organizer_email: organizerEmail || null,
+        marketplace_fee_percent: feePercent,
+        application_fee: applicationFee,
+      },
+    };
+
+    // Parâmetro do split de marketplace no Checkout Transparente
+    if (organizerData?.accessToken && applicationFee > 0) {
+      paymentPayload.application_fee = applicationFee;
+    }
+
+    console.log(`[Pix] Criando cobrança para ${cleanEntryEmail} no evento ${cleanEventPin}. Modo: ${organizerData ? `Marketplace (Organizador: ${organizerEmail}, fee: R$ ${applicationFee})` : "Global (Legado)"}`);
 
     // Checkout Transparente: cria pagamento Pix diretamente
     const payment = await new Payment(client).create({
-      body: {
-        transaction_amount: amount,
-        description,
-        payment_method_id: "pix",
-        date_of_expiration: expiresAt,
-        payer: {
-          email: cleanEntryEmail,
-        },
-        external_reference: externalReference,
-        notification_url: `${baseUrl}/api/mercadopago-webhook`,
-        metadata: {
-          event_pin: cleanEventPin,
-          entry_email: cleanEntryEmail,
-        },
-      },
+      body: paymentPayload,
     });
 
     const txData = payment.point_of_interaction?.transaction_data ?? {};
@@ -125,6 +152,9 @@ export default async function handler(req, res) {
       qrCodeBase64,
       externalReference,
       amount,
+      applicationFee: applicationFee || null,
+      marketplaceFeePercent: feePercent,
+      organizerEmail: organizerEmail || null,
       paymentMethod: "pix",
       status: payment.status || "pending",
       expiresAt,

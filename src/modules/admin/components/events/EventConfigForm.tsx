@@ -1,6 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
+  CheckCircle2,
   ChevronUp,
+  ExternalLink,
   FileText,
   Image as ImageIcon,
   Loader2,
@@ -29,6 +32,7 @@ export interface EventConfigFormProps {
   isSavingEvent: boolean;
   bannerInputRef: React.RefObject<HTMLInputElement>;
   coAdminNamesByPin: Record<string, string>;
+  adminEmail?: string;
   onChangeEditingEvent: (event: TournamentEvent | null) => void;
   onSaveEvent: () => void;
   onClose: () => void;
@@ -41,11 +45,52 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   isSavingEvent,
   bannerInputRef,
   coAdminNamesByPin,
+  adminEmail,
   onChangeEditingEvent,
   onSaveEvent,
   onClose,
 }) => {
   const regulationInputRef = useRef<HTMLInputElement>(null);
+  const [organizerStatus, setOrganizerStatus] = useState<{
+    loading: boolean;
+    connected?: boolean;
+    userId?: string;
+    checkedEmail?: string;
+  }>({ loading: false });
+
+  const currentOrganizerEmail = editingEvent.organizerEmail || (editingEvent.paymentType === 'mercadopago' && adminEmail ? adminEmail : '');
+
+  // Consulta o status de conexão da conta Mercado Pago do organizador
+  useEffect(() => {
+    if (editingEvent.paymentType !== 'mercadopago') return;
+    const targetEmail = (editingEvent.organizerEmail || adminEmail || '').trim().toLowerCase();
+    if (!targetEmail) {
+      setOrganizerStatus({ loading: false, connected: false, checkedEmail: '' });
+      return;
+    }
+
+    setOrganizerStatus((prev) => ({ ...prev, loading: true, checkedEmail: targetEmail }));
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/mercadopago-organizer-status?email=${encodeURIComponent(targetEmail)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setOrganizerStatus({
+            loading: false,
+            connected: !!data.connected,
+            userId: data.userId,
+            checkedEmail: targetEmail,
+          });
+        } else {
+          setOrganizerStatus({ loading: false, connected: false, checkedEmail: targetEmail });
+        }
+      } catch {
+        setOrganizerStatus({ loading: false, connected: false, checkedEmail: targetEmail });
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [editingEvent.organizerEmail, editingEvent.paymentType, adminEmail]);
 
   const handleProtectedChange = (updated: TournamentEvent | null) => {
     if (isReadOnlyRegistration && updated !== null) {
@@ -329,6 +374,123 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
             ))}
           </select>
         </div>
+
+        {editingEvent.paymentType === 'mercadopago' && (
+          <div className="space-y-4 rounded-2xl border border-sky-200 bg-sky-50/50 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-sky-900 flex items-center gap-1.5">
+                ⚡ Mercado Pago Split & Marketplace
+              </span>
+              <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">
+                Pix Automático
+              </span>
+            </div>
+
+            {/* Organizador */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black text-slate-600 ml-1">
+                  E-mail do Organizador (Recebedor principal)
+                </label>
+                {adminEmail && (!editingEvent.organizerEmail || editingEvent.organizerEmail !== adminEmail) && (
+                  <button
+                    type="button"
+                    onClick={() => handleProtectedChange({ ...editingEvent, organizerEmail: adminEmail })}
+                    className="text-[10px] font-bold text-sky-600 hover:text-sky-800 underline cursor-pointer"
+                  >
+                    Usar meu e-mail
+                  </button>
+                )}
+              </div>
+              <input
+                type="email"
+                value={editingEvent.organizerEmail ?? ''}
+                disabled={isReadOnlyRegistration}
+                onChange={(e) => handleProtectedChange({ ...editingEvent, organizerEmail: e.target.value.toLowerCase().trim() })}
+                placeholder={adminEmail || 'organizador@email.com'}
+                className="w-full h-11 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-bold text-xs outline-none focus:border-sky-400"
+              />
+
+              {/* Status do Organizador */}
+              <div className="pt-1">
+                {organizerStatus.loading ? (
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Verificando conexão Mercado Pago...</span>
+                  </div>
+                ) : organizerStatus.connected ? (
+                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-xs text-emerald-800 font-bold">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                      <span>Conta Mercado Pago conectada</span>
+                      {organizerStatus.userId && (
+                        <span className="text-[10px] font-normal text-emerald-600">(ID: {organizerStatus.userId})</span>
+                      )}
+                    </div>
+                    <a
+                      href={`/api/mercadopago-oauth-start?adminEmail=${encodeURIComponent(
+                        editingEvent.organizerEmail || adminEmail || ''
+                      )}`}
+                      className="text-[10px] text-emerald-700 underline font-bold"
+                      title="Reconectar ou trocar conta"
+                    >
+                      Reconectar
+                    </a>
+                  </div>
+                ) : (
+                  <div className="space-y-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 font-bold">
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                      <span>Organizador ainda não conectou o Mercado Pago</span>
+                    </div>
+                    <p className="text-[11px] font-medium text-amber-800 leading-relaxed">
+                      Para que o dinheiro das inscrições caia direto na conta do organizador com o split da sua taxa, é necessário autorizar a conexão uma única vez.
+                    </p>
+                    <a
+                      href={`/api/mercadopago-oauth-start?adminEmail=${encodeURIComponent(
+                        editingEvent.organizerEmail || adminEmail || ''
+                      )}`}
+                      className="inline-flex items-center justify-center gap-2 w-full py-2.5 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-black text-xs rounded-xl shadow transition-all"
+                    >
+                      <ExternalLink size={14} />
+                      Conectar Mercado Pago deste Organizador
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Taxa da Plataforma */}
+            <div className="space-y-1.5 pt-1 border-t border-sky-100">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black text-slate-600 ml-1">
+                  Taxa da plataforma (%)
+                </label>
+                <span className="text-[10px] font-black text-sky-700">
+                  {editingEvent.marketplaceFeePercent ?? 10}% de comissão
+                </span>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                value={editingEvent.marketplaceFeePercent ?? 10}
+                disabled={isReadOnlyRegistration}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 10 : Math.max(0, Math.min(100, Number(e.target.value)));
+                  handleProtectedChange({ ...editingEvent, marketplaceFeePercent: val });
+                }}
+                className="w-full h-11 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-bold text-xs outline-none focus:border-sky-400"
+              />
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Exemplo: em uma inscrição de R$ 100,00, R${' '}
+                {(100 * ((editingEvent.marketplaceFeePercent ?? 10) / 100)).toFixed(2)} fica com você (plataforma) e R${' '}
+                {(100 * (1 - (editingEvent.marketplaceFeePercent ?? 10) / 100)).toFixed(2)} vai direto para a conta do organizador.
+              </p>
+            </div>
+          </div>
+        )}
 
         {editingEvent.eventType === 'Ranking' && (
           <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">

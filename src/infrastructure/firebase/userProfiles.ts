@@ -30,6 +30,11 @@ export interface FirebaseUserProfile {
   passkeyPublicKey?: string;
   referredByPin?: string;
   uid?: string;
+  mercadoPagoAccessToken?: string;
+  mercadoPagoRefreshToken?: string;
+  mercadoPagoUserId?: string;
+  mercadoPagoConnectedAt?: number;
+  mercadoPagoTokenExpiresAt?: number;
 }
 
 const normalizeUserEmail = (email: string) => email.toLowerCase().trim();

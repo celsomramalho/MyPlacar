@@ -201,6 +201,8 @@ export interface TournamentEvent {
   registrationFee?: number;
   extraCategoryFee?: number;
   paymentType?: EventPaymentTypeOption;
+  organizerEmail?: string;
+  marketplaceFeePercent?: number;
   eventStatus?: EventStatusOption;
   eventType?: EventTypeOption;
   setsCount?: 1 | 3 | 5;

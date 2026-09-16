@@ -58,6 +58,25 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [migrationResult, setMigrationResult] = useState<AdminMigrationResult | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<AdminDeleteConfirm | null>(null);
   const [status, setStatus] = useState<AdminStatus | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mp_connected') === '1') {
+      setStatus({
+        type: 'success',
+        msg: 'Conta Mercado Pago conectada com sucesso! O split automático já está ativo.',
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('mp_error')) {
+      setStatus({
+        type: 'error',
+        msg: `Erro na autorização do Mercado Pago: ${params.get('mp_error')}`,
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   const [goldenRule, setGoldenRule] = useState(true);
   
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -143,6 +162,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       bracketDrawType: 'Manual',
       matchDrawType: 'Manual',
       paymentType: 'manual',
+      organizerEmail: userProfile?.email || '',
+      marketplaceFeePercent: 10,
       showRegisteredParticipants: false,
       allowUserScoreEntry: false,
       rankingMatchesPerTeam: undefined,

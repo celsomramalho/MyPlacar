@@ -237,6 +237,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         isSavingEvent={isSavingEvent}
         bannerInputRef={bannerInputRef}
         coAdminNamesByPin={coAdminNamesByPin}
+        adminEmail={adminEmail}
         onChangeEditingEvent={onChangeEditingEvent}
         onSaveEvent={handleSaveEventAndSyncDashboard}
         onClose={() => onChangeEditingEvent(null)}

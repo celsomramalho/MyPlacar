@@ -17,4 +17,9 @@ export interface UserProfile {
   passkeyCredentialId?: string;
   passkeyPublicKey?: string;
   referredByPin?: string;
+  mercadoPagoAccessToken?: string;
+  mercadoPagoRefreshToken?: string;
+  mercadoPagoUserId?: string;
+  mercadoPagoConnectedAt?: number;
+  mercadoPagoTokenExpiresAt?: number;
 }

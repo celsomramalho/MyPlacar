@@ -1,6 +1,7 @@
 import { Payment } from "mercadopago";
 import {
   getMercadoPagoClient,
+  getOrganizerMercadoPagoToken,
   initFirebaseAdmin,
   mapMercadoPagoStatus,
   parseExternalReference,
@@ -24,8 +25,40 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "paymentId, eventPin e email são obrigatórios" });
     }
 
-    const client = getMercadoPagoClient();
-    const payment = await new Payment(client).get({ id: paymentId });
+    const db = initFirebaseAdmin();
+    const rawPin = String(eventPin).trim();
+    const cleanEmail = String(email).toLowerCase().trim();
+
+    // Busca o evento para checar se é gerido por organizador com token próprio
+    let eventRef = db.collection("events").doc(rawPin);
+    let eventSnap = await eventRef.get();
+    if (!eventSnap.exists) {
+      const q = await db.collection("events").where("pin", "==", rawPin).limit(1).get();
+      if (!q.empty) { eventRef = q.docs[0].ref; eventSnap = q.docs[0]; }
+    }
+
+    const eventData = eventSnap.exists ? eventSnap.data() : null;
+    let organizerData = null;
+    if (eventData?.organizerEmail) {
+      organizerData = await getOrganizerMercadoPagoToken(db, eventData.organizerEmail);
+    }
+
+    // Tenta buscar o pagamento com o token do organizador, se falhar ou não tiver tenta com o global
+    let payment = null;
+    try {
+      const primaryClient = organizerData?.accessToken
+        ? getMercadoPagoClient(organizerData.accessToken)
+        : getMercadoPagoClient();
+      payment = await new Payment(primaryClient).get({ id: paymentId });
+    } catch (primaryErr) {
+      if (organizerData?.accessToken) {
+        // Fallback para token global
+        const fallbackClient = getMercadoPagoClient();
+        payment = await new Payment(fallbackClient).get({ id: paymentId });
+      } else {
+        throw primaryErr;
+      }
+    }
 
     if (!payment || !payment.id) {
       return res.status(404).json({ error: "Pagamento não encontrado" });
@@ -36,16 +69,6 @@ export default async function handler(req, res) {
     // Se aprovado, atualiza o Firestore
     if (payment.status === "approved") {
       try {
-        const db = initFirebaseAdmin();
-        const rawPin = String(eventPin).trim();
-        const cleanEmail = String(email).toLowerCase().trim();
-
-        let eventRef = db.collection("events").doc(rawPin);
-        let eventSnap = await eventRef.get();
-        if (!eventSnap.exists) {
-          const q = await db.collection("events").where("pin", "==", rawPin).limit(1).get();
-          if (!q.empty) { eventRef = q.docs[0].ref; eventSnap = q.docs[0]; }
-        }
 
         if (eventSnap.exists) {
           let entryRef = eventRef.collection("entries").doc(cleanEmail);
