@@ -43,7 +43,36 @@ export default async function handler(req, res) {
       organizerData = await getOrganizerMercadoPagoToken(db, eventData.organizerEmail);
     }
 
-    // Tenta buscar o pagamento com o token do organizador, se falhar ou não tiver tenta com o global
+    // 1. Checa primeiro no Firestore se a inscrição já está confirmada pelo webhook
+    let entryRef = null;
+    let entrySnap = null;
+    if (eventSnap.exists) {
+      entryRef = eventRef.collection("entries").doc(cleanEmail);
+      entrySnap = await entryRef.get();
+      if (!entrySnap.exists) {
+        const eq = await eventRef.collection("entries").where("email", "==", cleanEmail).limit(1).get();
+        if (!eq.empty) { entryRef = eq.docs[0].ref; entrySnap = eq.docs[0]; }
+      }
+    }
+
+    if (entrySnap?.exists) {
+      const entryData = entrySnap.data() || {};
+      const isConfirmed = entryData.paymentStatus === "Confirmado" || entryData.paymentStatus === "Pago";
+      const hasPayment = Array.isArray(entryData.payments) && entryData.payments.some(
+        (p) => String(p.providerPaymentId) === String(paymentId) || String(p.id) === `mp-${paymentId}`
+      );
+
+      if (isConfirmed || hasPayment) {
+        return res.status(200).json({
+          paymentId: String(paymentId),
+          status: "approved",
+          paymentStatus: "Confirmado",
+          source: "firestore",
+        });
+      }
+    }
+
+    // 2. Tenta buscar o pagamento com o token do organizador, se falhar ou não tiver tenta com o global
     let payment = null;
     try {
       const primaryClient = organizerData?.accessToken
