@@ -96,6 +96,34 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "Pagamento não encontrado" });
     }
 
+    // Se o paymentId específico ainda não estiver aprovado, busca se algum Pix referente a esta inscrição foi aprovado
+    if (payment.status !== "approved") {
+      try {
+        const clientToUse = organizerData?.accessToken
+          ? getMercadoPagoClient(organizerData.accessToken)
+          : getMercadoPagoClient();
+        const cleanPin = eventRef.id;
+        const refsToSearch = Array.from(new Set([`${cleanPin}:${cleanEmail}`, `${rawPin}:${cleanEmail}`]));
+
+        for (const ref of refsToSearch) {
+          const searchResult = await new Payment(clientToUse).search({
+            options: {
+              external_reference: ref,
+              sort: "date_created",
+              criteria: "desc",
+            },
+          });
+          const approved = (searchResult?.results || []).find((p) => p.status === "approved");
+          if (approved) {
+            payment = approved;
+            break;
+          }
+        }
+      } catch (searchErr) {
+        console.warn("Aviso na busca por external_reference:", searchErr?.message);
+      }
+    }
+
     const { paymentStatus } = mapMercadoPagoStatus(payment.status);
 
     // Se aprovado, atualiza o Firestore

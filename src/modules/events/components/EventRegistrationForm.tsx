@@ -206,6 +206,51 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const isRegistrationSaved = Boolean(entry.email && entry.email.trim() !== '');
 
+  // Listener em tempo real do Firestore para confirmação instantânea do pagamento
+  React.useEffect(() => {
+    const targetEmail = (entry.email || email).toLowerCase().trim();
+    if (!event.pin || !targetEmail || paymentStatus === 'Confirmado') {
+      return;
+    }
+    const db = getDb();
+    if (!db) return;
+
+    let unsub: (() => void) | null = null;
+    let isMounted = true;
+
+    import('firebase/firestore').then(({ doc, onSnapshot }) => {
+      if (!isMounted) return;
+      const entryDocRef = doc(db as Firestore, 'events', event.pin, 'entries', targetEmail);
+      unsub = onSnapshot(entryDocRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data() as TournamentEntry;
+          if (data.paymentStatus === 'Confirmado' || data.paymentStatus === 'Pago') {
+            stopPolling();
+            setPixPayment(null);
+            setPaymentStatus('Confirmado');
+            setPendingPaymentId(null);
+            setSavedPixData(null);
+            try {
+              localStorage.removeItem(`mp_pending_${event.pin}_${targetEmail}`);
+              localStorage.removeItem(`mp_pending_data_${event.pin}_${targetEmail}`);
+            } catch {}
+            if (Array.isArray(data.payments) && data.payments.length > 0) {
+              setPayments(data.payments);
+            }
+            playPaymentSuccessSound();
+            setFeedback('✅ Pagamento Pix confirmado com sucesso!');
+            setIsPayingPix(false);
+          }
+        }
+      });
+    }).catch(() => {});
+
+    return () => {
+      isMounted = false;
+      if (unsub) unsub();
+    };
+  }, [event.pin, entry.email, email, paymentStatus]);
+
 
   React.useEffect(() => {
     if (!canEditIdentity) return;
