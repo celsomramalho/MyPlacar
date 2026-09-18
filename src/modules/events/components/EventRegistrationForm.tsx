@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, QrCode, Trash2, Upload, Users } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { findUserByPin, getDb } from '@infra/firebase';
+import { fetchEventEntries } from '@infra/firebase/events';
 import type { Firestore } from 'firebase/firestore';
 import { playPaymentSuccessSound } from '@shared/utils/soundEffects';
 import { createMercadoPagoPixPayment, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
@@ -43,9 +44,26 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const isNewAdminEntry = isAdmin && (!entry.email || entry.email.trim() === '') && (!entry.name || entry.name.trim() === '');
   const canEditIdentity = !readOnly && isNewAdminEntry;
 
+  // ── registrationId: busca as entries REAIS da subcoleção para novas inscrições ──
+  // event.entries pode estar vazio (não é carregado no contexto do form de usuário),
+  // então buscamos direto do Firestore para garantir ID único e sequencial.
+  const [liveEntries, setLiveEntries] = useState<TournamentEntry[]>(event.entries || []);
+  const liveEntriesLoadedRef = useRef(false);
+
+  useEffect(() => {
+    // Só carrega se for nova inscrição (sem registrationId já definido)
+    if (entry.registrationId || liveEntriesLoadedRef.current) return;
+    liveEntriesLoadedRef.current = true;
+    const db = getDb();
+    if (!db || !event.pin) return;
+    fetchEventEntries(db as Firestore, event.pin)
+      .then((entries) => setLiveEntries(entries as unknown as TournamentEntry[]))
+      .catch((err) => console.warn('[EventRegistrationForm] Erro ao buscar entries para registrationId:', err));
+  }, [event.pin, entry.registrationId]);
+
   const registrationId = useMemo(
-    () => entry.registrationId || getNextRegistrationId(event.entries || []),
-    [entry.registrationId, event.entries]
+    () => entry.registrationId || getNextRegistrationId(liveEntries),
+    [entry.registrationId, liveEntries]
   );
 
   const [nickname, setNickname] = useState(entry.nickname || '');
@@ -570,7 +588,31 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         setEditingPaymentId(null);
       }
 
+      // Para NOVAS inscrições, re-busca as entries frescas no momento do save
+      // para garantir que o registrationId seja único mesmo em inscrições simultâneas
+      let freshRegistrationId: number | string | undefined = entry.registrationId;
+      if (!entry.registrationId) {
+        const db = getDb();
+        if (db && event.pin) {
+          try {
+            const freshEntries = await fetchEventEntries(db as Firestore, event.pin);
+            setLiveEntries(freshEntries as unknown as TournamentEntry[]);
+            freshRegistrationId = getNextRegistrationId(freshEntries);
+          } catch (err) {
+            console.warn('[EventRegistrationForm] Erro ao buscar entries frescas no save:', err);
+            freshRegistrationId = getNextRegistrationId(liveEntries);
+          }
+        } else {
+          freshRegistrationId = getNextRegistrationId(liveEntries);
+        }
+      }
+
       const cleanEntry = buildEntry(paymentsToSave, effectiveCategoryIds);
+      // Garante que o ID calculado com entries frescas é aplicado
+      if (freshRegistrationId !== undefined) {
+        cleanEntry.registrationId = Number(freshRegistrationId);
+      }
+
       const jsonClean = JSON.parse(JSON.stringify(cleanEntry));
       await onSave(jsonClean);
       if (!skipFeedback) {

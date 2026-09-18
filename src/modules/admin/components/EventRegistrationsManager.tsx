@@ -46,6 +46,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     initialExpandedPin || null
   );
   const [isSyncingMP, setIsSyncingMP] = useState(false);
+  const [isFixingIds, setIsFixingIds] = useState(false);
 
   const handleSyncMercadoPago = async () => {
     if (isSyncingMP || !event.pin) return;
@@ -73,6 +74,48 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       });
     } finally {
       setIsSyncingMP(false);
+    }
+  };
+
+  const handleFixRegistrationIds = async () => {
+    if (isFixingIds || !event.pin || !adminEmail) return;
+    setIsFixingIds(true);
+    try {
+      const res = await fetch('/api/admin-fix-registration-ids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventPin: event.pin, adminEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+
+      const db = getDb();
+      if (db && data.fixes?.length > 0) {
+        const freshEntries = await fetchEventEntries(db, event.pin);
+        onUpdateEntries(freshEntries as unknown as TournamentEntry[]);
+        onUpdateEvent({ ...event, entries: freshEntries as unknown as TournamentEntry[] });
+      }
+
+      const detail = data.fixes?.length > 0
+        ? data.fixes.map((f: { email: string; oldId: number | string | null; newId: number }) =>
+            `• ${f.email}: #${f.oldId ?? '(sem ID)'} → #${f.newId}`
+          ).join('\n')
+        : 'Todos os IDs estão corretos.';
+
+      setModalConfig({
+        title: data.fixes?.length > 0 ? `✅ ${data.message}` : 'IDs sem problemas',
+        message: detail,
+        onConfirm: () => setModalConfig(null),
+      });
+    } catch (err) {
+      console.error('Erro ao corrigir IDs:', err);
+      setModalConfig({
+        title: 'Erro ao corrigir IDs',
+        message: err instanceof Error ? err.message : 'Não foi possível corrigir os IDs.',
+        onConfirm: () => setModalConfig(null),
+      });
+    } finally {
+      setIsFixingIds(false);
     }
   };
 
@@ -474,6 +517,18 @@ export const EventRegistrationsManager: React.FC<Props> = ({
               >
                 <RefreshCw size={14} className={isSyncingMP ? 'animate-spin text-emerald-600' : 'text-emerald-600'} />
                 <span>{isSyncingMP ? 'Sincronizando...' : 'Sincronizar MP'}</span>
+              </button>
+            )}
+            {adminEmail && (
+              <button
+                type="button"
+                onClick={() => void handleFixRegistrationIds()}
+                disabled={isFixingIds}
+                className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-xs px-4 py-3 rounded-2xl shadow-xs transition-all disabled:opacity-60 cursor-pointer"
+                title="Detecta e corrige Inscrição_IDs duplicados ou ausentes neste evento"
+              >
+                <RefreshCw size={14} className={isFixingIds ? 'animate-spin text-amber-600' : 'text-amber-600'} />
+                <span>{isFixingIds ? 'Corrigindo...' : 'Corrigir IDs'}</span>
               </button>
             )}
             <button
