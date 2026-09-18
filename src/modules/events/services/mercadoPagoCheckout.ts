@@ -58,5 +58,22 @@ export const getMercadoPagoPaymentStatus = async ({
   return body as PixPaymentStatusResult;
 };
 
+export const syncEventMercadoPagoPayments = async ({
+  eventPin,
+}: {
+  eventPin: string;
+}): Promise<{ totalChecked: number; totalApproved: number; message: string }> => {
+  const response = await fetch('/api/mercadopago-sync-event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventPin }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error || 'Erro ao sincronizar pagamentos do evento.');
+  }
+  return body as { totalChecked: number; totalApproved: number; message: string };
+};
+
 // Mantém compatibilidade com código que ainda usa o nome antigo
 export const createMercadoPagoPreference = createMercadoPagoPixPayment;

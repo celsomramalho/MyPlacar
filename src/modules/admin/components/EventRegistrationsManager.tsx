@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
+import { fetchEventEntries } from '@infra/firebase/events';
 import { updateUserProfileFields } from '@infra/firebase/users';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { maskPin } from '@shared/utils/formatters';
+import { playPaymentSuccessSound } from '@shared/utils/soundEffects';
+import { syncEventMercadoPagoPayments } from '@modules/events/services/mercadoPagoCheckout';
 import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
 import { useUI } from '@modules/ui';
 
@@ -42,6 +45,36 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const [expandedRegistrationEmail, setExpandedRegistrationEmail] = useState<string | null>(
     initialExpandedPin || null
   );
+  const [isSyncingMP, setIsSyncingMP] = useState(false);
+
+  const handleSyncMercadoPago = async () => {
+    if (isSyncingMP || !event.pin) return;
+    setIsSyncingMP(true);
+    try {
+      const res = await syncEventMercadoPagoPayments({ eventPin: event.pin });
+      const db = getDb();
+      if (db && res.totalApproved > 0) {
+        const freshEntries = await fetchEventEntries(db, event.pin);
+        onUpdateEntries(freshEntries as unknown as TournamentEntry[]);
+        onUpdateEvent({ ...event, entries: freshEntries as unknown as TournamentEntry[] });
+        playPaymentSuccessSound();
+      }
+      setModalConfig({
+        title: res.totalApproved > 0 ? 'Pagamentos Confirmados! ✅' : 'Sincronização Mercado Pago',
+        message: res.message,
+        onConfirm: () => setModalConfig(null),
+      });
+    } catch (err) {
+      console.error('Erro na sincronização MP:', err);
+      setModalConfig({
+        title: 'Erro na Sincronização',
+        message: err instanceof Error ? err.message : 'Não foi possível sincronizar os pagamentos.',
+        onConfirm: () => setModalConfig(null),
+      });
+    } finally {
+      setIsSyncingMP(false);
+    }
+  };
 
   useEffect(() => {
     if (initialExpandedPin) {
@@ -430,12 +463,26 @@ export const EventRegistrationsManager: React.FC<Props> = ({
           </p>
         </div>
         {!isAdding && !isReadOnly && (
-          <button
-            onClick={handleStartAdd}
-            className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all self-start sm:self-auto"
-          >
-            Nova inscrição
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {event.paymentType === 'mercadopago' && (
+              <button
+                type="button"
+                onClick={() => void handleSyncMercadoPago()}
+                disabled={isSyncingMP}
+                className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-xs px-4 py-3 rounded-2xl shadow-xs transition-all disabled:opacity-60 cursor-pointer"
+                title="Verifica se alguma inscrição pendente já foi paga no Mercado Pago"
+              >
+                <RefreshCw size={14} className={isSyncingMP ? 'animate-spin text-emerald-600' : 'text-emerald-600'} />
+                <span>{isSyncingMP ? 'Sincronizando...' : 'Sincronizar MP'}</span>
+              </button>
+            )}
+            <button
+              onClick={handleStartAdd}
+              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all cursor-pointer"
+            >
+              Nova inscrição
+            </button>
+          </div>
         )}
       </div>
 

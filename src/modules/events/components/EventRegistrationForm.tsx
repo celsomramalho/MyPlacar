@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, QrCode, Trash2, Up
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { findUserByPin, getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
+import { playPaymentSuccessSound } from '@shared/utils/soundEffects';
 import { createMercadoPagoPixPayment, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
 import {
   formatRegistrationId,
@@ -142,6 +143,43 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const canUseManualPaymentForm = !usesAutomaticPayment || (isAdmin && showManualAdminPayment);
   const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<PaymentItem | null>(null);
+
+  // Estados para confirmação rápida do admin via código de transação
+  const [showAdminTxForm, setShowAdminTxForm] = useState(false);
+  const [adminTxCode, setAdminTxCode] = useState('');
+  const [isAdminConfirmingTx, setIsAdminConfirmingTx] = useState(false);
+
+  // Recupera dados salvos do Pix pendente (para poder reabrir o QR Code anterior)
+  const [savedPixData, setSavedPixData] = useState<PixPaymentResult | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const targetEmail = (entry.email || '').toLowerCase().trim();
+    try {
+      const dataKey = `mp_pending_data_${event.pin}_${targetEmail}`;
+      const saved = localStorage.getItem(dataKey);
+      if (saved) return JSON.parse(saved) as PixPaymentResult;
+    } catch {}
+    // Fallback do Firestore: se mercadoPagoCheckout contiver qrCode
+    const entryAny = entry as unknown as Record<string, unknown>;
+    const checkout = entryAny.mercadoPagoCheckout as Record<string, unknown> | undefined;
+    if (
+      checkout?.paymentId &&
+      checkout.qrCode &&
+      checkout.status !== 'approved' &&
+      entry.paymentStatus !== 'Confirmado' &&
+      entry.paymentStatus !== 'Pago'
+    ) {
+      return {
+        paymentId: String(checkout.paymentId),
+        status: String(checkout.status || 'pending'),
+        qrCode: String(checkout.qrCode),
+        qrCodeBase64: checkout.qrCodeBase64 ? String(checkout.qrCodeBase64) : undefined,
+        amount: Number(checkout.amount || entry.dueAmount || event.registrationFee || 0),
+        expiresAt: checkout.expiresAt ? String(checkout.expiresAt) : '',
+        externalReference: checkout.externalReference ? String(checkout.externalReference) : '',
+      };
+    }
+    return null;
+  });
 
   // paymentId pendente — salvo no localStorage ao iniciar o Pix e limpo ao confirmar
   // Carrega também do mercadoPagoCheckout do Firestore como fallback (extra)
@@ -611,6 +649,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         const nextPayments = alreadyRecorded ? payments : [...payments, newPayItem];
 
         setPayments(nextPayments);
+        playPaymentSuccessSound();
         setFeedback('✅ Pagamento Pix confirmado com sucesso!');
         setIsPayingPix(false);
 
@@ -668,6 +707,51 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     };
   }, [pixPayment, entry.email, email]);
 
+  const handleAdminQuickConfirmWithTxCode = async () => {
+    const cleanTx = adminTxCode.trim();
+    if (!cleanTx) {
+      setFeedback('Informe o código da transação do Mercado Pago.');
+      return;
+    }
+    setIsAdminConfirmingTx(true);
+    setFeedback(null);
+    try {
+      const payAmount = pendingAmount > 0 ? pendingAmount : Number(dueAmount) || 0;
+      const newPayItem: PaymentItem = {
+        id: `mp-tx-${cleanTx}`,
+        amount: payAmount,
+        date: Date.now(),
+        provider: 'mercadopago',
+        providerPaymentId: cleanTx,
+        receiptFileName: `Transação Mercado Pago #${cleanTx}`,
+      };
+
+      const nextPayments = [...payments, newPayItem];
+      setPayments(nextPayments);
+      setPaymentStatus('Confirmado');
+      setPendingPaymentId(null);
+      setSavedPixData(null);
+      try {
+        const targetEmail = (entry.email || email).toLowerCase().trim();
+        localStorage.removeItem(`mp_pending_${event.pin}_${targetEmail}`);
+        localStorage.removeItem(`mp_pending_data_${event.pin}_${targetEmail}`);
+      } catch {}
+
+      playPaymentSuccessSound();
+      setFeedback('✅ Inscrição confirmada com sucesso via transação Mercado Pago!');
+      setShowAdminTxForm(false);
+      setAdminTxCode('');
+
+      // Salva no banco
+      await save(nextPayments, true);
+    } catch (err) {
+      console.error('Erro ao confirmar via código de transação:', err);
+      setFeedback('Erro ao registrar confirmação da transação.');
+    } finally {
+      setIsAdminConfirmingTx(false);
+    }
+  };
+
   const handlePayViaPix = async () => {
     if (isSaving || isPayingPix) return;
     setIsPayingPix(true);
@@ -688,12 +772,15 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       });
 
       setPixPayment(result);
+      setSavedPixData(result);
 
-      // 3. Persiste o paymentId no localStorage para recuperação futura
+      // 3. Persiste o paymentId e os dados do Pix no localStorage para recuperação futura
       setPendingPaymentId(result.paymentId);
       try {
         const lsKey = `mp_pending_${event.pin}_${targetEmail}`;
+        const dataKey = `mp_pending_data_${event.pin}_${targetEmail}`;
         localStorage.setItem(lsKey, result.paymentId);
+        localStorage.setItem(dataKey, JSON.stringify(result));
       } catch {}
 
       // 4. Inicia polling a cada 4s para verificar confirmação
@@ -1075,13 +1162,34 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
                     </>
                   )}
                 </button>
+
+                {/* Melhoria: Reabrir QR Code anterior sem gerar novo */}
+                {savedPixData?.qrCode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPixPayment(savedPixData);
+                      stopPolling();
+                      pollingRef.current = setInterval(() => {
+                        void checkPixPaymentConfirmation(savedPixData.paymentId, (entry.email || email).toLowerCase().trim());
+                      }, 4000);
+                    }}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+                  >
+                    <QrCode size={14} />
+                    <span>Ver QR Code / Copiar Pix anterior</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
                     setPendingPaymentId(null);
+                    setSavedPixData(null);
                     try {
-                      const lsKey = `mp_pending_${event.pin}_${(entry.email || email).toLowerCase().trim()}`;
-                      localStorage.removeItem(lsKey);
+                      const targetEmail = (entry.email || email).toLowerCase().trim();
+                      localStorage.removeItem(`mp_pending_${event.pin}_${targetEmail}`);
+                      localStorage.removeItem(`mp_pending_data_${event.pin}_${targetEmail}`);
                     } catch {}
                   }}
                   className="w-full text-[10px] text-amber-600 hover:text-amber-800 font-medium underline cursor-pointer"
@@ -1165,16 +1273,64 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           </div>
         )}
 
-        {/* Opção administrativa para lançar pagamento manual se o admin desejar */}
-        {isAdmin && !showManualAdminPayment && (
-          <div className="text-center pt-1">
-            <button
-              type="button"
-              onClick={() => setShowManualAdminPayment(true)}
-              className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer"
-            >
-              + Registrar pagamento manual em dinheiro (Admin)
-            </button>
+        {/* Opções administrativas para confirmação manual ou via transação Mercado Pago */}
+        {isAdmin && (
+          <div className="pt-2 border-t border-slate-100 space-y-2">
+            {!showAdminTxForm ? (
+              <div className="flex flex-col gap-1.5 text-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminTxForm(true)}
+                  className="text-[11px] font-black text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 py-2.5 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  ⚡ Confirmar via código de transação Mercado Pago (Admin)
+                </button>
+                {!showManualAdminPayment && (
+                  <button
+                    type="button"
+                    onClick={() => setShowManualAdminPayment(true)}
+                    className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer"
+                  >
+                    + Registrar pagamento manual em dinheiro (Admin)
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-slate-800">
+                    Confirmar por código de transação MP
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminTxForm(false)}
+                    className="text-[10px] font-bold text-slate-400 hover:text-slate-600"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-snug">
+                  Cole o código de transação ou autorização do comprovante do Mercado Pago (ex: <span className="font-mono font-bold text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">B33AZ00ST29DCM5JK</span>):
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={adminTxCode}
+                    onChange={(e) => setAdminTxCode(e.target.value)}
+                    placeholder="Ex: B33AZ00ST29DCM5JK"
+                    className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAdminQuickConfirmWithTxCode()}
+                    disabled={isAdminConfirmingTx || !adminTxCode.trim()}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                  >
+                    {isAdminConfirmingTx ? 'Salvando...' : 'Confirmar'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
