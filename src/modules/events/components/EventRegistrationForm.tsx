@@ -1561,7 +1561,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
               <button
                 type="button"
                 onClick={() => void save()}
-                disabled={isSaving || isPayingPix}
+                disabled={isSaving}
                 className="flex-1 min-w-[170px] py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isSaving ? (
@@ -1577,6 +1577,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
                 )}
               </button>
             </>
+          ) : usesAutomaticPayment && pendingAmount > 0 && !pixPayment && isRegistrationSaved ? (
+            // Inscrição salva com pagamento MP pendente: o card de pagamento já tem o botão PIX
+            // Não mostra botão de salvar aqui para evitar confusão
+            null
           ) : (
             <button
               type="button"
