@@ -143,6 +143,32 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<PaymentItem | null>(null);
 
+  // paymentId pendente — salvo no localStorage ao iniciar o Pix e limpo ao confirmar
+  // Carrega também do mercadoPagoCheckout do Firestore como fallback (extra)
+  const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const lsKey = `mp_pending_${event.pin}_${(entry.email || '').toLowerCase().trim()}`;
+      const saved = localStorage.getItem(lsKey);
+      if (saved) return saved;
+    } catch {}
+    // fallback: usar paymentId do Firestore se inscrição ainda está pendente
+    const entryAny = entry as unknown as Record<string, unknown>;
+    const checkout = entryAny.mercadoPagoCheckout as Record<string, unknown> | undefined;
+    if (
+      checkout?.paymentId &&
+      checkout.status !== 'approved' &&
+      entry.paymentStatus !== 'Confirmado' &&
+      entry.paymentStatus !== 'Pago'
+    ) {
+      return String(checkout.paymentId);
+    }
+    return null;
+  });
+
+  const isRegistrationSaved = Boolean(entry.email && entry.email.trim() !== '');
+
+
   React.useEffect(() => {
     if (!canEditIdentity) return;
     const cleanPin = pin.trim().toUpperCase();
@@ -562,6 +588,12 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         stopPolling();
         setPixPayment(null);
         setPaymentStatus('Confirmado');
+        // Limpa paymentId pendente do localStorage e do estado
+        setPendingPaymentId(null);
+        try {
+          const lsKey = `mp_pending_${event.pin}_${targetEmail}`;
+          localStorage.removeItem(lsKey);
+        } catch {}
 
         const payAmount = pixPayment?.amount || Number(dueAmount) || 0;
         const newPayItem: PaymentItem = {
@@ -657,7 +689,14 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
       setPixPayment(result);
 
-      // 3. Inicia polling a cada 4s para verificar confirmação
+      // 3. Persiste o paymentId no localStorage para recuperação futura
+      setPendingPaymentId(result.paymentId);
+      try {
+        const lsKey = `mp_pending_${event.pin}_${targetEmail}`;
+        localStorage.setItem(lsKey, result.paymentId);
+      } catch {}
+
+      // 4. Inicia polling a cada 4s para verificar confirmação
       stopPolling();
       pollingRef.current = setInterval(() => {
         void checkPixPaymentConfirmation(result.paymentId, targetEmail);
@@ -1009,24 +1048,80 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
               ⚡ O pagamento é confirmado <strong>automaticamente</strong> em segundos após a leitura do Pix. Não precisa anexar comprovante.
             </p>
 
-            <button
-              type="button"
-              onClick={handlePayViaPix}
-              disabled={isSaving || isPayingPix}
-              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-60"
-            >
-              {isPayingPix ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>Iniciando pagamento Pix...</span>
-                </>
-              ) : (
-                <>
-                  <QrCode size={16} />
-                  <span>Pagar R$ {pendingAmount.toFixed(2)} via PIX</span>
-                </>
-              )}
-            </button>
+            {/* Banner Melhoria D + Extra: Pix pendente recuperado */}
+            {pendingPaymentId && !pixPayment && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
+                <p className="text-[11px] font-black text-amber-800">
+                  ⏳ Há um Pix aguardando confirmação
+                </p>
+                <p className="text-[10px] text-amber-700">
+                  ID do pagamento: <span className="font-mono">{pendingPaymentId}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void checkPixPaymentConfirmation(pendingPaymentId, (entry.email || email).toLowerCase().trim())}
+                  disabled={isCheckingPaymentStatus}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {isCheckingPaymentStatus ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Verificando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={14} />
+                      <span>Verificar confirmação do Pix</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingPaymentId(null);
+                    try {
+                      const lsKey = `mp_pending_${event.pin}_${(entry.email || email).toLowerCase().trim()}`;
+                      localStorage.removeItem(lsKey);
+                    } catch {}
+                  }}
+                  className="w-full text-[10px] text-amber-600 hover:text-amber-800 font-medium underline cursor-pointer"
+                >
+                  Descartar e gerar novo Pix
+                </button>
+              </div>
+            )}
+
+            {/* Melhoria C: botão de pagar via Pix só aparece se inscrição já salva, sem pendingPaymentId */}
+            {!pendingPaymentId && (
+              <>
+                {isRegistrationSaved ? (
+                  <button
+                    type="button"
+                    onClick={handlePayViaPix}
+                    disabled={isSaving || isPayingPix}
+                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    {isPayingPix ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Iniciando pagamento Pix...</span>
+                      </>
+                    ) : (
+                      <>
+                        <QrCode size={16} />
+                        <span>Pagar R$ {pendingAmount.toFixed(2)} via PIX</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-center">
+                    <p className="text-[11px] font-bold text-slate-500">
+                      💾 Salve a inscrição primeiro para liberar o pagamento via Pix
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         ) : (
           <div className="p-3.5 bg-emerald-100/70 border border-emerald-200 rounded-2xl flex items-center gap-2.5 text-xs font-black text-emerald-800">
