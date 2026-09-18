@@ -85,7 +85,14 @@ export default async function handler(req, res) {
 
     const baseUrl = getBaseUrl(req);
     const externalReference = `${cleanEventPin}:${cleanEntryEmail}`;
-    const description = `Inscrição - ${event.name || cleanEventPin}`;
+    
+    // Descrição enriquecida com número da inscrição e e-mail para fácil conciliação no extrato do Mercado Pago
+    const regNumber = entry.registrationId != null
+      ? `#${String(entry.registrationId).padStart(4, "0")}`
+      : "";
+    const regPrefix = regNumber ? `Inscrição ${regNumber}` : "Inscrição";
+    const eventTitle = event.name || cleanEventPin;
+    const description = `${regPrefix} - ${eventTitle} (${cleanEntryEmail})`.slice(0, 250);
 
     // Pix expira em 24 horas
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -119,6 +126,8 @@ export default async function handler(req, res) {
       metadata: {
         event_pin: cleanEventPin,
         entry_email: cleanEntryEmail,
+        registration_id: entry.registrationId ?? null,
+        payer_name: entry.name || entry.nickname || null,
         organizer_email: organizerEmail || null,
         marketplace_fee_percent: feePercent,
         application_fee: applicationFee,
