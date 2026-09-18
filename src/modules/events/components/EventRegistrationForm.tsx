@@ -613,7 +613,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     }
   };
 
-  const checkPixPaymentConfirmation = async (paymentId: string, targetEmail: string) => {
+  const checkPixPaymentConfirmation = async (paymentId: string, targetEmail: string, isManualClick: boolean = false) => {
     setIsCheckingPaymentStatus(true);
     try {
       const status = await getMercadoPagoPaymentStatus({
@@ -628,9 +628,12 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         setPaymentStatus('Confirmado');
         // Limpa paymentId pendente do localStorage e do estado
         setPendingPaymentId(null);
+        setSavedPixData(null);
         try {
           const lsKey = `mp_pending_${event.pin}_${targetEmail}`;
+          const dataKey = `mp_pending_data_${event.pin}_${targetEmail}`;
           localStorage.removeItem(lsKey);
+          localStorage.removeItem(dataKey);
         } catch {}
 
         const payAmount = pixPayment?.amount || Number(dueAmount) || 0;
@@ -675,7 +678,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           await onSave(finalEntry);
         }
         return true;
-      } else {
+      } else if (isManualClick) {
         setFeedback('⏳ Pagamento ainda não identificado como aprovado pelo Mercado Pago. Aguarde alguns segundos e tente novamente.');
       }
     } catch (err) {
@@ -1085,7 +1088,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         <div className="space-y-2 pt-1">
           <button
             type="button"
-            onClick={() => void checkPixPaymentConfirmation(pixPayment.paymentId, (entry.email || email).toLowerCase().trim())}
+            onClick={() => void checkPixPaymentConfirmation(pixPayment.paymentId, (entry.email || email).toLowerCase().trim(), true)}
             disabled={isCheckingPaymentStatus}
             className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-60"
           >
@@ -1146,7 +1149,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
                 </p>
                 <button
                   type="button"
-                  onClick={() => void checkPixPaymentConfirmation(pendingPaymentId, (entry.email || email).toLowerCase().trim())}
+                  onClick={() => void checkPixPaymentConfirmation(pendingPaymentId, (entry.email || email).toLowerCase().trim(), true)}
                   disabled={isCheckingPaymentStatus}
                   className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
                 >

@@ -49,8 +49,19 @@ export const getMercadoPagoPaymentStatus = async ({
   eventPin: string;
   email: string;
 }): Promise<PixPaymentStatusResult> => {
-  const params = new URLSearchParams({ paymentId, eventPin, email });
-  const response = await fetch(`/api/mercadopago-payment-status?${params}`);
+  const params = new URLSearchParams({
+    paymentId,
+    eventPin,
+    email,
+    _t: String(Date.now()),
+  });
+  const response = await fetch(`/api/mercadopago-payment-status?${params}`, {
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+    },
+  });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(body.error || 'Erro ao consultar status do pagamento.');
