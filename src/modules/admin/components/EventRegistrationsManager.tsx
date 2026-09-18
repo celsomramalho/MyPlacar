@@ -81,10 +81,10 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     if (isFixingIds || !event.pin || !adminEmail) return;
     setIsFixingIds(true);
     try {
-      const res = await fetch('/api/admin-fix-registration-ids', {
+      const res = await fetch('/api/admin-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventPin: event.pin, adminEmail }),
+        body: JSON.stringify({ action: 'fix-ids', eventPin: event.pin, adminEmail }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido');

@@ -289,10 +289,10 @@ export const saveAdminEventEntry = async (
     if (!isPermissionError || !adminEmail) throw err;
 
     const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
-    const response = await fetch(`${baseUrl}/api/admin-save-entry`, {
+    const response = await fetch(`${baseUrl}/api/admin-entry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eventPin, entry: sanitized, adminEmail }),
+      body: JSON.stringify({ action: 'save', eventPin, entry: sanitized, adminEmail }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -326,7 +326,7 @@ export const deleteUserEventRegistration = (
 /**
  * Exclui uma inscrição pelo painel administrativo.
  * Tenta no cliente via SDK e, caso haja falha ou para garantir limpeza completa,
- * aciona a rota server-side /api/admin-delete-entry com privilégios de Admin SDK.
+ * aciona a rota server-side /api/admin-entry com privilégios de Admin SDK.
  */
 export const deleteAdminEventEntry = async (
   db: Firestore,
@@ -349,10 +349,11 @@ export const deleteAdminEventEntry = async (
   // Se adminEmail fornecido, chama a API server-side para garantir exclusão definitiva no Firestore
   if (adminEmail) {
     const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
-    const response = await fetch(`${baseUrl}/api/admin-delete-entry`, {
+    const response = await fetch(`${baseUrl}/api/admin-entry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        action: 'delete',
         eventPin,
         entryEmail,
         entryPin,
