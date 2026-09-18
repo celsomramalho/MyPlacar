@@ -1200,8 +1200,8 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
-    {/* Bloco de Pagamento Automático Pix (Mercado Pago) */}
-    {!isFreeEvent && usesAutomaticPayment && !pixPayment && (
+    {/* Bloco de Pagamento Automático Pix (Mercado Pago) — só para inscrições já salvas */}
+    {!isFreeEvent && usesAutomaticPayment && !pixPayment && isRegistrationSaved && (
       <div className="border border-emerald-200 rounded-3xl p-5 bg-gradient-to-b from-emerald-50/80 to-white space-y-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -1557,32 +1557,24 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         <>
           {usesAutomaticPayment && pendingAmount > 0 && !pixPayment && !isRegistrationSaved ? (
             <>
-              <button
-                type="button"
-                onClick={handlePayViaPix}
-                disabled={isSaving || isPayingPix}
-                className="flex-1 min-w-[170px] py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {isPayingPix ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Iniciando Pix...</span>
-                  </>
-                ) : (
-                  <>
-                    <QrCode size={16} />
-                    <span>Pagar via PIX</span>
-                  </>
-                )}
-              </button>
+              {/* Nova inscrição + evento Pix: salva primeiro, depois o card mostra o botão de pagar */}
               <button
                 type="button"
                 onClick={() => void save()}
                 disabled={isSaving || isPayingPix}
-                className="px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition-colors active:scale-95 cursor-pointer"
-                title="Salvar inscrição para pagar depois"
+                className="flex-1 min-w-[170px] py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
               >
-                Salvar e pagar depois
+                {isSaving ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Salvando inscrição...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} />
+                    <span>Salvar e pagar depois</span>
+                  </>
+                )}
               </button>
             </>
           ) : (
