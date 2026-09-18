@@ -423,8 +423,12 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     onUpdateEntries(entries.map((item) => item.pin === originalPin ? finalEntry : item));
   };
 
-  const handleDelete = (targetPin: string) => {
-    const targetEntry = entries.find((e) => e.pin === targetPin);
+  const handleDelete = (targetPinOrEmail: string, specificEntry?: TournamentEntry) => {
+    const cleanSearch = targetPinOrEmail.toLowerCase().trim();
+    const targetEntry = specificEntry || entries.find((e) =>
+      (e.email && e.email.toLowerCase().trim() === cleanSearch) ||
+      (e.pin && e.pin.toLowerCase().trim() === cleanSearch)
+    );
     if (!targetEntry) return;
 
     setModalConfig({
@@ -440,26 +444,31 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
         const db = getDb();
         const targetEmailLower = targetEntry.email?.toLowerCase().trim();
+        const targetPinUpper = targetEntry.pin?.toUpperCase().trim();
 
         // Filtrar e desfazer duplas que continham esse participante
         const currentPairs = event.pairs || [];
         const updatedPairs = currentPairs.filter(
           (p) =>
-            p.p1?.pin !== targetPin &&
-            p.p2?.pin !== targetPin &&
+            (!targetPinUpper || (p.p1?.pin?.toUpperCase().trim() !== targetPinUpper && p.p2?.pin?.toUpperCase().trim() !== targetPinUpper)) &&
             (!targetEmailLower || (p.p1?.email?.toLowerCase().trim() !== targetEmailLower && p.p2?.email?.toLowerCase().trim() !== targetEmailLower))
         );
 
-        if (db && event.pin && targetEntry.email) {
+        if (db && event.pin) {
           try {
-            const { deleteEventEntry, deleteUserEventRegistration, updateEvent } = await import('@infra/firebase/events');
-            await deleteEventEntry(db, event.pin, targetEntry.email);
-            await deleteUserEventRegistration(db, targetEntry.email, event.pin);
+            const { deleteAdminEventEntry, updateEvent } = await import('@infra/firebase/events');
+            await deleteAdminEventEntry(
+              db,
+              event.pin,
+              targetEntry.email,
+              targetEntry.pin,
+              adminEmail || getAuthInstance()?.currentUser?.email || undefined
+            );
 
             // Disparar aviso de exclusão de inscrição confirmada para o participante
             try {
               const { eventNotificationService } = await import('../../events/services/eventNotificationService');
-              void eventNotificationService.notifyRegistrationDeleted(db, event, targetEntry.email || targetPin, targetEntry.nickname);
+              void eventNotificationService.notifyRegistrationDeleted(db, event, targetEntry.email || targetPinUpper || '', targetEntry.nickname);
             } catch (notifErr) {
               console.warn('Erro ao disparar aviso de exclusão de inscrição no admin:', notifErr);
             }
@@ -469,11 +478,24 @@ export const EventRegistrationsManager: React.FC<Props> = ({
               await updateEvent(db, event.pin, { pairs: updatedPairs });
             }
           } catch (err) {
-            console.error('Erro ao excluir inscrição no Firestore:', err);
+            console.error('Erro ao excluir inscrição:', err);
+            setModalConfig({
+              title: 'Erro ao excluir inscrição',
+              message: err instanceof Error ? err.message : 'Não foi possível excluir a inscrição no servidor.',
+              onConfirm: () => setModalConfig(null),
+            });
+            return;
           }
         }
 
-        const updatedList = entries.filter((entry) => entry.pin !== targetPin);
+        const updatedList = entries.filter((entry) => {
+          const eEmail = entry.email?.toLowerCase().trim();
+          const ePin = entry.pin?.toUpperCase().trim();
+          if (targetEmailLower && eEmail === targetEmailLower) return false;
+          if (targetPinUpper && ePin === targetPinUpper) return false;
+          return true;
+        });
+
         onUpdateEntries(updatedList);
         if (updatedPairs.length !== currentPairs.length) {
           onUpdateEvent({ ...event, pairs: updatedPairs, entries: updatedList });
@@ -1011,7 +1033,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                           onUpdateEvent={onUpdateEvent}
                           onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
                           onDelete={!isReadOnly ? () => {
-                            handleDelete(entry.pin);
+                            handleDelete(entry.email || entry.pin, entry);
                           } : undefined}
                           onCancel={() => setExpandedRegistrationEmail(null)}
                           readOnly={isReadOnly}

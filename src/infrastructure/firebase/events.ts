@@ -323,6 +323,57 @@ export const deleteUserEventRegistration = (
   eventPin: string,
 ) => deleteDoc(doc(db, 'user_registrations', email.toLowerCase().trim(), 'events', eventPin));
 
+/**
+ * Exclui uma inscrição pelo painel administrativo.
+ * Tenta no cliente via SDK e, caso haja falha ou para garantir limpeza completa,
+ * aciona a rota server-side /api/admin-delete-entry com privilégios de Admin SDK.
+ */
+export const deleteAdminEventEntry = async (
+  db: Firestore,
+  eventPin: string,
+  entryEmail: string,
+  entryPin?: string,
+  adminEmail?: string,
+) => {
+  let clientDeleted = false;
+  try {
+    if (entryEmail) {
+      await deleteEventEntry(db, eventPin, entryEmail);
+      await deleteUserEventRegistration(db, entryEmail, eventPin).catch(() => {});
+      clientDeleted = true;
+    }
+  } catch (err: unknown) {
+    console.warn('deleteEventEntry cliente falhou (permissão ou conexão), acionando fallback server-side:', err);
+  }
+
+  // Se adminEmail fornecido, chama a API server-side para garantir exclusão definitiva no Firestore
+  if (adminEmail) {
+    const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
+    const response = await fetch(`${baseUrl}/api/admin-delete-entry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventPin,
+        entryEmail,
+        entryPin,
+        adminEmail,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      if (!clientDeleted) {
+        throw new Error(body.error || 'Não foi possível excluir a inscrição no servidor.');
+      }
+    }
+    return;
+  }
+
+  if (!clientDeleted) {
+    throw new Error('Falha ao excluir inscrição: permissão insuficiente e administrador não identificado.');
+  }
+};
+
 export const updateEventEntry = (
   db: Firestore,
   eventPin: string,
