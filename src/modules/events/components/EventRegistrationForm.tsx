@@ -1555,7 +1555,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     <div className="flex flex-wrap gap-2.5 pt-1">
       {!readOnly && (
         <>
-          {usesAutomaticPayment && pendingAmount > 0 && !pixPayment ? (
+          {usesAutomaticPayment && pendingAmount > 0 && !pixPayment && !isRegistrationSaved ? (
             <>
               <button
                 type="button"
