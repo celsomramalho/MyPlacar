@@ -227,7 +227,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             if (isAlreadyInEvent) {
               setPinLookupMessage(`${user.nickname} já está inscrito neste evento`);
             } else {
-              setPinLookupMessage(`${user.nickname} já cadastrado`);
+              setPinLookupMessage(`${user.nickname} válido e apto para inscrição`);
             }
             if (user.name) setName(user.name);
             if (user.nickname) setNickname(user.nickname);
@@ -914,7 +914,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             </div>
             {pinLookupMessage && (
               <p className={`text-[10px] font-black ${
-                pinLookupMessage.includes('cadastrado')
+                pinLookupMessage.includes('apto')
                   ? 'text-emerald-600'
                   : 'text-amber-600'
               }`}>
