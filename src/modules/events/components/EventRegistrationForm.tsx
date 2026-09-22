@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { AlertCircle, CheckCircle2, DollarSign, Eye, Loader2, QrCode, Trash2, Upload, Users } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Check, CheckCircle2, DollarSign, Eye, Loader2, QrCode, Trash2, Upload, Users } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { findUserByPin, getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
@@ -51,15 +51,14 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const liveEntriesLoadedRef = useRef(false);
 
   useEffect(() => {
-    // Só carrega se for nova inscrição (sem registrationId já definido)
-    if (entry.registrationId || liveEntriesLoadedRef.current) return;
+    if (liveEntriesLoadedRef.current) return;
     liveEntriesLoadedRef.current = true;
     const db = getDb();
     if (!db || !event.pin) return;
     fetchEventEntries(db as Firestore, event.pin)
       .then((entries) => setLiveEntries(entries as unknown as TournamentEntry[]))
-      .catch((err) => console.warn('[EventRegistrationForm] Erro ao buscar entries para registrationId:', err));
-  }, [event.pin, entry.registrationId]);
+      .catch((err) => console.warn('[EventRegistrationForm] Erro ao buscar entries:', err));
+  }, [event.pin]);
 
   const registrationId = useMemo(
     () => entry.registrationId || getNextRegistrationId(liveEntries),
@@ -145,6 +144,9 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const [feedback, setFeedback] = useState<string | null>(null);
   const [expandedPartnerCategoryIds, setExpandedPartnerCategoryIds] = useState<Set<string>>(() => new Set());
   const [confirmTeamCategoryId, setConfirmTeamCategoryId] = useState<string | null>(null);
+
+  const [disabled, setDisabled] = useState(Boolean(entry.disabled));
+  const [disabledReason, setDisabledReason] = useState(entry.disabledReason || '');
 
   const [isSearchingPin, setIsSearchingPin] = useState(false);
   const [pinLookupMessage, setPinLookupMessage] = useState<string | null>(null);
@@ -316,6 +318,20 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const categories = event.categories || [];
   const availableCategories = useMemo(() => categories.filter((cat) => !cat.gender1 || cat.gender1 === gender || cat.gender2 === gender), [categories, gender]);
+  const categoryConfirmedCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    const entriesList = (liveEntries && liveEntries.length > 0) ? liveEntries : (event.entries || []);
+    entriesList.forEach((e) => {
+      if (e.disabled) return;
+      const isPaid = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
+      if (isPaid && e.categoryIds) {
+        e.categoryIds.forEach((catId) => {
+          map[catId] = (map[catId] || 0) + 1;
+        });
+      }
+    });
+    return map;
+  }, [liveEntries, event.entries]);
   const isDoubles = (cat: EventCategory) => !isSinglePlayer && (cat.format === 'Duplas' || !cat.format || cat.name.toLowerCase().includes('dupla') || Boolean(cat.gender2));
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const effectiveDueAmount = isFreeEvent
@@ -357,6 +373,272 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     );
   };
 
+  // ── Controle de 3 Etapas para inscrição do usuário (1: Cadastro, 2: Categorias, 3: Pagamento) ──
+  const isExistingRegistration = Boolean(entry.joinedAt || entry.email || entry.pin);
+  const hasPaymentRecorded = payments.length > 0 || (entry.paidAmount ?? 0) > 0 || entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago';
+  const hasInitialCategories = (entry.categoryIds && entry.categoryIds.length > 0) || categoryIds.length > 0;
+
+  const [userStep, setUserStep] = useState<1 | 2 | 3>(() => {
+    if (isAdmin) return 1;
+    if (hasPaymentRecorded) return 3;
+    if (hasInitialCategories) return 2;
+    return 1;
+  });
+
+  const [maxUnlockedStep, setMaxUnlockedStep] = useState<number>(() => {
+    if (isAdmin) return 3;
+    if (hasPaymentRecorded) return 3;
+    if (hasInitialCategories) return 2;
+    return 1;
+  });
+
+  const [acceptedRegulation, setAcceptedRegulation] = useState<boolean>(
+    Boolean(entry.joinedAt || !event.regulationUrl)
+  );
+
+  const [cancelModalConfig, setCancelModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    type: 'delete' | 'refund_with_fee' | 'cancel_no_refund' | 'cancel_with_matches';
+  } | null>(null);
+
+  const handleSaveStep1 = () => {
+    const trimmedName = name.trim();
+    const trimmedNickname = nickname.trim();
+    const trimmedEmail = email.trim();
+    const cleanPhone = phone.replace(/\D/g, '').trim();
+
+    if (!trimmedName) {
+      setFeedback('Informe seu nome antes de avançar.');
+      return;
+    }
+    if (!trimmedNickname) {
+      setFeedback('Informe como quer ser chamado (apelido).');
+      return;
+    }
+    if (!trimmedEmail) {
+      setFeedback('Informe seu e-mail.');
+      return;
+    }
+    if (!cleanPhone) {
+      setFeedback('Informe seu telefone.');
+      return;
+    }
+    if (event.regulationUrl && !acceptedRegulation) {
+      setFeedback('É necessário confirmar que leu o regulamento para avançar.');
+      return;
+    }
+
+    setFeedback(null);
+    setUserStep(2);
+    setMaxUnlockedStep((prev) => Math.max(prev, 2));
+    setFeedback('✓ Cadastro confirmado! Agora escolha sua(s) categoria(s).');
+  };
+
+  const handleSaveStep2 = async () => {
+    const effectiveCategoryIds = categoryIds.filter((catId) => availableCategories.some((c) => c.id === catId));
+    if (effectiveCategoryIds.length === 0) {
+      setFeedback('É obrigatório selecionar pelo menos uma categoria.');
+      return;
+    }
+
+    // Validação de limite de vagas
+    for (const catId of effectiveCategoryIds) {
+      if (!initialCategoryIds.includes(catId)) {
+        const cat = (event.categories || []).find((c) => c.id === catId);
+        const limit = cat?.maxPlayers ?? event.maxPlayersPerCategory ?? 8;
+        const confirmed = categoryConfirmedCountMap[catId] || 0;
+        if (confirmed >= limit) {
+          setFeedback(`Vagas esgotadas: a categoria "${cat?.name || ''}" atingiu o limite de ${limit} inscritos com pagamento confirmado.`);
+          return;
+        }
+      }
+    }
+
+    for (const catId of effectiveCategoryIds) {
+      const cat = (event.categories || []).find((c) => c.id === catId);
+      if (isSinglePlayer || !cat || !isDoubles(cat)) continue;
+      const pair = pairForCategory(cat.id);
+      if (pair) continue;
+      const partner = categoryPartners[catId] || { name: '', email: '', phone: '' };
+      const cleanedPartnerPhone = (partner.phone || '').replace(/\D/g, '');
+      if (!partner.name?.trim() || !partner.email?.trim() || !cleanedPartnerPhone) {
+        const msg = `Informe os dados do parceiro para ${cat.abbreviation || cat.name}.`;
+        setFeedback(msg);
+        setExpandedPartnerCategoryIds((prev) => new Set(prev).add(cat.id));
+        return;
+      }
+    }
+
+    setFeedback(null);
+    const saved = await save(payments, true);
+    if (saved) {
+      setUserStep(3);
+      setMaxUnlockedStep((prev) => Math.max(prev, 3));
+      setFeedback('✓ Categorias salvas com sucesso! Prossiga para o pagamento.');
+    }
+  };
+
+  const handleOpenCancelModal = () => {
+    const userEmail = (entry.email || email || '').toLowerCase().trim();
+    const userPin = (entry.pin || pin || '').toUpperCase().trim();
+
+    // 1. Identificar se o atleta já participou de alguma partida finalizada neste evento
+    const userPairIds = new Set<string>();
+    (event.pairs || []).forEach((p) => {
+      const isP1 = (p.p1?.email && p.p1.email.toLowerCase().trim() === userEmail) || (p.p1?.pin && p.p1.pin.toUpperCase().trim() === userPin);
+      const isP2 = (p.p2?.email && p.p2.email.toLowerCase().trim() === userEmail) || (p.p2?.pin && p.p2.pin.toUpperCase().trim() === userPin);
+      if (isP1 || isP2) {
+        userPairIds.add(p.id);
+      }
+    });
+
+    const hasFinishedMatches = (event.matches || []).some((m) => {
+      if (m.status !== 'finished') return false;
+      if (m.pair1Id && userPairIds.has(m.pair1Id)) return true;
+      if (m.pair2Id && userPairIds.has(m.pair2Id)) return true;
+      const p1 = m.pair1;
+      const p2 = m.pair2;
+      if (p1) {
+        const isP1 = (p1.p1?.email && p1.p1.email.toLowerCase().trim() === userEmail) || (p1.p1?.pin && p1.p1.pin.toUpperCase().trim() === userPin) ||
+                     (p1.p2?.email && p1.p2.email.toLowerCase().trim() === userEmail) || (p1.p2?.pin && p1.p2.pin.toUpperCase().trim() === userPin);
+        if (isP1) return true;
+      }
+      if (p2) {
+        const isP2 = (p2.p1?.email && p2.p1.email.toLowerCase().trim() === userEmail) || (p2.p1?.pin && p2.p1.pin.toUpperCase().trim() === userPin) ||
+                     (p2.p2?.email && p2.p2.email.toLowerCase().trim() === userEmail) || (p2.p2?.pin && p2.p2.pin.toUpperCase().trim() === userPin);
+        if (isP2) return true;
+      }
+      return false;
+    });
+
+    // 2. Situações para Evento Gratuito (valor de inscrição zero)
+    if (isFreeEvent) {
+      if (!hasFinishedMatches) {
+        // 2.a) Sem partidas realizadas: exclui a inscrição
+        setCancelModalConfig({
+          isOpen: true,
+          title: 'Cancelar inscrição?',
+          message: 'Tem certeza que deseja cancelar sua inscrição? Sua inscrição será excluída imediatamente deste evento.',
+          confirmLabel: 'Sim, excluir inscrição',
+          type: 'delete',
+        });
+      } else {
+        // 2.b) Com partida(s) realizada(s): cancela e impede de jogar
+        setCancelModalConfig({
+          isOpen: true,
+          title: 'Cancelar inscrição com partidas realizadas?',
+          message: 'Sua inscrição será cancelada mesmo já tendo partida(s) realizada(s). Você não poderá mais formar time e participar de partidas. Deseja prosseguir com o cancelamento?',
+          confirmLabel: 'Confirmar cancelamento',
+          type: 'cancel_with_matches',
+        });
+      }
+      return;
+    }
+
+    // 3. Situações para Evento Pago
+    // 1) Caso o usuário tentar cancelar sua inscrição mas se tiver partida finalizada
+    if (hasFinishedMatches) {
+      setCancelModalConfig({
+        isOpen: true,
+        title: 'Cancelar inscrição sem reembolso?',
+        message: 'Sua inscrição será cancelada, mas não haverá reembolso por haver partida(s) realizada(s). Deseja prosseguir com o cancelamento?',
+        confirmLabel: 'Confirmar cancelamento',
+        type: 'cancel_with_matches',
+      });
+      return;
+    }
+
+    // Se não tiver partida finalizada:
+    const hasPayment = payments.length > 0 || (entry.paidAmount ?? 0) > 0 || entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago';
+
+    if (!hasPayment) {
+      // Sem pagamento registrado: exclui
+      setCancelModalConfig({
+        isOpen: true,
+        title: 'Cancelar e excluir inscrição?',
+        message: 'Tem certeza que deseja cancelar sua inscrição? Como não há pagamentos registrados, sua inscrição será excluída imediatamente deste evento.',
+        confirmLabel: 'Sim, excluir inscrição',
+        type: 'delete',
+      });
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      const isWithinPeriod = !event.endDate || today <= event.endDate;
+
+      if (isWithinPeriod) {
+        // Com pagamento confirmado e dentro do prazo de inscrição
+        setCancelModalConfig({
+          isOpen: true,
+          title: 'Cancelar inscrição com reembolso?',
+          message: 'Sua inscrição será cancelada. O reembolso será realizado em até 5 dias úteis e será cobrada uma taxa administrativa de 30% do valor da inscrição.\n\nDeseja prosseguir com o cancelamento?',
+          confirmLabel: 'Confirmar cancelamento',
+          type: 'refund_with_fee',
+        });
+      } else {
+        // Com pagamento confirmado e fora do prazo de inscrição
+        setCancelModalConfig({
+          isOpen: true,
+          title: 'Cancelar inscrição fora do prazo?',
+          message: 'Sua inscrição será cancelada, mas não haverá reembolso por estar fora do prazo de cancelamento.\n\nDeseja prosseguir com o cancelamento?',
+          confirmLabel: 'Confirmar cancelamento',
+          type: 'cancel_no_refund',
+        });
+      }
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelModalConfig) return;
+    const { type } = cancelModalConfig;
+    setCancelModalConfig(null);
+
+    try {
+      if (type === 'delete') {
+        if (onDelete) {
+          onDelete();
+        } else {
+          const db = getDb();
+          const targetEmail = entry.email || email;
+          if (db && event.pin && targetEmail) {
+            const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
+            await deleteEventEntry(db as Firestore, event.pin, targetEmail);
+            await deleteUserEventRegistration(db as Firestore, targetEmail, event.pin).catch(() => {});
+          }
+          if (onCancel) onCancel();
+        }
+      } else {
+        let reason = '';
+        if (type === 'cancel_with_matches') {
+          reason = isFreeEvent
+            ? 'Cancelamento solicitado pelo participante com partida(s) já realizada(s) (evento gratuito)'
+            : 'Cancelamento solicitado pelo participante com partida(s) já realizada(s) (sem reembolso)';
+        } else if (type === 'refund_with_fee') {
+          reason = 'Cancelamento solicitado pelo participante dentro do prazo (taxa de 30%)';
+        } else {
+          reason = 'Cancelamento solicitado pelo participante fora do prazo (sem reembolso)';
+        }
+
+        const updatedEntry: TournamentEntry = {
+          ...entry,
+          paymentStatus: 'Cancelado',
+          disabled: true,
+          disabledReason: reason,
+        };
+
+        await onSave(updatedEntry);
+        setFeedback('✓ Inscrição cancelada com sucesso.');
+        setTimeout(() => {
+          if (onCancel) onCancel();
+        }, 1500);
+      }
+    } catch (err) {
+      console.error('Erro ao cancelar inscrição:', err);
+      setFeedback('Erro ao processar o cancelamento da inscrição.');
+    }
+  };
+
   const handleFormTeam = async (cat: EventCategory, partnerEntry: TournamentEntry) => {
     if (!onUpdateEvent) return;
     const currentEntry = buildEntry();
@@ -390,19 +672,32 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     setConfirmTeamCategoryId((current) => current === categoryId ? null : current);
   };
 
-  const toggleCategory = (categoryId: string) => setCategoryIds((ids) => {
-    const next = ids.includes(categoryId) ? ids.filter((id) => id !== categoryId) : [...ids, categoryId];
-    setDueAmount((event.registrationFee ?? 0) + (Math.max(0, next.length - 1) * (event.extraCategoryFee ?? 0)));
-    if (!next.includes(categoryId)) {
-      setConfirmTeamCategoryId((current) => current === categoryId ? null : current);
-      setExpandedPartnerCategoryIds((current) => {
-        const nextExpanded = new Set(current);
-        nextExpanded.delete(categoryId);
-        return nextExpanded;
-      });
+  const toggleCategory = (categoryId: string) => {
+    const isAlreadySelected = categoryIds.includes(categoryId);
+    if (!isAlreadySelected) {
+      const cat = categories.find((c) => c.id === categoryId);
+      const limit = cat?.maxPlayers ?? event.maxPlayersPerCategory ?? 8;
+      const confirmed = categoryConfirmedCountMap[categoryId] || 0;
+      const isAlreadyInEntry = (entry.categoryIds || []).includes(categoryId);
+      if (!isAlreadyInEntry && confirmed >= limit) {
+        setFeedback(`Vagas esgotadas: a categoria "${cat?.name || ''}" atingiu o limite de ${limit} inscritos com pagamento confirmado.`);
+        return;
+      }
     }
-    return next;
-  });
+    setCategoryIds((ids) => {
+      const next = ids.includes(categoryId) ? ids.filter((id) => id !== categoryId) : [...ids, categoryId];
+      setDueAmount((event.registrationFee ?? 0) + (Math.max(0, next.length - 1) * (event.extraCategoryFee ?? 0)));
+      if (!next.includes(categoryId)) {
+        setConfirmTeamCategoryId((current) => current === categoryId ? null : current);
+        setExpandedPartnerCategoryIds((current) => {
+          const nextExpanded = new Set(current);
+          nextExpanded.delete(categoryId);
+          return nextExpanded;
+        });
+      }
+      return next;
+    });
+  };
 
   const updateCategoryPartner = (categoryId: string, field: keyof CategoryPartnerInfo, value: string) => {
     setCategoryPartners((current) => ({
@@ -465,6 +760,8 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       partnerEmail: firstPartner?.email || undefined,
       partnerPhone: firstPartner?.phone || undefined,
       categoryPartners: Object.keys(selectedCategoryPartners).length > 0 ? selectedCategoryPartners : undefined,
+      disabled: Boolean(disabled),
+      disabledReason: disabled ? disabledReason.trim() : '',
     };
     return updated;
   };
@@ -493,6 +790,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       setFeedback('Informe o telefone.');
       return null;
     }
+    if (disabled && !disabledReason.trim()) {
+      setFeedback('Informe o motivo da desativação da inscrição.');
+      return null;
+    }
     // Validação de duplicidade: não permitir que o mesmo usuário se inscreva 2 vezes no mesmo evento
     if (canEditIdentity && !skipFeedback) {
       const normalizedEmail = trimmedEmail.toLowerCase();
@@ -517,6 +818,19 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     if (effectiveCategoryIds.length === 0) {
       setFeedback('É obrigatório selecionar pelo menos uma categoria para a inscrição.');
       return null;
+    }
+
+    // Validação de limite de jogadores com pagamento confirmado por categoria
+    for (const catId of effectiveCategoryIds) {
+      if (!initialCategoryIds.includes(catId)) {
+        const cat = (event.categories || []).find((c) => c.id === catId);
+        const limit = cat?.maxPlayers ?? event.maxPlayersPerCategory ?? 8;
+        const confirmed = categoryConfirmedCountMap[catId] || 0;
+        if (confirmed >= limit) {
+          setFeedback(`Vagas esgotadas: a categoria "${cat?.name || ''}" atingiu o limite de ${limit} inscritos com pagamento confirmado.`);
+          return null;
+        }
+      }
     }
 
     for (const catId of effectiveCategoryIds) {
@@ -942,14 +1256,19 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   };
 
   return <div className="space-y-4 text-left">
-    {(event.information || event.regulationUrl) && <div className="space-y-2">
+    {(event.information || event.regulationUrl || event.locationMapUrl) && <div className="space-y-2">
       {event.information && <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4"><p className="text-[10px] font-black tracking-wider text-sky-600">Informações do evento</p><p className="text-xs font-bold leading-relaxed whitespace-pre-wrap text-slate-700 mt-1">{event.information}</p></div>}
+      {event.locationMapUrl && (
+        <a href={event.locationMapUrl} target="_blank" rel="noopener noreferrer" className="w-full h-11 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 font-black text-xs flex items-center justify-center gap-2">
+          📍 Abrir no Google Maps {event.location ? `(${event.location})` : ''}
+        </a>
+      )}
       {event.regulationUrl && <a href={event.regulationUrl} target="_blank" rel="noopener noreferrer" className="w-full h-11 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 font-black text-xs flex items-center justify-center gap-2"><Eye size={15} /> Regulamento</a>}
     </div>}
 
     <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-      <h4 className="text-sm font-black text-slate-800">{isAdmin ? 'Editar inscrição' : 'Informações de inscrição'}</h4>
-      {!readOnly && onDelete && (
+      <h4 className="text-sm font-black text-slate-800">{isAdmin ? 'Editar inscrição' : 'Inscrição no torneio'}</h4>
+      {isAdmin && !readOnly && onDelete && (
         <button
           type="button"
           onClick={handleDeleteWithConfirmation}
@@ -960,6 +1279,37 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         </button>
       )}
     </div>
+
+    {/* Stepper das 3 Etapas para o Usuário */}
+    {!isAdmin && (
+      <div className="flex items-center justify-between gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 mb-1">
+        {[
+          { step: 1, label: '1. Cadastro' },
+          { step: 2, label: '2. Categorias' },
+          { step: 3, label: '3. Pagamento' },
+        ].map((item) => {
+          const isCurrent = userStep === item.step;
+          const isUnlocked = item.step <= maxUnlockedStep;
+          return (
+            <button
+              key={item.step}
+              type="button"
+              disabled={!isUnlocked}
+              onClick={() => isUnlocked && setUserStep(item.step as 1 | 2 | 3)}
+              className={`flex-1 py-2.5 px-2 text-center text-xs font-black rounded-xl transition-all ${
+                isCurrent
+                  ? 'bg-white text-emerald-600 shadow-sm'
+                  : isUnlocked
+                  ? 'text-slate-600 hover:text-slate-900 cursor-pointer'
+                  : 'text-slate-400 cursor-not-allowed opacity-50'
+              }`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    )}
 
     {/* Alerta de Feedback no Topo */}
     {feedback && (
@@ -973,156 +1323,333 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
-    <div className="grid grid-cols-3 gap-3">
-      <Field label="Inscrição_ID">
-        <div className="event-registration-readonly font-mono font-black text-emerald-600 tracking-wider">
-          {formatRegistrationId(entry.registrationId || registrationId)}
-        </div>
-      </Field>
-      <Field label={canEditIdentity ? 'Nome jogador *' : 'Nome do usuário'} className="col-span-2">
-        {canEditIdentity ? (
-          <input required value={name} onChange={(e) => setName(e.target.value)} className="event-registration-field" />
-        ) : (
-          <div className="event-registration-readonly">{entry.name || name}</div>
-        )}
-      </Field>
-      <Field label="PIN do usuário">
-        {canEditIdentity ? (
-          <div className="space-y-1">
-            <div className="relative">
-              <input
-                value={pin}
-                onChange={(e) => setPin(e.target.value.toUpperCase())}
-                placeholder="Ex: CARLO"
-                className="event-registration-field uppercase"
-              />
-              {isSearchingPin && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <Loader2 size={16} className="animate-spin text-slate-400" />
-                </div>
-              )}
+    {/* ── ETAPA 1: CADASTRO ── */}
+    {(isAdmin || userStep === 1) && (
+      <div className="space-y-4 animate-in fade-in duration-150">
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Inscrição_ID">
+            <div className="event-registration-readonly font-mono font-black text-emerald-600 tracking-wider">
+              {formatRegistrationId(entry.registrationId || registrationId)}
             </div>
-            {pinLookupMessage && (
-              <p className={`text-[10px] font-black ${
-                pinLookupMessage.includes('apto')
-                  ? 'text-emerald-600'
-                  : 'text-amber-600'
-              }`}>
-                {pinLookupMessage}
-              </p>
+          </Field>
+          <Field label={canEditIdentity ? 'Nome jogador *' : 'Nome do usuário'} className="col-span-2">
+            {canEditIdentity ? (
+              <input required value={name} onChange={(e) => setName(e.target.value)} className="event-registration-field" />
+            ) : (
+              <div className="event-registration-readonly">{entry.name || name}</div>
+            )}
+          </Field>
+          <Field label="PIN do usuário">
+            {canEditIdentity ? (
+              <div className="space-y-1">
+                <div className="relative">
+                  <input
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.toUpperCase())}
+                    placeholder="Ex: CARLO"
+                    className="event-registration-field uppercase"
+                  />
+                  {isSearchingPin && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <Loader2 size={16} className="animate-spin text-slate-400" />
+                    </div>
+                  )}
+                </div>
+                {pinLookupMessage && (
+                  <p className={`text-[10px] font-black ${
+                    pinLookupMessage.includes('apto')
+                      ? 'text-emerald-600'
+                      : 'text-amber-600'
+                  }`}>
+                    {pinLookupMessage}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="event-registration-readonly">{entry.pin || pin || '-'}</div>
+            )}
+          </Field>
+          <Field label="E-mail *" className="col-span-2">
+            {canEditIdentity ? (
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="event-registration-field" />
+            ) : (
+              <div className="event-registration-readonly">{entry.email || email}</div>
+            )}
+          </Field>
+        </div>
+        <Field label="Telefone *"><input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="(11) 91234-9988" className="event-registration-field" /></Field>
+        <Field label="Tamanho camiseta *"><select required value={shirtSize} onChange={(e) => setShirtSize(e.target.value as 'P' | 'M' | 'G')} className="event-registration-field"><option value="P">P</option><option value="M">M</option><option value="G">G</option></select></Field>
+        <Field label="Como quer ser chamado *"><div className="flex gap-2"><input required value={nickname} onChange={(e) => setNickname(e.target.value)} className="event-registration-field flex-1" /><button type="button" onClick={handleToggleGender} className={`w-11 rounded-xl border flex items-center justify-center ${gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}>{gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</button></div></Field>
+
+        {/* Bloco Desativar Inscrição: SOMENTE NO PAINEL DO ADMIN */}
+        {isAdmin && (
+          <div className={`p-3.5 rounded-2xl border transition-all ${disabled ? 'bg-red-50/70 border-red-200' : 'bg-slate-50 border-slate-200/80'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <label className={`text-xs font-black block ${disabled ? 'text-red-700' : 'text-slate-700'}`}>Desativar inscrição</label>
+                <p className="text-[10px] text-slate-400 font-bold">Impede o jogador de formar duplas ou participar de partidas</p>
+              </div>
+              {/* Toggle switch estilo iOS */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={disabled}
+                onClick={() => {
+                  if (disabled) {
+                    setDisabled(false);
+                    setDisabledReason('');
+                  } else {
+                    setDisabled(true);
+                  }
+                }}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                  disabled ? 'bg-red-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition-transform duration-200 ${
+                    disabled ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {disabled && (
+              <div className="pt-2.5 mt-2.5 border-t border-red-200/60 space-y-1.5 animate-in fade-in duration-200">
+                <label className="text-[10px] font-black text-red-600 ml-1">
+                  Motivo <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={disabledReason}
+                  onChange={(e) => setDisabledReason(e.target.value)}
+                  placeholder="Informe o motivo (obrigatório)"
+                  className="event-registration-field border-red-300 focus:border-red-500 bg-white"
+                />
+              </div>
             )}
           </div>
-        ) : (
-          <div className="event-registration-readonly">{entry.pin || pin || '-'}</div>
         )}
-      </Field>
-      <Field label="E-mail *" className="col-span-2">
-        {canEditIdentity ? (
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="event-registration-field" />
-        ) : (
-          <div className="event-registration-readonly">{entry.email || email}</div>
-        )}
-      </Field>
-    </div>
-    <Field label="Telefone *"><input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="(11) 91234-9988" className="event-registration-field" /></Field>
-    <Field label="Tamanho camiseta *"><select required value={shirtSize} onChange={(e) => setShirtSize(e.target.value as 'P' | 'M' | 'G')} className="event-registration-field"><option value="P">P</option><option value="M">M</option><option value="G">G</option></select></Field>
-    <Field label="Como quer ser chamado *"><div className="flex gap-2"><input required value={nickname} onChange={(e) => setNickname(e.target.value)} className="event-registration-field flex-1" /><button type="button" onClick={handleToggleGender} className={`w-11 rounded-xl border flex items-center justify-center ${gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}>{gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</button></div></Field>
 
-    {!isFreeEvent && (
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Valor devido">
-          <div className="event-registration-readonly">
-            R$ {effectiveDueAmount.toFixed(2)}
-          </div>
-        </Field>
-        <Field label="Valor pendente">
-          <div className="event-registration-readonly text-amber-600">
-            R$ {pendingAmount.toFixed(2)}
-          </div>
-        </Field>
-        <Field label="Status do pagamento" className="col-span-2">
-          {isAdmin ? (
-            <select
-              value={paymentStatus}
-              onChange={(e) => setPaymentStatus(e.target.value as typeof paymentStatus)}
-              className="event-registration-field"
+        {/* Regulamento e Ações da Etapa 1: SOMENTE PARA O USUÁRIO */}
+        {!isAdmin && (
+          <div className="space-y-3 pt-2">
+            {event.regulationUrl && (
+              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-amber-900 font-black text-xs">
+                    <Eye size={16} className="text-amber-600" />
+                    <span>Regulamento oficial do torneio</span>
+                  </div>
+                  <a
+                    href={event.regulationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-xs shadow-xs active:scale-95 transition-all shrink-0"
+                  >
+                    Ver regulamento
+                  </a>
+                </div>
+                <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={acceptedRegulation}
+                    onChange={(e) => setAcceptedRegulation(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded accent-emerald-500 cursor-pointer shrink-0"
+                  />
+                  <span className="text-xs font-bold text-slate-700 leading-tight">
+                    Declaro que li e concordo com o regulamento do torneio. <span className="text-red-500">*</span>
+                  </span>
+                </label>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSaveStep1}
+              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
             >
-              <option value="Pendente">Pendente</option>
-              <option value="Confirmado">Confirmado</option>
-              <option value="Isento">Isento</option>
-            </select>
-          ) : (
-            <div className="event-registration-readonly">{paymentStatus}</div>
-          )}
-        </Field>
+              <CheckCircle2 size={16} />
+              <span>Salvar cadastro</span>
+            </button>
+
+            {/* Botão Cancelar Inscrição com regras inteligentes */}
+            {isExistingRegistration && (
+              <button
+                type="button"
+                onClick={handleOpenCancelModal}
+                className="w-full py-3 px-4 rounded-2xl border border-red-200 bg-red-50/70 hover:bg-red-100 text-red-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
+              >
+                <Trash2 size={16} />
+                <span>Cancelar inscrição</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     )}
 
-    <Field label="Categorias vinculadas"><div className="space-y-2">{availableCategories.map((cat: EventCategory) => {
-      const isSelected = categoryIds.includes(cat.id);
-      const pair = pairForCategory(cat.id);
-      const partner = categoryPartners[cat.id] || { name: '', email: '', phone: '' };
-      const partnerEntry = partnerEntryForCategory(cat.id, partner.email);
-      const partnerAlreadyPaired = partner.email ? pairForEmailInCategory(partner.email, cat.id) : undefined;
-      const canShowFormTeam = Boolean(!isSinglePlayer && onUpdateEvent && isSelected && cat.format === 'Duplas' && partnerEntry && !pair && !partnerAlreadyPaired);
-      const isPartnerFormExpanded = expandedPartnerCategoryIds.has(cat.id);
-      const partnerFormMissingData = !partner.name.trim() || !partner.email.trim() || !partner.phone.trim();
-      return (
-        <div key={cat.id} className="space-y-2">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-2">
-            <label className={`flex min-w-0 items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-black ${isSelected ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-              <input type="checkbox" checked={isSelected} onChange={() => toggleCategory(cat.id)} className="h-4 w-4 accent-emerald-500" />
-              <span>{cat.name} ({cat.abbreviation})</span>
-            </label>
-            {!isSinglePlayer && isSelected ? (
-              <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${
-                pair ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-200'
-              }`}>
-                {pair ? pair.teamCode || `Time ${pair.teamNumber || ''}` : 'A formar'}
-              </span>
-            ) : (
-              <span />
-            )}
-            {!isSinglePlayer && isSelected && isDoubles(cat) ? (
-              <button
-                type="button"
-                onClick={() => togglePartnerForm(cat.id)}
-                className={`relative flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all active:scale-95 ${isPartnerFormExpanded ? 'bg-emerald-600' : 'bg-emerald-500'}`}
-                title="Informe seu parceiro"
-              >
-                <Users size={17} />
-                {partnerFormMissingData && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
-              </button>
-            ) : (
-              <span />
-            )}
-          </div>
-          {!isSinglePlayer && isSelected && isDoubles(cat) && isPartnerFormExpanded && (
-            <div className="ml-7 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
-              <p className="text-[10px] font-black text-slate-400">Informe seu parceiro - {cat.abbreviation || cat.name} *</p>
-              <input required value={partner.name} onChange={(e) => updateCategoryPartner(cat.id, 'name', e.target.value)} placeholder="Nome do parceiro" className="event-registration-field bg-white" />
-              <input type="email" required value={partner.email} onChange={(e) => updateCategoryPartner(cat.id, 'email', e.target.value)} placeholder="E-mail do parceiro" className="event-registration-field bg-white" />
-              <input type="tel" required inputMode="numeric" value={formatPhone(partner.phone)} onChange={(e) => updateCategoryPartner(cat.id, 'phone', e.target.value)} placeholder="(11) 91234-9988" className="event-registration-field bg-white" />
-              {canShowFormTeam && confirmTeamCategoryId !== cat.id && (
-                <button type="button" onClick={() => setConfirmTeamCategoryId(cat.id)} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95">
-                  Formar time
-                </button>
-              )}
-              {canShowFormTeam && confirmTeamCategoryId === cat.id && (
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => void handleFormTeam(cat, partnerEntry!)} className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95">
-                    Confirmar
+    {/* ── ETAPA 2: CATEGORIAS ── */}
+    {(isAdmin || userStep === 2) && (
+      <div className="space-y-4 animate-in fade-in duration-150">
+        <Field label="Categorias vinculadas"><div className="space-y-2">{availableCategories.map((cat: EventCategory) => {
+          const isSelected = categoryIds.includes(cat.id);
+          const limit = cat.maxPlayers ?? event.maxPlayersPerCategory ?? 8;
+          const confirmedCount = categoryConfirmedCountMap[cat.id] || 0;
+          const isAlreadyInEntry = (entry.categoryIds || []).includes(cat.id);
+          const isCategoryFull = !isAlreadyInEntry && confirmedCount >= limit;
+          const pair = pairForCategory(cat.id);
+          const partner = categoryPartners[cat.id] || { name: '', email: '', phone: '' };
+          const partnerEntry = partnerEntryForCategory(cat.id, partner.email);
+          const partnerAlreadyPaired = partner.email ? pairForEmailInCategory(partner.email, cat.id) : undefined;
+          const canShowFormTeam = Boolean(!isSinglePlayer && onUpdateEvent && isSelected && cat.format === 'Duplas' && partnerEntry && !pair && !partnerAlreadyPaired);
+          const isPartnerFormExpanded = expandedPartnerCategoryIds.has(cat.id);
+          const partnerFormMissingData = !partner.name.trim() || !partner.email.trim() || !partner.phone.trim();
+          return (
+            <div key={cat.id} className="space-y-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-2">
+                <label className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-xs font-black transition-all ${
+                  isSelected 
+                    ? 'bg-emerald-500 text-white border-emerald-500' 
+                    : isCategoryFull 
+                      ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' 
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300 cursor-pointer'
+                }`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected} 
+                      disabled={!isSelected && isCategoryFull} 
+                      onChange={() => toggleCategory(cat.id)} 
+                      className="h-4 w-4 accent-emerald-500" 
+                    />
+                    <span className="truncate">{cat.name} ({cat.abbreviation})</span>
+                  </div>
+                  {isCategoryFull && !isSelected ? (
+                    <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full shrink-0 font-black">
+                      Esgotada ({confirmedCount}/{limit})
+                    </span>
+                  ) : (
+                    <span className={`text-[10px] font-bold shrink-0 ${isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
+                      {confirmedCount}/{limit}
+                    </span>
+                  )}
+                </label>
+                {!isSinglePlayer && isSelected ? (
+                  <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${
+                    pair ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-200'
+                  }`}>
+                    {pair ? pair.teamCode || `Time ${pair.teamNumber || ''}` : 'A formar'}
+                  </span>
+                ) : (
+                  <span />
+                )}
+                {!isSinglePlayer && isSelected && isDoubles(cat) ? (
+                  <button
+                    type="button"
+                    onClick={() => togglePartnerForm(cat.id)}
+                    className={`relative flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all active:scale-95 ${isPartnerFormExpanded ? 'bg-emerald-600' : 'bg-emerald-500'}`}
+                    title="Informe seu parceiro"
+                  >
+                    <Users size={17} />
+                    {partnerFormMissingData && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
                   </button>
-                  <button type="button" onClick={() => setConfirmTeamCategoryId(null)} className="flex-1 rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-600 transition-all active:scale-95">
-                    Cancelar
-                  </button>
+                ) : (
+                  <span />
+                )}
+              </div>
+              {!isSinglePlayer && isSelected && isDoubles(cat) && isPartnerFormExpanded && (
+                <div className="ml-7 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+                  <p className="text-[10px] font-black text-slate-400">Informe seu parceiro - {cat.abbreviation || cat.name} *</p>
+                  <input required value={partner.name} onChange={(e) => updateCategoryPartner(cat.id, 'name', e.target.value)} placeholder="Nome do parceiro" className="event-registration-field bg-white" />
+                  <input type="email" required value={partner.email} onChange={(e) => updateCategoryPartner(cat.id, 'email', e.target.value)} placeholder="E-mail do parceiro" className="event-registration-field bg-white" />
+                  <input type="tel" required inputMode="numeric" value={formatPhone(partner.phone)} onChange={(e) => updateCategoryPartner(cat.id, 'phone', e.target.value)} placeholder="(11) 91234-9988" className="event-registration-field bg-white" />
+                  {canShowFormTeam && confirmTeamCategoryId !== cat.id && (
+                    <button type="button" onClick={() => setConfirmTeamCategoryId(cat.id)} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95">
+                      Formar time
+                    </button>
+                  )}
+                  {canShowFormTeam && confirmTeamCategoryId === cat.id && (
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => void handleFormTeam(cat, partnerEntry!)} className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95">
+                        Confirmar
+                      </button>
+                      <button type="button" onClick={() => setConfirmTeamCategoryId(null)} className="flex-1 rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-600 transition-all active:scale-95">
+                        Cancelar
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-      );
-    })}</div></Field>
+          );
+        })}</div></Field>
+
+        {!isAdmin && (
+          <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={() => setUserStep(1)}
+              className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs rounded-2xl transition-all active:scale-95 cursor-pointer"
+            >
+              ← Voltar para cadastro
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveStep2}
+              disabled={isSaving}
+              className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Salvando categorias...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} />
+                  <span>Salvar categorias</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* ── ETAPA 3: PAGAMENTO ── */}
+    {(isAdmin || userStep === 3) && (
+      <div className="space-y-4 animate-in fade-in duration-150">
+        {!isFreeEvent && (
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Valor devido">
+              <div className="event-registration-readonly">
+                R$ {effectiveDueAmount.toFixed(2)}
+              </div>
+            </Field>
+            <Field label="Valor pendente">
+              <div className="event-registration-readonly text-amber-600">
+                R$ {pendingAmount.toFixed(2)}
+              </div>
+            </Field>
+            <Field label="Status do pagamento" className="col-span-2">
+              {isAdmin ? (
+                <select
+                  value={paymentStatus}
+                  onChange={(e) => setPaymentStatus(e.target.value as typeof paymentStatus)}
+                  className="event-registration-field"
+                >
+                  <option value="Pendente">Pendente</option>
+                  <option value="Confirmado">Confirmado</option>
+                  <option value="Isento">Isento</option>
+                </select>
+              ) : (
+                <div className="event-registration-readonly">{paymentStatus}</div>
+              )}
+            </Field>
+          </div>
+        )}
 
     {/* Modal inline do QR Code Pix */}
     {pixPayment && (
@@ -1540,6 +2067,20 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
+        {!isAdmin && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setUserStep(2)}
+              className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs rounded-2xl transition-all active:scale-95 cursor-pointer"
+            >
+              ← Voltar para categorias
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+
     {/* Alerta de Feedback no Rodapé */}
     {feedback && (
       <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-bottom-1 ${
@@ -1552,7 +2093,8 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
-    <div className="flex flex-wrap gap-2.5 pt-1">
+    {(isAdmin || userStep === 3) && (
+      <div className="flex flex-wrap gap-2.5 pt-1">
       {!readOnly && (
         <>
           {usesAutomaticPayment && pendingAmount > 0 && !pixPayment && !isRegistrationSaved ? (
@@ -1613,6 +2155,57 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
         </button>
       )}
     </div>
+    )}
+
+    {/* Botão de Fechar auxiliar para as Etapas 1 e 2 do Usuário */}
+    {!isAdmin && userStep !== 3 && onCancel && (
+      <div className="pt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-2xl transition-colors active:scale-95"
+        >
+          Fechar
+        </button>
+      </div>
+    )}
+
+    {/* Modal de Cancelamento de Inscrição */}
+    {cancelModalConfig && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+        onClick={() => setCancelModalConfig(null)}
+      >
+        <div
+          className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-200 text-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+            <AlertTriangle size={24} />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-base font-black text-slate-900">{cancelModalConfig.title}</h3>
+            <p className="text-xs font-bold text-slate-500 leading-relaxed whitespace-pre-line">{cancelModalConfig.message}</p>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setCancelModalConfig(null)}
+              className="flex-1 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs active:scale-95 transition-all cursor-pointer"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleConfirmCancel()}
+              className="flex-1 py-3 rounded-2xl bg-red-500 hover:bg-red-600 text-white font-black text-xs active:scale-95 transition-all shadow-sm cursor-pointer"
+            >
+              {cancelModalConfig.confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Modal de Comprovante de Pagamento (Mercado Pago) */}
     {viewingReceipt && (

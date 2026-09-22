@@ -14,6 +14,7 @@ export interface CategoryFormModalProps {
   priority: number;
   gender1: 'M' | 'F';
   gender2: 'M' | 'F';
+  maxPlayers: number;
   activeSports: FirebaseAdminSportIcon[];
   onNameChange: (val: string) => void;
   onDescriptionChange: (val: string) => void;
@@ -23,6 +24,7 @@ export interface CategoryFormModalProps {
   onPriorityChange: (val: number) => void;
   onGender1Change: (val: 'M' | 'F') => void;
   onGender2Change: (val: 'M' | 'F') => void;
+  onMaxPlayersChange: (val: number) => void;
   onSave: (e: React.FormEvent) => void;
   onDelete?: (id: string) => void;
   onCancel: () => void;
@@ -38,6 +40,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   priority,
   gender1,
   gender2,
+  maxPlayers,
   activeSports,
   onNameChange,
   onDescriptionChange,
@@ -47,6 +50,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   onPriorityChange,
   onGender1Change,
   onGender2Change,
+  onMaxPlayersChange,
   onSave,
   onDelete,
   onCancel,
@@ -151,7 +155,20 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           />
         </div>
 
-        {/* Linha 6: Prioridade e Gêneros */}
+        {/* Linha 6: Limite de jogadores */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Limite de jogadores (padrão: 8)</label>
+          <input
+            type="number"
+            min={1}
+            value={maxPlayers || 8}
+            onChange={(e) => onMaxPlayersChange(Math.max(1, Number(e.target.value) || 8))}
+            placeholder="8"
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        {/* Linha 7: Prioridade e Gêneros */}
         <div className="grid grid-cols-3 gap-3 pt-1">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 ml-1">Prioridade</label>

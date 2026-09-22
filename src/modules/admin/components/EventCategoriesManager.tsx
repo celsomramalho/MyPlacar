@@ -95,6 +95,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [abbreviation, setAbbreviation] = useState('');
   const [gender1, setGender1] = useState<'M' | 'F'>('M');
   const [gender2, setGender2] = useState<'M' | 'F'>('M');
+  const [maxPlayers, setMaxPlayers] = useState<number>(event.maxPlayersPerCategory ?? 8);
 
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -139,6 +140,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setAbbreviation('');
     setGender1('M');
     setGender2('M');
+    setMaxPlayers(event.maxPlayersPerCategory ?? 8);
     setIsAdding(false);
     setEditingId(null);
   };
@@ -161,6 +163,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setAbbreviation(cat.abbreviation || '');
     setGender1(cat.gender1 || 'M');
     setGender2(cat.gender2 || 'M');
+    setMaxPlayers(cat.maxPlayers ?? event.maxPlayersPerCategory ?? 8);
     setEditingId(cat.id);
     setIsAdding(true);
   };
@@ -187,6 +190,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
               abbreviation: abbreviation.trim(),
               gender1,
               gender2: format === 'Duplas' ? gender2 : undefined,
+              maxPlayers: maxPlayers > 0 ? maxPlayers : (event.maxPlayersPerCategory ?? 8),
             }
           : c
       );
@@ -202,6 +206,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
         abbreviation: abbreviation.trim(),
         gender1,
         gender2: format === 'Duplas' ? gender2 : undefined,
+        maxPlayers: maxPlayers > 0 ? maxPlayers : (event.maxPlayersPerCategory ?? 8),
       };
       updated = [...categories, newCategory];
     }
@@ -364,6 +369,9 @@ export const EventCategoriesManager: React.FC<Props> = ({
   }, [isRanking, pairs, selectedCategory?.id, selectedEntries]);
 
   const toggleEntrySelection = (entry: TournamentEntry) => {
+    // Jogadores com inscrição desativada não podem ser selecionados para formar times
+    if (entry.disabled) return;
+
     const existingPair = pairForEntry(entry);
     if (!isRanking && existingPair) {
       const isAlreadySelected =
@@ -1362,6 +1370,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
           priority={priority}
           gender1={gender1}
           gender2={gender2}
+          maxPlayers={maxPlayers}
           activeSports={activeSports}
           onNameChange={setName}
           onDescriptionChange={setDescription}
@@ -1371,6 +1380,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
           onPriorityChange={setPriority}
           onGender1Change={setGender1}
           onGender2Change={setGender2}
+          onMaxPlayersChange={setMaxPlayers}
           onSave={handleSave}
           onCancel={resetForm}
         />
@@ -1424,6 +1434,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     priority={priority}
                     gender1={gender1}
                     gender2={gender2}
+                    maxPlayers={maxPlayers}
                     activeSports={activeSports}
                     onNameChange={setName}
                     onDescriptionChange={setDescription}
@@ -1433,6 +1444,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onPriorityChange={setPriority}
                     onGender1Change={setGender1}
                     onGender2Change={setGender2}
+                    onMaxPlayersChange={setMaxPlayers}
                     onSave={handleSave}
                     onDelete={handleDelete}
                     onCancel={resetForm}

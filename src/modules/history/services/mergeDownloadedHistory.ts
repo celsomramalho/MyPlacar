@@ -4,7 +4,15 @@ export const mergeDownloadedHistory = (
   downloaded: MatchHistoryItem[],
   currentHistory: MatchHistoryItem[],
 ): MatchHistoryItem[] => {
-  const existingIds = new Set(currentHistory.map((m) => m.id));
-  const newOnly = downloaded.filter((m) => !existingIds.has(m.id));
-  return [...newOnly, ...currentHistory].sort((a, b) => b.id.localeCompare(a.id));
+  const seenIds = new Set<string>();
+  const merged: MatchHistoryItem[] = [];
+
+  for (const match of [...downloaded, ...currentHistory]) {
+    if (match?.id && !seenIds.has(match.id)) {
+      seenIds.add(match.id);
+      merged.push(match);
+    }
+  }
+
+  return merged.sort((a, b) => b.id.localeCompare(a.id));
 };

@@ -13,7 +13,15 @@ export const persistLocalHistory = (
   options: PersistLocalHistoryOptions = {},
 ): MatchHistoryItem[] => {
   const { limit = 100, fallbackLimit = 50 } = options;
-  const limitedList = newList.slice(0, limit);
+  const seenIds = new Set<string>();
+  const deduplicatedList: MatchHistoryItem[] = [];
+  for (const item of newList) {
+    if (item?.id && !seenIds.has(item.id)) {
+      seenIds.add(item.id);
+      deduplicatedList.push(item);
+    }
+  }
+  const limitedList = deduplicatedList.slice(0, limit);
 
   try {
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(limitedList));

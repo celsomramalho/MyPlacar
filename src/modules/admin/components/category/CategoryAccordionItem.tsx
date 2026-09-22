@@ -98,6 +98,9 @@ export const CategoryAccordionItem: React.FC<CategoryAccordionItemProps> = ({
             {cat.gender2}
           </span>
         )}
+        <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+          Limite: {cat.maxPlayers ?? 8} vagas
+        </span>
       </div>
 
       {/* Contadores da categoria */}

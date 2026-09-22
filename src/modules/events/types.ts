@@ -22,6 +22,8 @@ export const minifyEntryForPair = (entry: Partial<TournamentEntry>): TournamentE
   shirtSize: entry.shirtSize || 'M',
   phone: entry.phone || '',
   checkedIn: !!entry.checkedIn,
+  disabled: !!entry.disabled,
+  disabledReason: entry.disabledReason || '',
 });
 
 export const minifyPairForStorage = (pair: TournamentPair): TournamentPair => ({
@@ -167,6 +169,7 @@ export interface EventCategory {
   gamesPerSet?: number;
   gender1?: 'M' | 'F';
   gender2?: 'M' | 'F';
+  maxPlayers?: number;
 }
 
 export interface EventSponsor {
@@ -192,14 +195,22 @@ export interface TournamentEvent {
   sponsors?: EventSponsor[];
   coAdminPins?: string[];
   eventDateText?: string;
+  /** Período de inscrição */
   startDate?: string;
   endDate?: string;
+  /** Período do torneio */
+  tournamentStartDate?: string;
+  tournamentEndDate?: string;
   location?: string;
+  /** Link para abrir no Google Maps */
+  locationMapUrl?: string;
   courtsCount?: number;
   courtNames?: string[];
   interdictedCourts?: string[];
   registrationFee?: number;
   extraCategoryFee?: number;
+  /** Limite de jogadores com pagamento confirmado por categoria (padrão 8) */
+  maxPlayersPerCategory?: number;
   paymentType?: EventPaymentTypeOption;
   organizerEmail?: string;
   marketplaceFeePercent?: number;
@@ -272,6 +283,8 @@ export interface TournamentEntry {
   partnerEmail?: string;
   partnerPhone?: string;
   categoryPartners?: Record<string, CategoryPartnerInfo>;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 /**

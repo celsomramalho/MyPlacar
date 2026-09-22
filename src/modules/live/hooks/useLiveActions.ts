@@ -158,6 +158,7 @@ export function useLiveActions({
   };
 
   const handleConfirmMatch = async () => {
+    const endedAt = Date.now();
     // Ação remota — SOMENTE se live ativa
     if (gameState?.isMirroringActive) {
       const db = getDb();
@@ -167,7 +168,7 @@ export function useLiveActions({
           await updateDoc(doc(db, 'live_matches', targetPin), {
             isConfirmedFinished: true,
             isMatchOver: true,
-            matchEndedAt: Date.now(),
+            matchEndedAt: endedAt,
           });
         } catch {}
       }
@@ -177,6 +178,8 @@ export function useLiveActions({
     setGameState(p => p ? {
       ...p,
       isConfirmedFinished: true,
+      isMatchOver: true,
+      matchEndedAt: p.matchEndedAt || endedAt,
       isPaused: false,
     } : null);
   };

@@ -1358,7 +1358,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                    </button>
                  )}
                </div>
-               <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${effectiveGameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(displayTime)}</span><button onClick={() => onTogglePause?.()} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${effectiveGameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{effectiveGameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
+               <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${effectiveGameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(displayTime)}</span><button onClick={() => onTogglePause?.()} disabled={effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400" : effectiveGameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{effectiveGameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
              </div>
              
               <div className="flex flex-col w-full mt-4">

@@ -164,6 +164,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       paymentType: 'manual',
       organizerEmail: userProfile?.email || '',
       marketplaceFeePercent: 10,
+      maxPlayersPerCategory: 8,
       showRegisteredParticipants: false,
       allowUserScoreEntry: false,
       rankingMatchesPerTeam: undefined,

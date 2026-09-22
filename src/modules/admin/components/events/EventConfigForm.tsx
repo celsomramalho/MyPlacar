@@ -243,6 +243,19 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           />
         </div>
 
+        {/* Link Google Maps */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Link do endereço (Google Maps)</label>
+          <input
+            type="url"
+            value={editingEvent.locationMapUrl || ''}
+            disabled={isReadOnlyRegistration}
+            onChange={(event) => handleProtectedChange({ ...editingEvent, locationMapUrl: event.target.value })}
+            placeholder="https://maps.google.com/..."
+            className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-bold text-xs outline-none"
+          />
+        </div>
+
         {/* Data do Evento Texto */}
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 ml-1">Data do Evento</label>
@@ -256,27 +269,57 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           />
         </div>
 
-        {/* Data Inicio e Fim */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Data Inicio</label>
-            <input
-              type="date"
-              value={editingEvent.startDate || ''}
-              disabled={isReadOnlyRegistration}
-              onChange={(event) => handleProtectedChange({ ...editingEvent, startDate: event.target.value })}
-              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
-            />
+        {/* Período de inscrição */}
+        <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Período de inscrição</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">Início</label>
+              <input
+                type="date"
+                value={editingEvent.startDate || ''}
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChange({ ...editingEvent, startDate: event.target.value })}
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">Fim</label>
+              <input
+                type="date"
+                value={editingEvent.endDate || ''}
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChange({ ...editingEvent, endDate: event.target.value })}
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+              />
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Data fim</label>
-            <input
-              type="date"
-              value={editingEvent.endDate || ''}
-              disabled={isReadOnlyRegistration}
-              onChange={(event) => handleProtectedChange({ ...editingEvent, endDate: event.target.value })}
-              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
-            />
+        </div>
+
+        {/* Período do torneio */}
+        <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Período do torneio</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">Início</label>
+              <input
+                type="date"
+                value={editingEvent.tournamentStartDate || ''}
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChange({ ...editingEvent, tournamentStartDate: event.target.value })}
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">Fim</label>
+              <input
+                type="date"
+                value={editingEvent.tournamentEndDate || ''}
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => handleProtectedChange({ ...editingEvent, tournamentEndDate: event.target.value })}
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+              />
+            </div>
           </div>
         </div>
 
@@ -328,6 +371,25 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
               className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
             />
           </div>
+        </div>
+
+        {/* Limite de jogadores por categoria */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Limite de jogadores por categoria (padrão)</label>
+          <input
+            type="number"
+            min={1}
+            disabled={isReadOnlyRegistration}
+            value={editingEvent.maxPlayersPerCategory ?? 8}
+            onChange={(event) =>
+              handleProtectedChange({
+                ...editingEvent,
+                maxPlayersPerCategory: event.target.value ? Math.max(1, Number(event.target.value)) : 8,
+              })
+            }
+            placeholder="8"
+            className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
+          />
         </div>
 
         {/* Status do Evento e Tipo de Evento */}
@@ -437,7 +499,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
                       Reconectar
                     </a>
                   </div>
-                ) : (
+                ) : (editingEvent.organizerEmail || '').trim().toLowerCase() === (adminEmail || '').trim().toLowerCase() && editingEvent.organizerEmail ? null : (
                   <div className="space-y-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 font-bold">
                     <div className="flex items-center gap-1.5">
                       <AlertTriangle size={15} className="text-amber-600 shrink-0" />

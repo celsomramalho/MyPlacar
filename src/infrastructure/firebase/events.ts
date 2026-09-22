@@ -64,6 +64,8 @@ interface FirebaseTournamentEntry {
   partnerEmail?: string;
   partnerPhone?: string;
   categoryPartners?: Record<string, { name: string; email: string; phone: string }>;
+  disabled?: boolean;
+  disabledReason?: string;
   information?: string;
 }
 
@@ -101,6 +103,10 @@ export interface FirebaseTournamentEvent {
   teamDrawType?: string;
   bracketDrawType?: string;
   matchDrawType?: string;
+  tournamentStartDate?: string;
+  tournamentEndDate?: string;
+  locationMapUrl?: string;
+  maxPlayersPerCategory?: number;
   rankingMatchesPerTeam?: number;
   paymentType?: 'manual' | 'mercadopago';
 }

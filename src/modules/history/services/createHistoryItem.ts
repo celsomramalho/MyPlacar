@@ -49,9 +49,13 @@ export const createHistoryItem = (
     duration: (() => {
       // Usa o matchDuration antigo como fallback, mas calcula dinamicamente se startTime for válido
       if (!state.startTime) return state.matchDuration || 0;
-      let elapsedMs = Date.now() - state.startTime;
-      if (state.isPaused && state.lastPauseTime) {
+      let elapsedMs: number;
+      if (state.matchEndedAt) {
+        elapsedMs = state.matchEndedAt - state.startTime;
+      } else if (state.isPaused && state.lastPauseTime) {
         elapsedMs = state.lastPauseTime - state.startTime;
+      } else {
+        elapsedMs = Date.now() - state.startTime;
       }
       const totalPaused = state.accumulatedPausedTime || 0;
       elapsedMs -= totalPaused;

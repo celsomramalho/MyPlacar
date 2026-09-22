@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
@@ -149,6 +149,20 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
   const totalPaid = payments.reduce((acc, curr) => acc + curr.amount, 0);
   const pendingAmount = Math.max(0, dueAmount - totalPaid);
+
+  const categoryConfirmedCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    (entries || []).forEach((e) => {
+      if (e.disabled) return;
+      const isPaid = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
+      if (isPaid && e.categoryIds) {
+        e.categoryIds.forEach((catId) => {
+          map[catId] = (map[catId] || 0) + 1;
+        });
+      }
+    });
+    return map;
+  }, [entries]);
 
   // Estado para edição de um pagamento existente no histórico
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
@@ -520,42 +534,44 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner & Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
-        <div>
+      <div className="flex flex-col gap-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+        <div className="w-full">
           <h2 className="text-xl font-black text-slate-800 tracking-tight">Inscrições (participantes oficiais)</h2>
           <p className="text-xs text-slate-400 font-bold mt-0.5">
             Gerencie participantes inscritos, dados financeiros e vínculo de categorias.
           </p>
         </div>
         {!isAdding && !isReadOnly && (
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            {event.paymentType === 'mercadopago' && (
-              <button
-                type="button"
-                onClick={() => void handleSyncMercadoPago()}
-                disabled={isSyncingMP}
-                className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-xs px-4 py-3 rounded-2xl shadow-xs transition-all disabled:opacity-60 cursor-pointer"
-                title="Verifica se alguma inscrição pendente já foi paga no Mercado Pago"
-              >
-                <RefreshCw size={14} className={isSyncingMP ? 'animate-spin text-emerald-600' : 'text-emerald-600'} />
-                <span>{isSyncingMP ? 'Sincronizando...' : 'Sincronizar MP'}</span>
-              </button>
-            )}
-            {adminEmail && (
-              <button
-                type="button"
-                onClick={() => void handleFixRegistrationIds()}
-                disabled={isFixingIds}
-                className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-xs px-4 py-3 rounded-2xl shadow-xs transition-all disabled:opacity-60 cursor-pointer"
-                title="Detecta e corrige Inscrição_IDs duplicados ou ausentes neste evento"
-              >
-                <RefreshCw size={14} className={isFixingIds ? 'animate-spin text-amber-600' : 'text-amber-600'} />
-                <span>{isFixingIds ? 'Corrigindo...' : 'Corrigir IDs'}</span>
-              </button>
-            )}
+          <div className="flex flex-col gap-2 w-full">
+            <div className="flex items-center gap-2">
+              {event.paymentType === 'mercadopago' && (
+                <button
+                  type="button"
+                  onClick={() => void handleSyncMercadoPago()}
+                  disabled={isSyncingMP}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-xs px-3 py-2.5 rounded-2xl shadow-xs transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
+                  title="Verifica se alguma inscrição pendente já foi paga no Mercado Pago"
+                >
+                  <RefreshCw size={14} className={isSyncingMP ? 'animate-spin text-emerald-600' : 'text-emerald-600'} />
+                  <span>{isSyncingMP ? 'Sincronizando...' : 'Sincronizar MP'}</span>
+                </button>
+              )}
+              {adminEmail && (
+                <button
+                  type="button"
+                  onClick={() => void handleFixRegistrationIds()}
+                  disabled={isFixingIds}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-xs px-3 py-2.5 rounded-2xl shadow-xs transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
+                  title="Detecta e corrige Inscrição_IDs duplicados ou ausentes neste evento"
+                >
+                  <RefreshCw size={14} className={isFixingIds ? 'animate-spin text-amber-600' : 'text-amber-600'} />
+                  <span>{isFixingIds ? 'Corrigindo...' : 'Corrigir IDs'}</span>
+                </button>
+              )}
+            </div>
             <button
               onClick={handleStartAdd}
-              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-4 py-2.5 rounded-2xl shadow-sm transition-all cursor-pointer whitespace-nowrap"
             >
               Nova inscrição
             </button>
@@ -712,18 +728,26 @@ export const EventRegistrationsManager: React.FC<Props> = ({
               <div className="flex flex-wrap gap-2">
                 {availableCategoriesForGender.map((cat) => {
                   const isSelected = selectedCategoryIds.includes(cat.id);
+                  const limit = cat.maxPlayers ?? event.maxPlayersPerCategory ?? 8;
+                  const confirmed = categoryConfirmedCountMap[cat.id] || 0;
+                  const isFull = confirmed >= limit;
                   return (
                     <button
                       key={cat.id}
                       type="button"
                       onClick={() => toggleCategory(cat.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all border ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all border flex items-center gap-1.5 ${
                         isSelected
                           ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs'
+                          : isFull
+                          ? 'bg-slate-100 text-slate-500 border-slate-300'
                           : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      {cat.name} ({cat.abbreviation})
+                      <span>{cat.name} ({cat.abbreviation})</span>
+                      <span className={`text-[10px] font-bold ${isSelected ? 'text-emerald-100' : isFull ? 'text-red-500' : 'text-slate-400'}`}>
+                        {confirmed}/{limit}
+                      </span>
                     </button>
                   );
                 })}
@@ -954,10 +978,17 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
                       {/* Bloco das Linhas de Informação */}
                       <div className="space-y-1 min-w-0 flex-1 text-left">
-                        {/* Linha 1: Nome do usuário */}
-                        <p className="font-black text-sm text-slate-800 tracking-tight truncate">
-                          {entry.name || entry.nickname}
-                        </p>
+                        {/* Linha 1: Nome do usuário + Badge Desativado */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className={`font-black text-sm tracking-tight truncate ${entry.disabled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                            {entry.name || entry.nickname}
+                          </p>
+                          {entry.disabled && (
+                            <span className="bg-red-100 text-red-700 border border-red-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider" title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição desativada'}>
+                              DESATIVADO {entry.disabledReason ? `• ${entry.disabledReason}` : ''}
+                            </span>
+                          )}
+                        </div>
 
                         {/* Linha 2: Como quer ser chamado - PIN mascarado (padrão Meus Parceiros) */}
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">

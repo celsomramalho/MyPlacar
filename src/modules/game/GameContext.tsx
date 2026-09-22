@@ -84,10 +84,28 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 }) => {
   // ── Passo 4.5: matchHistory migrado do App.tsx ─────────────────────────
   const matchHistoryRef = useRef<MatchHistoryItem[]>([]);
+  const finalizingMatchIdsRef = useRef<Set<string>>(new Set());
   const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>(() => {
-    const list = safeJsonParse('myPlacarHistory', []);
-    matchHistoryRef.current = list;
-    return list;
+    const list = safeJsonParse('myPlacarHistory', []) as MatchHistoryItem[];
+    // Auto-reparo: elimina duplicatas pré-existentes salvas no localStorage
+    const seenIds = new Set<string>();
+    const cleanList: MatchHistoryItem[] = [];
+    let hasDuplicates = false;
+    for (const item of list) {
+      if (item?.id && !seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        cleanList.push(item);
+      } else if (item?.id) {
+        hasDuplicates = true;
+      }
+    }
+    if (hasDuplicates) {
+      try {
+        localStorage.setItem('myPlacarHistory', JSON.stringify(cleanList));
+      } catch {}
+    }
+    matchHistoryRef.current = cleanList;
+    return cleanList;
   });
   useEffect(() => { matchHistoryRef.current = matchHistory; }, [matchHistory]);
   const persistHistory = useCallback((newList: MatchHistoryItem[]) => {
@@ -544,10 +562,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       return;
     }
 
-    if (matchHistoryRef.current.some(m => m.id === state.matchId)) {
+    if (!state.matchId || finalizingMatchIdsRef.current.has(state.matchId) || matchHistoryRef.current.some(m => m.id === state.matchId)) {
       clearTournamentMatchLocally();
       return;
     }
+    finalizingMatchIdsRef.current.add(state.matchId);
+
     let location: { lat: number, lng: number } | undefined = undefined;
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => { 
@@ -557,7 +577,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     } catch {}
     const historyItem = createHistoryItem(state, userProfile, partners, location);
-    persistHistory([historyItem, ...matchHistoryRef.current]);
+    persistHistory([historyItem, ...matchHistoryRef.current.filter(m => m.id !== historyItem.id)]);
     try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
     const db = getDb();
     if (db && userProfile.pin && navigator.onLine) {
@@ -1067,6 +1087,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       
       const next = incrementScore(prev, player, type, source);
       next.isPaused = false;
+      if (next.isMatchOver && !next.matchEndedAt) {
+        next.matchEndedAt = Date.now();
+      }
 
       const lastPoint = next.pointHistory[next.pointHistory.length - 1];
       if (lastPoint?.resultingScore && next.tournamentPin && next.tournamentMatchId && navigator.onLine) {
@@ -1136,11 +1159,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       const isFinishedPending = (s.isMatchOver && !s.isConfirmedFinished);
       if (isFinishedPending) {
         setHistoryStack(stack.slice(0, -1));
-        setGameState({ ...p, isPaused: false, isMatchOver: false });
+        setGameState({ ...p, isPaused: false, isMatchOver: false, matchEndedAt: undefined });
         return;
       }
       setHistoryStack(stack.slice(0, -1));
-      setGameState({ ...p, isPaused: false, isMatchOver: false });
+      setGameState({ ...p, isPaused: false, isMatchOver: false, matchEndedAt: undefined });
     }
   }, [gameState, deviceId, setGameState]);
 
