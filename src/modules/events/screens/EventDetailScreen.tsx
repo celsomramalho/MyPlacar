@@ -305,7 +305,7 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   // Formação de duplas pelo gestor dentro da categoria
   const toggleEntrySelection = (entry: TournamentEntry) => {
-    if (!canManageEvent || isSuper8) return;
+    if (!canManageEvent || isSuper8 || entry.disabled || entry.paymentStatus === 'Cancelado') return;
     const key = entry.email || entry.pin;
     setSelectedEntries((prev) => {
       const next = new Set(prev);
@@ -323,6 +323,15 @@ export const EventDetailScreen: React.FC<Props> = ({
     if (!canManageEvent || selectedEntries.size !== 2 || !activeCategory) return;
     const selectedList = entries.filter((e) => selectedEntries.has(e.email || e.pin));
     if (selectedList.length !== 2) return;
+
+    if (selectedList.some((e) => e.disabled || e.paymentStatus === 'Cancelado')) {
+      setModalConfig({
+        title: 'Inscrição cancelada',
+        message: 'Não é possível formar time com participantes com inscrição cancelada ou desativada.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
 
     const [first, second] = selectedList;
 
@@ -750,7 +759,10 @@ export const EventDetailScreen: React.FC<Props> = ({
   const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished');
   const finalMatch = categoryMatches.find((m) => m.phase === 'final');
   const thirdMatch = categoryMatches.find((m) => m.phase === '3lugar');
-  const lockParticipantMatchControls = isChaveEvent || isSuper8;
+  const isCurrentPlayerCancelled = Boolean(
+    currentUserEntry?.disabled || currentUserEntry?.paymentStatus === 'Cancelado'
+  );
+  const lockParticipantMatchControls = isChaveEvent || isSuper8 || (!canManageEvent && isCurrentPlayerCancelled);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden animate-in fade-in duration-300 font-sans">
@@ -1116,7 +1128,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                             const live = liveScores[match.id];
                             const isCurrentUserMatchParticipant = isCurrentUserInMatch(match);
                             const canUseRankingMatchActions =
-                              isRanking && canSubmitScore && isCurrentUserMatchParticipant;
+                              isRanking && canSubmitScore && isCurrentUserMatchParticipant && !isCurrentPlayerCancelled;
 
                             return (
                               <MatchCard
@@ -1153,7 +1165,17 @@ export const EventDetailScreen: React.FC<Props> = ({
                                     ? undefined
                                     : openDeleteMatchRequest
                                 }
-                                onStartLiveMatch={(m, p1, p2) => onStartTournamentMatch(m, p1, p2, event)}
+                                onStartLiveMatch={(m, p1, p2) => {
+                                  if (!canManageEvent && isCurrentPlayerCancelled) {
+                                    setModalConfig({
+                                      title: 'Inscrição cancelada',
+                                      message: 'Sua inscrição está cancelada. Você não pode participar de partidas.',
+                                      onConfirm: () => setModalConfig(null),
+                                    });
+                                    return;
+                                  }
+                                  onStartTournamentMatch(m, p1, p2, event);
+                                }}
                               />
                             );
                           })

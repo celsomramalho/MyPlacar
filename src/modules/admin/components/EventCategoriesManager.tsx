@@ -369,8 +369,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
   }, [isRanking, pairs, selectedCategory?.id, selectedEntries]);
 
   const toggleEntrySelection = (entry: TournamentEntry) => {
-    // Jogadores com inscrição desativada não podem ser selecionados para formar times
-    if (entry.disabled) return;
+    // Jogadores com inscrição desativada ou cancelada não podem ser selecionados para formar times
+    if (entry.disabled || entry.paymentStatus === 'Cancelado') return;
 
     const existingPair = pairForEntry(entry);
     if (!isRanking && existingPair) {
@@ -530,6 +530,15 @@ export const EventCategoriesManager: React.FC<Props> = ({
     if (!selectedCategory || selectedEntries.size !== 2) return;
     const selected = Array.from(selectedEntries).map((email) => categoryEntries.find((entry) => entry.email === email)).filter(Boolean) as TournamentEntry[];
     if (selected.length !== 2) return;
+
+    if (selected.some((e) => e.disabled || e.paymentStatus === 'Cancelado')) {
+      setModalConfig({
+        title: 'Inscrição cancelada',
+        message: 'Não é possível formar time com participantes com inscrição cancelada ou desativada.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
 
     const validation = validateCategoryGenders(selectedCategory, selected);
     if (!validation.valid) {

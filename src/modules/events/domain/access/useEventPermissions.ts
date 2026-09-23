@@ -67,11 +67,16 @@ export function useEventPermissions(
 
   const isParticipant = currentUserEntry !== null;
 
+  const isCurrentEntryCancelled = Boolean(
+    currentUserEntry?.disabled || currentUserEntry?.paymentStatus === 'Cancelado'
+  );
+
   const canSubmitScore = useMemo(() => {
     if (isReadOnly) return false;
     if (canManageEvent) return true;
+    if (isCurrentEntryCancelled) return false;
     return event.allowUserScoreEntry === true;
-  }, [isReadOnly, canManageEvent, event.allowUserScoreEntry]);
+  }, [isReadOnly, canManageEvent, isCurrentEntryCancelled, event.allowUserScoreEntry]);
 
   const canViewParticipants = useMemo(() => {
     if (canManageEvent) return true;

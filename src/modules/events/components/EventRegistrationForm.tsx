@@ -322,7 +322,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     const map: Record<string, number> = {};
     const entriesList = (liveEntries && liveEntries.length > 0) ? liveEntries : (event.entries || []);
     entriesList.forEach((e) => {
-      if (e.disabled) return;
+      if (e.disabled || e.paymentStatus === 'Cancelado') return;
       const isPaid = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
       if (isPaid && e.categoryIds) {
         e.categoryIds.forEach((catId) => {
@@ -376,6 +376,12 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   // ── Controle de 3 Etapas para inscrição do usuário (1: Cadastro, 2: Categorias, 3: Pagamento) ──
   const isExistingRegistration = Boolean(entry.joinedAt || entry.email || entry.pin);
   const hasPaymentRecorded = payments.length > 0 || (entry.paidAmount ?? 0) > 0 || entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago';
+  const isCancelled = Boolean(
+    disabled ||
+    paymentStatus === 'Cancelado' ||
+    entry.disabled ||
+    entry.paymentStatus === 'Cancelado'
+  );
   const hasInitialCategories = (entry.categoryIds && entry.categoryIds.length > 0) || categoryIds.length > 0;
 
   const [userStep, setUserStep] = useState<1 | 2 | 3>(() => {
@@ -405,6 +411,11 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   } | null>(null);
 
   const handleSaveStep1 = () => {
+    if (!isAdmin && isCancelled) {
+      setFeedback('Sua inscrição está cancelada. Clique em "Ativar inscrição" abaixo para reativá-la antes de continuar.');
+      return;
+    }
+
     const trimmedName = name.trim();
     const trimmedNickname = nickname.trim();
     const trimmedEmail = email.trim();
@@ -627,6 +638,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           disabledReason: reason,
         };
 
+        setPaymentStatus('Cancelado');
+        setDisabled(true);
+        setDisabledReason(reason);
+
         await onSave(updatedEntry);
         setFeedback('✓ Inscrição cancelada com sucesso.');
         setTimeout(() => {
@@ -641,6 +656,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const handleFormTeam = async (cat: EventCategory, partnerEntry: TournamentEntry) => {
     if (!onUpdateEvent) return;
+    if (isCancelled || partnerEntry.disabled || partnerEntry.paymentStatus === 'Cancelado') {
+      setFeedback('Não é possível formar time com inscrição cancelada ou desativada.');
+      return;
+    }
     const currentEntry = buildEntry();
     const pairs = event.pairs || [];
     const teamNumber = Math.max(
@@ -764,6 +783,33 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       disabledReason: disabled ? disabledReason.trim() : '',
     };
     return updated;
+  };
+
+  const handleReactivateRegistration = async () => {
+    setIsSaving(true);
+    setFeedback(null);
+    try {
+      const restoredStatus = (hasPaymentRecorded || isFreeEvent) ? 'Confirmado' : 'Pendente';
+      setDisabled(false);
+      setDisabledReason('');
+      setPaymentStatus(restoredStatus);
+
+      const baseEntry = buildEntry();
+      const updatedEntry: TournamentEntry = {
+        ...baseEntry,
+        disabled: false,
+        disabledReason: '',
+        paymentStatus: restoredStatus,
+      };
+
+      await onSave(updatedEntry);
+      setFeedback('✓ Inscrição ativada com sucesso!');
+    } catch (err) {
+      console.error('Erro ao ativar inscrição:', err);
+      setFeedback('Erro ao ativar inscrição. Tente novamente.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const initialCategoryIds = useMemo(() => entry.categoryIds || [], [entry.categoryIds]);
@@ -1311,6 +1357,26 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
+    {/* Banner de Status: Inscrição Cancelada / Desativada */}
+    {isCancelled && (
+      <div className="p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-red-800 space-y-2 animate-in fade-in">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="text-red-600 shrink-0" size={18} />
+          <span className="text-xs font-black uppercase tracking-wider">
+            Inscrição Cancelada
+          </span>
+        </div>
+        <p className="text-xs text-red-700 font-bold leading-relaxed">
+          Esta inscrição está cancelada. Enquanto estiver cancelada, você não poderá formar time nem participar de partidas.
+        </p>
+        {(disabledReason || entry.disabledReason) && (
+          <div className="text-[11px] text-red-600 bg-white/80 p-2.5 rounded-xl border border-red-100">
+            <strong>Motivo:</strong> {disabledReason || entry.disabledReason}
+          </div>
+        )}
+      </div>
+    )}
+
     {/* Alerta de Feedback no Topo */}
     {feedback && (
       <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-top-1 ${
@@ -1474,16 +1540,28 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
               <span>Salvar cadastro</span>
             </button>
 
-            {/* Botão Cancelar Inscrição com regras inteligentes */}
+            {/* Botão Cancelar Inscrição com regras inteligentes OU Ativar Inscrição */}
             {isExistingRegistration && (
-              <button
-                type="button"
-                onClick={handleOpenCancelModal}
-                className="w-full py-3 px-4 rounded-2xl border border-red-200 bg-red-50/70 hover:bg-red-100 text-red-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
-              >
-                <Trash2 size={16} />
-                <span>Cancelar inscrição</span>
-              </button>
+              isCancelled ? (
+                <button
+                  type="button"
+                  onClick={handleReactivateRegistration}
+                  disabled={isSaving}
+                  className="w-full py-3.5 px-4 rounded-2xl border-2 border-emerald-500 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-sm"
+                >
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  <span>{isSaving ? 'Ativando inscrição...' : 'Ativar inscrição'}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleOpenCancelModal}
+                  className="w-full py-3 px-4 rounded-2xl border border-red-200 bg-red-50/70 hover:bg-red-100 text-red-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
+                >
+                  <Trash2 size={16} />
+                  <span>Cancelar inscrição</span>
+                </button>
+              )
             )}
           </div>
         )}
@@ -1503,7 +1581,8 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           const partner = categoryPartners[cat.id] || { name: '', email: '', phone: '' };
           const partnerEntry = partnerEntryForCategory(cat.id, partner.email);
           const partnerAlreadyPaired = partner.email ? pairForEmailInCategory(partner.email, cat.id) : undefined;
-          const canShowFormTeam = Boolean(!isSinglePlayer && onUpdateEvent && isSelected && cat.format === 'Duplas' && partnerEntry && !pair && !partnerAlreadyPaired);
+          const isPartnerCancelled = Boolean(partnerEntry?.disabled || partnerEntry?.paymentStatus === 'Cancelado');
+          const canShowFormTeam = Boolean(!isCancelled && !isSinglePlayer && onUpdateEvent && isSelected && cat.format === 'Duplas' && partnerEntry && !isPartnerCancelled && !pair && !partnerAlreadyPaired);
           const isPartnerFormExpanded = expandedPartnerCategoryIds.has(cat.id);
           const partnerFormMissingData = !partner.name.trim() || !partner.email.trim() || !partner.phone.trim();
           return (

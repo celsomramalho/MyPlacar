@@ -127,6 +127,8 @@ export default async function handler(req, res) {
       (item) => item.id === paymentItemId || String(item.providerPaymentId || "") === providerPaymentId,
     );
 
+    const isRefundOrChargeback = ["refunded", "charged_back"].includes(payment.status);
+
     const nextPayments = [...existingPayments];
     if (statusMap.shouldRecordPayment && amountIsCompatible && !alreadyRecorded) {
       nextPayments.push({
@@ -140,12 +142,25 @@ export default async function handler(req, res) {
       });
     }
 
-    const paidAmount = nextPayments.reduce((total, item) => total + Number(item.amount || 0), 0);
+    // Se é reembolso ou estorno: marca o pagamento original como reembolsado no histórico
+    // e zera o valor pago, pois o dinheiro voltou para o usuário.
+    const finalPayments = isRefundOrChargeback
+      ? nextPayments.map((item) =>
+          String(item.providerPaymentId) === providerPaymentId || item.id === paymentItemId
+            ? { ...item, status: payment.status, refundedAt: Date.now(), amount: 0 }
+            : item
+        )
+      : nextPayments;
+
+    const paidAmount = isRefundOrChargeback
+      ? Math.max(0, finalPayments.reduce((total, item) => total + Number(item.amount || 0), 0))
+      : nextPayments.reduce((total, item) => total + Number(item.amount || 0), 0);
+
     const nextPaymentStatus = amountIsCompatible ? statusMap.paymentStatus : "Pendente";
     const checkoutStatus = amountIsCompatible ? statusMap.checkoutStatus : "pending";
 
     await entryRef.set(sanitize({
-      payments: nextPayments,
+      payments: finalPayments,
       paidAmount,
       paymentStatus: nextPaymentStatus,
       mercadoPagoCheckout: {

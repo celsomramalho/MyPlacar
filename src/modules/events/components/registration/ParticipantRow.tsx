@@ -46,11 +46,13 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
       : pair.p1
     : null;
 
+  const isCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
+
   return (
     <div
-      onClick={() => canSelect && !entry.disabled && onToggleSelect?.(entry)}
+      onClick={() => canSelect && !isCancelled && onToggleSelect?.(entry)}
       className={`p-3.5 transition-all border-b border-slate-100 last:border-b-0 ${
-        entry.disabled
+        isCancelled
           ? 'bg-red-50/40 opacity-70'
           : isSelected
           ? isRanking && !pair
@@ -61,7 +63,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
           : isRanking && !pair
           ? 'bg-emerald-50/25 hover:bg-emerald-50/60 border-l-4 border-l-emerald-400'
           : 'odd:bg-white even:bg-slate-50/40 hover:bg-slate-50'
-      } ${canSelect && !entry.disabled ? 'cursor-pointer' : entry.disabled ? 'cursor-not-allowed' : ''}`}
+      } ${canSelect && !isCancelled ? 'cursor-pointer' : isCancelled ? 'cursor-not-allowed' : ''}`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -92,7 +94,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
           {/* Dados Textuais */}
           <div className="min-w-0 space-y-1 flex-1">
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
-              {canSelect && !entry.disabled && (
+              {canSelect && !isCancelled && (
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
                     isSelected ? 'bg-sky-500 border-sky-600 text-white' : 'border-slate-300 bg-white'
@@ -101,18 +103,18 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
                   {isSelected && <Check size={10} className="stroke-[3]" />}
                 </div>
               )}
-              <p className={`text-sm font-black truncate ${entry.disabled ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
+              <p className={`text-sm font-black truncate ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
                 {entry.name || entry.nickname}
                 {isCurrentUser && <span className="text-[10px] text-indigo-600 font-bold ml-1">(você)</span>}
               </p>
 
-              {/* Badge DESATIVADO */}
-              {entry.disabled && (
+              {/* Badge CANCELADO / DESATIVADO */}
+              {isCancelled && (
                 <span
                   className="bg-red-100 text-red-700 border border-red-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider"
-                  title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição desativada'}
+                  title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição cancelada ou desativada'}
                 >
-                  DESATIVADO
+                  {entry.paymentStatus === 'Cancelado' ? 'CANCELADO' : 'DESATIVADO'}
                 </span>
               )}
 

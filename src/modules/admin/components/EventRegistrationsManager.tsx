@@ -153,7 +153,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const categoryConfirmedCountMap = useMemo(() => {
     const map: Record<string, number> = {};
     (entries || []).forEach((e) => {
-      if (e.disabled) return;
+      if (e.disabled || e.paymentStatus === 'Cancelado') return;
       const isPaid = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
       if (isPaid && e.categoryIds) {
         e.categoryIds.forEach((catId) => {
@@ -978,16 +978,23 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
                       {/* Bloco das Linhas de Informação */}
                       <div className="space-y-1 min-w-0 flex-1 text-left">
-                        {/* Linha 1: Nome do usuário + Badge Desativado */}
+                        {/* Linha 1: Nome do usuário + Badge Desativado/Cancelado */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`font-black text-sm tracking-tight truncate ${entry.disabled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
-                            {entry.name || entry.nickname}
-                          </p>
-                          {entry.disabled && (
-                            <span className="bg-red-100 text-red-700 border border-red-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider" title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição desativada'}>
-                              DESATIVADO {entry.disabledReason ? `• ${entry.disabledReason}` : ''}
-                            </span>
-                          )}
+                          {(() => {
+                            const isEntryCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
+                            return (
+                              <>
+                                <p className={`font-black text-sm tracking-tight truncate ${isEntryCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                                  {entry.name || entry.nickname}
+                                </p>
+                                {isEntryCancelled && (
+                                  <span className="bg-red-100 text-red-700 border border-red-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider" title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição cancelada ou desativada'}>
+                                    {entry.paymentStatus === 'Cancelado' ? 'CANCELADO' : 'DESATIVADO'} {entry.disabledReason ? `• ${entry.disabledReason}` : ''}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
 
                         {/* Linha 2: Como quer ser chamado - PIN mascarado (padrão Meus Parceiros) */}
