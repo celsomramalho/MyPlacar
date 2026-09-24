@@ -226,18 +226,34 @@ export const fetchUserEventRegistrations = async (
   const registrations: FirebaseEventRegistration[] = [];
   const registeredPins = new Set<string>();
 
-  snap.forEach((registrationDoc) => {
-    const reg = registrationDoc.data() as FirebaseEventRegistration;
-    registrations.push(reg);
-    registeredPins.add(reg.pin);
-  });
+  // Validar se as inscrições em user_registrations continuam existindo na subcoleção entries do evento
+  await Promise.all(
+    snap.docs.map(async (registrationDoc) => {
+      const reg = registrationDoc.data() as FirebaseEventRegistration;
+      const eventPin = reg.pin;
+      try {
+        const entrySnap = await getDoc(doc(db, 'events', eventPin, 'entries', cleanEmail));
+        if (entrySnap.exists()) {
+          registrations.push(reg);
+          registeredPins.add(eventPin.toUpperCase());
+        } else {
+          // A inscrição foi excluída do evento! Limpa o registro órfão
+          await deleteDoc(doc(db, 'user_registrations', cleanEmail, 'events', eventPin)).catch(() => {});
+        }
+      } catch {
+        // Fallback em caso de erro de rede/leitura: mantém
+        registrations.push(reg);
+        registeredPins.add(eventPin.toUpperCase());
+      }
+    })
+  );
 
   // Reconciliação: se o usuário foi inscrito manualmente pelo admin, busca os eventos e reconhece a inscrição
   try {
     const eventsSnap = await getDocs(query(collection(db, 'events')));
     for (const eventDoc of eventsSnap.docs) {
       const eventPin = eventDoc.id;
-      if (registeredPins.has(eventPin)) continue;
+      if (registeredPins.has(eventPin.toUpperCase())) continue;
 
       const entrySnap = await getDoc(doc(db, 'events', eventPin, 'entries', cleanEmail));
       if (entrySnap.exists()) {

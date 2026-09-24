@@ -56,6 +56,8 @@ import { calculateSuper8PlayerStandings, calculateBracketStandings } from '../se
 import { calculateQueueState } from '../services/queueManager';
 import { validateCategoryGenders } from '../services/matchGenerator';
 import { createMercadoPagoPreference, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
+import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
+import { isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
 
 interface Props {
   event: TournamentEvent;
@@ -101,10 +103,9 @@ export const EventDetailScreen: React.FC<Props> = ({
     isParticipant,
   } = permissions;
 
-  const isChaveEvent =
-    !event.eventType || event.eventType === 'Chave classificatória' || event.eventType === 'Chave mata-mata';
-  const isRanking = event.eventType === 'Ranking';
-  const isSuper8 = event.eventType === 'Super 8';
+  const isRanking = isRankingEvent(event);
+  const isSuper8 = isSuper8Event(event);
+  const isChaveEvent = !isRanking && !isSuper8;
 
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set());
@@ -130,6 +131,24 @@ export const EventDetailScreen: React.FC<Props> = ({
   const qrCodeUrl = useMemo(() => {
     return `https://quickchart.io/qr?text=${encodeURIComponent(inviteLink)}&size=400&margin=1&ecLevel=H&dark=0f172a`;
   }, [inviteLink]);
+
+  const defaultUserEntry: TournamentEntry = useMemo(() => {
+    return {
+      email: userProfile?.email || '',
+      name: userProfile?.name || '',
+      nickname: userProfile?.nickname || userProfile?.name || '',
+      pin: userProfile?.pin || `TEMP${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      phone: userProfile?.phone || '',
+      shirtSize: (userProfile as unknown as { shirtSize?: 'P' | 'M' | 'G' })?.shirtSize || 'M',
+      gender: userProfile?.gender || 'M',
+      categoryIds: [],
+      joinedAt: Date.now(),
+      dueAmount: event?.registrationFee ?? 0,
+      paidAmount: 0,
+      paymentStatus: 'Pendente',
+      payments: [],
+    };
+  }, [userProfile, event]);
 
   const currentEntryDueAmount = currentUserEntry?.dueAmount ?? event.registrationFee ?? 0;
   const currentEntryPaidAmount = currentUserEntry?.paidAmount ?? currentUserEntry?.payments?.reduce((sum, item) => sum + Number(item.amount || 0), 0) ?? 0;
@@ -823,8 +842,8 @@ export const EventDetailScreen: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Botão de Edição de Inscrição Própria */}
-          {isParticipant && currentUserEntry && (
+          {/* Bloco de Inscrição do Usuário */}
+          {isParticipant && currentUserEntry ? (
             <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-black text-slate-800">Minha inscrição no evento</p>
@@ -858,6 +877,46 @@ export const EventDetailScreen: React.FC<Props> = ({
                 </button>
               </div>
             </div>
+          ) : (
+            (() => {
+              const period = getRegistrationPeriodStatus(event);
+              if (period.isOpen) {
+                return (
+                  <div className="bg-white p-4 rounded-3xl border border-emerald-200/80 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-black text-slate-800">Inscrição no torneio</p>
+                      <p className="text-[11px] font-bold text-slate-400">
+                        Você ainda não está inscrito neste evento.
+                      </p>
+                      <p className="text-[11px] font-bold text-emerald-600 mt-0.5">
+                        ⚡ {period.message}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowMyRegistrationModal(true)}
+                      className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                    >
+                      <CheckCircle2 size={15} />
+                      Inscrever-se no evento
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-black text-slate-700">Inscrições</p>
+                    <p className="text-[11px] font-bold text-slate-400">
+                      {period.message}
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-slate-200 text-slate-600">
+                    {period.status === 'not_started' ? 'Em breve' : 'Encerradas'}
+                  </span>
+                </div>
+              );
+            })()
           )}
 
           {/* Ações e Compartilhamento (QR Code / WhatsApp) */}
@@ -1272,7 +1331,7 @@ export const EventDetailScreen: React.FC<Props> = ({
       )}
 
       {/* Modal / Bottom Sheet: Formulário de Inscrição Oficial */}
-      {showMyRegistrationModal && currentUserEntry && (
+      {showMyRegistrationModal && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-xs animate-in fade-in"
@@ -1280,7 +1339,9 @@ export const EventDetailScreen: React.FC<Props> = ({
           />
           <div className="relative bg-white rounded-t-[2.5rem] shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] flex flex-col">
             <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-slate-100">
-              <h2 className="text-base font-black text-slate-900">Minha Inscrição</h2>
+              <h2 className="text-base font-black text-slate-900">
+                {currentUserEntry ? 'Minha Inscrição' : 'Fazer Inscrição'}
+              </h2>
               <button
                 type="button"
                 onClick={() => setShowMyRegistrationModal(false)}
@@ -1292,18 +1353,29 @@ export const EventDetailScreen: React.FC<Props> = ({
             <div className="overflow-y-auto px-6 py-4 space-y-4 no-scrollbar">
               <EventRegistrationForm
                 event={event}
-                entry={currentUserEntry}
+                entry={currentUserEntry || defaultUserEntry}
                 mode="user"
                 onSave={async (updated) => {
                   const db = getDb();
                   if (db) {
                     try {
                       await saveEventEntry(db as Firestore, event.pin, updated as any);
+                      if (updated.email) {
+                        const { saveUserEventRegistration } = await import('@infra/firebase/events');
+                        await saveUserEventRegistration(db as Firestore, updated.email, event.pin, {
+                          pin: event.pin,
+                          name: event.name || event.pin,
+                          joinedAt: updated.joinedAt || Date.now(),
+                          bannerUrl: event.bannerUrl || null,
+                        }).catch(() => {});
+                      }
                       await refreshEntries();
                       setShowMyRegistrationModal(false);
                       setModalConfig({
                         title: 'Sucesso',
-                        message: 'Dados da inscrição atualizados com sucesso.',
+                        message: currentUserEntry
+                          ? 'Dados da inscrição atualizados com sucesso.'
+                          : 'Inscrição realizada com sucesso!',
                         onConfirm: () => setModalConfig(null),
                       });
                     } catch (err) {

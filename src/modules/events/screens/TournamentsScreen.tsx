@@ -8,6 +8,7 @@ import type { EventRegistration, TournamentEntry, TournamentEvent } from '../typ
 import type { UserProfile } from '@modules/auth/types';
 import { EventRegistrationForm } from '../components/EventRegistrationForm';
 import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
+import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
 
 interface Props {
   registrations: EventRegistration[];
@@ -19,9 +20,10 @@ interface Props {
   userProfile?: UserProfile;
   onOpenCommunications?: () => void;
   unreadCount?: number;
+  onRefreshRegistrations?: () => Promise<void> | void;
 }
 
-export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onSelectAdminEvent, onOpenMenu, userProfile, onOpenCommunications, unreadCount = 0 }) => {
+export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onSelectAdminEvent, onOpenMenu, userProfile, onOpenCommunications, unreadCount = 0, onRefreshRegistrations }) => {
   const [pinInput, setPinInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [joiningPin, setJoiningPin] = useState<string | null>(null);
@@ -50,8 +52,11 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
       }
     };
     loadActiveEvents();
+    if (onRefreshRegistrations) {
+      void onRefreshRegistrations();
+    }
     return () => { isMounted = false; };
-  }, []);
+  }, [onRefreshRegistrations]);
 
   // Para cada inscrição que NÃO está em activeEvents, buscar o evento completo para checar coAdminPins
   useEffect(() => {
@@ -92,9 +97,23 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
         return;
       }
     }
+
+    const period = getRegistrationPeriodStatus(ev);
+    if (!period.isOpen) {
+      onSelectEvent({ pin: ev.pin, name: ev.name, joinedAt: 0 });
+      return;
+    }
+
     const db = getDb();
     const freshEvent = db ? await fetchEventByPin(db as Firestore, ev.pin) : null;
-    setPendingEvent((freshEvent as TournamentEvent | null) || ev);
+    const targetEvent = (freshEvent as TournamentEvent | null) || ev;
+    const freshPeriod = getRegistrationPeriodStatus(targetEvent);
+    if (!freshPeriod.isOpen) {
+      onSelectEvent({ pin: targetEvent.pin, name: targetEvent.name, joinedAt: 0 });
+      return;
+    }
+
+    setPendingEvent(targetEvent);
     setPendingPin(null);
   };
 
@@ -115,6 +134,12 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     const event = db ? await fetchEventByPin(db as Firestore, targetPin) : null;
     setIsSearching(false);
     if (event) {
+      const period = getRegistrationPeriodStatus(event as TournamentEvent);
+      if (!period.isOpen) {
+        onSelectEvent({ pin: (event as TournamentEvent).pin, name: (event as TournamentEvent).name, joinedAt: 0 });
+        setPendingPin(null);
+        return;
+      }
       setPendingEvent(event as TournamentEvent);
     } else {
       alert('Torneio não encontrado com o PIN informado ou está inativo.');
@@ -293,6 +318,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
             <div className="space-y-3">
               {availableEvents.map((ev) => {
                 const isJoiningThis = isSearching && joiningPin === ev.pin;
+                const period = getRegistrationPeriodStatus(ev);
                 return (
                   <button
                     key={ev.pin}
@@ -306,7 +332,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-black text-gray-900 mb-1 truncate">{ev.name}</p>
-                        <div className="flex flex-wrap items-center gap-3 text-slate-400 text-[10px] font-bold">
+                        <div className="flex flex-wrap items-center gap-2 text-slate-400 text-[10px] font-bold">
                           {ev.location && (
                             <div className="flex items-center gap-1">
                               <MapPin size={12} /><span className="truncate">{ev.location}</span>
@@ -323,15 +349,32 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                               R$ {ev.registrationFee?.toFixed(2)}
                             </span>
                           )}
+                          <span className={`font-black px-2 py-0.5 rounded-md ${
+                            period.isOpen
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : period.status === 'not_started'
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {period.message}
+                          </span>
                         </div>
                       </div>
                     </div>
                     <div className="shrink-0 pl-2">
                       {isJoiningThis ? (
                         <Loader2 size={20} className="animate-spin text-emerald-500" />
-                      ) : (
-                        <span className="bg-emerald-500 text-white text-[11px] font-black uppercase px-3 py-1.5 rounded-xl group-hover:bg-emerald-600 transition-colors">
+                      ) : period.isOpen ? (
+                        <span className="bg-emerald-500 text-white text-[11px] font-black uppercase px-3 py-1.5 rounded-xl group-hover:bg-emerald-600 transition-colors shadow-sm">
                           Inscrever-se
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-xl ${
+                          period.status === 'not_started'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
+                            : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}>
+                          {period.status === 'not_started' ? 'Em breve' : 'Encerrado'}
                         </span>
                       )}
                     </div>

@@ -48,6 +48,7 @@ export interface AppScreenRouterProps {
   activeEvent: TournamentEvent | null;
   userEntryDate: number | null;
   registeredEvents: EventRegistration[];
+  fetchUserRegistrations?: (email: string) => Promise<void>;
   handleJoinTournament: (pin: string, silent?: boolean, profileOverride?: UserProfile, paymentData?: { payments?: import('@modules/events/types').PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' | 'Confirmado' | 'Recusado' | 'Cancelado' }, entryOverride?: Partial<import('@modules/events/types').TournamentEntry>) => Promise<void>;
   handleExitTournament: () => void;
   handleSelectEvent: (ev: TournamentEvent) => void;
@@ -85,6 +86,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   activeEvent,
   userEntryDate,
   registeredEvents,
+  fetchUserRegistrations,
   handleJoinTournament,
   handleExitTournament,
   handleSelectEvent,
@@ -338,6 +340,11 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             userProfile={userProfile}
             onOpenCommunications={() => setCurrentScreen('communications')}
             unreadCount={unreadCommsCount}
+            onRefreshRegistrations={() => {
+              if (userProfile?.email && fetchUserRegistrations) {
+                return fetchUserRegistrations(userProfile.email);
+              }
+            }}
           />
         )}
 

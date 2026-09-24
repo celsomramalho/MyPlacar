@@ -25,6 +25,7 @@ import {
 } from '@modules/events/services/matchProgression';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
 import { calculateQueueState } from '@modules/events/services/queueManager';
+import { isRankingEvent, isSuper8Event } from '@modules/events/services/eventTypeHelpers';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb } from '@infra/firebase';
 import { updateEvent, saveEventEntry, deleteEventEntry } from '@infra/firebase/events';
@@ -237,8 +238,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
     });
   };
 
-  const isSuper8 = event.eventType === 'Super 8';
-  const isRanking = event.eventType === 'Ranking';
+  const isSuper8 = isSuper8Event(event);
+  const isRanking = isRankingEvent(event);
   const isIndividualRanking = isSuper8 || isRanking;
   const isManualMatchDraw = event.matchDrawType === 'Manual';
   const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;

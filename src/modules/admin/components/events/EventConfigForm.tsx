@@ -23,6 +23,7 @@ import {
 } from '@modules/events/types';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
+import { isRankingEvent } from '@modules/events/services/eventTypeHelpers';
 import { EventCoAdminsManager } from './EventCoAdminsManager';
 
 export interface EventConfigFormProps {
@@ -411,7 +412,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 ml-1">Tipo de evento</label>
             <select
-              value={editingEvent.eventType || 'Chave Mata-Mata'}
+              value={editingEvent.eventType || (isRankingEvent(editingEvent) ? 'Ranking' : 'Chave mata-mata')}
               disabled={isReadOnlyRegistration}
               onChange={(event) => handleProtectedChange({ ...editingEvent, eventType: event.target.value as EventTypeOption })}
               className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
@@ -554,7 +555,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           </div>
         )}
 
-        {editingEvent.eventType === 'Ranking' && (
+        {(editingEvent.eventType === 'Ranking' || isRankingEvent(editingEvent)) && (
           <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
             <div className="space-y-1">
               <label className="text-[10px] font-black text-emerald-700 ml-1">Quantas partidas por time</label>

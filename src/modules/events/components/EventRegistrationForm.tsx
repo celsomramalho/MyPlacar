@@ -17,6 +17,7 @@ import {
   type TournamentEvent,
   type TournamentPair,
 } from '../types';
+import { isRankingEvent, isSuper8Event, isSinglePlayerEvent } from '../services/eventTypeHelpers';
 
 interface Props {
   event: TournamentEvent;
@@ -131,9 +132,15 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
     return initialMap;
   });
+
+  const isSuper8 = isSuper8Event(event);
+  const isRanking = isRankingEvent(event);
+  const isSinglePlayer = isSinglePlayerEvent(event);
+  const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
+
   const [payments, setPayments] = useState<PaymentItem[]>(entry.payments || []);
   const [paymentStatus, setPaymentStatus] = useState(
-    entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'
+    entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || (isFreeEvent ? 'Confirmado' : 'Pendente')
   );
   const [dueAmount, setDueAmount] = useState(entry.dueAmount ?? event.registrationFee ?? 0);
   const [newAmount, setNewAmount] = useState('');
@@ -150,11 +157,6 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const [isSearchingPin, setIsSearchingPin] = useState(false);
   const [pinLookupMessage, setPinLookupMessage] = useState<string | null>(null);
-
-  const isSuper8 = event.eventType === 'Super 8';
-  const isRanking = event.eventType === 'Ranking';
-  const isSinglePlayer = isSuper8 || isRanking;
-  const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
   const usesAutomaticPayment = event.paymentType === 'mercadopago';
   const [isPayingPix, setIsPayingPix] = useState(false);
   const [pixPayment, setPixPayment] = useState<PixPaymentResult | null>(null);
@@ -1587,7 +1589,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
           const partnerFormMissingData = !partner.name.trim() || !partner.email.trim() || !partner.phone.trim();
           return (
             <div key={cat.id} className="space-y-2">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-2">
+              <div className={isSinglePlayer ? 'w-full' : 'grid grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-2'}>
                 <label className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-xs font-black transition-all ${
                   isSelected 
                     ? 'bg-emerald-500 text-white border-emerald-500' 
@@ -1615,27 +1617,31 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
                     </span>
                   )}
                 </label>
-                {!isSinglePlayer && isSelected ? (
-                  <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${
-                    pair ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-200'
-                  }`}>
-                    {pair ? pair.teamCode || `Time ${pair.teamNumber || ''}` : 'A formar'}
-                  </span>
-                ) : (
-                  <span />
-                )}
-                {!isSinglePlayer && isSelected && isDoubles(cat) ? (
-                  <button
-                    type="button"
-                    onClick={() => togglePartnerForm(cat.id)}
-                    className={`relative flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all active:scale-95 ${isPartnerFormExpanded ? 'bg-emerald-600' : 'bg-emerald-500'}`}
-                    title="Informe seu parceiro"
-                  >
-                    <Users size={17} />
-                    {partnerFormMissingData && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
-                  </button>
-                ) : (
-                  <span />
+                {!isSinglePlayer && (
+                  <>
+                    {isSelected ? (
+                      <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${
+                        pair ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-200'
+                      }`}>
+                        {pair ? pair.teamCode || `Time ${pair.teamNumber || ''}` : 'A formar'}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                    {isSelected && isDoubles(cat) ? (
+                      <button
+                        type="button"
+                        onClick={() => togglePartnerForm(cat.id)}
+                        className={`relative flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all active:scale-95 ${isPartnerFormExpanded ? 'bg-emerald-600' : 'bg-emerald-500'}`}
+                        title="Informe seu parceiro"
+                      >
+                        <Users size={17} />
+                        {partnerFormMissingData && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                  </>
                 )}
               </div>
               {!isSinglePlayer && isSelected && isDoubles(cat) && isPartnerFormExpanded && (

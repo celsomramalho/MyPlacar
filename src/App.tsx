@@ -40,6 +40,7 @@ const AppContent: React.FC = () => {
     activeEvent,
     userEntryDate,
     registeredEvents,
+    fetchUserRegistrations,
     handleJoinTournament,
     handleExitTournament,
     handleSelectEvent,
@@ -114,6 +115,7 @@ const AppContent: React.FC = () => {
         activeEvent={activeEvent}
         userEntryDate={userEntryDate}
         registeredEvents={registeredEvents}
+        fetchUserRegistrations={fetchUserRegistrations}
         handleJoinTournament={handleJoinTournament}
         handleExitTournament={handleExitTournament}
         handleSelectEvent={handleSelectEvent}

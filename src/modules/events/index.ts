@@ -12,5 +12,5 @@ export { TeamCard, type TeamCardProps } from './components/teams/TeamCard';
 export { ParticipantRow, type ParticipantRowProps } from './components/registration/ParticipantRow';
 export { EventRegistrationForm } from './components/EventRegistrationForm';
 export type { EventRegistration, TournamentConfig, TournamentEntry, TournamentEvent, TournamentMatch, TournamentPair } from './types';
-
-
+export { getRegistrationPeriodStatus, isRegistrationPeriodOpen, type RegistrationPeriodInfo, type RegistrationPeriodStatus } from './services/eventRegistrationPeriod';
+export { isRankingEvent, isSuper8Event, isSinglePlayerEvent } from './services/eventTypeHelpers';
