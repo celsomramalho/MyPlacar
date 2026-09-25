@@ -18,6 +18,7 @@ import {
   type TournamentPair,
 } from '../types';
 import { isRankingEvent, isSuper8Event, isSinglePlayerEvent } from '../services/eventTypeHelpers';
+import { openPdfOrUrl } from '../services/openRegulationPdf';
 
 interface Props {
   event: TournamentEvent;
@@ -1346,14 +1347,22 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
   };
 
   return <div className="space-y-4 text-left">
-    {(event.information || event.regulationUrl || event.locationMapUrl) && <div className="space-y-2">
+    {!isAdmin && (event.information || event.regulationUrl || event.locationMapUrl) && <div className="space-y-2">
       {event.information && <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4"><p className="text-[10px] font-black tracking-wider text-sky-600">Informações do evento</p><p className="text-xs font-bold leading-relaxed whitespace-pre-wrap text-slate-700 mt-1">{event.information}</p></div>}
       {event.locationMapUrl && (
         <a href={event.locationMapUrl} target="_blank" rel="noopener noreferrer" className="w-full h-11 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 font-black text-xs flex items-center justify-center gap-2">
           📍 Abrir no Google Maps {event.location ? `(${event.location})` : ''}
         </a>
       )}
-      {event.regulationUrl && <a href={event.regulationUrl} target="_blank" rel="noopener noreferrer" className="w-full h-11 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 font-black text-xs flex items-center justify-center gap-2"><Eye size={15} /> Regulamento</a>}
+      {event.regulationUrl && (
+        <button
+          type="button"
+          onClick={() => openPdfOrUrl(event.regulationUrl!, event.regulationFileName || 'regulamento.pdf')}
+          className="w-full h-11 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 font-black text-xs flex items-center justify-center gap-2 hover:bg-amber-100 active:scale-98 transition-all cursor-pointer"
+        >
+          <Eye size={15} /> Regulamento
+        </button>
+      )}
     </div>}
 
     <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -1405,7 +1414,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
     {isExistingRegistration && (
       <>
         {isCancelled ? (
-          <div className="p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-red-800 space-y-2 animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-red-800 space-y-3 animate-in fade-in">
             <div className="flex items-center gap-2">
               <AlertCircle className="text-red-600 shrink-0" size={18} />
               <span className="text-xs font-black uppercase tracking-wider">
@@ -1420,9 +1429,18 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
                 <strong>Motivo:</strong> {disabledReason || entry.disabledReason}
               </div>
             )}
+            <button
+              type="button"
+              onClick={handleReactivateRegistration}
+              disabled={isSaving}
+              className="w-full py-2.5 px-4 rounded-2xl border-2 border-emerald-500 bg-white hover:bg-emerald-50 text-emerald-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-xs disabled:opacity-60"
+            >
+              <CheckCircle2 size={16} className="text-emerald-600" />
+              <span>{isSaving ? 'Ativando inscrição...' : 'Ativar inscrição'}</span>
+            </button>
           </div>
         ) : isConfirmedRegistration ? (
-          <div className="p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-200 text-emerald-800 space-y-1 animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 text-emerald-800 space-y-3 animate-in fade-in">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="text-emerald-600 shrink-0" size={18} />
@@ -1434,14 +1452,22 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
                 Confirmada
               </span>
             </div>
-            <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
+            <p className="text-xs text-emerald-700 font-medium leading-relaxed">
               {isFreeEvent
                 ? 'Sua inscrição está confirmada no evento gratuito e você está apto(a) a participar do torneio.'
                 : 'Pagamento confirmado! Sua inscrição está ativa e você está apto(a) a participar do torneio.'}
             </p>
+            <button
+              type="button"
+              onClick={handleOpenCancelModal}
+              className="w-full py-2.5 px-4 rounded-2xl border border-red-200 bg-white hover:bg-red-50 text-red-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-xs"
+            >
+              <Trash2 size={15} />
+              <span>Cancelar inscrição</span>
+            </button>
           </div>
         ) : isPendingPaymentRegistration ? (
-          <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-200 text-amber-800 space-y-1 animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 text-amber-800 space-y-3 animate-in fade-in">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Clock className="text-amber-600 shrink-0" size={18} />
@@ -1453,9 +1479,17 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
                 Pendente
               </span>
             </div>
-            <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
+            <p className="text-xs text-amber-700 font-medium leading-relaxed">
               Aguardando a confirmação do pagamento para garantir sua vaga no torneio.
             </p>
+            <button
+              type="button"
+              onClick={handleOpenCancelModal}
+              className="w-full py-2.5 px-4 rounded-2xl border border-red-200 bg-white hover:bg-red-50 text-red-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-xs"
+            >
+              <Trash2 size={15} />
+              <span>Cancelar inscrição</span>
+            </button>
           </div>
         ) : null}
       </>
@@ -1539,9 +1573,58 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
             )}
           </Field>
         </div>
-        <Field label="Telefone *"><input type="tel" required inputMode="numeric" value={formatPhone(phone)} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="(11) 91234-9988" className="event-registration-field" /></Field>
-        <Field label="Tamanho camiseta *"><select required value={shirtSize} onChange={(e) => setShirtSize(e.target.value as 'P' | 'M' | 'G')} className="event-registration-field"><option value="P">P</option><option value="M">M</option><option value="G">G</option></select></Field>
-        <Field label="Como quer ser chamado *"><div className="flex gap-2"><input required value={nickname} onChange={(e) => setNickname(e.target.value)} className="event-registration-field flex-1" /><button type="button" onClick={handleToggleGender} className={`w-11 rounded-xl border flex items-center justify-center ${gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}>{gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}</button></div></Field>
+
+        {/* Como quer ser chamado + Gênero conforme Imagem 2 */}
+        <Field label="Como quer ser chamado *">
+          <div className="flex gap-2">
+            <input
+              required
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="Como quer ser chamado"
+              className="event-registration-field flex-1"
+            />
+            <button
+              type="button"
+              onClick={handleToggleGender}
+              className={`w-11 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+                gender === 'F'
+                  ? 'bg-pink-50 text-pink-600 border-pink-100 hover:bg-pink-100'
+                  : 'bg-sky-50 text-sky-600 border-sky-100 hover:bg-sky-100'
+              }`}
+              title={gender === 'F' ? 'Feminino (clique para alternar)' : 'Masculino (clique para alternar)'}
+            >
+              {gender === 'F' ? <VenusIcon size={18} /> : <MarsIcon size={18} />}
+            </button>
+          </div>
+        </Field>
+
+        {/* Tamanho camiseta e Telefone alinhados na mesma linha conforme Imagem 2 */}
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Tamanho camiseta *">
+            <select
+              required
+              value={shirtSize}
+              onChange={(e) => setShirtSize(e.target.value as 'P' | 'M' | 'G')}
+              className="event-registration-field"
+            >
+              <option value="P">P</option>
+              <option value="M">M</option>
+              <option value="G">G</option>
+            </select>
+          </Field>
+          <Field label="Telefone *" className="col-span-2">
+            <input
+              type="tel"
+              required
+              inputMode="numeric"
+              value={formatPhone(phone)}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
+              placeholder="(11) 91234-9988"
+              className="event-registration-field"
+            />
+          </Field>
+        </div>
 
         {/* Bloco Desativar Inscrição: SOMENTE NO PAINEL DO ADMIN */}
         {isAdmin && (
@@ -1604,14 +1687,13 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
                     <Eye size={16} className="text-amber-600" />
                     <span>Regulamento oficial do torneio</span>
                   </div>
-                  <a
-                    href={event.regulationUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-xs shadow-xs active:scale-95 transition-all shrink-0"
+                  <button
+                    type="button"
+                    onClick={() => openPdfOrUrl(event.regulationUrl!, event.regulationFileName || 'regulamento.pdf')}
+                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-xs shadow-xs active:scale-95 transition-all shrink-0 cursor-pointer"
                   >
                     Ver regulamento
-                  </a>
+                  </button>
                 </div>
                 <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
                   <input
@@ -1636,29 +1718,6 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
               <span>Salvar cadastro</span>
             </button>
 
-            {/* Botão Cancelar Inscrição com regras inteligentes OU Ativar Inscrição */}
-            {isExistingRegistration && (
-              isCancelled ? (
-                <button
-                  type="button"
-                  onClick={handleReactivateRegistration}
-                  disabled={isSaving}
-                  className="w-full py-3.5 px-4 rounded-2xl border-2 border-emerald-500 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-sm"
-                >
-                  <CheckCircle2 size={16} className="text-emerald-600" />
-                  <span>{isSaving ? 'Ativando inscrição...' : 'Ativar inscrição'}</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleOpenCancelModal}
-                  className="w-full py-3 px-4 rounded-2xl border border-red-200 bg-red-50/70 hover:bg-red-100 text-red-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
-                >
-                  <Trash2 size={16} />
-                  <span>Cancelar inscrição</span>
-                </button>
-              )
-            )}
           </div>
         )}
       </div>

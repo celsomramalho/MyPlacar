@@ -20,6 +20,7 @@ import {
   X,
   Link2,
   CreditCard,
+  Lock,
 } from 'lucide-react';
 import type {
   TournamentEvent,
@@ -58,6 +59,7 @@ import { validateCategoryGenders } from '../services/matchGenerator';
 import { createMercadoPagoPreference, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
 import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
 import { isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
+import { openPdfOrUrl } from '../services/openRegulationPdf';
 
 interface Props {
   event: TournamentEvent;
@@ -101,6 +103,8 @@ export const EventDetailScreen: React.FC<Props> = ({
     canViewParticipants,
     currentUserEntry,
     isParticipant,
+    hasActiveRegistration,
+    canViewEventDetails,
   } = permissions;
 
   const isRanking = isRankingEvent(event);
@@ -980,19 +984,19 @@ export const EventDetailScreen: React.FC<Props> = ({
               </button>
             </div>
             {event.regulationUrl && (
-              <a
-                href={event.regulationUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full bg-amber-500 text-white py-2.5 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow active:scale-95 transition-all"
+              <button
+                type="button"
+                onClick={() => openPdfOrUrl(event.regulationUrl!, event.regulationFileName || 'regulamento.pdf')}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow active:scale-95 transition-all cursor-pointer"
               >
                 <Eye size={16} /> Ver regulamento
-              </a>
+              </button>
             )}
           </div>
 
-          {/* Seção de Categorias */}
-          <div className="space-y-4">
+          {/* Seção de Categorias, Inscritos, Times e Jogos - Exclusiva para inscrições ativas */}
+          {canViewEventDetails ? (
+            <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2 text-emerald-600 font-black">
                 <Trophy size={18} />
@@ -1273,10 +1277,50 @@ export const EventDetailScreen: React.FC<Props> = ({
                 )}
               </div>
             )}
-          </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 text-center space-y-3.5 shadow-sm">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+                <Lock size={22} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-slate-800">
+                  Conteúdo exclusivo para inscritos confirmados
+                </h3>
+                <p className="text-xs text-slate-500 font-bold max-w-md mx-auto leading-relaxed">
+                  {!currentUserEntry
+                    ? 'As categorias, lista de inscritos, times e jogos deste evento estão disponíveis apenas para atletas com inscrição ativa e confirmada.'
+                    : currentUserEntry.disabled || currentUserEntry.paymentStatus === 'Cancelado'
+                    ? 'Sua inscrição neste evento está cancelada ou desativada. Reative sua inscrição para acessar as categorias, times e partidas.'
+                    : 'Sua inscrição está aguardando confirmação do pagamento. Conclua o pagamento para liberar o acesso às categorias, times e jogos.'}
+                </p>
+              </div>
+              {!currentUserEntry && getRegistrationPeriodStatus(event).isOpen && (
+                <button
+                  type="button"
+                  onClick={() => setShowMyRegistrationModal(true)}
+                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm inline-flex items-center gap-1.5"
+                >
+                  <CheckCircle2 size={15} />
+                  Fazer inscrição para ver o evento
+                </button>
+              )}
+              {currentUserEntry && !currentUserEntry.disabled && currentUserEntry.paymentStatus !== 'Cancelado' && canPayCurrentEntry && (
+                <button
+                  type="button"
+                  onClick={handleStartMercadoPagoPayment}
+                  disabled={isStartingPayment}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm inline-flex items-center gap-1.5"
+                >
+                  <CreditCard size={15} />
+                  Pagar inscrição agora
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Botão Sair do Torneio */}
-          {isParticipant && (
+          {hasActiveRegistration && (
             <div className="pt-4 flex justify-center">
               <button
                 type="button"

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronUp,
   ExternalLink,
+  Eye,
   FileText,
   Image as ImageIcon,
   Loader2,
@@ -24,6 +25,7 @@ import {
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { isRankingEvent, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
+import { openPdfOrUrl } from '@modules/events/services/openRegulationPdf';
 import { EventCoAdminsManager } from './EventCoAdminsManager';
 
 export interface EventConfigFormProps {
@@ -161,14 +163,13 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           <label className="text-[10px] font-black text-slate-400 ml-1">Regulamento (PDF)</label>
           {isReadOnlyRegistration ? (
             editingEvent.regulationUrl ? (
-              <a
-                href={editingEvent.regulationUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-indigo-600 hover:underline"
+              <button
+                type="button"
+                onClick={() => openPdfOrUrl(editingEvent.regulationUrl!, editingEvent.regulationFileName || 'regulamento.pdf')}
+                className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-indigo-600 hover:underline cursor-pointer"
               >
                 <FileText size={16} /> Ver regulamento ({editingEvent.regulationFileName || 'PDF'})
-              </a>
+              </button>
             ) : (
               <div className="w-full h-12 bg-slate-100 border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-400">
                 <FileText size={16} /> Nenhum regulamento anexado
@@ -179,10 +180,20 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
               <button
                 type="button"
                 onClick={() => regulationInputRef.current?.click()}
-                className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-500"
+                className="flex-1 h-12 bg-white border border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 font-black text-xs text-slate-500 hover:bg-slate-50 cursor-pointer"
               >
                 <FileText size={16} /> {editingEvent.regulationFileName || 'Carregar regulamento'}
               </button>
+              {editingEvent.regulationUrl && (
+                <button
+                  type="button"
+                  onClick={() => openPdfOrUrl(editingEvent.regulationUrl!, editingEvent.regulationFileName || 'regulamento.pdf')}
+                  className="w-12 h-12 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-center text-amber-700 hover:bg-amber-100 cursor-pointer transition-colors"
+                  title="Visualizar regulamento anexado"
+                >
+                  <Eye size={18} />
+                </button>
+              )}
               <input
                 ref={regulationInputRef}
                 type="file"

@@ -24,6 +24,10 @@ export interface EventPermissions {
   canEditEntry: (entry?: Partial<TournamentEntry> | null) => boolean;
   /** Objeto da inscrição do usuário atual, caso esteja inscrito */
   currentUserEntry: TournamentEntry | null;
+  /** Indica se o usuário atual possui uma inscrição ativa e válida no evento */
+  hasActiveRegistration: boolean;
+  /** Indica se o usuário tem permissão para visualizar categorias, inscritos, times e jogos do evento */
+  canViewEventDetails: boolean;
 }
 
 /**
@@ -95,6 +99,25 @@ export function useEventPermissions(
     [canManageEvent, isReadOnly, userEmail, userPin]
   );
 
+  const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
+
+  const hasActiveRegistration = useMemo(() => {
+    if (!currentUserEntry) return false;
+    if (currentUserEntry.disabled) return false;
+    if (currentUserEntry.paymentStatus === 'Cancelado') return false;
+    if (isFreeEvent) return true;
+    return (
+      currentUserEntry.paymentStatus === 'Confirmado' ||
+      currentUserEntry.paymentStatus === 'Pago' ||
+      currentUserEntry.paymentStatus === 'Isento'
+    );
+  }, [currentUserEntry, isFreeEvent]);
+
+  const canViewEventDetails = useMemo(() => {
+    if (canManageEvent) return true;
+    return hasActiveRegistration;
+  }, [canManageEvent, hasActiveRegistration]);
+
   return {
     isPrimaryAdmin,
     isCoAdmin,
@@ -106,5 +129,7 @@ export function useEventPermissions(
     canViewParticipants,
     canEditEntry,
     currentUserEntry,
+    hasActiveRegistration,
+    canViewEventDetails,
   };
 }
