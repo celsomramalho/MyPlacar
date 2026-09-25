@@ -108,6 +108,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
         canSelect ? 'cursor-pointer hover:border-slate-300' : ''
       } ${isSelected ? 'border-sky-500 ring-2 ring-sky-100 bg-sky-50/20' : 'border-slate-100'}`}
     >
+      {/* Linha do Cabeçalho: Nomes à esquerda, Chave e Ações à direita */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -140,136 +141,10 @@ export const TeamCard: React.FC<TeamCardProps> = ({
             )}
           </div>
           <p className="mt-1 text-xs font-bold text-slate-400 truncate">{code}</p>
-
-          {/* Informações da fase de chaves */}
-          {hasCategoryMatches && (
-            <div className="mt-2.5 pt-2 border-t border-slate-100/90 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-bold text-slate-500">
-                <span className="text-xs font-bold text-slate-500">Fase de chaves:</span>
-                {standing && standing.played > 0 && (
-                  <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
-                      standing.rank === 1
-                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : standing.rank === 2
-                        ? 'bg-sky-100 text-sky-900 border-sky-300'
-                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                    }`}
-                    title={
-                      isChaveFinished
-                        ? `${standing.rank}º lugar - ${
-                            standing.rank <= 2 ? 'Classificado para semifinal' : 'Fase de chaves finalizada'
-                          }`
-                        : `${standing.rank}º lugar parcial`
-                    }
-                  >
-                    {standing.rank === 1 ? '🥇 1º lugar' : standing.rank === 2 ? '🥈 2º lugar' : `${standing.rank}º lugar`}
-                    {isChaveFinished && (standing.rank === 1 || standing.rank === 2) && ' (Classificado)'}
-                  </span>
-                )}
-              </div>
-
-              {standing && standing.played > 0 && <BracketTeamStatsBlock standing={standing} />}
-
-              {/* Placar da semifinal */}
-              {semiMatch && (
-                <div className="pt-1 space-y-0.5">
-                  <p className="text-xs font-bold text-slate-400">Semifinal:</p>
-                  <p
-                    className={`text-xs font-bold leading-snug ${
-                      wonSemi ? 'text-emerald-700' : 'text-rose-700'
-                    }`}
-                  >
-                    {getOppName(semiMatch)}{' '}
-                    <strong>{formatMatchScore(semiMatch)}</strong>
-                    <span className="ml-1 font-black">{wonSemi ? '✓' : '✗'}</span>
-                  </p>
-                </div>
-              )}
-
-              {/* Placar da final ou 3º lugar */}
-              {nextMatch && (
-                <div className="pt-1 space-y-0.5">
-                  <p className="text-xs font-bold text-slate-400">
-                    {nextMatch.phase === 'final' ? 'Final:' : '3º lugar:'}
-                  </p>
-                  <p
-                    className={`text-xs font-bold leading-snug ${
-                      nextMatch.winnerPairId === pair.id ? 'text-emerald-700' : 'text-rose-700'
-                    }`}
-                  >
-                    {getOppName(nextMatch)}{' '}
-                    <strong>{formatMatchScore(nextMatch)}</strong>
-                    <span className="ml-1 font-black">
-                      {nextMatch.winnerPairId === pair.id ? '✓' : '✗'}
-                    </span>
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Histórico de partidas — apenas para Ranking */}
-          {isRanking && (() => {
-            const teamMatches = categoryMatches.filter(
-              (m) => m.status === 'finished' && (m.pair1Id === pair.id || m.pair2Id === pair.id)
-            );
-            if (teamMatches.length === 0) return null;
-            const wins = teamMatches.filter((m) => m.winnerPairId === pair.id).length;
-            const losses = teamMatches.length - wins;
-            return (
-              <div className="mt-2.5 pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Histórico de partidas</p>
-                  <span className="text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">
-                    {wins}V {losses}D
-                  </span>
-                </div>
-                <div className="rounded-xl border border-slate-200/80 overflow-hidden divide-y divide-slate-200/60">
-                  {teamMatches.map((m) => {
-                    const isWinner = m.winnerPairId === pair.id;
-                    const resultParts = (m.result || '').split('/');
-                    const myScore = m.pair1Id === pair.id ? resultParts[0] : resultParts[1];
-                    const oppScore = m.pair1Id === pair.id ? resultParts[1] : resultParts[0];
-                    return (
-                      <div
-                        key={m.id}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] transition-colors ${
-                          isWinner ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'bg-red-50/50 hover:bg-red-50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {isWinner
-                            ? <Trophy size={11} className="text-emerald-600 shrink-0" />
-                            : <X size={11} className="text-red-400 shrink-0" />
-                          }
-                          <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
-                            {isWinner ? 'Vitória' : 'Derrota'}
-                          </span>
-                          <span className="text-slate-500 font-bold truncate">
-                            vs {getOppName(m)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="font-black text-slate-700">{myScore || '?'} x {oppScore || '?'}</span>
-                          {m.matchDate && (
-                            <span className="text-slate-400 font-bold">
-                              {new Date(m.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
         </div>
 
         {/* Lado Direito: Badge da Chave e Ação de Desfazer Time */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 pt-0.5">
           <span
             className={`rounded-xl px-3 py-1.5 text-xs font-bold border shadow-xs ${
               (pair.bracket ?? 1) === 1
@@ -294,6 +169,133 @@ export const TeamCard: React.FC<TeamCardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Informações da fase de chaves — ocupa 100% da largura do card */}
+      {hasCategoryMatches && (
+        <div className="mt-2.5 pt-2 border-t border-slate-100/90 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-bold text-slate-500">
+            <span className="text-xs font-bold text-slate-500">Fase de chaves:</span>
+            {standing && standing.played > 0 && (
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
+                  standing.rank === 1
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : standing.rank === 2
+                    ? 'bg-sky-100 text-sky-900 border-sky-300'
+                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                }`}
+                title={
+                  isChaveFinished
+                    ? `${standing.rank}º lugar - ${
+                        standing.rank <= 2 ? 'Classificado para semifinal' : 'Fase de chaves finalizada'
+                      }`
+                    : `${standing.rank}º lugar parcial`
+                }
+              >
+                {standing.rank === 1 ? '🥇 1º lugar' : standing.rank === 2 ? '🥈 2º lugar' : `${standing.rank}º lugar`}
+                {isChaveFinished && (standing.rank === 1 || standing.rank === 2) && ' (Classificado)'}
+              </span>
+            )}
+          </div>
+
+          {/* Tabela de estatísticas com largura total */}
+          {standing && standing.played > 0 && <BracketTeamStatsBlock standing={standing} />}
+
+          {/* Placar da semifinal */}
+          {semiMatch && (
+            <div className="pt-1 space-y-0.5">
+              <p className="text-xs font-bold text-slate-400">Semifinal:</p>
+              <p
+                className={`text-xs font-bold leading-snug ${
+                  wonSemi ? 'text-emerald-700' : 'text-rose-700'
+                }`}
+              >
+                {getOppName(semiMatch)}{' '}
+                <strong>{formatMatchScore(semiMatch)}</strong>
+                <span className="ml-1 font-black">{wonSemi ? '✓' : '✗'}</span>
+              </p>
+            </div>
+          )}
+
+          {/* Placar da final ou 3º lugar */}
+          {nextMatch && (
+            <div className="pt-1 space-y-0.5">
+              <p className="text-xs font-bold text-slate-400">
+                {nextMatch.phase === 'final' ? 'Final:' : '3º lugar:'}
+              </p>
+              <p
+                className={`text-xs font-bold leading-snug ${
+                  nextMatch.winnerPairId === pair.id ? 'text-emerald-700' : 'text-rose-700'
+                }`}
+              >
+                {getOppName(nextMatch)}{' '}
+                <strong>{formatMatchScore(nextMatch)}</strong>
+                <span className="ml-1 font-black">
+                  {nextMatch.winnerPairId === pair.id ? '✓' : '✗'}
+                </span>
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Histórico de partidas — apenas para Ranking */}
+      {isRanking && (() => {
+        const teamMatches = categoryMatches.filter(
+          (m) => m.status === 'finished' && (m.pair1Id === pair.id || m.pair2Id === pair.id)
+        );
+        if (teamMatches.length === 0) return null;
+        const wins = teamMatches.filter((m) => m.winnerPairId === pair.id).length;
+        const losses = teamMatches.length - wins;
+        return (
+          <div className="mt-2.5 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Histórico de partidas</p>
+              <span className="text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">
+                {wins}V {losses}D
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-200/80 overflow-hidden divide-y divide-slate-200/60">
+              {teamMatches.map((m) => {
+                const isWinner = m.winnerPairId === pair.id;
+                const resultParts = (m.result || '').split('/');
+                const myScore = m.pair1Id === pair.id ? resultParts[0] : resultParts[1];
+                const oppScore = m.pair1Id === pair.id ? resultParts[1] : resultParts[0];
+                return (
+                  <div
+                    key={m.id}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] transition-colors ${
+                      isWinner ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'bg-red-50/50 hover:bg-red-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {isWinner
+                        ? <Trophy size={11} className="text-emerald-600 shrink-0" />
+                        : <X size={11} className="text-red-400 shrink-0" />
+                      }
+                      <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
+                        {isWinner ? 'Vitória' : 'Derrota'}
+                      </span>
+                      <span className="text-slate-500 font-bold truncate">
+                        vs {getOppName(m)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-black text-slate-700">{myScore || '?'} x {oppScore || '?'}</span>
+                      {m.matchDate && (
+                        <span className="text-slate-400 font-bold">
+                          {new Date(m.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
