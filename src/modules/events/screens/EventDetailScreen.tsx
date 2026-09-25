@@ -133,6 +133,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   }, [inviteLink]);
 
   const defaultUserEntry: TournamentEntry = useMemo(() => {
+    const isFree = (event?.registrationFee ?? 0) === 0 && (event?.extraCategoryFee ?? 0) === 0;
     return {
       email: userProfile?.email || '',
       name: userProfile?.name || '',
@@ -142,10 +143,10 @@ export const EventDetailScreen: React.FC<Props> = ({
       shirtSize: (userProfile as unknown as { shirtSize?: 'P' | 'M' | 'G' })?.shirtSize || 'M',
       gender: userProfile?.gender || 'M',
       categoryIds: [],
-      joinedAt: Date.now(),
-      dueAmount: event?.registrationFee ?? 0,
+      joinedAt: 0,
+      dueAmount: isFree ? 0 : (event?.registrationFee ?? 0),
       paidAmount: 0,
-      paymentStatus: 'Pendente',
+      paymentStatus: isFree ? 'Confirmado' : 'Pendente',
       payments: [],
     };
   }, [userProfile, event]);
@@ -844,39 +845,66 @@ export const EventDetailScreen: React.FC<Props> = ({
 
           {/* Bloco de Inscrição do Usuário */}
           {isParticipant && currentUserEntry ? (
-            <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-black text-slate-800">Minha inscrição no evento</p>
-                <p className="text-[11px] font-bold text-slate-400">
-                  {currentUserEntry.nickname || currentUserEntry.name} • {currentUserEntry.paymentStatus || 'Pendente'}
-                </p>
-                {canPayCurrentEntry && (
-                  <p className="text-[11px] font-black text-amber-600 mt-1">
-                    Pendente: R$ {currentEntryPendingAmount.toFixed(2)}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {canPayCurrentEntry && (
-                  <button
-                    type="button"
-                    onClick={handleStartMercadoPagoPayment}
-                    disabled={isStartingPayment}
-                    className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer inline-flex items-center justify-center gap-2"
-                  >
-                    {isStartingPayment ? <RotateCw size={15} className="animate-spin" /> : <CreditCard size={15} />}
-                    Pagar inscrição
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowMyRegistrationModal(true)}
-                  className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer"
-                >
-                  Gerenciar Inscrição
-                </button>
-              </div>
-            </div>
+            (() => {
+              const isFree = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
+              const isCancelled = Boolean(
+                currentUserEntry.disabled ||
+                currentUserEntry.paymentStatus === 'Cancelado'
+              );
+              const isConfirmed = !isCancelled && (
+                isFree ||
+                currentUserEntry.paymentStatus === 'Confirmado' ||
+                currentUserEntry.paymentStatus === 'Pago' ||
+                currentUserEntry.paymentStatus === 'Isento'
+              );
+
+              return (
+                <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-black text-slate-800">Minha inscrição no evento</p>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        isCancelled
+                          ? 'bg-red-100 text-red-700 border border-red-200'
+                          : isConfirmed
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                          : 'bg-amber-100 text-amber-700 border border-amber-200'
+                      }`}>
+                        {isCancelled ? 'Inscrição Cancelada' : isConfirmed ? 'Inscrição Ativa' : 'Pendente de Pagamento'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-400 mt-0.5">
+                      {currentUserEntry.nickname || currentUserEntry.name}
+                    </p>
+                    {canPayCurrentEntry && !isCancelled && (
+                      <p className="text-[11px] font-black text-amber-600 mt-1">
+                        Pendente: R$ {currentEntryPendingAmount.toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canPayCurrentEntry && !isCancelled && (
+                      <button
+                        type="button"
+                        onClick={handleStartMercadoPagoPayment}
+                        disabled={isStartingPayment}
+                        className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer inline-flex items-center justify-center gap-2"
+                      >
+                        {isStartingPayment ? <RotateCw size={15} className="animate-spin" /> : <CreditCard size={15} />}
+                        Pagar inscrição
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowMyRegistrationModal(true)}
+                      className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer"
+                    >
+                      Gerenciar Inscrição
+                    </button>
+                  </div>
+                </div>
+              );
+            })()
           ) : (
             (() => {
               const period = getRegistrationPeriodStatus(event);
@@ -1355,6 +1383,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                 event={event}
                 entry={currentUserEntry || defaultUserEntry}
                 mode="user"
+                isNew={!currentUserEntry}
                 onSave={async (updated) => {
                   const db = getDb();
                   if (db) {
@@ -1383,7 +1412,21 @@ export const EventDetailScreen: React.FC<Props> = ({
                     }
                   }
                 }}
-                onCancel={() => setShowMyRegistrationModal(false)}
+                onDelete={async () => {
+                  const db = getDb();
+                  const targetEmail = (currentUserEntry?.email || userProfile.email || '').toLowerCase().trim();
+                  if (db && event.pin && targetEmail) {
+                    const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
+                    await deleteEventEntry(db as Firestore, event.pin, targetEmail);
+                    await deleteUserEventRegistration(db as Firestore, targetEmail, event.pin).catch(() => {});
+                  }
+                  await refreshEntries();
+                  setShowMyRegistrationModal(false);
+                }}
+                onCancel={async () => {
+                  await refreshEntries();
+                  setShowMyRegistrationModal(false);
+                }}
               />
             </div>
           </div>

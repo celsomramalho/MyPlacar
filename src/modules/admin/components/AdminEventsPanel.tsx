@@ -137,6 +137,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             location: freshEventDoc.location ?? freshestEvent.location,
             locationMapUrl: freshEventDoc.locationMapUrl ?? freshestEvent.locationMapUrl,
             maxPlayersPerCategory: freshEventDoc.maxPlayersPerCategory ?? freshestEvent.maxPlayersPerCategory ?? 8,
+            groupsPerBracket: freshEventDoc.groupsPerBracket ?? freshestEvent.groupsPerBracket ?? 2,
             categories: (freshEventDoc.categories as any) || freshestEvent.categories || [],
             sponsors: (freshEventDoc.sponsors as any) || freshestEvent.sponsors || [],
           } : {}),

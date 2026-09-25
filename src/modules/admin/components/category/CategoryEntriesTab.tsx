@@ -14,6 +14,7 @@ export interface CategoryEntriesTabProps {
   isIndividualRanking: boolean;
   isRanking: boolean;
   isSuper8: boolean;
+  isSuper8Duplas?: boolean;
   isReadOnly: boolean;
   selectedEntries: Set<string>;
   expandedRegistrationEmail: string | null;
@@ -35,6 +36,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   isIndividualRanking,
   isRanking,
   isSuper8,
+  isSuper8Duplas = false,
   isReadOnly,
   selectedEntries,
   expandedRegistrationEmail,
@@ -45,13 +47,15 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   onDeleteEntry,
   onUpdateEvent,
 }) => {
+  const isSuper8Like = isSuper8 || isSuper8Duplas;
+
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
       <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-black text-slate-800">Inscritos ({category.name})</h3>
           <p className="text-xs text-slate-400 font-bold mt-0.5">
-            {isSuper8 || isRanking
+            {isSuper8Like || isRanking
               ? 'Classificação individual e estatísticas dos atletas.'
               : 'Clique nos participantes para formar ou desfazer times.'}
           </p>
@@ -59,9 +63,9 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
       </div>
 
       <div className="flex items-center justify-between gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
-        {isSuper8 || isRanking ? (
+        {isSuper8Like || isRanking ? (
           <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-lg">
-            Classificação {isRanking ? 'Ranking' : 'Super 8'}
+            Classificação {isRanking ? 'Ranking' : isSuper8Duplas ? 'Super 8 Duplas' : 'Super 8'}
           </span>
         ) : (
           <>
@@ -103,9 +107,9 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                     standing={standing}
                     isIndividualRanking={isIndividualRanking}
                     isRanking={isRanking}
-                    isSuper8={isSuper8}
+                    isSuper8={isSuper8Like}
                     isSelected={selectedEntries.has(entry.email)}
-                    canSelect={!isSuper8 && !isReadOnly}
+                    canSelect={!isSuper8Like && !isReadOnly}
                     hasCategoryMatches={categoryMatches.length > 0}
                     onToggleSelect={onToggleEntrySelection}
                     onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
@@ -146,9 +150,9 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                   standing={standing}
                   isIndividualRanking={isIndividualRanking}
                   isRanking={isRanking}
-                  isSuper8={isSuper8}
+                  isSuper8={isSuper8Like}
                   isSelected={selectedEntries.has(entry.email)}
-                  canSelect={!isSuper8 && !isReadOnly}
+                  canSelect={!isSuper8Like && !isReadOnly}
                   hasCategoryMatches={categoryMatches.length > 0}
                   onToggleSelect={onToggleEntrySelection}
                   onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}

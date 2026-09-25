@@ -108,6 +108,7 @@ export interface FirebaseTournamentEvent {
   locationMapUrl?: string;
   maxPlayersPerCategory?: number;
   rankingMatchesPerTeam?: number;
+  groupsPerBracket?: number;
   paymentType?: 'manual' | 'mercadopago';
 }
 

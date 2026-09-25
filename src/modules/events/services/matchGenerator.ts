@@ -31,6 +31,26 @@ export const getPhaseLabel = (phase?: string): string => {
     const num = lower.replace(/\D/g, '');
     return num ? `Rodada ${num}` : phase;
   }
+  // Super 8 duplas phases
+  if (lower.startsWith('super8d_fase1_')) {
+    // e.g. super8d_fase1_A1_r2 → "Fase 1 · Grupo A1 · Rodada 2"
+    const parts = lower.replace('super8d_fase1_', '').split('_r');
+    const group = parts[0]?.toUpperCase() || '';
+    const round = parts[1] || '';
+    return `Fase 1 · Grupo ${group}${round ? ` · Rodada ${round}` : ''}`;
+  }
+  if (lower.startsWith('super8d_semi_ouro')) {
+    const n = lower.replace('super8d_semi_ouro_', '');
+    return `Semifinal Ouro ${n}`;
+  }
+  if (lower.startsWith('super8d_semi_prata')) {
+    const n = lower.replace('super8d_semi_prata_', '');
+    return `Semifinal Prata ${n}`;
+  }
+  if (lower === 'super8d_final_ouro') return 'Final Ouro';
+  if (lower === 'super8d_3lugar_ouro') return '3º Lugar Ouro';
+  if (lower === 'super8d_final_prata') return 'Final Prata';
+  if (lower === 'super8d_3lugar_prata') return '3º Lugar Prata';
   return phase;
 };
 
@@ -564,6 +584,245 @@ export const generateSuper8MatchesForCategory = (
       });
     });
   });
+
+  return generatedMatches;
+};
+
+/**
+ * Gera TODAS as partidas do Super 8 duplas de uma vez:
+ *
+ * Fase 1 — round-robin individual por grupo (SUPER_4_ROUNDS = 3 partidas por grupo)
+ * Fase 2 — Semifinais chave Ouro + chave Prata (4 partidas de duplas)
+ * Fase 3 — Finais chave Ouro + chave Prata, mais 3º lugar de cada (4 partidas)
+ *
+ * O evento tem 2 chaves fixas (A, B). O admin configura quantos grupos por chave
+ * (groupsPerBracket, padrão 2). Ex: A1, A2, B1, B2 com 4 jogadores cada.
+ *
+ * Os jogadores são passados em `orderedPlayers` já na ordem desejada
+ * (definida pelo admin via UI de sorteio antes de confirmar a geração).
+ *
+ * As partidas de fase 2 e 3 são criadas com pair1Label/pair2Label (A definir)
+ * e preenchidas automaticamente por updateSuper8DuplasProgression.
+ */
+export const generateSuper8DuplasMatchesForCategory = (
+  category: EventCategory,
+  orderedPlayers: TournamentEntry[],  // players in group order: [A1p1,A1p2,A1p3,A1p4, A2p1,..., B1p1,..., B2p1,...]
+  groupsPerBracket: number = 2,
+  existingMatches: TournamentMatch[] = []
+): TournamentMatch[] => {
+  const matchesFromOtherCategories = existingMatches.filter(
+    (m) => m.categoryId && m.categoryId !== category.id
+  );
+  let currentMatchNum = getNextMatchNumber(matchesFromOtherCategories);
+
+  const generatedMatches: TournamentMatch[] = [];
+  const now = Date.now();
+
+  // ── Fase 1: grupos ──────────────────────────────────────────────────────────
+  // 2 chaves (A, B) × groupsPerBracket grupos × 4 jogadores
+  // Groups: A1, A2, ... An, B1, B2, ... Bn
+  const BRACKETS = ['A', 'B'] as const;
+  const playersPerGroup = 4;
+  const totalGroups = BRACKETS.length * groupsPerBracket;
+
+  // Fase 1 match IDs por grupo para usar como referência nas fases 2 e 3
+  // groupKey → array of matchIds gerados na fase 1
+  const groupMatchIds: Record<string, string[]> = {};
+
+  let playerIndex = 0;
+  for (const bracket of BRACKETS) {
+    for (let g = 1; g <= groupsPerBracket; g++) {
+      const groupKey = `${bracket}${g}`; // e.g. "A1", "A2", "B1", "B2"
+      const groupPlayers = orderedPlayers.slice(playerIndex, playerIndex + playersPerGroup);
+      playerIndex += playersPerGroup;
+
+      groupMatchIds[groupKey] = [];
+
+      if (groupPlayers.length < 2) continue;
+
+      // Round-robin individual dentro do grupo (SUPER_4_ROUNDS se 4 jogadores)
+      const makePlayerPair = (eA: TournamentEntry, eB: TournamentEntry, roundNum: number, pairIdx: number): TournamentPair => {
+        const [e1, e2] = (eA.gender && eB.gender && eA.gender !== eB.gender)
+          ? orderPairEntriesForMixed(eA, eB)
+          : [eA, eB];
+        return minifyPairForStorage({
+          id: `pair_${category.id}_${groupKey}_r${roundNum}_p${pairIdx}_${eA.email || eA.pin}_${eB.email || eB.pin}`,
+          p1: minifyEntryForPair(e1),
+          p2: minifyEntryForPair(e2),
+          categoryId: category.id,
+        });
+      };
+
+      SUPER_4_ROUNDS.forEach((roundMatches, roundIdx) => {
+        const roundNum = roundIdx + 1;
+        roundMatches.forEach((matchup, matchIdx) => {
+          const [pair1Indices, pair2Indices] = matchup;
+          const p1 = groupPlayers[pair1Indices[0]];
+          const p2 = groupPlayers[pair1Indices[1]];
+          const p3 = groupPlayers[pair2Indices[0]];
+          const p4 = groupPlayers[pair2Indices[1]];
+
+          if (!p1 || !p2 || !p3 || !p4) return;
+
+          const pair1 = makePlayerPair(p1, p2, roundNum, matchIdx * 2 + 1);
+          const pair2 = makePlayerPair(p3, p4, roundNum, matchIdx * 2 + 2);
+
+          const matchNum = currentMatchNum++;
+          const matchCode = formatMatchNumber(matchNum);
+          const matchId = `match_${now}_${matchNum}`;
+
+          groupMatchIds[groupKey].push(matchId);
+
+          generatedMatches.push({
+            id: matchId,
+            matchNumber: matchNum,
+            matchCode,
+            categoryId: category.id,
+            phase: `super8d_fase1_${groupKey}_r${roundNum}`,
+            pair1Id: pair1.id,
+            pair2Id: pair2.id,
+            pair1,
+            pair2,
+            status: 'waiting',
+            // Metadata for progression logic
+            super8dGroup: groupKey,
+            super8dBracket: bracket,
+          } as TournamentMatch & { super8dGroup: string; super8dBracket: string });
+        });
+      });
+    }
+  }
+
+  // ── Fase 2: Semifinais ──────────────────────────────────────────────────────
+  // Chave Ouro:  Semi 1: A1(1°+2°) vs A2(1°+2°),  Semi 2: B1(1°+2°) vs B2(1°+2°)
+  // Chave Prata: Semi 3: A1(3°+4°) vs A2(3°+4°),  Semi 4: B1(3°+4°) vs B2(3°+4°)
+
+  const semiMatchIds: {
+    ouro: string[];   // [semi_ouro_1_id, semi_ouro_2_id]
+    prata: string[];  // [semi_prata_1_id, semi_prata_2_id]
+  } = { ouro: [], prata: [] };
+
+  // Semis Ouro: A1xA2, B1xB2
+  for (let i = 0; i < BRACKETS.length; i++) {
+    const bracket = BRACKETS[i];
+    const g1Key = `${bracket}1`;
+    const g2Key = `${bracket}2`;
+    const semiNum = i + 1;
+
+    const matchNum = currentMatchNum++;
+    const matchCode = formatMatchNumber(matchNum);
+    const matchId = `match_${now}_${matchNum}`;
+    semiMatchIds.ouro.push(matchId);
+
+    generatedMatches.push({
+      id: matchId,
+      matchNumber: matchNum,
+      matchCode,
+      categoryId: category.id,
+      phase: `super8d_semi_ouro_${semiNum}`,
+      pair1Label: `Dupla Ouro ${g1Key} (1°+2°)`,
+      pair2Label: `Dupla Ouro ${g2Key} (1°+2°)`,
+      status: 'waiting',
+      super8dSemiOuro: semiNum,
+      super8dGroup1: g1Key,
+      super8dGroup2: g2Key,
+    } as TournamentMatch & { super8dSemiOuro: number; super8dGroup1: string; super8dGroup2: string });
+  }
+
+  // Semis Prata: A1xA2, B1xB2
+  for (let i = 0; i < BRACKETS.length; i++) {
+    const bracket = BRACKETS[i];
+    const g1Key = `${bracket}1`;
+    const g2Key = `${bracket}2`;
+    const semiNum = i + 1;
+
+    const matchNum = currentMatchNum++;
+    const matchCode = formatMatchNumber(matchNum);
+    const matchId = `match_${now}_${matchNum}`;
+    semiMatchIds.prata.push(matchId);
+
+    generatedMatches.push({
+      id: matchId,
+      matchNumber: matchNum,
+      matchCode,
+      categoryId: category.id,
+      phase: `super8d_semi_prata_${semiNum}`,
+      pair1Label: `Dupla Prata ${g1Key} (3°+4°)`,
+      pair2Label: `Dupla Prata ${g2Key} (3°+4°)`,
+      status: 'waiting',
+      super8dSemiPrata: semiNum,
+      super8dGroup1: g1Key,
+      super8dGroup2: g2Key,
+    } as TournamentMatch & { super8dSemiPrata: number; super8dGroup1: string; super8dGroup2: string });
+  }
+
+  // ── Fase 3: Finais ──────────────────────────────────────────────────────────
+  const [semiOuro1Id, semiOuro2Id] = semiMatchIds.ouro;
+  const [semiPrata1Id, semiPrata2Id] = semiMatchIds.prata;
+
+  // Final Ouro
+  const finalOuroNum = currentMatchNum++;
+  generatedMatches.push({
+    id: `match_${now}_${finalOuroNum}`,
+    matchNumber: finalOuroNum,
+    matchCode: formatMatchNumber(finalOuroNum),
+    categoryId: category.id,
+    phase: 'super8d_final_ouro',
+    pair1Label: `Ganhador ${formatMatchNumber(semiOuro1Id ? generatedMatches.find(m => m.id === semiOuro1Id)?.matchNumber || 0 : 0)}`,
+    pair2Label: `Ganhador ${formatMatchNumber(semiOuro2Id ? generatedMatches.find(m => m.id === semiOuro2Id)?.matchNumber || 0 : 0)}`,
+    status: 'waiting',
+    super8dSemiRef1: semiOuro1Id,
+    super8dSemiRef2: semiOuro2Id,
+  } as TournamentMatch & { super8dSemiRef1: string; super8dSemiRef2: string });
+
+  // 3° Lugar Ouro
+  const tercOuroNum = currentMatchNum++;
+  generatedMatches.push({
+    id: `match_${now}_${tercOuroNum}`,
+    matchNumber: tercOuroNum,
+    matchCode: formatMatchNumber(tercOuroNum),
+    categoryId: category.id,
+    phase: 'super8d_3lugar_ouro',
+    pair1Label: `Perdedor Semi Ouro 1`,
+    pair2Label: `Perdedor Semi Ouro 2`,
+    status: 'waiting',
+    super8dSemiRef1: semiOuro1Id,
+    super8dSemiRef2: semiOuro2Id,
+  } as TournamentMatch & { super8dSemiRef1: string; super8dSemiRef2: string });
+
+  // Final Prata
+  const finalPrataNum = currentMatchNum++;
+  generatedMatches.push({
+    id: `match_${now}_${finalPrataNum}`,
+    matchNumber: finalPrataNum,
+    matchCode: formatMatchNumber(finalPrataNum),
+    categoryId: category.id,
+    phase: 'super8d_final_prata',
+    pair1Label: `Ganhador Semi Prata 1`,
+    pair2Label: `Ganhador Semi Prata 2`,
+    status: 'waiting',
+    super8dSemiRef1: semiPrata1Id,
+    super8dSemiRef2: semiPrata2Id,
+  } as TournamentMatch & { super8dSemiRef1: string; super8dSemiRef2: string });
+
+  // 3° Lugar Prata
+  const tercPrataNum = currentMatchNum++;
+  generatedMatches.push({
+    id: `match_${now}_${tercPrataNum}`,
+    matchNumber: tercPrataNum,
+    matchCode: formatMatchNumber(tercPrataNum),
+    categoryId: category.id,
+    phase: 'super8d_3lugar_prata',
+    pair1Label: `Perdedor Semi Prata 1`,
+    pair2Label: `Perdedor Semi Prata 2`,
+    status: 'waiting',
+    super8dSemiRef1: semiPrata1Id,
+    super8dSemiRef2: semiPrata2Id,
+  } as TournamentMatch & { super8dSemiRef1: string; super8dSemiRef2: string });
+
+  // Suppress unused variable warning
+  void totalGroups;
+  void groupMatchIds;
 
   return generatedMatches;
 };

@@ -1,7 +1,7 @@
 import type { Firestore } from 'firebase/firestore';
-import { fetchEventByPin, updateEventMatches } from '@infra/firebase/events';
+import { fetchEventByPin, fetchEventEntries, updateEventMatches } from '@infra/firebase/events';
 import type { TournamentMatch } from '../types';
-import { updatePlayoffProgression } from './matchProgression';
+import { updatePlayoffProgression, updateSuper8DuplasProgression } from './matchProgression';
 
 export const markTournamentMatchLive = async (
   db: Firestore,
@@ -86,7 +86,22 @@ export const markTournamentMatchFinished = async (
     };
   });
 
-  const progressedMatches = updatePlayoffProgression((event.pairs || []) as unknown as import('../types').TournamentPair[], updatedMatches);
+  // Determina qual progressão usar conforme o tipo de evento
+  const isSuper8Duplas = event.eventType === 'Super 8 duplas';
+  let progressedMatches = updatedMatches;
+  if (isSuper8Duplas) {
+    const entries = await fetchEventEntries(db, eventPin);
+    progressedMatches = updateSuper8DuplasProgression(
+      entries as unknown as import('../types').TournamentEntry[],
+      updatedMatches
+    );
+  } else {
+    progressedMatches = updatePlayoffProgression(
+      (event.pairs || []) as unknown as import('../types').TournamentPair[],
+      updatedMatches
+    );
+  }
 
   await updateEventMatches(db, eventPin, progressedMatches);
 };
+

@@ -23,7 +23,7 @@ import {
 } from '@modules/events/types';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
-import { isRankingEvent } from '@modules/events/services/eventTypeHelpers';
+import { isRankingEvent, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import { EventCoAdminsManager } from './EventCoAdminsManager';
 
 export interface EventConfigFormProps {
@@ -576,6 +576,41 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
               <p className="text-[10px] font-black text-emerald-700 uppercase">Pontuação do ranking</p>
               <p className="text-xs font-bold text-slate-600 mt-1">
                 Vitória = 5 pts + 1 ponto para o saldo de games da partida. Derrota = 2 pts.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isSuper8DuplasEvent(editingEvent) && (
+          <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-amber-700 ml-1">Grupos por chave</label>
+              <input
+                type="number"
+                min={1}
+                max={8}
+                value={editingEvent.groupsPerBracket ?? 2}
+                disabled={isReadOnlyRegistration}
+                onChange={(event) => {
+                  const value = Math.max(1, Math.min(8, Number(event.target.value) || 2));
+                  handleProtectedChange({ ...editingEvent, groupsPerBracket: value });
+                }}
+                placeholder="2"
+                className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-amber-200 rounded-xl px-4 font-black text-sm outline-none"
+              />
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-white px-4 py-3 space-y-1">
+              <p className="text-[10px] font-black text-amber-700 uppercase">Estrutura dos grupos</p>
+              <p className="text-xs font-bold text-slate-600">
+                {(() => {
+                  const g = editingEvent.groupsPerBracket ?? 2;
+                  const groupsA = Array.from({ length: g }, (_, i) => `A${i + 1}`).join(', ');
+                  const groupsB = Array.from({ length: g }, (_, i) => `B${i + 1}`).join(', ');
+                  return `Chave A: ${groupsA} · Chave B: ${groupsB} · ${g * 2} grupos · ${g * 2 * 4} jogadores`;
+                })()}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                1° e 2° de cada grupo → Chave Ouro · 3° e 4° → Chave Prata
               </p>
             </div>
           </div>

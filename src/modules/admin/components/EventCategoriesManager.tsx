@@ -15,17 +15,19 @@ import {
 import {
   generateSystemMatchesForCategory,
   generateSuper8MatchesForCategory,
+  generateSuper8DuplasMatchesForCategory,
   createManualMatch,
 } from '@modules/events/services/matchGenerator';
 import {
   updatePlayoffProgression,
+  updateSuper8DuplasProgression,
   calculateBracketStandings,
   calculateSuper8PlayerStandings,
   type TeamStanding,
 } from '@modules/events/services/matchProgression';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
 import { calculateQueueState } from '@modules/events/services/queueManager';
-import { isRankingEvent, isSuper8Event } from '@modules/events/services/eventTypeHelpers';
+import { isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb } from '@infra/firebase';
 import { updateEvent, saveEventEntry, deleteEventEntry } from '@infra/firebase/events';
@@ -38,6 +40,7 @@ import {
   CategoryFormModal,
   CategoryMatchesTab,
   CategoryTeamsTab,
+  Super8DuplasDrawModal,
 } from './category';
 
 interface Props {
@@ -108,10 +111,15 @@ export const EventCategoriesManager: React.FC<Props> = ({
     return map;
   }, [pairs]);
 
+  const isSuper8 = isSuper8Event(event);
+  const isSuper8Duplas = isSuper8DuplasEvent(event);
+
   // Sincroniza e corrige os confrontos de playoffs caso placares anteriores tenham sido zerados
   useEffect(() => {
     if (!matches || matches.length === 0) return;
-    const progressed = updatePlayoffProgression(pairs, matches);
+    const progressed = isSuper8Duplas
+      ? updateSuper8DuplasProgression(entries, matches)
+      : updatePlayoffProgression(pairs, matches);
     const hasDifference = progressed.some((m, idx) => {
       const orig = matches[idx];
       return (
@@ -130,7 +138,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
         );
       }
     }
-  }, [matches, pairs, event.pin]);
+  }, [matches, pairs, entries, event.pin, isSuper8Duplas]);
 
   const resetForm = () => {
     setName('');
@@ -238,12 +246,12 @@ export const EventCategoriesManager: React.FC<Props> = ({
     });
   };
 
-  const isSuper8 = isSuper8Event(event);
   const isRanking = isRankingEvent(event);
-  const isIndividualRanking = isSuper8 || isRanking;
+  const isIndividualRanking = isSuper8 || isSuper8Duplas || isRanking;
   const isManualMatchDraw = event.matchDrawType === 'Manual';
   const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;
   const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+  const [isSuper8dDrawModalOpen, setIsSuper8dDrawModalOpen] = useState(false);
 
   const openCategoryPanel = (categoryId: string, view: CategoryPanelView) => {
     setSelectedEntries(new Set());
@@ -742,8 +750,13 @@ export const EventCategoriesManager: React.FC<Props> = ({
 
   const handleGenerateSystemMatches = async () => {
     if (!selectedCategory) return;
-    let newCategoryMatches: TournamentMatch[] = [];
 
+    if (isSuper8Duplas) {
+      setIsSuper8dDrawModalOpen(true);
+      return;
+    }
+
+    let newCategoryMatches: TournamentMatch[] = [];
     if (isSuper8) {
       newCategoryMatches = generateSuper8MatchesForCategory(selectedCategory, categoryEntries, matches);
     } else {
@@ -765,6 +778,36 @@ export const EventCategoriesManager: React.FC<Props> = ({
         await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
       } catch (err) {
         console.error('Erro ao gerar partidas pelo sistema no Firestore:', err);
+      }
+    }
+  };
+
+  const handleConfirmSuper8DuplasDraw = async (orderedPlayers: TournamentEntry[]) => {
+    if (!selectedCategory) return;
+    const groupsPerBracket = event.groupsPerBracket ?? 2;
+    const newCategoryMatches = generateSuper8DuplasMatchesForCategory(
+      selectedCategory,
+      orderedPlayers,
+      groupsPerBracket,
+      matches
+    );
+
+    const otherMatches = matches.filter(
+      (m) =>
+        m.categoryId !== selectedCategory.id &&
+        !pairs.some((p) => (p.id === m.pair1Id || p.id === m.pair2Id) && p.categoryId === selectedCategory.id)
+    );
+
+    const nextMatches = [...otherMatches, ...newCategoryMatches];
+    onUpdateEvent({ ...event, matches: nextMatches });
+    setIsSuper8dDrawModalOpen(false);
+
+    const db = getDb();
+    if (db) {
+      try {
+        await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+      } catch (err) {
+        console.error('Erro ao gerar partidas de Super 8 duplas no Firestore:', err);
       }
     }
   };
@@ -1235,7 +1278,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   return (
     <div className="space-y-6">
       {/* Selection Header (Formar time / Desfazer time) */}
-      {!isSuper8 && selectedEntries.size > 0 && (
+      {!isSuper8 && !isSuper8Duplas && selectedEntries.size > 0 && (
         <header className="px-6 py-5 flex items-center justify-between bg-sky-600 text-white fixed top-0 left-0 right-0 z-[60] shadow-lg animate-in slide-in-from-top duration-200">
           <div className="flex items-center gap-4">
             <button
@@ -1474,6 +1517,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                         isIndividualRanking={isIndividualRanking}
                         isRanking={isRanking}
                         isSuper8={isSuper8}
+                        isSuper8Duplas={isSuper8Duplas}
                         isReadOnly={isReadOnly}
                         selectedEntries={selectedEntries}
                         expandedRegistrationEmail={expandedRegistrationEmail}
@@ -1528,6 +1572,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                         pairsById={pairsById}
                         isRanking={isRanking}
                         isSuper8={isSuper8}
+                        isSuper8Duplas={isSuper8Duplas}
                         isReadOnly={isReadOnly}
                         totalSets={totalSets}
                         allCategoryFinished={categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished')}
@@ -1548,6 +1593,19 @@ export const EventCategoriesManager: React.FC<Props> = ({
             );
           })}
         </div>
+      )}
+
+      {/* Super 8 Duplas Draw Modal */}
+      {isSuper8dDrawModalOpen && selectedCategory && (
+        <Super8DuplasDrawModal
+          isOpen={isSuper8dDrawModalOpen}
+          category={selectedCategory}
+          categoryEntries={categoryEntries}
+          groupsPerBracket={event.groupsPerBracket ?? 2}
+          initialDrawType={event.bracketDrawType}
+          onClose={() => setIsSuper8dDrawModalOpen(false)}
+          onConfirm={handleConfirmSuper8DuplasDraw}
+        />
       )}
     </div>
   );

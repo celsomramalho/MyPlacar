@@ -9,6 +9,7 @@ export interface CategoryMatchesTabProps {
   pairsById: Record<string, TournamentPair>;
   isRanking: boolean;
   isSuper8: boolean;
+  isSuper8Duplas?: boolean;
   isReadOnly: boolean;
   totalSets: number;
   allCategoryFinished: boolean;
@@ -29,6 +30,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   pairsById,
   isRanking,
   isSuper8,
+  isSuper8Duplas = false,
   isReadOnly,
   totalSets,
   allCategoryFinished,
@@ -53,7 +55,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       m.phase !== 'semifinal' &&
       m.phase !== 'final' &&
       m.phase !== '3lugar' &&
-      !m.phase?.startsWith('rodada')
+      !m.phase?.startsWith('rodada') &&
+      !m.phase?.startsWith('super8d_')
   );
 
   const renderItem = (match: TournamentMatch) => (
@@ -64,7 +67,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       variant="detailed"
       isRanking={isRanking}
       totalSets={totalSets}
-      gamesPerSet={category.gamesPerSet ?? (isSuper8 ? 4 : 6)}
+      gamesPerSet={category.gamesPerSet ?? ((isSuper8 || isSuper8Duplas) ? 4 : 6)}
       queuePosition={queuePosByMatchId?.get(match.id) ?? 0}
       canSubmitScore={!isReadOnly}
       canManage={!isReadOnly}
@@ -78,18 +81,20 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
     />
   );
 
+  const descriptionText = isRanking
+    ? 'Confrontos gerados para o ranking. Registre os placares ou reabra partidas.'
+    : isSuper8Duplas
+    ? 'Fase 1: round-robin individual por grupo. Fases 2 e 3: duplas fixas formadas automaticamente.'
+    : isSuper8
+    ? 'Rodadas do Super 8 organizadas por fases.'
+    : 'Confrontos de chaves e fases eliminatórias (Semifinais e Finais).';
+
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
       <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
         <div>
           <h3 className="text-base font-black text-slate-800">Jogos ({category.name})</h3>
-          <p className="text-xs text-slate-400 font-bold mt-0.5">
-            {isRanking
-              ? 'Confrontos gerados para o ranking. Registre os placares ou reabra partidas.'
-              : isSuper8
-              ? 'Rodadas do Super 8 organizadas por fases.'
-              : 'Confrontos de chaves e fases eliminatórias (Semifinais e Finais).'}
-          </p>
+          <p className="text-xs text-slate-400 font-bold mt-0.5">{descriptionText}</p>
         </div>
 
         {/* Botões de Ação */}
@@ -147,6 +152,96 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
           <div className="grid grid-cols-1 gap-2.5">
             {categoryMatches.map(renderItem)}
           </div>
+        </div>
+      ) : isSuper8Duplas ? (
+        <div className="p-4 space-y-5">
+          {/* Fase 1: agrupado por grupo (A1, A2, B1, B2, ...) */}
+          {(() => {
+            const fase1Matches = categoryMatches.filter((m) => m.phase?.startsWith('super8d_fase1_'));
+            const groupMap = new Map<string, TournamentMatch[]>();
+            fase1Matches.forEach((m) => {
+              const parts = m.phase!.replace('super8d_fase1_', '').split('_r');
+              const groupKey = parts[0]?.toUpperCase() || 'G?';
+              if (!groupMap.has(groupKey)) groupMap.set(groupKey, []);
+              groupMap.get(groupKey)!.push(m);
+            });
+            const groups = Array.from(groupMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+            return groups.length > 0 ? (
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-700 px-1">Fase 1 — Grupos (individual)</h4>
+                <div className="space-y-3">
+                  {groups.map(([groupKey, gMatches]) => (
+                    <div key={groupKey} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-[11px] font-black text-slate-700">Grupo {groupKey}</h5>
+                        <span className="text-[10px] font-black text-slate-400">{gMatches.length} jogos</span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2">
+                        {gMatches.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null;
+          })()}
+
+          {/* Fase 2: Semifinais */}
+          {(() => {
+            const semiOuro = categoryMatches.filter((m) => m.phase?.startsWith('super8d_semi_ouro'));
+            const semiPrata = categoryMatches.filter((m) => m.phase?.startsWith('super8d_semi_prata'));
+            if (semiOuro.length === 0 && semiPrata.length === 0) return null;
+            return (
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-amber-700 px-1">Fase 2 — Semifinais</h4>
+                {semiOuro.length > 0 && (
+                  <div className="rounded-2xl border border-yellow-100 bg-yellow-50/50 p-4 space-y-2.5">
+                    <h5 className="text-[11px] font-black text-yellow-700">🥇 Chave Ouro</h5>
+                    <div className="grid grid-cols-1 gap-2">
+                      {semiOuro.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                    </div>
+                  </div>
+                )}
+                {semiPrata.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2.5">
+                    <h5 className="text-[11px] font-black text-slate-600">🥈 Chave Prata</h5>
+                    <div className="grid grid-cols-1 gap-2">
+                      {semiPrata.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Fase 3: Finais */}
+          {(() => {
+            const finalOuro = categoryMatches.filter((m) => m.phase === 'super8d_final_ouro' || m.phase === 'super8d_3lugar_ouro');
+            const finalPrata = categoryMatches.filter((m) => m.phase === 'super8d_final_prata' || m.phase === 'super8d_3lugar_prata');
+            if (finalOuro.length === 0 && finalPrata.length === 0) return null;
+            return (
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-emerald-700 px-1">Fase 3 — Finais</h4>
+                {finalOuro.length > 0 && (
+                  <div className="rounded-2xl border border-yellow-100 bg-yellow-50/50 p-4 space-y-2.5">
+                    <h5 className="text-[11px] font-black text-yellow-700">🥇 Final Ouro</h5>
+                    <div className="grid grid-cols-1 gap-2">
+                      {finalOuro.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                    </div>
+                  </div>
+                )}
+                {finalPrata.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2.5">
+                    <h5 className="text-[11px] font-black text-slate-600">🥈 Final Prata</h5>
+                    <div className="grid grid-cols-1 gap-2">
+                      {finalPrata.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       ) : isSuper8 ? (
         <div className="p-4 space-y-6">

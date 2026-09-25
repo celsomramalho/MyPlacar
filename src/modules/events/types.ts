@@ -118,12 +118,15 @@ export type EventTypeOption =
   | 'Chave classificatória'
   | 'Chave mata-mata'
   | 'Super 8'
+  | 'Super 8 individual'
+  | 'Super 8 duplas'
   | 'Ranking';
 
 export const EVENT_TYPE_OPTIONS: EventTypeOption[] = [
   'Chave classificatória',
   'Chave mata-mata',
-  'Super 8',
+  'Super 8 individual',
+  'Super 8 duplas',
   'Ranking',
 ];
 
@@ -224,6 +227,8 @@ export interface TournamentEvent {
   showRegisteredParticipants?: boolean;
   allowUserScoreEntry?: boolean;
   rankingMatchesPerTeam?: number;
+  /** Número de grupos por chave no Super 8 duplas (padrão 2, ex: A1, A2 por chave) */
+  groupsPerBracket?: number;
   categories?: EventCategory[];
   regulationUrl?: string;
   regulationFileName?: string;

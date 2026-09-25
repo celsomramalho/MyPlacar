@@ -1,5 +1,5 @@
 import type { MatchSetScore, PlayerStanding, TournamentEntry, TournamentMatch, TournamentPair } from '../types';
-import { minifyPairForStorage } from '../types';
+import { minifyPairForStorage, minifyEntryForPair } from '../types';
 import { formatMatchNumber } from './matchGenerator';
 
 export interface TeamStanding {
@@ -715,4 +715,228 @@ export const calculateSuper8PlayerStandings = (
   });
 
   return finalSortedStandings;
+};
+
+/**
+ * Atualiza automaticamente as duplas das Fases 2 e 3 do Super 8 duplas
+ * conforme os resultados da Fase 1 ficam disponíveis.
+ *
+ * Lógica:
+ * - Para cada grupo da Fase 1, calcula standings individuais.
+ * - 1° e 2° colocados do grupo → dupla da Chave Ouro.
+ * - 3° e 4° colocados do grupo → dupla da Chave Prata.
+ * - Quando ambos os grupos de uma semi estão finalizados, preenche os pares da semi.
+ * - Quando a semi está finalizada, preenche a final e o 3° lugar correspondentes.
+ */
+export const updateSuper8DuplasProgression = (
+  entries: TournamentEntry[],
+  matches: TournamentMatch[]
+): TournamentMatch[] => {
+  const updatedMatches = matches.map((m) => ({ ...m }));
+
+  // Agrupa as partidas de Fase 1 por grupo (super8dGroup metadata)
+  const groupToMatches: Record<string, TournamentMatch[]> = {};
+  updatedMatches.forEach((m) => {
+    if (m.phase?.startsWith('super8d_fase1_')) {
+      // phase format: super8d_fase1_A1_r1
+      const parts = m.phase.replace('super8d_fase1_', '').split('_r');
+      const groupKey = parts[0]?.toUpperCase() || '';
+      if (groupKey) {
+        if (!groupToMatches[groupKey]) groupToMatches[groupKey] = [];
+        groupToMatches[groupKey].push(m);
+      }
+    }
+  });
+
+  // Calcula standings de cada grupo
+  const groupStandings: Record<string, TournamentEntry[]> = {};
+  Object.entries(groupToMatches).forEach(([groupKey, groupMatches]) => {
+    const allFinished = groupMatches.length > 0 && groupMatches.every((m) => m.status === 'finished');
+    if (!allFinished) return;
+
+    // Identifica jogadores que participaram deste grupo
+    const groupPlayerKeys = new Set<string>();
+    groupMatches.forEach((m) => {
+      [m.pair1, m.pair2].forEach((pair) => {
+        [pair?.p1, pair?.p2].forEach((p) => {
+          if (p) {
+            const key = (p.email || p.pin || p.name || '').toLowerCase().trim();
+            if (key) groupPlayerKeys.add(key);
+          }
+        });
+      });
+    });
+
+    const groupEntries = entries.filter((e) => {
+      const key = (e.email || e.pin || e.name || '').toLowerCase().trim();
+      return groupPlayerKeys.has(key);
+    });
+
+    const standings = calculateSuper8PlayerStandings(groupEntries, groupMatches, 'wins');
+    groupStandings[groupKey] = standings.map((s) => s.entry);
+  });
+
+  // Função auxiliar: cria TournamentPair com 2 entries (dupla do Super 8 duplas)
+  const makeSuper8DuplasPair = (e1: TournamentEntry, e2: TournamentEntry, groupKey: string, rank: string): TournamentPair => {
+    return minifyPairForStorage({
+      id: `s8d_pair_${groupKey}_${rank}_${e1.email || e1.pin}_${e2.email || e2.pin}`,
+      p1: minifyEntryForPair(e1),
+      p2: minifyEntryForPair(e2),
+      categoryId: '',
+    });
+  };
+
+  // ── Atualizar Semifinais Ouro ────────────────────────────────────────────────
+  const semiOuroMatches = updatedMatches.filter((m) => m.phase?.startsWith('super8d_semi_ouro'));
+  semiOuroMatches.forEach((semi) => {
+    // Extrai os grupos que alimentam essa semi a partir do pair1Label/pair2Label
+    // pair1Label ex: "Dupla Ouro A1 (1°+2°)"
+    const extractGroup = (label?: string) => {
+      if (!label) return null;
+      const match = label.match(/([A-B]\d+)/);
+      return match ? match[1] : null;
+    };
+    const g1Key = extractGroup(semi.pair1Label);
+    const g2Key = extractGroup(semi.pair2Label);
+    if (!g1Key || !g2Key) return;
+
+    const standings1 = groupStandings[g1Key];
+    const standings2 = groupStandings[g2Key];
+
+    if (standings1 && standings1.length >= 2 && standings2 && standings2.length >= 2) {
+      // Dupla Ouro: 1° e 2° de cada grupo
+      const pair1 = makeSuper8DuplasPair(standings1[0], standings1[1], g1Key, 'ouro');
+      const pair2 = makeSuper8DuplasPair(standings2[0], standings2[1], g2Key, 'ouro');
+
+      const idx = updatedMatches.findIndex((m) => m.id === semi.id);
+      if (idx !== -1) {
+        updatedMatches[idx].pair1Id = pair1.id;
+        updatedMatches[idx].pair2Id = pair2.id;
+        updatedMatches[idx].pair1 = pair1;
+        updatedMatches[idx].pair2 = pair2;
+        delete updatedMatches[idx].pair1Label;
+        delete updatedMatches[idx].pair2Label;
+      }
+    } else {
+      // Fase 1 incompleta — limpa duplas da semi
+      const idx = updatedMatches.findIndex((m) => m.id === semi.id);
+      if (idx !== -1) {
+        delete updatedMatches[idx].pair1Id;
+        delete updatedMatches[idx].pair2Id;
+        delete updatedMatches[idx].pair1;
+        delete updatedMatches[idx].pair2;
+        updatedMatches[idx].pair1Label = g1Key ? `Dupla Ouro ${g1Key} (1°+2°)` : 'A definir';
+        updatedMatches[idx].pair2Label = g2Key ? `Dupla Ouro ${g2Key} (1°+2°)` : 'A definir';
+      }
+    }
+  });
+
+  // ── Atualizar Semifinais Prata ───────────────────────────────────────────────
+  const semiPrataMatches = updatedMatches.filter((m) => m.phase?.startsWith('super8d_semi_prata'));
+  semiPrataMatches.forEach((semi) => {
+    const extractGroup = (label?: string) => {
+      if (!label) return null;
+      const match = label.match(/([A-B]\d+)/);
+      return match ? match[1] : null;
+    };
+    const g1Key = extractGroup(semi.pair1Label);
+    const g2Key = extractGroup(semi.pair2Label);
+    if (!g1Key || !g2Key) return;
+
+    const standings1 = groupStandings[g1Key];
+    const standings2 = groupStandings[g2Key];
+
+    if (standings1 && standings1.length >= 4 && standings2 && standings2.length >= 4) {
+      // Dupla Prata: 3° e 4° de cada grupo
+      const pair1 = makeSuper8DuplasPair(standings1[2], standings1[3], g1Key, 'prata');
+      const pair2 = makeSuper8DuplasPair(standings2[2], standings2[3], g2Key, 'prata');
+
+      const idx = updatedMatches.findIndex((m) => m.id === semi.id);
+      if (idx !== -1) {
+        updatedMatches[idx].pair1Id = pair1.id;
+        updatedMatches[idx].pair2Id = pair2.id;
+        updatedMatches[idx].pair1 = pair1;
+        updatedMatches[idx].pair2 = pair2;
+        delete updatedMatches[idx].pair1Label;
+        delete updatedMatches[idx].pair2Label;
+      }
+    } else {
+      const idx = updatedMatches.findIndex((m) => m.id === semi.id);
+      if (idx !== -1) {
+        delete updatedMatches[idx].pair1Id;
+        delete updatedMatches[idx].pair2Id;
+        delete updatedMatches[idx].pair1;
+        delete updatedMatches[idx].pair2;
+        updatedMatches[idx].pair1Label = g1Key ? `Dupla Prata ${g1Key} (3°+4°)` : 'A definir';
+        updatedMatches[idx].pair2Label = g2Key ? `Dupla Prata ${g2Key} (3°+4°)` : 'A definir';
+      }
+    }
+  });
+
+  // ── Atualizar Finais a partir de Semis ──────────────────────────────────────
+  const fillFinalFromSemis = (
+    semi1Phase: string,
+    semi2Phase: string,
+    finalPhase: string,
+    thirdPhase: string
+  ) => {
+    const s1 = updatedMatches.find((m) => m.phase === semi1Phase);
+    const s2 = updatedMatches.find((m) => m.phase === semi2Phase);
+    const finalMatch = updatedMatches.find((m) => m.phase === finalPhase);
+    const thirdMatch = updatedMatches.find((m) => m.phase === thirdPhase);
+
+    if (s1?.status === 'finished' && s1.winnerPairId && s2?.status === 'finished' && s2.winnerPairId) {
+      // Final: ganhadores das semis
+      if (finalMatch) {
+        const fIdx = updatedMatches.findIndex((m) => m.id === finalMatch.id);
+        if (fIdx !== -1) {
+          const p1 = s1.pair1Id === s1.winnerPairId ? s1.pair1 : s1.pair2;
+          const p2 = s2.pair1Id === s2.winnerPairId ? s2.pair1 : s2.pair2;
+          if (p1 && p2) {
+            updatedMatches[fIdx].pair1Id = p1.id;
+            updatedMatches[fIdx].pair2Id = p2.id;
+            updatedMatches[fIdx].pair1 = p1;
+            updatedMatches[fIdx].pair2 = p2;
+            delete updatedMatches[fIdx].pair1Label;
+            delete updatedMatches[fIdx].pair2Label;
+          }
+        }
+      }
+      // 3° Lugar: perdedores das semis
+      if (thirdMatch) {
+        const tIdx = updatedMatches.findIndex((m) => m.id === thirdMatch.id);
+        if (tIdx !== -1) {
+          const p1 = s1.pair1Id !== s1.winnerPairId ? s1.pair1 : s1.pair2;
+          const p2 = s2.pair1Id !== s2.winnerPairId ? s2.pair1 : s2.pair2;
+          if (p1 && p2) {
+            updatedMatches[tIdx].pair1Id = p1.id;
+            updatedMatches[tIdx].pair2Id = p2.id;
+            updatedMatches[tIdx].pair1 = p1;
+            updatedMatches[tIdx].pair2 = p2;
+            delete updatedMatches[tIdx].pair1Label;
+            delete updatedMatches[tIdx].pair2Label;
+          }
+        }
+      }
+    } else {
+      // Semis não concluídas — limpa finais
+      [{ m: finalMatch, l1: 'Ganhador Semi 1', l2: 'Ganhador Semi 2' }, { m: thirdMatch, l1: 'Perdedor Semi 1', l2: 'Perdedor Semi 2' }].forEach(({ m, l1, l2 }) => {
+        if (!m) return;
+        const idx = updatedMatches.findIndex((x) => x.id === m.id);
+        if (idx !== -1) {
+          delete updatedMatches[idx].pair1Id;
+          delete updatedMatches[idx].pair2Id;
+          delete updatedMatches[idx].pair1;
+          delete updatedMatches[idx].pair2;
+          updatedMatches[idx].pair1Label = l1;
+          updatedMatches[idx].pair2Label = l2;
+        }
+      });
+    }
+  };
+
+  fillFinalFromSemis('super8d_semi_ouro_1', 'super8d_semi_ouro_2', 'super8d_final_ouro', 'super8d_3lugar_ouro');
+  fillFinalFromSemis('super8d_semi_prata_1', 'super8d_semi_prata_2', 'super8d_final_prata', 'super8d_3lugar_prata');
+
+  return updatedMatches;
 };

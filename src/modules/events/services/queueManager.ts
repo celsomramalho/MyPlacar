@@ -87,7 +87,7 @@ export function calculateAverageMatchDuration(
 
   // Duração estimada padrão conforme formato
   const sets = event?.setsCount || event?.config?.sets || 1;
-  const isSuper8 = event?.eventType === 'Super 8' || event?.config?.sportType === 'Super 8';
+  const isSuper8 = event?.eventType === 'Super 8' || event?.eventType === 'Super 8 individual' || event?.config?.sportType === 'Super 8';
 
   let defaultDuration = 25;
   if (isSuper8) {
@@ -476,6 +476,24 @@ function isMatchBlockedByPreviousPhase(match: TournamentMatch, allMatches: Tourn
       const num = m.phase.replace(/\D/g, '');
       phaseLabel = num ? `Rodada ${num}` : m.phase;
     }
+    else if (m.phase?.startsWith('super8d_fase1_')) {
+      const parts = m.phase.replace('super8d_fase1_', '').split('_r');
+      const group = parts[0]?.toUpperCase() || '';
+      const round = parts[1] || '';
+      phaseLabel = `Grupo ${group}${round ? ` R${round}` : ''}`;
+    }
+    else if (m.phase?.startsWith('super8d_semi_ouro')) {
+      const n = m.phase.replace('super8d_semi_ouro_', '');
+      phaseLabel = `Semi Ouro ${n}`;
+    }
+    else if (m.phase?.startsWith('super8d_semi_prata')) {
+      const n = m.phase.replace('super8d_semi_prata_', '');
+      phaseLabel = `Semi Prata ${n}`;
+    }
+    else if (m.phase === 'super8d_final_ouro') phaseLabel = 'Final Ouro';
+    else if (m.phase === 'super8d_3lugar_ouro') phaseLabel = '3º Ouro';
+    else if (m.phase === 'super8d_final_prata') phaseLabel = 'Final Prata';
+    else if (m.phase === 'super8d_3lugar_prata') phaseLabel = '3º Prata';
 
     return {
       match: m,

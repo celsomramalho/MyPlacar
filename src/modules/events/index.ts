@@ -13,4 +13,4 @@ export { ParticipantRow, type ParticipantRowProps } from './components/registrat
 export { EventRegistrationForm } from './components/EventRegistrationForm';
 export type { EventRegistration, TournamentConfig, TournamentEntry, TournamentEvent, TournamentMatch, TournamentPair } from './types';
 export { getRegistrationPeriodStatus, isRegistrationPeriodOpen, type RegistrationPeriodInfo, type RegistrationPeriodStatus } from './services/eventRegistrationPeriod';
-export { isRankingEvent, isSuper8Event, isSinglePlayerEvent } from './services/eventTypeHelpers';
+export { isRankingEvent, isSuper8Event, isSuper8IndividualEvent, isSuper8DuplasEvent, isSinglePlayerEvent } from './services/eventTypeHelpers';

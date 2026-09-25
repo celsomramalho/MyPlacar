@@ -150,11 +150,13 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const totalPaid = payments.reduce((acc, curr) => acc + curr.amount, 0);
   const pendingAmount = Math.max(0, dueAmount - totalPaid);
 
+  const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
+
   const categoryConfirmedCountMap = useMemo(() => {
     const map: Record<string, number> = {};
     (entries || []).forEach((e) => {
       if (e.disabled || e.paymentStatus === 'Cancelado') return;
-      const isPaid = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
+      const isPaid = isFreeEvent || e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago' || e.paymentStatus === 'Isento';
       if (isPaid && e.categoryIds) {
         e.categoryIds.forEach((catId) => {
           map[catId] = (map[catId] || 0) + 1;
@@ -162,7 +164,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       }
     });
     return map;
-  }, [entries]);
+  }, [entries, isFreeEvent]);
 
   // Estado para edição de um pagamento existente no histórico
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
@@ -1022,14 +1024,18 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                         <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                           <span
                             className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                              entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'
+                              entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || (isFreeEvent && entry.paymentStatus !== 'Cancelado')
                                 ? 'bg-emerald-100 text-emerald-700'
                                 : entry.paymentStatus === 'Isento'
                                 ? 'bg-blue-100 text-blue-700'
                                 : 'bg-amber-100 text-amber-700'
                             }`}
                           >
-                            {entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || 'Pendente'}
+                            {isFreeEvent && entry.paymentStatus !== 'Cancelado'
+                              ? 'Confirmado'
+                              : entry.paymentStatus === 'Pago'
+                              ? 'Confirmado'
+                              : entry.paymentStatus || 'Pendente'}
                           </span>
                           <span className="text-xs font-bold text-slate-600">
                             R$ {entryPaid.toFixed(2)}/{(entry.dueAmount ?? 0).toFixed(2)}

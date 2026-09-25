@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { AlertCircle, AlertTriangle, Check, CheckCircle2, DollarSign, Eye, Loader2, QrCode, Trash2, Upload, Users } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Check, CheckCircle2, Clock, DollarSign, Eye, Loader2, QrCode, Trash2, Upload, Users } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { findUserByPin, getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
@@ -23,6 +23,7 @@ interface Props {
   event: TournamentEvent;
   entry: TournamentEntry;
   mode: 'admin' | 'user';
+  isNew?: boolean;
   onSave: (entry: TournamentEntry) => Promise<void>;
   onUpdateEvent?: (event: TournamentEvent) => void;
   onDelete?: () => void;
@@ -39,7 +40,7 @@ const formatPhone = (value: string) => {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 };
 
-export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onSave, onUpdateEvent, onDelete, onCancel, readOnly = false }) => {
+export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isNew, onSave, onUpdateEvent, onDelete, onCancel, readOnly = false }) => {
   const canEdit = !readOnly;
   const isAdmin = mode === 'admin';
   const isNewAdminEntry = isAdmin && (!entry.email || entry.email.trim() === '') && (!entry.name || entry.name.trim() === '');
@@ -139,9 +140,12 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const isFreeEvent = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
 
   const [payments, setPayments] = useState<PaymentItem[]>(entry.payments || []);
-  const [paymentStatus, setPaymentStatus] = useState(
-    entry.paymentStatus === 'Pago' ? 'Confirmado' : entry.paymentStatus || (isFreeEvent ? 'Confirmado' : 'Pendente')
-  );
+  const [paymentStatus, setPaymentStatus] = useState<TournamentEntry['paymentStatus']>(() => {
+    if (entry.paymentStatus === 'Cancelado') return 'Cancelado';
+    if (isFreeEvent) return 'Confirmado';
+    if (entry.paymentStatus === 'Pago') return 'Confirmado';
+    return entry.paymentStatus || 'Pendente';
+  });
   const [dueAmount, setDueAmount] = useState(entry.dueAmount ?? event.registrationFee ?? 0);
   const [newAmount, setNewAmount] = useState('');
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
@@ -226,7 +230,23 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     return null;
   });
 
-  const isRegistrationSaved = Boolean(entry.email && entry.email.trim() !== '');
+  const isActuallyNew = Boolean(
+    isNew ||
+    isNewAdminEntry ||
+    (!entry.registrationId &&
+      !(event.entries || []).some(
+        (e) => (entry.email && e.email && e.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
+               (entry.pin && e.pin && e.pin.toUpperCase().trim() === entry.pin.toUpperCase().trim())
+      ) &&
+      !(liveEntries || []).some(
+        (e) => (entry.email && e.email && e.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
+               (entry.pin && e.pin && e.pin.toUpperCase().trim() === entry.pin.toUpperCase().trim())
+      )
+    )
+  );
+
+  const isRegistrationSaved = !isActuallyNew;
+  const isExistingRegistration = !isActuallyNew;
 
   // Listener em tempo real do Firestore para confirmação instantânea do pagamento
   React.useEffect(() => {
@@ -322,10 +342,21 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   const availableCategories = useMemo(() => categories.filter((cat) => !cat.gender1 || cat.gender1 === gender || cat.gender2 === gender), [categories, gender]);
   const categoryConfirmedCountMap = useMemo(() => {
     const map: Record<string, number> = {};
-    const entriesList = (liveEntries && liveEntries.length > 0) ? liveEntries : (event.entries || []);
+    let entriesList = (liveEntries && liveEntries.length > 0) ? liveEntries : (event.entries || []);
+
+    if (isExistingRegistration && entry && (entry.email || entry.pin) && entry.categoryIds && entry.categoryIds.length > 0) {
+      const alreadyInList = entriesList.some((e) =>
+        (entry.email && e.email && e.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
+        (entry.pin && e.pin && e.pin.toUpperCase().trim() === entry.pin.toUpperCase().trim())
+      );
+      if (!alreadyInList) {
+        entriesList = [...entriesList, entry];
+      }
+    }
+
     entriesList.forEach((e) => {
       if (e.disabled || e.paymentStatus === 'Cancelado') return;
-      const isPaid = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
+      const isPaid = isFreeEvent || e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago' || e.paymentStatus === 'Isento';
       if (isPaid && e.categoryIds) {
         e.categoryIds.forEach((catId) => {
           map[catId] = (map[catId] || 0) + 1;
@@ -333,7 +364,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       }
     });
     return map;
-  }, [liveEntries, event.entries]);
+  }, [liveEntries, event.entries, entry, isFreeEvent, isExistingRegistration]);
   const isDoubles = (cat: EventCategory) => !isSinglePlayer && (cat.format === 'Duplas' || !cat.format || cat.name.toLowerCase().includes('dupla') || Boolean(cat.gender2));
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const effectiveDueAmount = isFreeEvent
@@ -376,18 +407,28 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
   };
 
   // ── Controle de 3 Etapas para inscrição do usuário (1: Cadastro, 2: Categorias, 3: Pagamento) ──
-  const isExistingRegistration = Boolean(entry.joinedAt || entry.email || entry.pin);
-  const hasPaymentRecorded = payments.length > 0 || (entry.paidAmount ?? 0) > 0 || entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago';
-  const isCancelled = Boolean(
+  const hasPaymentRecorded = !isActuallyNew && (payments.length > 0 || (entry.paidAmount ?? 0) > 0 || entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago');
+  const isCancelled = !isActuallyNew && Boolean(
     disabled ||
     paymentStatus === 'Cancelado' ||
     entry.disabled ||
     entry.paymentStatus === 'Cancelado'
   );
-  const hasInitialCategories = (entry.categoryIds && entry.categoryIds.length > 0) || categoryIds.length > 0;
+  const isConfirmedRegistration = isExistingRegistration && !isCancelled && (
+    isFreeEvent ||
+    paymentStatus === 'Confirmado' ||
+    paymentStatus === 'Pago' ||
+    paymentStatus === 'Isento' ||
+    entry.paymentStatus === 'Confirmado' ||
+    entry.paymentStatus === 'Pago' ||
+    entry.paymentStatus === 'Isento'
+  );
+  const isPendingPaymentRegistration = isExistingRegistration && !isCancelled && !isConfirmedRegistration && !isFreeEvent;
+  const hasInitialCategories = !isActuallyNew && ((entry.categoryIds && entry.categoryIds.length > 0) || categoryIds.length > 0);
 
   const [userStep, setUserStep] = useState<1 | 2 | 3>(() => {
     if (isAdmin) return 1;
+    if (isActuallyNew) return 1;
     if (hasPaymentRecorded) return 3;
     if (hasInitialCategories) return 2;
     return 1;
@@ -395,13 +436,14 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
   const [maxUnlockedStep, setMaxUnlockedStep] = useState<number>(() => {
     if (isAdmin) return 3;
+    if (isActuallyNew) return 1;
     if (hasPaymentRecorded) return 3;
     if (hasInitialCategories) return 2;
     return 1;
   });
 
   const [acceptedRegulation, setAcceptedRegulation] = useState<boolean>(
-    Boolean(entry.joinedAt || !event.regulationUrl)
+    Boolean((!isActuallyNew && entry.joinedAt) || !event.regulationUrl)
   );
 
   const [cancelModalConfig, setCancelModalConfig] = useState<{
@@ -774,7 +816,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       gender,
       categoryIds: targetCategoryIds,
       dueAmount: effectiveDueAmount,
-      paymentStatus,
+      paymentStatus: (isFreeEvent && paymentStatus !== 'Cancelado') ? 'Confirmado' : paymentStatus,
       payments: nextPayments,
       paidAmount: nextPayments.reduce((sum, payment) => sum + payment.amount, 0),
       partnerName: firstPartner?.name || undefined,
@@ -1359,36 +1401,88 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
-    {/* Banner de Status: Inscrição Cancelada / Desativada */}
-    {isCancelled && (
-      <div className="p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-red-800 space-y-2 animate-in fade-in">
-        <div className="flex items-center gap-2">
-          <AlertCircle className="text-red-600 shrink-0" size={18} />
-          <span className="text-xs font-black uppercase tracking-wider">
-            Inscrição Cancelada
-          </span>
-        </div>
-        <p className="text-xs text-red-700 font-bold leading-relaxed">
-          Esta inscrição está cancelada. Enquanto estiver cancelada, você não poderá formar time nem participar de partidas.
-        </p>
-        {(disabledReason || entry.disabledReason) && (
-          <div className="text-[11px] text-red-600 bg-white/80 p-2.5 rounded-xl border border-red-100">
-            <strong>Motivo:</strong> {disabledReason || entry.disabledReason}
+    {/* Banner de Status da Inscrição */}
+    {isExistingRegistration && (
+      <>
+        {isCancelled ? (
+          <div className="p-4 rounded-2xl bg-red-50 border-2 border-red-200 text-red-800 space-y-2 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="text-red-600 shrink-0" size={18} />
+              <span className="text-xs font-black uppercase tracking-wider">
+                Inscrição Cancelada
+              </span>
+            </div>
+            <p className="text-xs text-red-700 font-bold leading-relaxed">
+              Esta inscrição está cancelada. Enquanto estiver cancelada, você não poderá formar time nem participar de partidas.
+            </p>
+            {(disabledReason || entry.disabledReason) && (
+              <div className="text-[11px] text-red-600 bg-white/80 p-2.5 rounded-xl border border-red-100">
+                <strong>Motivo:</strong> {disabledReason || entry.disabledReason}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        ) : isConfirmedRegistration ? (
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-200 text-emerald-800 space-y-1 animate-in fade-in">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="text-emerald-600 shrink-0" size={18} />
+                <span className="text-xs font-black uppercase tracking-wider">
+                  Inscrição Ativa
+                </span>
+              </div>
+              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+                Confirmada
+              </span>
+            </div>
+            <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
+              {isFreeEvent
+                ? 'Sua inscrição está confirmada no evento gratuito e você está apto(a) a participar do torneio.'
+                : 'Pagamento confirmado! Sua inscrição está ativa e você está apto(a) a participar do torneio.'}
+            </p>
+          </div>
+        ) : isPendingPaymentRegistration ? (
+          <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-200 text-amber-800 space-y-1 animate-in fade-in">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Clock className="text-amber-600 shrink-0" size={18} />
+                <span className="text-xs font-black uppercase tracking-wider">
+                  Inscrição Pendente de Pagamento
+                </span>
+              </div>
+              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                Pendente
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
+              Aguardando a confirmação do pagamento para garantir sua vaga no torneio.
+            </p>
+          </div>
+        ) : null}
+      </>
     )}
 
-    {/* Alerta de Feedback no Topo */}
+    {/* Alerta de Feedback */}
     {feedback && (
-      <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-top-1 ${
-        feedback.includes('sucesso')
-          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-          : 'bg-red-50 border-red-200 text-red-700'
-      }`}>
-        {feedback.includes('sucesso') ? <CheckCircle2 size={18} className="shrink-0 text-emerald-600" /> : <AlertCircle size={18} className="shrink-0 text-red-600" />}
-        <span>{feedback}</span>
-      </div>
+      (() => {
+        const isSuccess = Boolean(
+          feedback.includes('sucesso') ||
+          feedback.includes('✓') ||
+          feedback.includes('✅') ||
+          feedback.toLowerCase().includes('confirmad') ||
+          feedback.toLowerCase().includes('salv')
+        );
+
+        return (
+          <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-top-1 ${
+            isSuccess
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}>
+            {isSuccess ? <CheckCircle2 size={18} className="shrink-0 text-emerald-600" /> : <AlertCircle size={18} className="shrink-0 text-red-600" />}
+            <span>{feedback}</span>
+          </div>
+        );
+      })()
     )}
 
     {/* ── ETAPA 1: CADASTRO ── */}
@@ -1451,10 +1545,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
 
         {/* Bloco Desativar Inscrição: SOMENTE NO PAINEL DO ADMIN */}
         {isAdmin && (
-          <div className={`p-3.5 rounded-2xl border transition-all ${disabled ? 'bg-red-50/70 border-red-200' : 'bg-slate-50 border-slate-200/80'}`}>
+          <div className={`p-3.5 rounded-2xl border transition-all ${disabled ? 'bg-blue-50/70 border-blue-200' : 'bg-slate-50 border-slate-200/80'}`}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <label className={`text-xs font-black block ${disabled ? 'text-red-700' : 'text-slate-700'}`}>Desativar inscrição</label>
+                <label className={`text-xs font-black block ${disabled ? 'text-blue-700' : 'text-slate-700'}`}>Desativar inscrição</label>
                 <p className="text-[10px] text-slate-400 font-bold">Impede o jogador de formar duplas ou participar de partidas</p>
               </div>
               {/* Toggle switch estilo iOS */}
@@ -1471,7 +1565,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
                   }
                 }}
                 className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                  disabled ? 'bg-red-500' : 'bg-slate-300'
+                  disabled ? 'bg-blue-500' : 'bg-slate-300'
                 }`}
               >
                 <span
@@ -1483,9 +1577,9 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
             </div>
 
             {disabled && (
-              <div className="pt-2.5 mt-2.5 border-t border-red-200/60 space-y-1.5 animate-in fade-in duration-200">
-                <label className="text-[10px] font-black text-red-600 ml-1">
-                  Motivo <span className="text-red-500">*</span>
+              <div className="pt-2.5 mt-2.5 border-t border-blue-200/60 space-y-1.5 animate-in fade-in duration-200">
+                <label className="text-[10px] font-black text-blue-600 ml-1">
+                  Motivo <span className="text-blue-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1493,7 +1587,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
                   value={disabledReason}
                   onChange={(e) => setDisabledReason(e.target.value)}
                   placeholder="Informe o motivo (obrigatório)"
-                  className="event-registration-field border-red-300 focus:border-red-500 bg-white"
+                  className="event-registration-field border-blue-300 focus:border-blue-500 bg-white"
                 />
               </div>
             )}
@@ -1706,6 +1800,15 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
     {/* ── ETAPA 3: PAGAMENTO ── */}
     {(isAdmin || userStep === 3) && (
       <div className="space-y-4 animate-in fade-in duration-150">
+        {isFreeEvent && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-xs font-black text-emerald-800">
+            <CheckCircle2 size={20} className="text-emerald-600 shrink-0" />
+            <div>
+              <p className="text-sm font-black text-emerald-900">Inscrição Gratuita</p>
+              <p className="text-[11px] font-medium text-emerald-700">Este evento não possui taxa de inscrição. Sua inscrição é confirmada automaticamente.</p>
+            </div>
+          </div>
+        )}
         {!isFreeEvent && (
           <div className="grid grid-cols-2 gap-2">
             <Field label="Valor devido">
@@ -2166,17 +2269,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, onS
       </div>
     )}
 
-    {/* Alerta de Feedback no Rodapé */}
-    {feedback && (
-      <div className={`p-3 rounded-2xl flex items-center gap-2 border text-xs font-black animate-in fade-in slide-in-from-bottom-1 ${
-        feedback.includes('sucesso')
-          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-          : 'bg-red-50 border-red-200 text-red-700'
-      }`}>
-        {feedback.includes('sucesso') ? <CheckCircle2 size={18} className="shrink-0 text-emerald-600" /> : <AlertCircle size={18} className="shrink-0 text-red-600" />}
-        <span>{feedback}</span>
-      </div>
-    )}
+
 
     {(isAdmin || userStep === 3) && (
       <div className="flex flex-wrap gap-2.5 pt-1">
