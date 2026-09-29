@@ -10,6 +10,7 @@ export { useEventRealtime, type UseEventRealtimeResult } from './domain/realtime
 export { MatchCard, type MatchCardProps } from './components/matches/MatchCard';
 export { TeamCard, type TeamCardProps } from './components/teams/TeamCard';
 export { ParticipantRow, type ParticipantRowProps } from './components/registration/ParticipantRow';
+export { ParticipantMatchHistory, type ParticipantMatchHistoryProps } from './components/registration/ParticipantMatchHistory';
 export { EventRegistrationForm } from './components/EventRegistrationForm';
 export type { EventRegistration, TournamentConfig, TournamentEntry, TournamentEvent, TournamentMatch, TournamentPair } from './types';
 export { getRegistrationPeriodStatus, isRegistrationPeriodOpen, type RegistrationPeriodInfo, type RegistrationPeriodStatus } from './services/eventRegistrationPeriod';

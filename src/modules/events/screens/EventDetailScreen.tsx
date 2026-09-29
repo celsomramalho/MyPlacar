@@ -21,6 +21,8 @@ import {
   Link2,
   CreditCard,
   Lock,
+  ChevronDown,
+  History,
 } from 'lucide-react';
 import type {
   TournamentEvent,
@@ -51,6 +53,7 @@ import { Super8StandingStatsBlock } from '../components/Super8StandingStatsBlock
 import { MatchCard } from '../components/matches/MatchCard';
 import { TeamCard } from '../components/teams/TeamCard';
 import { ParticipantRow } from '../components/registration/ParticipantRow';
+import { ParticipantMatchHistory } from '../components/registration/ParticipantMatchHistory';
 import { useEventPermissions } from '../domain/access/useEventPermissions';
 import { useEventRealtime } from '../domain/realtime/useEventRealtime';
 import { calculateSuper8PlayerStandings, calculateBracketStandings } from '../services/matchProgression';
@@ -124,6 +127,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   const [deleteRequestMatch, setDeleteRequestMatch] = useState<TournamentMatch | null>(null);
   const [deleteRequestReason, setDeleteRequestReason] = useState('');
   const [isSendingDeleteRequest, setIsSendingDeleteRequest] = useState(false);
+  const [myHistoryOpen, setMyHistoryOpen] = useState(true);
 
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -326,6 +330,12 @@ export const EventDetailScreen: React.FC<Props> = ({
     },
     [isCurrentUserEntry, pairsById]
   );
+
+  // Todas as partidas do evento em que o usuário atual participa (para o bloco Meu Histórico)
+  const myHistoryMatches = useMemo(() => {
+    if (canManageEvent) return [];
+    return (event.matches || []).filter((m) => isCurrentUserInMatch(m));
+  }, [event.matches, isCurrentUserInMatch, canManageEvent]);
 
   // Formação de duplas pelo gestor dentro da categoria
   const toggleEntrySelection = (entry: TournamentEntry) => {
@@ -767,18 +777,32 @@ export const EventDetailScreen: React.FC<Props> = ({
   }, [standingsData.playerStandings]);
 
   const sortedCategoryEntries = useMemo(() => {
-    if (!isIndividualRanking) return categoryEntries;
-    return [...categoryEntries].sort((a, b) => {
-      const aKey = (a.email || a.pin || '').toLowerCase().trim();
-      const bKey = (b.email || b.pin || '').toLowerCase().trim();
-      const aStanding = playerStandingsMap.get(aKey);
-      const bStanding = playerStandingsMap.get(bKey);
-      if (aStanding?.rank !== undefined && bStanding?.rank !== undefined && aStanding.rank !== bStanding.rank) {
-        return aStanding.rank - bStanding.rank;
+    let entries = isIndividualRanking
+      ? [...categoryEntries].sort((a, b) => {
+          const aKey = (a.email || a.pin || '').toLowerCase().trim();
+          const bKey = (b.email || b.pin || '').toLowerCase().trim();
+          const aStanding = playerStandingsMap.get(aKey);
+          const bStanding = playerStandingsMap.get(bKey);
+          if (aStanding?.rank !== undefined && bStanding?.rank !== undefined && aStanding.rank !== bStanding.rank) {
+            return aStanding.rank - bStanding.rank;
+          }
+          return (a.name || '').localeCompare(b.name || '');
+        })
+      : categoryEntries;
+
+    if (!canManageEvent) {
+      // Current user always appears first on the player-facing side
+      const currentIdx = entries.findIndex((e) => isCurrentUserEntry(e));
+      if (currentIdx > 0) {
+        const copy = [...entries];
+        const [current] = copy.splice(currentIdx, 1);
+        copy.unshift(current);
+        entries = copy;
       }
-      return (a.name || '').localeCompare(b.name || '');
-    });
-  }, [categoryEntries, isIndividualRanking, playerStandingsMap]);
+    }
+
+    return entries;
+  }, [categoryEntries, isIndividualRanking, playerStandingsMap, canManageEvent, isCurrentUserEntry]);
 
   const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished');
   const finalMatch = categoryMatches.find((m) => m.phase === 'final');
@@ -997,6 +1021,45 @@ export const EventDetailScreen: React.FC<Props> = ({
           {/* Seção de Categorias, Inscritos, Times e Jogos - Exclusiva para inscrições ativas */}
           {canViewEventDetails ? (
             <div className="space-y-4">
+
+            {/* ─── MEU HISTÓRICO (somente jogador, quando há partidas) ─── */}
+            {!canManageEvent && myHistoryMatches.length > 0 && currentUserEntry && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                {/* Cabeçalho colapsável */}
+                <button
+                  type="button"
+                  onClick={() => setMyHistoryOpen((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 gap-2 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <History size={16} className="text-indigo-500 shrink-0" />
+                    <span className="text-sm font-black text-slate-800">Meu histórico</span>
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                      {myHistoryMatches.length} {myHistoryMatches.length === 1 ? 'partida' : 'partidas'}
+                    </span>
+                  </div>
+                  <ChevronDown
+                    size={18}
+                    className={`text-slate-400 transition-transform duration-200 shrink-0 ${myHistoryOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {/* Conteúdo colapsável */}
+                {myHistoryOpen && (
+                  <div className="border-t border-slate-100 px-4 py-3">
+                    <ParticipantMatchHistory
+                      entry={currentUserEntry}
+                      matches={event.matches || []}
+                      categories={event.categories}
+                      pairsById={Object.fromEntries(pairsById)}
+                      allPairs={event.pairs}
+                      defaultExpanded
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2 text-emerald-600 font-black">
                 <Trophy size={18} />
@@ -1068,19 +1131,17 @@ export const EventDetailScreen: React.FC<Props> = ({
 
                     <div className="flex items-center justify-between pb-1">
                       <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
-                        {canViewParticipants && (
-                          <button
-                            type="button"
-                            onClick={() => setUserCategoryView('entries')}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                              userCategoryView === 'entries'
-                                ? 'bg-white text-slate-900 shadow-xs'
-                                : 'text-slate-500 hover:text-slate-900'
-                            }`}
-                          >
-                            Inscritos ({categoryEntries.length})
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => setUserCategoryView('entries')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                            userCategoryView === 'entries'
+                              ? 'bg-white text-slate-900 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-900'
+                          }`}
+                        >
+                          Inscritos ({categoryEntries.length})
+                        </button>
                         {!isSuper8 && (
                           <button
                             type="button"
@@ -1135,9 +1196,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                           </div>
                         ) : (
                           sortedCategoryEntries.map((entry) => {
-                            const isCurrentUser =
-                              entry.email?.toLowerCase().trim() === userProfile.email.toLowerCase().trim() ||
-                              entry.pin?.toUpperCase().trim() === userProfile.pin.toUpperCase().trim();
+                            const isCurrentUser = isCurrentUserEntry(entry);
                             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
                             const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
                             const pair = isRanking ? null : categoryPairs.find(
@@ -1164,6 +1223,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 hasCategoryMatches={categoryMatches.length > 0}
                                 onToggleSelect={toggleEntrySelection}
                               />
+
                             );
                           })
                         )}

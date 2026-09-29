@@ -7,11 +7,14 @@ import { formatRegistrationId } from '../../types';
 
 import { RankingStandingStatsBlock } from '../RankingStandingStatsBlock';
 import { Super8StandingStatsBlock } from '../Super8StandingStatsBlock';
+import { ParticipantMatchHistory } from './ParticipantMatchHistory';
 
 export interface ParticipantRowProps {
   entry: TournamentEntry;
   category?: EventCategory;
+  categories?: EventCategory[];
   isCurrentUser?: boolean;
+  canViewHistory?: boolean;
   pair?: TournamentPair | null;
   standing?: PlayerStanding | null;
   isIndividualRanking?: boolean;
@@ -20,6 +23,9 @@ export interface ParticipantRowProps {
   isSelected?: boolean;
   canSelect?: boolean;
   hasCategoryMatches?: boolean;
+  matches?: TournamentMatch[];
+  pairsById?: Record<string, TournamentPair>;
+  allPairs?: TournamentPair[];
   onToggleSelect?: (entry: TournamentEntry) => void;
   onEdit?: (entry: TournamentEntry) => void;
 }
@@ -27,7 +33,9 @@ export interface ParticipantRowProps {
 export const ParticipantRow: React.FC<ParticipantRowProps> = ({
   entry,
   category,
+  categories,
   isCurrentUser = false,
+  canViewHistory,
   pair,
   standing,
   isIndividualRanking = false,
@@ -36,6 +44,9 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
   isSelected = false,
   canSelect = false,
   hasCategoryMatches = false,
+  matches,
+  pairsById,
+  allPairs,
   onToggleSelect,
   onEdit,
 }) => {
@@ -189,6 +200,18 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
             <Super8StandingStatsBlock standing={standing} />
           )}
         </div>
+      )}
+
+      {/* Histórico de partidas do atleta (visível para o próprio jogador ou admin) */}
+      {Boolean(canViewHistory ?? isCurrentUser) && matches && matches.length > 0 && (
+        <ParticipantMatchHistory
+          entry={entry}
+          matches={matches}
+          categories={categories}
+          category={category}
+          pairsById={pairsById}
+          allPairs={allPairs}
+        />
       )}
     </div>
   );

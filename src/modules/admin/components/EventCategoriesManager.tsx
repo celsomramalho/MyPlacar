@@ -1512,6 +1512,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                         event={event}
                         entries={sortedCategoryEntries}
                         categoryMatches={categoryMatches}
+                        pairsById={pairsById}
                         playerStandingsMap={playerStandingsMap}
                         sortBy={sortBy}
                         isIndividualRanking={isIndividualRanking}

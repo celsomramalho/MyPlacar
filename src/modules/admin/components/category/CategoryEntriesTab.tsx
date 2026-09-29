@@ -9,6 +9,7 @@ export interface CategoryEntriesTabProps {
   event: TournamentEvent;
   entries: TournamentEntry[];
   categoryMatches: TournamentMatch[];
+  pairsById?: Record<string, TournamentPair>;
   playerStandingsMap: Map<string, PlayerStanding>;
   sortBy: 'team' | 'name';
   isIndividualRanking: boolean;
@@ -31,6 +32,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   event,
   entries,
   categoryMatches,
+  pairsById,
   playerStandingsMap,
   sortBy,
   isIndividualRanking,
@@ -98,19 +100,35 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
               const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
               const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
               const isExpanded = expandedRegistrationEmail === entry.email;
+              const pair = isRanking
+                ? null
+                : (event.pairs || []).find(
+                    (p) =>
+                      p.categoryId === category.id &&
+                      ((p.p1?.email && entry.email && p.p1.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
+                        (p.p2?.email && entry.email && p.p2.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
+                        (p.p1?.pin && entry.pin && p.p1.pin.toUpperCase().trim() === entry.pin.toUpperCase().trim()) ||
+                        (p.p2?.pin && entry.pin && p.p2.pin.toUpperCase().trim() === entry.pin.toUpperCase().trim()))
+                  );
 
               return (
                 <div key={entry.email || entry.pin}>
                   <ParticipantRow
                     entry={entry}
                     category={category}
+                    categories={event.categories}
+                    pair={pair}
                     standing={standing}
                     isIndividualRanking={isIndividualRanking}
                     isRanking={isRanking}
                     isSuper8={isSuper8Like}
+                    canViewHistory={!isReadOnly}
                     isSelected={selectedEntries.has(entry.email)}
                     canSelect={!isSuper8Like && !isReadOnly}
                     hasCategoryMatches={categoryMatches.length > 0}
+                    matches={categoryMatches}
+                    pairsById={pairsById}
+                    allPairs={event.pairs}
                     onToggleSelect={onToggleEntrySelection}
                     onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
                   />
@@ -141,19 +159,35 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
             const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
             const isExpanded = expandedRegistrationEmail === entry.email;
+            const pair = isRanking
+              ? null
+              : (event.pairs || []).find(
+                  (p) =>
+                    p.categoryId === category.id &&
+                    ((p.p1?.email && entry.email && p.p1.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
+                      (p.p2?.email && entry.email && p.p2.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
+                      (p.p1?.pin && entry.pin && p.p1.pin.toUpperCase().trim() === entry.pin.toUpperCase().trim()) ||
+                      (p.p2?.pin && entry.pin && p.p2.pin.toUpperCase().trim() === entry.pin.toUpperCase().trim()))
+                );
 
             return (
               <div key={entry.email || entry.pin}>
                 <ParticipantRow
                   entry={entry}
                   category={category}
+                  categories={event.categories}
+                  pair={pair}
                   standing={standing}
                   isIndividualRanking={isIndividualRanking}
                   isRanking={isRanking}
                   isSuper8={isSuper8Like}
+                  canViewHistory={!isReadOnly}
                   isSelected={selectedEntries.has(entry.email)}
                   canSelect={!isSuper8Like && !isReadOnly}
                   hasCategoryMatches={categoryMatches.length > 0}
+                  matches={categoryMatches}
+                  pairsById={pairsById}
+                  allPairs={event.pairs}
                   onToggleSelect={onToggleEntrySelection}
                   onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
                 />
