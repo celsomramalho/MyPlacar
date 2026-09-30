@@ -1380,7 +1380,6 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 key={entry.email || entry.pin}
                                 entry={entry}
                                 category={activeCategory}
-                                categories={event.categories}
                                 isCurrentUser={isCurrentUser}
                                 pair={pair}
                                 standing={standing}
@@ -1390,10 +1389,6 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 isSelected={selectedEntries.has(entry.email || entry.pin)}
                                 canSelect={canManageEvent && !pair && !isSuper8}
                                 hasCategoryMatches={categoryMatches.length > 0}
-                                matches={event.matches || []}
-                                pairsById={pairsMap}
-                                allPairs={event.pairs}
-                                canViewHistory={isCurrentUser || canManageEvent}
                                 onToggleSelect={toggleEntrySelection}
                               />
 
