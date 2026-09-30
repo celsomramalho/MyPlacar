@@ -15,10 +15,12 @@ import {
   EVENT_STATUS_OPTIONS,
   EVENT_TYPE_OPTIONS,
   DRAW_TYPE_OPTIONS,
+  TEAM_DRAW_TYPE_OPTIONS,
   EVENT_PAYMENT_TYPE_OPTIONS,
   type EventStatusOption,
   type EventTypeOption,
   type DrawTypeOption,
+  type TeamDrawTypeOption,
   type EventPaymentTypeOption,
   type TournamentEvent,
 } from '@modules/events/types';
@@ -668,14 +670,14 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         {/* Sorteios */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Sorteio formação times</label>
+            <label className="text-[10px] font-black text-slate-400 ml-1">Formação times</label>
             <select
               value={editingEvent.teamDrawType || 'Manual'}
               disabled={isReadOnlyRegistration}
-              onChange={(event) => handleProtectedChange({ ...editingEvent, teamDrawType: event.target.value as DrawTypeOption })}
+              onChange={(event) => handleProtectedChange({ ...editingEvent, teamDrawType: event.target.value as TeamDrawTypeOption })}
               className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
             >
-              {DRAW_TYPE_OPTIONS.map((option) => (
+              {TEAM_DRAW_TYPE_OPTIONS.map((option) => (
                 <option key={option} value={option}>{option}</option>
               ))}
             </select>

@@ -23,6 +23,7 @@ import {
   Lock,
   ChevronDown,
   History,
+  Check,
 } from 'lucide-react';
 import type {
   TournamentEvent,
@@ -53,14 +54,26 @@ import { Super8StandingStatsBlock } from '../components/Super8StandingStatsBlock
 import { MatchCard } from '../components/matches/MatchCard';
 import { TeamCard } from '../components/teams/TeamCard';
 import { ParticipantRow } from '../components/registration/ParticipantRow';
-import { ParticipantMatchHistory } from '../components/registration/ParticipantMatchHistory';
+import {
+  ParticipantMatchHistory,
+  isAthleteMatch,
+  isAthleteInPair,
+  getMatchPair,
+} from '../components/registration/ParticipantMatchHistory';
 import { useEventPermissions } from '../domain/access/useEventPermissions';
 import { useEventRealtime } from '../domain/realtime/useEventRealtime';
 import { calculateSuper8PlayerStandings, calculateBracketStandings } from '../services/matchProgression';
 import { calculateQueueState } from '../services/queueManager';
 import { validateCategoryGenders } from '../services/matchGenerator';
 import { createMercadoPagoPreference, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
-import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
+import {
+  getRegistrationPeriodStatus,
+  isTournamentPeriodActive,
+  entryHasFinishedMatch,
+  entryHasFinishedMatchOnDate,
+  isEntryCheckedInToday,
+  getTodayDateStr,
+} from '../services/eventRegistrationPeriod';
 import { isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
 import { openPdfOrUrl } from '../services/openRegulationPdf';
 
@@ -128,6 +141,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   const [deleteRequestReason, setDeleteRequestReason] = useState('');
   const [isSendingDeleteRequest, setIsSendingDeleteRequest] = useState(false);
   const [myHistoryOpen, setMyHistoryOpen] = useState(true);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
 
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -220,6 +234,99 @@ export const EventDetailScreen: React.FC<Props> = ({
     }
   };
 
+  const handleParticipantCheckIn = async () => {
+    if (!currentUserEntry || isCheckingIn) return;
+    if (!isTournamentPeriodActive(event)) {
+      setModalConfig({
+        title: 'Check-in indisponível',
+        message: 'O check-in só pode ser realizado no dia do torneio (hoje). Não é possível realizar check-in no passado nem no futuro.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
+
+    const todayStr = getTodayDateStr();
+    const hasFinishedToday = entryHasFinishedMatchOnDate(currentUserEntry, event.matches, pairsById, todayStr);
+    const currentChecked = isEntryCheckedInToday(currentUserEntry, event.matches, pairsById, todayStr);
+
+    if (currentChecked && hasFinishedToday) {
+      setModalConfig({
+        title: 'Check-in confirmado',
+        message: 'Você possui uma partida finalizada hoje no evento. Seu check-in de hoje permanece confirmado.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
+
+    const nextChecked = !currentChecked;
+
+    setIsCheckingIn(true);
+    try {
+      const updatedEntry: TournamentEntry = {
+        ...currentUserEntry,
+        checkedIn: nextChecked,
+        checkInDate: nextChecked ? todayStr : undefined,
+        checkInDates: nextChecked
+          ? Array.from(new Set([...(currentUserEntry.checkInDates || []), todayStr]))
+          : (currentUserEntry.checkInDates || []).filter((d) => d !== todayStr),
+      };
+
+      const db = getDb();
+      if (db && event.pin && currentUserEntry.email) {
+        const { saveEventEntry } = await import('@infra/firebase/events');
+        await saveEventEntry(db, event.pin, updatedEntry as any);
+      }
+
+      const updatedEntries = (event.entries || []).map((e) =>
+        (e.email === currentUserEntry.email || e.pin === currentUserEntry.pin)
+          ? updatedEntry
+          : e
+      );
+      if (db && event.pin) {
+        try {
+          await updateEvent(db, event.pin, { entries: updatedEntries } as any);
+        } catch {}
+      }
+    } catch (err) {
+      console.error('Erro ao realizar check-in:', err);
+    } finally {
+      setIsCheckingIn(false);
+    }
+  };
+
+  const handleQuickReactivate = async () => {
+    if (!currentUserEntry) return;
+    try {
+      const isFree = (event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0;
+      const hasPayment = (currentUserEntry.payments && currentUserEntry.payments.length > 0) || (currentUserEntry.paidAmount ?? 0) > 0 || currentUserEntry.paymentStatus === 'Confirmado' || currentUserEntry.paymentStatus === 'Pago' || isFree;
+      const restoredStatus = hasPayment ? 'Confirmado' : 'Pendente';
+
+      const updatedEntry: TournamentEntry = {
+        ...currentUserEntry,
+        disabled: false,
+        disabledReason: '',
+        paymentStatus: currentUserEntry.paymentStatus === 'Cancelado' ? restoredStatus : currentUserEntry.paymentStatus,
+      };
+
+      const db = getDb();
+      if (db && event.pin && currentUserEntry.email) {
+        const { saveEventEntry } = await import('@infra/firebase/events');
+        await saveEventEntry(db, event.pin, updatedEntry as any);
+      }
+
+      const updatedEntries = (event.entries || []).map((e) =>
+        (e.email === currentUserEntry.email || e.pin === currentUserEntry.pin) ? updatedEntry : e
+      );
+      if (db && event.pin) {
+        try {
+          await updateEvent(db, event.pin, { entries: updatedEntries } as any);
+        } catch {}
+      }
+    } catch (err) {
+      console.error('Erro ao reativar inscrição:', err);
+    }
+  };
+
   React.useEffect(() => {
     return () => {
       if (pixPollingRef.current) {
@@ -302,9 +409,27 @@ export const EventDetailScreen: React.FC<Props> = ({
     return map;
   }, [event.pairs]);
 
+  const pairsMap = useMemo(() => Object.fromEntries(pairsById), [pairsById]);
+
+  const activeUserEntry = useMemo(() => {
+    if (currentUserEntry) return currentUserEntry;
+    if (userProfile.email || userProfile.pin || userProfile.nickname || userProfile.name) {
+      return {
+        email: userProfile.email || '',
+        pin: userProfile.pin || '',
+        name: userProfile.name || '',
+        nickname: userProfile.nickname || '',
+      } as TournamentEntry;
+    }
+    return null;
+  }, [currentUserEntry, userProfile]);
+
   const isCurrentUserEntry = useCallback(
     (entry?: Partial<TournamentEntry> | null) => {
       if (!entry) return false;
+      if (activeUserEntry) {
+        return isAthleteMatch(activeUserEntry, entry);
+      }
       const userEmail = userProfile.email?.toLowerCase().trim();
       const userPin = userProfile.pin?.toUpperCase().trim();
       const entryEmail = entry.email?.toLowerCase().trim();
@@ -314,28 +439,27 @@ export const EventDetailScreen: React.FC<Props> = ({
           (userPin && entryPin && userPin === entryPin)
       );
     },
-    [userProfile.email, userProfile.pin]
+    [activeUserEntry, userProfile.email, userProfile.pin]
   );
 
   const isCurrentUserInMatch = useCallback(
     (match: TournamentMatch) => {
-      const pair1 = match.pair1 || (match.pair1Id ? pairsById.get(match.pair1Id) : undefined);
-      const pair2 = match.pair2 || (match.pair2Id ? pairsById.get(match.pair2Id) : undefined);
+      if (!activeUserEntry) return false;
+      const pair1 = getMatchPair(match, 1, pairsMap, event.pairs);
+      const pair2 = getMatchPair(match, 2, pairsMap, event.pairs);
       return Boolean(
-        isCurrentUserEntry(pair1?.p1) ||
-          isCurrentUserEntry(pair1?.p2) ||
-          isCurrentUserEntry(pair2?.p1) ||
-          isCurrentUserEntry(pair2?.p2)
+        isAthleteInPair(activeUserEntry, pair1) ||
+        isAthleteInPair(activeUserEntry, pair2)
       );
     },
-    [isCurrentUserEntry, pairsById]
+    [activeUserEntry, pairsMap, event.pairs]
   );
 
   // Todas as partidas do evento em que o usuário atual participa (para o bloco Meu Histórico)
   const myHistoryMatches = useMemo(() => {
-    if (canManageEvent) return [];
+    if (!activeUserEntry) return [];
     return (event.matches || []).filter((m) => isCurrentUserInMatch(m));
-  }, [event.matches, isCurrentUserInMatch, canManageEvent]);
+  }, [event.matches, isCurrentUserInMatch, activeUserEntry]);
 
   // Formação de duplas pelo gestor dentro da categoria
   const toggleEntrySelection = (entry: TournamentEntry) => {
@@ -885,6 +1009,10 @@ export const EventDetailScreen: React.FC<Props> = ({
                 currentUserEntry.paymentStatus === 'Pago' ||
                 currentUserEntry.paymentStatus === 'Isento'
               );
+              const isTournamentActive = isTournamentPeriodActive(event);
+              const todayStr = getTodayDateStr();
+              const hasFinishedToday = entryHasFinishedMatchOnDate(currentUserEntry, event.matches, pairsById, todayStr);
+              const isCheckedIn = isEntryCheckedInToday(currentUserEntry, event.matches, pairsById, todayStr);
 
               return (
                 <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -898,7 +1026,11 @@ export const EventDetailScreen: React.FC<Props> = ({
                           ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                           : 'bg-amber-100 text-amber-700 border border-amber-200'
                       }`}>
-                        {isCancelled ? 'Inscrição Cancelada' : isConfirmed ? 'Inscrição Ativa' : 'Pendente de Pagamento'}
+                        {currentUserEntry.disabled && currentUserEntry.paymentStatus !== 'Cancelado'
+                          ? 'Inscrição Desativada'
+                          : isCancelled
+                          ? 'Inscrição Cancelada'
+                          : isConfirmed ? 'Inscrição Ativa' : 'Pendente de Pagamento'}
                       </span>
                     </div>
                     <p className="text-[11px] font-bold text-slate-400 mt-0.5">
@@ -911,6 +1043,32 @@ export const EventDetailScreen: React.FC<Props> = ({
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {/* Check-in no período do torneio para participante com inscrição válida */}
+                    {isConfirmed && isTournamentActive && (
+                      <button
+                        type="button"
+                        onClick={handleParticipantCheckIn}
+                        disabled={isCheckingIn}
+                        className={`px-3.5 py-2 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm ${
+                          isCheckedIn
+                            ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                        }`}
+                        title={isCheckedIn ? 'Check-in confirmado (clique para alternar)' : 'Fazer check-in no evento'}
+                      >
+                        {isCheckedIn ? (
+                          <>
+                            <CheckCircle2 size={16} className="text-emerald-600" />
+                            <span>Check-in realizado</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check size={14} className="stroke-[3]" />
+                            <span>{isCheckingIn ? 'Confirmando...' : 'Fazer check-in'}</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                     {canPayCurrentEntry && !isCancelled && (
                       <button
                         type="button"
@@ -920,6 +1078,16 @@ export const EventDetailScreen: React.FC<Props> = ({
                       >
                         {isStartingPayment ? <RotateCw size={15} className="animate-spin" /> : <CreditCard size={15} />}
                         Pagar inscrição
+                      </button>
+                    )}
+                    {currentUserEntry.disabled && currentUserEntry.paymentStatus !== 'Cancelado' && (
+                      <button
+                        type="button"
+                        onClick={handleQuickReactivate}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 size={15} />
+                        Reativar Inscrição
                       </button>
                     )}
                     <button
@@ -1022,8 +1190,8 @@ export const EventDetailScreen: React.FC<Props> = ({
           {canViewEventDetails ? (
             <div className="space-y-4">
 
-            {/* ─── MEU HISTÓRICO (somente jogador, quando há partidas) ─── */}
-            {!canManageEvent && myHistoryMatches.length > 0 && currentUserEntry && (
+            {/* ─── MEU HISTÓRICO (quando há partidas do usuário) ─── */}
+            {myHistoryMatches.length > 0 && activeUserEntry && (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 {/* Cabeçalho colapsável */}
                 <button
@@ -1048,10 +1216,10 @@ export const EventDetailScreen: React.FC<Props> = ({
                 {myHistoryOpen && (
                   <div className="border-t border-slate-100 px-4 py-3">
                     <ParticipantMatchHistory
-                      entry={currentUserEntry}
+                      entry={activeUserEntry}
                       matches={event.matches || []}
                       categories={event.categories}
-                      pairsById={Object.fromEntries(pairsById)}
+                      pairsById={pairsMap}
                       allPairs={event.pairs}
                       defaultExpanded
                     />
@@ -1212,6 +1380,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 key={entry.email || entry.pin}
                                 entry={entry}
                                 category={activeCategory}
+                                categories={event.categories}
                                 isCurrentUser={isCurrentUser}
                                 pair={pair}
                                 standing={standing}
@@ -1221,6 +1390,10 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 isSelected={selectedEntries.has(entry.email || entry.pin)}
                                 canSelect={canManageEvent && !pair && !isSuper8}
                                 hasCategoryMatches={categoryMatches.length > 0}
+                                matches={event.matches || []}
+                                pairsById={pairsMap}
+                                allPairs={event.pairs}
+                                canViewHistory={isCurrentUser || canManageEvent}
                                 onToggleSelect={toggleEntrySelection}
                               />
 

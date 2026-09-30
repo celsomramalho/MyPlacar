@@ -20,6 +20,7 @@ import { EventSponsorsManager } from './EventSponsorsManager';
 import { EventPaymentsView } from './EventPaymentsView';
 import { calculateQueueState } from '@modules/events/services/queueManager';
 import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
+import { isEntryCheckedInToday, getTodayDateStr } from '@modules/events/services/eventRegistrationPeriod';
 
 export type EventDashboardTab =
   | 'categories'
@@ -105,7 +106,14 @@ export const EventDashboardView: React.FC<Props> = ({
     (e) => !e.paymentStatus || e.paymentStatus === 'Pendente'
   ).length;
 
-  const checkedInCount = entries.filter((e) => e.checkedIn).length;
+  const todayStr = getTodayDateStr();
+  const pairsById = React.useMemo(() => {
+    const map = new Map<string, import('@modules/events/types').TournamentPair>();
+    (event.pairs || []).forEach((p) => map.set(p.id, p));
+    return map;
+  }, [event.pairs]);
+
+  const checkedInCount = entries.filter((e) => isEntryCheckedInToday(e, event.matches, pairsById, todayStr)).length;
 
   const isPrimary = isPrimaryAdminEmail(adminEmail);
   const isReadOnly = event.active !== true && !isPrimary;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem } from '@modules/events/types';
+import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react';
+import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem, type TournamentPair } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
 import { updateUserProfileFields } from '@infra/firebase/users';
@@ -8,6 +8,12 @@ import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { maskPin } from '@shared/utils/formatters';
 import { playPaymentSuccessSound } from '@shared/utils/soundEffects';
 import { syncEventMercadoPagoPayments } from '@modules/events/services/mercadoPagoCheckout';
+import {
+  isTournamentPeriodActive,
+  entryHasFinishedMatchOnDate,
+  isEntryCheckedInToday,
+  getTodayDateStr,
+} from '@modules/events/services/eventRegistrationPeriod';
 import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
 import { useUI } from '@modules/ui';
 
@@ -40,6 +46,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const entries = event.entries || [];
   const categories = event.categories || [];
 
+  const [searchName, setSearchName] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [editingPin, setEditingPin] = useState<string | null>(null);
   const [expandedRegistrationEmail, setExpandedRegistrationEmail] = useState<string | null>(
@@ -47,6 +54,87 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   );
   const [isSyncingMP, setIsSyncingMP] = useState(false);
   const [isFixingIds, setIsFixingIds] = useState(false);
+
+  const pairsById = useMemo(() => {
+    const map = new Map<string, TournamentPair>();
+    (event.pairs || []).forEach((p) => map.set(p.id, p));
+    return map;
+  }, [event.pairs]);
+
+  const filteredEntries = useMemo(() => {
+    if (!searchName.trim()) return entries;
+    const term = searchName.toLowerCase().trim();
+    return entries.filter((e) =>
+      (e.name || '').toLowerCase().includes(term) ||
+      (e.nickname || '').toLowerCase().includes(term) ||
+      (e.pin || '').toLowerCase().includes(term)
+    );
+  }, [entries, searchName]);
+
+  const handleToggleCheckIn = async (entry: TournamentEntry) => {
+    if (isReadOnly) return;
+
+    if (!isTournamentPeriodActive(event)) {
+      const today = getTodayDateStr();
+      let reason = 'O check-in só é permitido nos dias de realização do torneio (hoje). Não é possível fazer check-in no passado ou no futuro.';
+      if (event.tournamentStartDate && today < event.tournamentStartDate) {
+        reason = `O torneio inicia em ${new Date(event.tournamentStartDate + 'T12:00:00').toLocaleDateString('pt-BR')}. Não é possível fazer check-in no futuro.`;
+      } else if (event.tournamentEndDate && today > event.tournamentEndDate) {
+        reason = `O torneio encerrou em ${new Date(event.tournamentEndDate + 'T12:00:00').toLocaleDateString('pt-BR')}. Não é possível fazer check-in no passado.`;
+      }
+      setModalConfig({
+        title: 'Check-in indisponível',
+        message: reason,
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
+
+    const todayStr = getTodayDateStr();
+    const hasFinishedToday = entryHasFinishedMatchOnDate(entry, event.matches, pairsById, todayStr);
+    const currentChecked = isEntryCheckedInToday(entry, event.matches, pairsById, todayStr);
+
+    if (currentChecked && hasFinishedToday) {
+      setModalConfig({
+        title: 'Check-in confirmado',
+        message: 'O participante possui partida finalizada hoje, portanto o check-in não pode ser desmarcado.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
+
+    const nextChecked = !currentChecked;
+
+    const updatedEntry: TournamentEntry = {
+      ...entry,
+      checkedIn: nextChecked,
+      checkInDate: nextChecked ? todayStr : undefined,
+      checkInDates: nextChecked
+        ? Array.from(new Set([...(entry.checkInDates || []), todayStr]))
+        : (entry.checkInDates || []).filter((d) => d !== todayStr),
+    };
+
+    const db = getDb();
+    if (db && event.pin) {
+      try {
+        const { saveAdminEventEntry } = await import('@infra/firebase/events');
+        await saveAdminEventEntry(
+          db,
+          event.pin,
+          updatedEntry,
+          adminEmail || getAuthInstance()?.currentUser?.email || undefined
+        );
+      } catch (err) {
+        console.error('Erro ao atualizar check-in do participante:', err);
+      }
+    }
+
+    const updatedEntries = entries.map((item) =>
+      (item.email === entry.email || item.pin === entry.pin) ? updatedEntry : item
+    );
+    onUpdateEntries(updatedEntries);
+    onUpdateEvent({ ...event, entries: updatedEntries });
+  };
 
   const handleSyncMercadoPago = async () => {
     if (isSyncingMP || !event.pin) return;
@@ -577,6 +665,27 @@ export const EventRegistrationsManager: React.FC<Props> = ({
             >
               Nova inscrição
             </button>
+            {/* Campo de pesquisa de participante por nome */}
+            <div className="relative w-full">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchName}
+                onChange={(e) => setSearchName(e.target.value)}
+                placeholder="Pesquisar participante por nome..."
+                className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
+              />
+              {searchName && (
+                <button
+                  type="button"
+                  onClick={() => setSearchName('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                  title="Limpar pesquisa"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -923,14 +1032,30 @@ export const EventRegistrationsManager: React.FC<Props> = ({
             <p className="text-sm font-bold text-slate-400">Nenhum participante inscrito ainda.</p>
             <p className="text-xs text-slate-300">Clique em "Nova inscrição" para inscrever um jogador.</p>
           </div>
+        ) : filteredEntries.length === 0 ? (
+          <div className="p-10 text-center space-y-2">
+            <Search className="mx-auto text-slate-300" size={32} />
+            <p className="text-sm font-bold text-slate-400">Nenhum participante encontrado para "{searchName}".</p>
+            <button
+              type="button"
+              onClick={() => setSearchName('')}
+              className="text-xs font-black text-emerald-600 hover:underline cursor-pointer"
+            >
+              Limpar pesquisa
+            </button>
+          </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {entries.map((entry) => {
+            {filteredEntries.map((entry) => {
               const entryCategories = categories.filter((c) =>
                 entry.categoryIds?.includes(c.id)
               );
               const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
               const isExpanded = expandedRegistrationEmail === entry.email;
+              const todayStr = getTodayDateStr();
+              const isTournamentActive = isTournamentPeriodActive(event);
+              const hasFinishedToday = entryHasFinishedMatchOnDate(entry, event.matches, pairsById, todayStr);
+              const isCheckedIn = isEntryCheckedInToday(entry, event.matches, pairsById, todayStr);
 
               return (
                 <div
@@ -1044,8 +1169,38 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {/* Lado Direito: Inscrição_ID + Botão de Ação / Chevron */}
-                    <div className="flex items-center gap-3 shrink-0">
+                    {/* Lado Direito: Check-in + Inscrição_ID + Botão de Ação / Chevron */}
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                      {/* Check-in habilitado para o admin marcar */}
+                      <button
+                        type="button"
+                        disabled={isReadOnly}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (isReadOnly) return;
+                          await handleToggleCheckIn(entry);
+                        }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-black transition-all ${
+                          isCheckedIn
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 shadow-xs'
+                            : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100 hover:text-slate-600'
+                        } ${isReadOnly ? 'cursor-default opacity-80' : 'cursor-pointer active:scale-95'}`}
+                        title={
+                          !isTournamentActive
+                            ? 'Check-in disponível apenas nos dias do torneio (hoje)'
+                            : isCheckedIn
+                            ? 'Check-in confirmado (clique para desmarcar)'
+                            : 'Marcar check-in'
+                        }
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                          isCheckedIn ? 'bg-emerald-500 border-emerald-600 text-white' : 'border-slate-300 bg-white'
+                        }`}>
+                          {isCheckedIn && <Check size={11} className="stroke-[3]" />}
+                        </div>
+                        <span className="text-[11px] hidden sm:inline font-bold">Check-in</span>
+                      </button>
+
                       <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
                         {formatRegistrationId(entry.registrationId)}
                       </span>

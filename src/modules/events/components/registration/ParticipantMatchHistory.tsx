@@ -169,7 +169,7 @@ export const extractAthleteMatchDetail = (
 
   // Status & Scores
   const isFinished = match.status === 'finished';
-  const isInProgress = match.status === 'in_progress';
+  const isInProgress = match.status === 'live' || (match.status as unknown as string) === 'in_progress';
   const isWaiting = !isFinished && !isInProgress;
 
   const { g1, g2, s1, s2 } = parseScoresFromMatch(match);

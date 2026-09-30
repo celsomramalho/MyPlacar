@@ -402,12 +402,23 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
           ) : (
             <div className="space-y-3">
               {filteredRegistrations.map((reg) => {
-                const { pin, name, joinedAt } = reg;
+                const { pin, name, joinedAt, paymentStatus } = reg;
                 // Usa o evento completo do mapa ativo; se não estiver lá, usa o mapa de inscrições (eventos inativos)
                 const eventObj = activeEventsMap.get(pin.toUpperCase()) ?? registeredEventsMap.get(pin.toUpperCase());
                 const isUserAdmin =
                   isPrimaryAdminEmail(userProfile?.email) ||
                   (eventObj ? canUseEventAdminAccess(eventObj, userProfile?.pin) : false);
+
+                // Badge de status de inscrição
+                const statusConfig: Record<string, { label: string; className: string }> = {
+                  'Confirmado': { label: 'Inscrição ativa', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+                  'Pago':       { label: 'Inscrição ativa', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+                  'Isento':     { label: 'Isento',          className: 'bg-blue-100 text-blue-700 border-blue-200' },
+                  'Pendente':   { label: 'Pendente de pagamento', className: 'bg-amber-100 text-amber-700 border-amber-200' },
+                  'Recusado':   { label: 'Pagamento recusado', className: 'bg-red-100 text-red-700 border-red-200' },
+                  'Cancelado':  { label: 'Cancelado',       className: 'bg-red-100 text-red-700 border-red-200' },
+                };
+                const statusInfo = paymentStatus ? statusConfig[paymentStatus] : null;
 
                 return (
                   <div
@@ -421,9 +432,16 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                       </div>
                       <div className="text-left min-w-0 flex-1">
                         <p className="text-sm font-black text-gray-900 mb-1 truncate">{name}</p>
-                        <div className="flex items-center gap-1.5 text-slate-400">
-                          <Calendar size={12} className="shrink-0" />
-                          <p className="text-[10px] font-bold truncate">Inscrito em {new Date(joinedAt).toLocaleDateString('pt-BR')}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 text-slate-400">
+                            <Calendar size={12} className="shrink-0" />
+                            <p className="text-[10px] font-bold">Inscrito em {new Date(joinedAt).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          {statusInfo && (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black border ${statusInfo.className}`}>
+                              {statusInfo.label}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

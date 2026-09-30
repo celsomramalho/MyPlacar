@@ -365,8 +365,14 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
       }
     });
     return map;
-  }, [liveEntries, event.entries, entry, isFreeEvent, isExistingRegistration]);
-  const isDoubles = (cat: EventCategory) => !isSinglePlayer && (cat.format === 'Duplas' || !cat.format || cat.name.toLowerCase().includes('dupla') || Boolean(cat.gender2));
+  }, [liveEntries, event.entries, event.categories, isExistingRegistration, entry, isFreeEvent]);
+
+  const teamDraw = (event.teamDrawType || 'Manual').trim().toLowerCase();
+  const isTeamDrawPreDefined = teamDraw === 'pré definida' || teamDraw === 'pre definida' || teamDraw === 'pré-definida' || teamDraw === 'pre-definida';
+  const isTeamDrawSystem = teamDraw === 'sistema';
+  const isTeamDrawManual = !isTeamDrawPreDefined && !isTeamDrawSystem;
+
+  const isDoubles = (cat: EventCategory) => !isSinglePlayer && cat.format === 'Duplas' && !isTeamDrawSystem;
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const effectiveDueAmount = isFreeEvent
     ? 0
@@ -452,7 +458,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
     title: string;
     message: string;
     confirmLabel: string;
-    type: 'delete' | 'refund_with_fee' | 'cancel_no_refund' | 'cancel_with_matches';
+    type: 'delete' | 'refund_with_fee' | 'cancel_no_refund' | 'cancel_with_matches' | 'deactivate_with_matches';
   } | null>(null);
 
   const handleSaveStep1 = () => {
@@ -515,7 +521,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
 
     for (const catId of effectiveCategoryIds) {
       const cat = (event.categories || []).find((c) => c.id === catId);
-      if (isSinglePlayer || !cat || !isDoubles(cat)) continue;
+      if (isSinglePlayer || !cat || !isDoubles(cat) || !isTeamDrawPreDefined) continue;
       const pair = pairForCategory(cat.id);
       if (pair) continue;
       const partner = categoryPartners[catId] || { name: '', email: '', phone: '' };
@@ -582,13 +588,13 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
           type: 'delete',
         });
       } else {
-        // 2.b) Com partida(s) realizada(s): cancela e impede de jogar
+        // 2.b) Com partida(s) realizada(s): desativa a inscrição (pode ser reativada a qualquer momento)
         setCancelModalConfig({
           isOpen: true,
-          title: 'Cancelar inscrição com partidas realizadas?',
-          message: 'Sua inscrição será cancelada mesmo já tendo partida(s) realizada(s). Você não poderá mais formar time e participar de partidas. Deseja prosseguir com o cancelamento?',
-          confirmLabel: 'Confirmar cancelamento',
-          type: 'cancel_with_matches',
+          title: 'Desativar inscrição?',
+          message: 'Como você já possui partida(s) realizada(s), sua inscrição ficará com status DESATIVADA. Para todos os efeitos você não poderá jogar ou formar times enquanto estiver desativada, mas poderá reativá-la a qualquer momento. Deseja prosseguir?',
+          confirmLabel: 'Confirmar desativação',
+          type: 'deactivate_with_matches',
         });
       }
       return;
@@ -599,10 +605,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
     if (hasFinishedMatches) {
       setCancelModalConfig({
         isOpen: true,
-        title: 'Cancelar inscrição sem reembolso?',
-        message: 'Sua inscrição será cancelada, mas não haverá reembolso por haver partida(s) realizada(s). Deseja prosseguir com o cancelamento?',
-        confirmLabel: 'Confirmar cancelamento',
-        type: 'cancel_with_matches',
+        title: 'Desativar inscrição?',
+        message: 'Como você já possui partida(s) realizada(s), sua inscrição ficará com status DESATIVADA (sem reembolso). Para todos os efeitos você não poderá jogar ou formar times enquanto estiver desativada, mas poderá reativá-la a qualquer momento. Deseja prosseguir?',
+        confirmLabel: 'Confirmar desativação',
+        type: 'deactivate_with_matches',
       });
       return;
     }
@@ -664,13 +670,25 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
           }
           if (onCancel) onCancel();
         }
+      } else if (type === 'deactivate_with_matches') {
+        const reason = 'Inscrição desativada a pedido do participante (partida realizada). Pode ser reativada a qualquer momento.';
+        const updatedEntry: TournamentEntry = {
+          ...entry,
+          disabled: true,
+          disabledReason: reason,
+        };
+
+        setDisabled(true);
+        setDisabledReason(reason);
+
+        await onSave(updatedEntry);
+        setFeedback('✓ Inscrição desativada com sucesso. Você pode reativá-la a qualquer momento.');
+        setTimeout(() => {
+          if (onCancel) onCancel();
+        }, 1500);
       } else {
         let reason = '';
-        if (type === 'cancel_with_matches') {
-          reason = isFreeEvent
-            ? 'Cancelamento solicitado pelo participante com partida(s) já realizada(s) (evento gratuito)'
-            : 'Cancelamento solicitado pelo participante com partida(s) já realizada(s) (sem reembolso)';
-        } else if (type === 'refund_with_fee') {
+        if (type === 'refund_with_fee') {
           reason = 'Cancelamento solicitado pelo participante dentro do prazo (taxa de 30%)';
         } else {
           reason = 'Cancelamento solicitado pelo participante fora do prazo (sem reembolso)';
@@ -746,6 +764,9 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
       if (!isAlreadyInEntry && confirmed >= limit) {
         setFeedback(`Vagas esgotadas: a categoria "${cat?.name || ''}" atingiu o limite de ${limit} inscritos com pagamento confirmado.`);
         return;
+      }
+      if (cat && isDoubles(cat) && isTeamDrawPreDefined) {
+        setExpandedPartnerCategoryIds((current) => new Set(current).add(categoryId));
       }
     }
     setCategoryIds((ids) => {
@@ -926,7 +947,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
 
     for (const catId of effectiveCategoryIds) {
       const cat = (event.categories || []).find((c) => c.id === catId);
-      if (isSinglePlayer || !cat || !isDoubles(cat)) continue;
+      if (isSinglePlayer || !cat || !isDoubles(cat) || !isTeamDrawPreDefined) continue;
       const pair = pairForCategory(cat.id);
       if (pair) continue; // Se já tem time formado, não precisa exigir dados do parceiro novamente
       const partner = categoryPartners[catId] || { name: '', email: '', phone: '' };
@@ -1418,11 +1439,15 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
             <div className="flex items-center gap-2">
               <AlertCircle className="text-red-600 shrink-0" size={18} />
               <span className="text-xs font-black uppercase tracking-wider">
-                Inscrição Cancelada
+                {(disabled || entry.disabled) && paymentStatus !== 'Cancelado' && entry.paymentStatus !== 'Cancelado'
+                  ? 'Inscrição Desativada'
+                  : 'Inscrição Cancelada'}
               </span>
             </div>
             <p className="text-xs text-red-700 font-bold leading-relaxed">
-              Esta inscrição está cancelada. Enquanto estiver cancelada, você não poderá formar time nem participar de partidas.
+              {(disabled || entry.disabled) && paymentStatus !== 'Cancelado' && entry.paymentStatus !== 'Cancelado'
+                ? 'Esta inscrição está desativada. Para todos os efeitos é como se estivesse cancelada, com a diferença de que a qualquer momento você pode reativá-la.'
+                : 'Esta inscrição está cancelada. Enquanto estiver cancelada, você não poderá formar time nem participar de partidas.'}
             </p>
             {(disabledReason || entry.disabledReason) && (
               <div className="text-[11px] text-red-600 bg-white/80 p-2.5 rounded-xl border border-red-100">
@@ -1436,7 +1461,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
               className="w-full py-2.5 px-4 rounded-2xl border-2 border-emerald-500 bg-white hover:bg-emerald-50 text-emerald-700 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-xs disabled:opacity-60"
             >
               <CheckCircle2 size={16} className="text-emerald-600" />
-              <span>{isSaving ? 'Ativando inscrição...' : 'Ativar inscrição'}</span>
+              <span>{isSaving ? 'Reativando inscrição...' : 'Reativar inscrição'}</span>
             </button>
           </div>
         ) : isConfirmedRegistration ? (
@@ -1742,7 +1767,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
           const partnerFormMissingData = !partner.name.trim() || !partner.email.trim() || !partner.phone.trim();
           return (
             <div key={cat.id} className="space-y-2">
-              <div className={isSinglePlayer ? 'w-full' : 'grid grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-2'}>
+              <div className={(isSinglePlayer || !isDoubles(cat)) ? 'w-full' : 'grid grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-2'}>
                 <label className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-xs font-black transition-all ${
                   isSelected 
                     ? 'bg-emerald-500 text-white border-emerald-500' 
@@ -1770,7 +1795,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
                     </span>
                   )}
                 </label>
-                {!isSinglePlayer && (
+                {isDoubles(cat) && (
                   <>
                     {isSelected ? (
                       <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${
@@ -1781,7 +1806,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
                     ) : (
                       <span />
                     )}
-                    {isSelected && isDoubles(cat) ? (
+                    {isSelected ? (
                       <button
                         type="button"
                         onClick={() => togglePartnerForm(cat.id)}
@@ -1789,7 +1814,7 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
                         title="Informe seu parceiro"
                       >
                         <Users size={17} />
-                        {partnerFormMissingData && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
+                        {partnerFormMissingData && isTeamDrawPreDefined && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
                       </button>
                     ) : (
                       <span />
@@ -1799,10 +1824,10 @@ export const EventRegistrationForm: React.FC<Props> = ({ event, entry, mode, isN
               </div>
               {!isSinglePlayer && isSelected && isDoubles(cat) && isPartnerFormExpanded && (
                 <div className="ml-7 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
-                  <p className="text-[10px] font-black text-slate-400">Informe seu parceiro - {cat.abbreviation || cat.name} *</p>
-                  <input required value={partner.name} onChange={(e) => updateCategoryPartner(cat.id, 'name', e.target.value)} placeholder="Nome do parceiro" className="event-registration-field bg-white" />
-                  <input type="email" required value={partner.email} onChange={(e) => updateCategoryPartner(cat.id, 'email', e.target.value)} placeholder="E-mail do parceiro" className="event-registration-field bg-white" />
-                  <input type="tel" required inputMode="numeric" value={formatPhone(partner.phone)} onChange={(e) => updateCategoryPartner(cat.id, 'phone', e.target.value)} placeholder="(11) 91234-9988" className="event-registration-field bg-white" />
+                  <p className="text-[10px] font-black text-slate-400">Informe seu parceiro - {cat.abbreviation || cat.name} {isTeamDrawPreDefined ? '*' : '(opcional)'}</p>
+                  <input required={isTeamDrawPreDefined} value={partner.name} onChange={(e) => updateCategoryPartner(cat.id, 'name', e.target.value)} placeholder="Nome do parceiro" className="event-registration-field bg-white" />
+                  <input type="email" required={isTeamDrawPreDefined} value={partner.email} onChange={(e) => updateCategoryPartner(cat.id, 'email', e.target.value)} placeholder="E-mail do parceiro" className="event-registration-field bg-white" />
+                  <input type="tel" required={isTeamDrawPreDefined} inputMode="numeric" value={formatPhone(partner.phone)} onChange={(e) => updateCategoryPartner(cat.id, 'phone', e.target.value)} placeholder="(11) 91234-9988" className="event-registration-field bg-white" />
                   {canShowFormTeam && confirmTeamCategoryId !== cat.id && (
                     <button type="button" onClick={() => setConfirmTeamCategoryId(cat.id)} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95">
                       Formar time

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowUpDown, Sparkles } from 'lucide-react';
-import type { EventCategory, TournamentEntry, TournamentEvent, PlayerStanding, TournamentMatch } from '@modules/events/types';
+import type { EventCategory, TournamentEntry, TournamentEvent, PlayerStanding, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { ParticipantRow } from '@modules/events/components/registration/ParticipantRow';
 import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
 

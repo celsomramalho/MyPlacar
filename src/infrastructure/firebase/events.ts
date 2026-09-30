@@ -21,6 +21,7 @@ interface FirebaseEventRegistration {
   name: string;
   joinedAt: number;
   bannerUrl?: string | null;
+  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
 }
 
 interface FirebaseTournamentEntry {
@@ -235,7 +236,8 @@ export const fetchUserEventRegistrations = async (
       try {
         const entrySnap = await getDoc(doc(db, 'events', eventPin, 'entries', cleanEmail));
         if (entrySnap.exists()) {
-          registrations.push(reg);
+          const entryData = entrySnap.data() as FirebaseTournamentEntry;
+          registrations.push({ ...reg, paymentStatus: entryData.paymentStatus });
           registeredPins.add(eventPin.toUpperCase());
         } else {
           // A inscrição foi excluída do evento! Limpa o registro órfão
@@ -265,6 +267,7 @@ export const fetchUserEventRegistrations = async (
           name: eventData.name || eventPin,
           joinedAt: entryData.joinedAt || Date.now(),
           bannerUrl: eventData.bannerUrl || null,
+          paymentStatus: entryData.paymentStatus,
         };
         registrations.push(autoReg);
         registeredPins.add(eventPin);

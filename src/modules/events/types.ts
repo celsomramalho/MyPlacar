@@ -22,6 +22,8 @@ export const minifyEntryForPair = (entry: Partial<TournamentEntry>): TournamentE
   shirtSize: entry.shirtSize || 'M',
   phone: entry.phone || '',
   checkedIn: !!entry.checkedIn,
+  checkInDate: entry.checkInDate,
+  checkInDates: entry.checkInDates,
   disabled: !!entry.disabled,
   disabledReason: entry.disabledReason || '',
 });
@@ -153,6 +155,17 @@ export const DRAW_TYPE_OPTIONS: DrawTypeOption[] = [
   'Sistema',
 ];
 
+export type TeamDrawTypeOption =
+  | 'Manual'
+  | 'Sistema'
+  | 'Pré definida';
+
+export const TEAM_DRAW_TYPE_OPTIONS: TeamDrawTypeOption[] = [
+  'Manual',
+  'Sistema',
+  'Pré definida',
+];
+
 export type EventPaymentTypeOption = 'manual' | 'mercadopago';
 
 export const EVENT_PAYMENT_TYPE_OPTIONS: Array<{ value: EventPaymentTypeOption; label: string }> = [
@@ -221,7 +234,7 @@ export interface TournamentEvent {
   eventType?: EventTypeOption;
   setsCount?: 1 | 3 | 5;
   gamesPerSet?: number;
-  teamDrawType?: DrawTypeOption;
+  teamDrawType?: TeamDrawTypeOption;
   bracketDrawType?: DrawTypeOption;
   matchDrawType?: DrawTypeOption;
   showRegisteredParticipants?: boolean;
@@ -276,6 +289,8 @@ export interface TournamentEntry {
   joinedAt: number;
   gender?: 'M' | 'F';
   checkedIn?: boolean;
+  checkInDate?: string;
+  checkInDates?: string[];
   dueAmount?: number;
   paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
   paidAmount?: number;
@@ -321,4 +336,5 @@ export interface EventRegistration {
   name: string;
   joinedAt: number;
   bannerUrl?: string | null;
+  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
 }
