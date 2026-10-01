@@ -6,7 +6,7 @@ import { fetchActiveEvents } from '../services/fetchActiveEvents';
 import { fetchEventByPin } from '@infra/firebase/events';
 import type { EventRegistration, TournamentEntry, TournamentEvent } from '../types';
 import type { UserProfile } from '@modules/auth/types';
-import { EventRegistrationForm } from '../components/EventRegistrationForm';
+import { EventRegistrationForm } from '../domain/registration';
 import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
 

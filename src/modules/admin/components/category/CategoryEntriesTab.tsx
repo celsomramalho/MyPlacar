@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowUpDown, Sparkles } from 'lucide-react';
 import type { EventCategory, TournamentEntry, TournamentEvent, PlayerStanding, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { ParticipantRow } from '@modules/events/components/registration/ParticipantRow';
-import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
+import { EventRegistrationForm } from '@modules/events/domain/registration';
 
 export interface CategoryEntriesTabProps {
   category: EventCategory;

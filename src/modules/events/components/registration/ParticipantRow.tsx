@@ -202,8 +202,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
         </div>
       )}
 
-      {/* Histórico de partidas do atleta (visível para o próprio jogador ou admin) */}
-      {Boolean(canViewHistory ?? isCurrentUser) && matches && matches.length > 0 && (
+      {/* Histórico de partidas do atleta (visível apenas para o próprio jogador, não para o admin) */}
+      {isCurrentUser && matches && matches.length > 0 && (
         <ParticipantMatchHistory
           entry={entry}
           matches={matches}

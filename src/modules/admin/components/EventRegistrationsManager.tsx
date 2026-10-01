@@ -14,7 +14,7 @@ import {
   isEntryCheckedInToday,
   getTodayDateStr,
 } from '@modules/events/services/eventRegistrationPeriod';
-import { EventRegistrationForm } from '@modules/events/components/EventRegistrationForm';
+import { EventRegistrationForm } from '@modules/events/domain/registration';
 import { useUI } from '@modules/ui';
 
 const formatPhone = (value: string) => {

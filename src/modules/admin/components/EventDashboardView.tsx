@@ -18,7 +18,7 @@ import { EventRegistrationsManager } from './EventRegistrationsManager';
 import { EventFormedTeamsView } from './EventFormedTeamsView';
 import { EventSponsorsManager } from './EventSponsorsManager';
 import { EventPaymentsView } from './EventPaymentsView';
-import { calculateQueueState } from '@modules/events/services/queueManager';
+import { calculateQueueState } from '@modules/events/domain/queue';
 import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 import { isEntryCheckedInToday, getTodayDateStr } from '@modules/events/services/eventRegistrationPeriod';
 

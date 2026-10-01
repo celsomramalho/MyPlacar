@@ -48,7 +48,7 @@ import { addCommunication } from '@infra/firebase/communications';
 import type { Firestore } from 'firebase/firestore';
 import { copyToClipboard } from '@shared/utils/clipboard';
 import type { ModalConfig } from '@modules/ui/types';
-import { EventRegistrationForm } from '../components/EventRegistrationForm';
+import { EventRegistrationForm } from '../domain/registration';
 import { RankingStandingStatsBlock } from '../components/RankingStandingStatsBlock';
 import { Super8StandingStatsBlock } from '../components/Super8StandingStatsBlock';
 import { MatchCard } from '../components/matches/MatchCard';
@@ -63,7 +63,7 @@ import {
 import { useEventPermissions } from '../domain/access/useEventPermissions';
 import { useEventRealtime } from '../domain/realtime/useEventRealtime';
 import { calculateSuper8PlayerStandings, calculateBracketStandings } from '../services/matchProgression';
-import { calculateQueueState } from '../services/queueManager';
+import { calculateQueueState } from '../domain/queue';
 import { validateCategoryGenders } from '../services/matchGenerator';
 import { createMercadoPagoPreference, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
 import {

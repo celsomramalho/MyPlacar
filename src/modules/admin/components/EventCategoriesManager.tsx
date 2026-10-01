@@ -26,7 +26,7 @@ import {
   type TeamStanding,
 } from '@modules/events/services/matchProgression';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
-import { calculateQueueState } from '@modules/events/services/queueManager';
+import { calculateQueueState } from '@modules/events/domain/queue';
 import { isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb } from '@infra/firebase';
