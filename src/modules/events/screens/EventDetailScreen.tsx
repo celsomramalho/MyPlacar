@@ -18,7 +18,6 @@ import {
   RotateCw,
   LogOut,
   X,
-  Link2,
   CreditCard,
   Lock,
   ChevronDown,
@@ -1359,19 +1358,10 @@ export const EventDetailScreen: React.FC<Props> = ({
                             : `${categoryMatches.length} ${categoryMatches.length === 1 ? 'partida configurada' : 'partidas configuradas'} nesta categoria.`}
                         </p>
                       </div>
-                      {canManageEvent && userCategoryView === 'entries' && selectedEntries.size === 2 && (
-                        <button
-                          type="button"
-                          onClick={handleFormTeam}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer"
-                        >
-                          <Link2 size={14} /> Formar Dupla
-                        </button>
-                      )}
                     </div>
 
-                    {!canManageEvent && canAthleteFormTeam && userCategoryView === 'entries' && selectedEntries.size > 0 && (
-                      <div className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-3 bg-sky-600 px-4 py-3 text-white shadow-md">
+                    {(canManageEvent || canAthleteFormTeam) && userCategoryView === 'entries' && selectedEntries.size > 0 && (
+                      <header className="fixed inset-x-0 top-0 z-[60] flex min-h-[76px] items-center justify-between gap-3 bg-sky-600 px-5 py-3 text-white shadow-lg animate-in slide-in-from-top duration-200">
                         <div className="flex min-w-0 items-center gap-3">
                           <button
                             type="button"
@@ -1385,17 +1375,23 @@ export const EventDetailScreen: React.FC<Props> = ({
                             {selectedEntries.size} {selectedEntries.size === 1 ? 'Selecionado' : 'Selecionados'}
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={handleFormTeam}
-                          disabled={!canSubmitSelectedTeam}
-                          className="flex shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-3.5 py-2.5 text-xs font-black text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-400"
-                          title="Formar time com os dois atletas selecionados"
-                        >
-                          <Users size={15} />
-                          <span>{canSubmitSelectedTeam ? 'Formar time' : 'Selecione 2'}</span>
-                        </button>
-                      </div>
+                        {selectedEntries.size === 2 ? (
+                          <button
+                            type="button"
+                            onClick={handleFormTeam}
+                            disabled={!canSubmitSelectedTeam}
+                            className="flex shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-3.5 py-2.5 text-xs font-black text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+                            title="Formar time com os dois atletas selecionados"
+                          >
+                            <Users size={15} />
+                            <span>Formar time</span>
+                          </button>
+                        ) : (
+                          <span className="shrink-0 rounded-xl bg-sky-700/60 px-3 py-2 text-xs font-bold text-sky-100">
+                            Selecione +1
+                          </span>
+                        )}
+                      </header>
                     )}
 
                     <div className="flex items-center justify-between pb-1">
