@@ -560,8 +560,9 @@ export const EventDetailScreen: React.FC<Props> = ({
     }
   };
 
-  const handleAthleteToggleTeamBracket = async (pair: TournamentPair) => {
-    if (canManageEvent || event.allowUserTeamFormation !== true || !hasActiveRegistration || isReadOnly) return;
+  const handleToggleTeamBracket = async (pair: TournamentPair) => {
+    const canAthleteChangeBracket = event.allowUserTeamFormation === true && hasActiveRegistration;
+    if ((!canManageEvent && !canAthleteChangeBracket) || isReadOnly) return;
     if (pairHasMatches(pair.id)) {
       setModalConfig({
         title: 'Chave bloqueada',
@@ -1536,10 +1537,10 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 index={idx}
                                 isRanking={isRanking}
                                 canManage={canManageEvent}
-                                canChangeBracket={!canManageEvent && event.allowUserTeamFormation === true &&
-                                  hasActiveRegistration && !isReadOnly &&
+                                canChangeBracket={(canManageEvent || (event.allowUserTeamFormation === true && hasActiveRegistration)) &&
+                                  !isReadOnly &&
                                   !pairHasMatches(pair.id)}
-                                onToggleBracket={handleAthleteToggleTeamBracket}
+                                onToggleBracket={handleToggleTeamBracket}
                                 onUndoPair={handleUndoPair}
                               />
                             );
