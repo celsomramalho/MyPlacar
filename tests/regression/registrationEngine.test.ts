@@ -39,6 +39,7 @@ import {
   isEntryCheckedInToday,
   getTodayDateStr,
 } from '../../src/modules/events/services/eventRegistrationPeriod';
+import { isPreDefinedTeamDraw, requiresPartnerDetails } from '../../src/modules/events/domain/registration/engine/partnerRequirements';
 
 // ─── Helpers de Teste ────────────────────────────────────────────────────────
 
@@ -414,29 +415,25 @@ describe('R-T18 a R-T20 – Mapeamento de Inscritos e Vagas em Eventos Gratuitos
 // ─── Grupo 8: Formação de Times Pré-definida e Dados do Parceiro ─────────────
 
 describe('R-T21 e R-T22 – Detecção de Formação de Duplas e Validação de Parceiro', () => {
-  const isPreDefinedDraw = (teamDrawType?: string): boolean => {
-    const normalized = (teamDrawType || 'Manual')
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-
-    return (
-      normalized.includes('pre definida') ||
-      normalized.includes('pre-definida') ||
-      normalized.includes('pre_definida') ||
-      normalized.includes('predefinida')
-    );
-  };
-
   it('R-T21: detecta corretamente formação "Pré definida" em suas variações', () => {
-    expect(isPreDefinedDraw('Pré definida')).toBe(true);
-    expect(isPreDefinedDraw('pre definida')).toBe(true);
-    expect(isPreDefinedDraw('Pré-definida')).toBe(true);
-    expect(isPreDefinedDraw('duplas pré-definidas')).toBe(true);
-    expect(isPreDefinedDraw('Manual')).toBe(false);
-    expect(isPreDefinedDraw('Sistema')).toBe(false);
-    expect(isPreDefinedDraw(undefined)).toBe(false);
+    expect(isPreDefinedTeamDraw('Pré definida')).toBe(true);
+    expect(isPreDefinedTeamDraw('pre definida')).toBe(true);
+    expect(isPreDefinedTeamDraw('Pré-definida')).toBe(true);
+    expect(isPreDefinedTeamDraw('duplas pré-definidas')).toBe(true);
+    expect(isPreDefinedTeamDraw('Manual')).toBe(false);
+    expect(isPreDefinedTeamDraw('Sistema')).toBe(false);
+    expect(isPreDefinedTeamDraw(undefined)).toBe(false);
+  });
+
+  it('R-T21b: só solicita parceiro quando o sorteio é pré-definido e há categoria de duplas', () => {
+    const categories = [
+      { id: 'simples', name: 'Simples', format: 'Simples' as const },
+      { id: 'duplas', name: 'Duplas', format: 'Duplas' as const },
+    ] as EventCategory[];
+
+    expect(requiresPartnerDetails('Pré definida', categories, ['duplas'])).toBe(true);
+    expect(requiresPartnerDetails('Pré definida', categories, ['simples'])).toBe(false);
+    expect(requiresPartnerDetails('Manual', categories, ['duplas'])).toBe(false);
   });
 
   it('R-T22: em duplas pré-definidas, exige nome, email e whatsapp válidos', () => {
@@ -562,4 +559,3 @@ describe('R-T21 e R-T22 – Detecção de Formação de Duplas e Validação de 
     expect(teamCode).toBe('003 - SUP8M');
   });
 });
-

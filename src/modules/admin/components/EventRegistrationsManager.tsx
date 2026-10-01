@@ -488,7 +488,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     resetForm();
   };
 
-  const handleSaveSharedEntry = async (entryData: TournamentEntry) => {
+  const handleSaveSharedEntry = async (entryData: TournamentEntry, resetAfterSave = true) => {
     const db = getDb();
     const finalEntry: TournamentEntry = {
       ...entryData,
@@ -506,7 +506,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     }
     const updated = editingPin ? entries.map((item) => item.pin === editingPin ? finalEntry : item) : [...entries, finalEntry];
     onUpdateEntries(updated);
-    resetForm();
+    if (resetAfterSave) resetForm();
   };
 
   const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
@@ -697,6 +697,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         mode="admin"
         entry={editingPin ? entries.find((item) => item.pin === editingPin)! : { name: name.trim(), nickname: nickname.trim(), email: email.trim(), pin: pin.trim(), joinedAt: Date.now(), gender, phone, shirtSize, categoryIds: selectedCategoryIds, dueAmount, paymentStatus, payments }}
         onSave={handleSaveSharedEntry}
+        onSaveDraft={(entryData) => handleSaveSharedEntry(entryData, false)}
+        onUpdateEvent={onUpdateEvent}
         onDelete={!isReadOnly && editingPin ? () => { if (editingPin) void handleDelete(editingPin); } : undefined}
         onCancel={resetForm}
         readOnly={isReadOnly}

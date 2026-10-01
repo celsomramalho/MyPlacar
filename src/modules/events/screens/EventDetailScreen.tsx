@@ -1684,6 +1684,20 @@ export const EventDetailScreen: React.FC<Props> = ({
                     }
                   }
                 }}
+                onSaveDraft={async (updated) => {
+                  const db = getDb();
+                  if (!db) return;
+                  await saveEventEntry(db as Firestore, event.pin, updated as any);
+                  await refreshEntries();
+                }}
+                onUpdateEvent={(updatedEvent) => {
+                  const db = getDb();
+                  if (!db) return;
+                  setEvent((currentEvent) => currentEvent
+                    ? { ...currentEvent, pairs: updatedEvent.pairs }
+                    : currentEvent);
+                  void updateEvent(db as Firestore, updatedEvent.pin, { pairs: updatedEvent.pairs });
+                }}
                 onDelete={async () => {
                   const db = getDb();
                   const targetEmail = (currentUserEntry?.email || userProfile.email || '').toLowerCase().trim();

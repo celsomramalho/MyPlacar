@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, UserPlus, Phone, Mail, CheckCircle2, UserCheck } from 'lucide-react';
+import { Users, UserPlus, Phone, Mail, UserCheck } from 'lucide-react';
 import type { EventCategory, CategoryPartnerInfo, TournamentEntry, TournamentPair } from '@modules/events/types';
 
 export interface PartnerSelectionStepProps {
@@ -42,39 +42,19 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
   onFormTeam,
   isSelfCancelled = false,
 }) => {
-  const [confirmTeamCategoryId, setConfirmTeamCategoryId] = useState<string | null>(null);
   const [isForming, setIsForming] = useState(false);
 
   const doublesCategories = categories.filter(
     (c) => selectedCategoryIds.includes(c.id) && c.format === 'Duplas'
   );
 
-  if (doublesCategories.length === 0) {
-    return (
-      <div className="space-y-4 animate-in fade-in duration-200">
-        <div className="border-b border-slate-100 pb-3">
-          <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
-            <Users size={18} className="text-blue-600" />
-            Parceiros de Dupla
-          </h3>
-          <p className="text-xs text-slate-400 font-bold mt-0.5">
-            Nenhuma das categorias selecionadas é disputada em duplas.
-          </p>
-        </div>
-        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 font-bold text-xs flex flex-col items-center gap-2">
-          <CheckCircle2 size={24} className="text-emerald-500" />
-          <span>Suas categorias selecionadas são individuais (Simples). Você pode avançar para o próximo passo.</span>
-        </div>
-      </div>
-    );
-  }
+  if (!isTeamDrawPreDefined || doublesCategories.length === 0) return null;
 
   const handleFormTeam = async (categoryId: string, partnerEntry: TournamentEntry) => {
     if (!onFormTeam || isForming) return;
     setIsForming(true);
     try {
       await onFormTeam(categoryId, partnerEntry);
-      setConfirmTeamCategoryId(null);
     } catch (err) {
       console.error('[PartnerSelectionStep] Erro ao formar time:', err);
     } finally {
@@ -126,9 +106,18 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
 
           const handleChange = (field: keyof CategoryPartnerInfo, val: string) => {
             if (readOnly) return;
+            const registeredPartner = field === 'email'
+              ? getPartnerEntryForCategory?.(cat.id, val.trim())
+              : undefined;
             updateCategoryPartner(cat.id, {
               ...partner,
               [field]: field === 'phone' ? formatPhone(val) : val,
+              ...(registeredPartner
+                ? {
+                    name: registeredPartner.name,
+                    phone: formatPhone(registeredPartner.phone || ''),
+                  }
+                : {}),
             });
           };
 
@@ -157,27 +146,6 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
 
               {/* Campos do parceiro */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Nome */}
-                <div className="space-y-1 sm:col-span-1">
-                  <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
-                    Nome do Parceiro(a)
-                    {isTeamDrawPreDefined ? (
-                      <span className="text-rose-500 font-black">*</span>
-                    ) : (
-                      <span className="text-slate-400 font-bold text-[10px]">(opcional)</span>
-                    )}
-                  </label>
-                  <input
-                    type="text"
-                    disabled={readOnly || Boolean(existingPair)}
-                    required={isTeamDrawPreDefined}
-                    value={partner.name}
-                    onChange={(e) => handleChange('name', e.target.value)}
-                    placeholder="Nome completo"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs font-bold text-slate-800 bg-white disabled:bg-slate-50 outline-none"
-                  />
-                </div>
-
                 {/* E-mail */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
@@ -196,6 +164,27 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                     value={partner.email}
                     onChange={(e) => handleChange('email', e.target.value)}
                     placeholder="parceiro@email.com"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs font-bold text-slate-800 bg-white disabled:bg-slate-50 outline-none"
+                  />
+                </div>
+
+                {/* Nome */}
+                <div className="space-y-1 sm:col-span-1">
+                  <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
+                    Nome do Parceiro(a)
+                    {isTeamDrawPreDefined ? (
+                      <span className="text-rose-500 font-black">*</span>
+                    ) : (
+                      <span className="text-slate-400 font-bold text-[10px]">(opcional)</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly || Boolean(existingPair)}
+                    required={isTeamDrawPreDefined}
+                    value={partner.name}
+                    onChange={(e) => handleChange('name', e.target.value)}
+                    placeholder="Nome completo"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs font-bold text-slate-800 bg-white disabled:bg-slate-50 outline-none"
                   />
                 </div>
@@ -223,45 +212,30 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                 </div>
               </div>
 
-              {/* Botão Formar time – aparece quando o parceiro foi encontrado como inscrito */}
-              {canShowFormTeam && confirmTeamCategoryId !== cat.id && (
-                <button
-                  type="button"
-                  onClick={() => setConfirmTeamCategoryId(cat.id)}
-                  className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center justify-center gap-2 shadow-xs"
-                >
-                  <UserCheck size={14} />
-                  Formar time com {partnerEntry!.nickname || partnerEntry!.name}
-                </button>
-              )}
-
-              {/* Confirmação de formação de time */}
-              {canShowFormTeam && confirmTeamCategoryId === cat.id && (
-                <div className="space-y-2 p-3 bg-blue-50 rounded-xl border border-blue-100">
-                  <p className="text-xs font-bold text-slate-700 text-center">
-                    Confirmar formação de dupla com{' '}
-                    <strong>{partnerEntry!.nickname || partnerEntry!.name}</strong> em{' '}
-                    <strong>{cat.name}</strong>?
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={isForming}
-                      onClick={() => handleFormTeam(cat.id, partnerEntry!)}
-                      className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      {isForming ? 'Formando...' : 'Confirmar'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isForming}
-                      onClick={() => setConfirmTeamCategoryId(null)}
-                      className="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 transition-all active:scale-95"
-                    >
-                      Cancelar
-                    </button>
+              {partnerEntry && !existingPair && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+                  <UserCheck size={16} className="mt-0.5 shrink-0 text-blue-600" />
+                  <div>
+                    <p className="font-black">{partnerEntry.name || partnerEntry.nickname} já possui inscrição neste evento.</p>
+                    <p className="mt-0.5 font-bold text-blue-700">
+                      {partnerEntry.email}{partnerEntry.phone ? ` · ${formatPhone(partnerEntry.phone)}` : ''}
+                    </p>
+                    <p className="mt-1 font-bold text-blue-700">Confirme abaixo para formar esta dupla.</p>
                   </div>
                 </div>
+              )}
+
+              {/* Botão Formar time – aparece quando o parceiro foi encontrado como inscrito */}
+              {canShowFormTeam && (
+                <button
+                  type="button"
+                  disabled={isForming}
+                  onClick={() => handleFormTeam(cat.id, partnerEntry!)}
+                  className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
+                >
+                  <UserCheck size={14} />
+                  {isForming ? 'Formando dupla...' : `Confirmar dupla com ${partnerEntry!.nickname || partnerEntry!.name}`}
+                </button>
               )}
 
               {/* Aviso: parceiro já em outro time */}

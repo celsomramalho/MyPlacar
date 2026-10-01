@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X, Bell, ShieldCheck } from 'lucide-react';
-import { getDb } from '@infra/firebase';
+import { getDb, updateEvent, saveEventEntry } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { fetchActiveEvents } from '../services/fetchActiveEvents';
-import { fetchEventByPin } from '@infra/firebase/events';
+import { fetchEventByPin, fetchEventEntry } from '@infra/firebase/events';
 import type { EventRegistration, TournamentEntry, TournamentEvent } from '../types';
 import type { UserProfile } from '@modules/auth/types';
 import { EventRegistrationForm } from '../domain/registration';
@@ -29,6 +29,8 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
   const [joiningPin, setJoiningPin] = useState<string | null>(null);
   const [activeEvents, setActiveEvents] = useState<TournamentEvent[]>([]);
   const [isLoadingActive, setIsLoadingActive] = useState(true);
+  const [directRegistrationPins, setDirectRegistrationPins] = useState<Set<string>>(new Set());
+  const [isCheckingDirectRegistrations, setIsCheckingDirectRegistrations] = useState(true);
 
   // Pre-join form state
   const [pendingEvent, setPendingEvent] = useState<TournamentEvent | null>(null);
@@ -36,6 +38,11 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
 
   // Mapa suplementar: eventos das inscrições do usuário que não estão em activeEvents
   const [registeredEventsMap, setRegisteredEventsMap] = useState<Map<string, TournamentEvent>>(new Map());
+  const refreshRegistrationsRef = useRef(onRefreshRegistrations);
+
+  useEffect(() => {
+    refreshRegistrationsRef.current = onRefreshRegistrations;
+  }, [onRefreshRegistrations]);
 
   useEffect(() => {
     let isMounted = true;
@@ -52,11 +59,49 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
       }
     };
     loadActiveEvents();
-    if (onRefreshRegistrations) {
-      void onRefreshRegistrations();
+    if (refreshRegistrationsRef.current) {
+      void refreshRegistrationsRef.current();
     }
     return () => { isMounted = false; };
-  }, [onRefreshRegistrations]);
+  }, []);
+
+  const activeEventPins = useMemo(
+    () => activeEvents.map((event) => event.pin.trim()).filter(Boolean).sort(),
+    [activeEvents]
+  );
+  const activeEventPinsKey = activeEventPins.join('|');
+
+  // O índice user_registrations pode demorar a refletir inscrições criadas pelo admin.
+  // Confere também a inscrição real do atleta em cada evento ativo.
+  useEffect(() => {
+    const email = userProfile?.email?.toLowerCase().trim();
+    const db = getDb();
+    if (!db || !email || activeEventPins.length === 0) {
+      setDirectRegistrationPins(new Set());
+      setIsCheckingDirectRegistrations(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsCheckingDirectRegistrations(true);
+    Promise.all(
+      activeEventPins.map(async (eventPin) => {
+        try {
+          const entry = await fetchEventEntry(db as Firestore, eventPin, email);
+          return entry ? eventPin.toUpperCase() : null;
+        } catch {
+          return null;
+        }
+      })
+    ).then((pins) => {
+      if (isMounted) {
+        setDirectRegistrationPins(new Set(pins.filter((pin): pin is string => Boolean(pin))));
+        setIsCheckingDirectRegistrations(false);
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [activeEventPinsKey, userProfile?.email]);
 
   // Para cada inscrição que NÃO está em activeEvents, buscar o evento completo para checar coAdminPins
   useEffect(() => {
@@ -170,22 +215,40 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     };
   }, [userProfile, pendingEvent]);
 
-  const registeredPins = useMemo(() => new Set(registrations.map((r) => r.pin.toUpperCase())), [registrations]);
+  const adminEventPins = useMemo(() => {
+    const userPin = userProfile?.pin;
+    const isPrimary = isPrimaryAdminEmail(userProfile?.email);
+    return new Set(
+      activeEvents
+        .filter((event) => isPrimary || canUseEventAdminAccess(event, userPin))
+        .map((event) => event.pin.trim().toUpperCase())
+    );
+  }, [activeEvents, userProfile?.pin, userProfile?.email]);
+
+  const registeredPins = useMemo(
+    () => new Set([
+      ...registrations.map((registration) => registration.pin.trim().toUpperCase()),
+      ...directRegistrationPins,
+    ]),
+    [registrations, directRegistrationPins]
+  );
 
   const normalizedSearch = pinInput.trim().toLowerCase();
 
-  // Torneios disponíveis: somente eventos ativos nos quais o usuário ainda não se inscreveu
+  // Torneios disponíveis: inscrições abertas sem inscrição prévia ou acesso administrativo.
   const availableEvents = useMemo(() => {
     return activeEvents.filter((ev) => {
-      const isNotRegistered = !registeredPins.has(ev.pin.toUpperCase());
-      const isActive = Boolean(ev.active);
-      if (!isNotRegistered || !isActive) return false;
+      const eventPin = ev.pin.trim().toUpperCase();
+      const isNotRegistered = !registeredPins.has(eventPin);
+      const isNotAdmin = !adminEventPins.has(eventPin);
+      const isRegistrationOpen = getRegistrationPeriodStatus(ev).isOpen;
+      if (!isNotRegistered || !isNotAdmin || !isRegistrationOpen) return false;
       if (!normalizedSearch) return true;
       const matchName = ev.name?.toLowerCase().includes(normalizedSearch);
       const matchPin = ev.pin?.toLowerCase().includes(normalizedSearch);
       return matchName || matchPin;
     });
-  }, [activeEvents, registeredPins, normalizedSearch]);
+  }, [activeEvents, registeredPins, adminEventPins, normalizedSearch]);
 
   // Mapa de eventos ativos por PIN
   const activeEventsMap = useMemo(() => {
@@ -199,30 +262,21 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
   // Combina inscrições do usuário com eventos ativos onde ele foi cadastrado como administrador
   const allUserEvents = useMemo(() => {
     const list = [...registrations];
-    const userPin = userProfile?.pin;
-    const userEmail = userProfile?.email;
-    const isPrimary = isPrimaryAdminEmail(userEmail);
-
-    if (userPin || isPrimary) {
-      activeEvents.forEach((ev) => {
-        const pinUpper = ev.pin?.toUpperCase();
-        if (!pinUpper) return;
-        const alreadyInList = list.some((r) => r.pin.toUpperCase() === pinUpper);
-        if (!alreadyInList) {
-          const hasAdminAccess = isPrimary || canUseEventAdminAccess(ev, userPin);
-          if (hasAdminAccess) {
-            list.push({
-              pin: ev.pin,
-              name: ev.name,
-              joinedAt: ev.createdAt || Date.now(),
-              bannerUrl: ev.bannerUrl || null,
-            });
-          }
-        }
-      });
-    }
+    activeEvents.forEach((ev) => {
+      const pinUpper = ev.pin?.trim().toUpperCase();
+      if (!pinUpper || !adminEventPins.has(pinUpper)) return;
+      const alreadyInList = list.some((registration) => registration.pin.trim().toUpperCase() === pinUpper);
+      if (!alreadyInList) {
+        list.push({
+          pin: ev.pin,
+          name: ev.name,
+          joinedAt: ev.createdAt || Date.now(),
+          bannerUrl: ev.bannerUrl || null,
+        });
+      }
+    });
     return list;
-  }, [registrations, activeEvents, userProfile?.pin, userProfile?.email]);
+  }, [registrations, activeEvents, adminEventPins]);
 
   // Minhas inscrições: todos os eventos nos quais o usuário já se inscreveu (mesmo inativos) + eventos que administra
   const filteredRegistrations = useMemo(() => {
@@ -303,7 +357,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
             <h3 className="text-sm font-black text-black tracking-tight">Torneios disponíveis</h3>
           </div>
 
-          {isLoadingActive ? (
+          {isLoadingActive || isCheckingDirectRegistrations ? (
             <div className="py-8 bg-white rounded-[2rem] border border-gray-100 flex flex-col items-center justify-center gap-2 text-slate-400">
               <Loader2 size={24} className="animate-spin text-emerald-500" />
               <span className="text-xs font-bold">Buscando torneios disponíveis...</span>
@@ -408,6 +462,9 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                 const isUserAdmin =
                   isPrimaryAdminEmail(userProfile?.email) ||
                   (eventObj ? canUseEventAdminAccess(eventObj, userProfile?.pin) : false);
+                const isActualRegistration = registrations.some(
+                  (registration) => registration.pin.trim().toUpperCase() === pin.trim().toUpperCase()
+                );
 
                 // Badge de status de inscrição
                 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -435,7 +492,11 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="flex items-center gap-1.5 text-slate-400">
                             <Calendar size={12} className="shrink-0" />
-                            <p className="text-[10px] font-bold">Inscrito em {new Date(joinedAt).toLocaleDateString('pt-BR')}</p>
+                            <p className="text-[10px] font-bold">
+                              {isActualRegistration
+                                ? `Inscrito em ${new Date(joinedAt).toLocaleDateString('pt-BR')}`
+                                : 'Administrador do evento'}
+                            </p>
                           </div>
                           {statusInfo && (
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black border ${statusInfo.className}`}>
@@ -509,6 +570,16 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                   await onJoin(pendingEvent.pin, savedEntry);
                   setPendingEvent(null);
                   setPendingPin(null);
+                }}
+                onSaveDraft={async (savedEntry) => {
+                  const db = getDb();
+                  if (!db) throw new Error('Não foi possível salvar a inscrição temporariamente.');
+                  await saveEventEntry(db as Firestore, pendingEvent.pin, savedEntry as any);
+                }}
+                onUpdateEvent={(updatedEvent) => {
+                  const db = getDb();
+                  if (!db) return;
+                  void updateEvent(db as Firestore, updatedEvent.pin, { pairs: updatedEvent.pairs });
                 }}
                 onCancel={handleCancelPreJoin}
               />

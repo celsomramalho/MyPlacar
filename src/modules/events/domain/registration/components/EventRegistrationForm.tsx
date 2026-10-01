@@ -37,6 +37,7 @@ export interface EventRegistrationFormProps {
   mode: 'admin' | 'user';
   isNew?: boolean;
   onSave: (entry: TournamentEntry) => Promise<void>;
+  onSaveDraft?: (entry: TournamentEntry) => Promise<void>;
   onUpdateEvent?: (event: TournamentEvent) => void;
   onDelete?: () => void;
   onCancel?: () => void;
@@ -50,6 +51,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   mode,
   isNew = false,
   onSave,
+  onSaveDraft,
   onUpdateEvent,
   onDelete,
   onCancel,
@@ -142,9 +144,9 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       item.pin === entry.pin ? currentEntry : item
     );
 
-    await onSave(currentEntry);
+    await (onSaveDraft || onSave)(currentEntry);
     onUpdateEvent({ ...event, entries: updatedEntries, pairs: [...pairs, newPair] });
-  }, [entry, event, form, onSave, onUpdateEvent]);
+  }, [entry, event, form, onSave, onSaveDraft, onUpdateEvent]);
 
   const handleNext = () => {
     setFeedback(null);
@@ -168,6 +170,11 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       setFeedback('Selecione pelo menos uma categoria.');
       return;
     }
+    const partnerValidation = form.isStepValid('partners');
+    if (!partnerValidation.isValid) {
+      setFeedback(partnerValidation.error || 'Preencha os dados obrigatórios do parceiro(a).');
+      return;
+    }
 
     if (!submission.registrationId) {
       submission.registrationId = getNextRegistrationId(liveEntries);
@@ -185,15 +192,23 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   };
 
   const isSelfCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
+  const registrationSteps = form.requiresPartnerDetails
+    ? ['identity', 'categories', 'partners', 'payment'] as const
+    : ['identity', 'categories', 'payment'] as const;
+  const stepLabels = {
+    identity: 'Atleta',
+    categories: 'Categorias',
+    partners: 'Duplas',
+    payment: 'Pagamento',
+  } as const;
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto p-4 sm:p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
       {/* Barra de Progresso dos Steps */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
-          {(['identity', 'categories', 'partners', 'payment'] as const).map((stepKey, idx) => {
+          {registrationSteps.map((stepKey, idx) => {
             const isActive = form.currentStep === stepKey;
-            const labels = ['Atleta', 'Categorias', 'Duplas', 'Pagamento'];
             return (
               <button
                 key={stepKey}
@@ -206,7 +221,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
                 }`}
               >
                 <span>{idx + 1}.</span>
-                <span>{labels[idx]}</span>
+                <span>{stepLabels[stepKey]}</span>
               </button>
             );
           })}

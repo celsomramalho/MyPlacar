@@ -8,7 +8,7 @@
  * @see docs/PLANO_REFATORACAO_INSCRICOES_TORNEIO.md — Fase 3
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import type {
   TournamentEvent,
   TournamentEntry,
@@ -23,7 +23,7 @@ import type {
 } from '../types';
 import { calculateRegistrationPrice } from '../engine/pricingEngine';
 import { calculateCategoryVacancy, buildCategoryConfirmedCountMap } from '../engine/vacancyCalculator';
-import { validateCategoryPartner } from '../engine/partnerValidator';
+import { isPreDefinedTeamDraw, requiresPartnerDetails as shouldRequirePartnerDetails } from '../engine/partnerRequirements';
 
 export interface UseRegistrationFormOptions {
   event: TournamentEvent;
@@ -47,18 +47,17 @@ export interface UseRegistrationFormResult {
   categoryVacancyMap: Record<string, ReturnType<typeof calculateCategoryVacancy>>;
   availableCategories: EventCategory[];
   isTeamDrawPreDefined: boolean;
+  requiresPartnerDetails: boolean;
   isStepValid: (step: RegistrationStep) => { isValid: boolean; error?: string };
   canProceedToNext: boolean;
   getSubmissionEntry: () => TournamentEntry;
-  /** Retorna o TournamentEntry do parceiro inscrito no e-mail informado para uma categoria */
+  /** Retorna o TournamentEntry do parceiro inscrito no e-mail informado no evento */
   getPartnerEntryForCategory: (categoryId: string, partnerEmail: string) => TournamentEntry | undefined;
   /** Retorna o TournamentPair do atleta na categoria (se já formado) */
   getPairForCategory: (categoryId: string) => TournamentPair | undefined;
   /** Retorna o TournamentPair do e-mail do parceiro na categoria (se já formado) */
   getPairForEmailInCategory: (targetEmail: string, categoryId: string) => TournamentPair | undefined;
 }
-
-const STEP_ORDER: RegistrationStep[] = ['identity', 'categories', 'partners', 'payment', 'confirmation'];
 
 export function useRegistrationForm({
   event,
@@ -85,17 +84,23 @@ export function useRegistrationForm({
   }));
 
   // ─── Detecção do Método de Formação de Duplas ──────────────────────────────
-  const normalizedTeamDraw = (event.teamDrawType || 'Manual')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, ''); // remove acentos (ex: 'pré' -> 'pre')
+  const isTeamDrawPreDefined = isPreDefinedTeamDraw(event.teamDrawType);
+  const requiresPartnerDetails = useMemo(
+    () => shouldRequirePartnerDetails(event.teamDrawType, event.categories || [], formData.categoryIds),
+    [event.categories, event.teamDrawType, formData.categoryIds]
+  );
+  const stepOrder = useMemo<RegistrationStep[]>(
+    () => requiresPartnerDetails
+      ? ['identity', 'categories', 'partners', 'payment', 'confirmation']
+      : ['identity', 'categories', 'payment', 'confirmation'],
+    [requiresPartnerDetails]
+  );
 
-  const isTeamDrawPreDefined =
-    normalizedTeamDraw.includes('pre definida') ||
-    normalizedTeamDraw.includes('pre-definida') ||
-    normalizedTeamDraw.includes('pre_definida') ||
-    normalizedTeamDraw.includes('predefinida');
+  useEffect(() => {
+    if (!requiresPartnerDetails && currentStep === 'partners') {
+      setCurrentStep('payment');
+    }
+  }, [currentStep, requiresPartnerDetails]);
 
   // ─── Filtragem de Categorias por Gênero do Atleta ───────────────────────────
   const availableCategories = useMemo(() => {
@@ -220,8 +225,7 @@ export function useRegistrationForm({
       }
 
       if (step === 'partners') {
-        // Se a formação de duplas não for pré-definida (ex: Manual ou Sorteio), o parceiro não é obrigatório
-        if (!isTeamDrawPreDefined) {
+        if (!requiresPartnerDetails) {
           return { isValid: true };
         }
 
@@ -244,7 +248,7 @@ export function useRegistrationForm({
 
       return { isValid: true };
     },
-    [formData, categoryVacancyMap, event.categories, event.regulationUrl, isTeamDrawPreDefined]
+    [formData, categoryVacancyMap, event.categories, event.regulationUrl, requiresPartnerDetails]
   );
 
   const canProceedToNext = useMemo(() => isStepValid(currentStep).isValid, [currentStep, isStepValid]);
@@ -252,32 +256,32 @@ export function useRegistrationForm({
   // ─── Navegação entre Steps ─────────────────────────────────────────────────
   const goToStep = useCallback(
     (target: RegistrationStep) => {
-      const targetIndex = STEP_ORDER.indexOf(target);
-      const currentIndex = STEP_ORDER.indexOf(currentStep);
+      const targetIndex = stepOrder.indexOf(target);
+      const currentIndex = stepOrder.indexOf(currentStep);
       if (targetIndex > currentIndex) {
         if (!isStepValid(currentStep).isValid) return;
       }
       setCurrentStep(target);
     },
-    [currentStep, isStepValid]
+    [currentStep, isStepValid, stepOrder]
   );
 
   const goToNextStep = useCallback((): boolean => {
-    const currentIndex = STEP_ORDER.indexOf(currentStep);
+    const currentIndex = stepOrder.indexOf(currentStep);
     if (!isStepValid(currentStep).isValid) return false;
-    if (currentIndex < STEP_ORDER.length - 1) {
-      setCurrentStep(STEP_ORDER[currentIndex + 1]);
+    if (currentIndex < stepOrder.length - 1) {
+      setCurrentStep(stepOrder[currentIndex + 1]);
       return true;
     }
     return false;
-  }, [currentStep, isStepValid]);
+  }, [currentStep, isStepValid, stepOrder]);
 
   const goToPrevStep = useCallback(() => {
-    const currentIndex = STEP_ORDER.indexOf(currentStep);
+    const currentIndex = stepOrder.indexOf(currentStep);
     if (currentIndex > 0) {
-      setCurrentStep(STEP_ORDER[currentIndex - 1]);
+      setCurrentStep(stepOrder[currentIndex - 1]);
     }
-  }, [currentStep]);
+  }, [currentStep, stepOrder]);
 
   // ─── Objeto Final para Submissão ───────────────────────────────────────────
   const getSubmissionEntry = useCallback((): TournamentEntry => {
@@ -333,14 +337,13 @@ export function useRegistrationForm({
     });
   }, [event.pairs]);
 
-  const getPartnerEntryForCategory = useCallback((categoryId: string, partnerEmail: string): TournamentEntry | undefined => {
+  const getPartnerEntryForCategory = useCallback((_categoryId: string, partnerEmail: string): TournamentEntry | undefined => {
     const normalizedPartner = partnerEmail.toLowerCase().trim();
     const normalizedSelf = (formData.email || entry.email || '').toLowerCase().trim();
     if (!normalizedPartner) return undefined;
     return liveEntries.find((candidate) =>
       candidate.email.toLowerCase().trim() === normalizedPartner &&
-      candidate.email.toLowerCase().trim() !== normalizedSelf &&
-      candidate.categoryIds?.includes(categoryId)
+      candidate.email.toLowerCase().trim() !== normalizedSelf
     );
   }, [liveEntries, formData.email, entry.email]);
 
@@ -358,6 +361,7 @@ export function useRegistrationForm({
     categoryVacancyMap,
     availableCategories,
     isTeamDrawPreDefined,
+    requiresPartnerDetails,
     isStepValid,
     canProceedToNext,
     getSubmissionEntry,
