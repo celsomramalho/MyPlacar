@@ -8,6 +8,7 @@ export interface PartnerSelectionStepProps {
   categoryPartners: Record<string, CategoryPartnerInfo>;
   updateCategoryPartner: (categoryId: string, partner: CategoryPartnerInfo) => void;
   isTeamDrawPreDefined?: boolean;
+  allowUserTeamFormation?: boolean;
   readOnly?: boolean;
   /** Retorna o TournamentEntry do parceiro já inscrito no e-mail informado */
   getPartnerEntryForCategory?: (categoryId: string, partnerEmail: string) => TournamentEntry | undefined;
@@ -35,6 +36,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
   categoryPartners,
   updateCategoryPartner,
   isTeamDrawPreDefined = true,
+  allowUserTeamFormation = false,
   readOnly = false,
   getPartnerEntryForCategory,
   getPairForCategory,
@@ -48,7 +50,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
     (c) => selectedCategoryIds.includes(c.id) && c.format === 'Duplas'
   );
 
-  if (!isTeamDrawPreDefined || doublesCategories.length === 0) return null;
+  if ((!isTeamDrawPreDefined && !allowUserTeamFormation) || doublesCategories.length === 0) return null;
 
   const handleFormTeam = async (categoryId: string, partnerEntry: TournamentEntry) => {
     if (!onFormTeam || isForming) return;

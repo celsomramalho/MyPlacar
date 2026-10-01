@@ -90,17 +90,17 @@ export function useRegistrationForm({
     [event.categories, event.teamDrawType, formData.categoryIds]
   );
   const stepOrder = useMemo<RegistrationStep[]>(
-    () => requiresPartnerDetails
+    () => requiresPartnerDetails || event.allowUserTeamFormation === true
       ? ['identity', 'categories', 'partners', 'payment', 'confirmation']
       : ['identity', 'categories', 'payment', 'confirmation'],
-    [requiresPartnerDetails]
+    [requiresPartnerDetails, event.allowUserTeamFormation]
   );
 
   useEffect(() => {
-    if (!requiresPartnerDetails && currentStep === 'partners') {
+    if (!requiresPartnerDetails && event.allowUserTeamFormation !== true && currentStep === 'partners') {
       setCurrentStep('payment');
     }
-  }, [currentStep, requiresPartnerDetails]);
+  }, [currentStep, requiresPartnerDetails, event.allowUserTeamFormation]);
 
   // ─── Filtragem de Categorias por Gênero do Atleta ───────────────────────────
   const availableCategories = useMemo(() => {

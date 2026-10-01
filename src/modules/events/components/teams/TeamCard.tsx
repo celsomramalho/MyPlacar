@@ -20,6 +20,8 @@ export interface TeamCardProps {
   canSelect?: boolean;
   canManage?: boolean;
   onToggleSelect?: (pair: TournamentPair) => void;
+  canChangeBracket?: boolean;
+  onToggleBracket?: (pair: TournamentPair) => void;
   onUndoPair?: (pairId: string) => void;
   isRanking?: boolean;
 }
@@ -40,6 +42,8 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   canSelect = false,
   canManage = false,
   onToggleSelect,
+  canChangeBracket = false,
+  onToggleBracket,
   onUndoPair,
   isRanking = false,
 }) => {
@@ -145,15 +149,34 @@ export const TeamCard: React.FC<TeamCardProps> = ({
 
         {/* Lado Direito: Badge da Chave e Ação de Desfazer Time */}
         <div className="flex items-center gap-2 shrink-0 pt-0.5">
-          <span
-            className={`rounded-xl px-3 py-1.5 text-xs font-bold border shadow-xs ${
+          {canChangeBracket && onToggleBracket ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleBracket(pair);
+              }}
+              title={`Trocar para Chave ${(pair.bracket ?? 1) === 1 ? 2 : 1}`}
+              aria-label={`Chave ${pair.bracket ?? 1}. Trocar chave`}
+              className={`rounded-xl px-3 py-1.5 text-xs font-bold border shadow-xs transition-colors hover:ring-2 hover:ring-offset-1 ${
+                (pair.bracket ?? 1) === 1
+                  ? 'bg-emerald-50/70 text-emerald-700 border-emerald-200 hover:ring-emerald-200'
+                  : 'bg-blue-50/70 text-blue-700 border-blue-200 hover:ring-blue-200'
+              }`}
+            >
+              Chave {pair.bracket ?? 1}
+            </button>
+          ) : (
+            <span
+              className={`rounded-xl px-3 py-1.5 text-xs font-bold border shadow-xs ${
               (pair.bracket ?? 1) === 1
                 ? 'bg-emerald-50/70 text-emerald-700 border-emerald-200'
                 : 'bg-blue-50/70 text-blue-700 border-blue-200'
-            }`}
-          >
-            Chave {pair.bracket ?? 1}
-          </span>
+              }`}
+            >
+              Chave {pair.bracket ?? 1}
+            </span>
+          )}
           {canManage && onUndoPair && (
             <button
               type="button"

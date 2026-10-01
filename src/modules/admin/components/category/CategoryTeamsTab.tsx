@@ -220,7 +220,9 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
                         onToggleSelect={() => onToggleTeamSelection?.(pair)}
                         onUndoPair={onUndoPair}
                       />
-                      {!hasCategoryMatches && !isReadOnly && (
+                      {!isReadOnly && !categoryMatches.some((match) =>
+                        match.pair1Id === pair.id || match.pair2Id === pair.id
+                      ) && (
                         <div className="flex items-center justify-between px-3 py-1 bg-white/80 border border-slate-200 rounded-xl text-xs">
                           {onToggleTeamBracket && (
                             <button

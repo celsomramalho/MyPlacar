@@ -238,6 +238,7 @@ export interface TournamentEvent {
   bracketDrawType?: DrawTypeOption;
   matchDrawType?: DrawTypeOption;
   showRegisteredParticipants?: boolean;
+  allowUserTeamFormation?: boolean;
   allowUserScoreEntry?: boolean;
   rankingMatchesPerTeam?: number;
   /** Número de grupos por chave no Super 8 duplas (padrão 2, ex: A1, A2 por chave) */

@@ -583,6 +583,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
       categoryId: selectedCategory.id,
       teamNumber,
       teamCode,
+      bracket: 1,
+      bracketOrder: categoryPairs.filter((pair) => (pair.bracket ?? 1) === 1).length + 1,
     };
     const nextPairs = [...pairs.map(minifyPairForStorage), newPair];
     onUpdateEvent({ ...event, pairs: nextPairs });
@@ -599,11 +601,11 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const handleToggleTeamBracket = async (pair: TournamentPair) => {
     const hasCatMatches = matches.some(
       (m) =>
-        m.categoryId === selectedCategory?.id ||
-        (!m.categoryId && (m.pair1Id === pair.id || m.pair2Id === pair.id))
+        (m.categoryId === selectedCategory?.id || !m.categoryId) &&
+        (m.pair1Id === pair.id || m.pair2Id === pair.id)
     );
     if (hasCatMatches) {
-      window.alert('As chaves estão bloqueadas pois as partidas desta categoria já foram geradas.');
+      window.alert('Não é possível trocar este time de chave porque ele já está em uma partida.');
       return;
     }
     const nextBracket: 1 | 2 = (pair.bracket ?? 1) === 1 ? 2 : 1;

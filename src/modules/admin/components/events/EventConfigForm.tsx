@@ -715,11 +715,11 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         <div className="grid grid-cols-1 gap-3">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
             <Toggle
-              id="event-show-registered-participants"
-              label="Categoria com Inscrito"
-              checked={editingEvent.showRegisteredParticipants === true}
+              id="event-allow-user-team-formation"
+              label="Usuário forma time"
+              checked={editingEvent.allowUserTeamFormation === true}
               disabled={isReadOnlyRegistration}
-              onChange={(checked) => handleProtectedChange({ ...editingEvent, showRegisteredParticipants: checked })}
+              onChange={(checked) => handleProtectedChange({ ...editingEvent, allowUserTeamFormation: checked })}
             />
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">

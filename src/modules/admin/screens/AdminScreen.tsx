@@ -169,6 +169,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       courtNames: ['Quadra 1'],
       groupsPerBracket: 2,
       showRegisteredParticipants: false,
+      allowUserTeamFormation: false,
       allowUserScoreEntry: false,
       rankingMatchesPerTeam: undefined,
       createdAt: Date.now(),

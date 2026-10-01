@@ -105,7 +105,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
   // ── Formação de Time ─────────────────────────────────────────────────────────
   const handleFormTeam = useCallback(async (categoryId: string, partnerEntry: TournamentEntry) => {
-    if (!onUpdateEvent) return;
+    if (!onUpdateEvent || (!form.isTeamDrawPreDefined && event.allowUserTeamFormation !== true)) return;
 
     const isSelfCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
     if (isSelfCancelled || partnerEntry.disabled || partnerEntry.paymentStatus === 'Cancelado') {
@@ -137,6 +137,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       p2: orderedP2,
       categoryId,
       teamNumber,
+      bracket: 1,
+      bracketOrder: pairs.filter((pair) => pair.categoryId === categoryId && (pair.bracket ?? 1) === 1).length + 1,
       teamCode: `${String(teamNumber).padStart(3, '0')} - ${cat?.abbreviation || cat?.name || categoryId}`,
     };
 
@@ -205,8 +207,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   return (
     <div className="space-y-6 max-w-2xl mx-auto p-4 sm:p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
       {/* Barra de Progresso dos Steps */}
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2 border-b border-slate-100 pb-3">
+        <div className="grid flex-1 min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
           {registrationSteps.map((stepKey, idx) => {
             const isActive = form.currentStep === stepKey;
             return (
@@ -214,14 +216,14 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
                 key={stepKey}
                 type="button"
                 onClick={() => form.goToStep(stepKey)}
-                className={`flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-xl transition-all ${
+                className={`flex min-w-0 items-center justify-center gap-1 text-[11px] font-black px-2 py-2 rounded-xl transition-all sm:text-xs ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}
               >
                 <span>{idx + 1}.</span>
-                <span>{stepLabels[stepKey]}</span>
+                <span className="whitespace-nowrap">{stepLabels[stepKey]}</span>
               </button>
             );
           })}
@@ -231,7 +233,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            className="shrink-0 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
           >
             <X size={18} />
           </button>
@@ -285,6 +287,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             categoryPartners={form.formData.categoryPartners}
             updateCategoryPartner={form.updateCategoryPartner}
             isTeamDrawPreDefined={form.isTeamDrawPreDefined}
+            allowUserTeamFormation={event.allowUserTeamFormation === true}
             readOnly={readOnly}
             getPartnerEntryForCategory={form.getPartnerEntryForCategory}
             getPairForCategory={form.getPairForCategory}
