@@ -17,11 +17,13 @@ import {
   DRAW_TYPE_OPTIONS,
   TEAM_DRAW_TYPE_OPTIONS,
   EVENT_PAYMENT_TYPE_OPTIONS,
+  EVENT_REGISTRATION_TYPE_OPTIONS,
   type EventStatusOption,
   type EventTypeOption,
   type DrawTypeOption,
   type TeamDrawTypeOption,
   type EventPaymentTypeOption,
+  type EventRegistrationTypeOption,
   type TournamentEvent,
 } from '@modules/events/types';
 import { Button } from '@shared/components/Button';
@@ -406,22 +408,8 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           />
         </div>
 
-        {/* Status do Evento e Tipo de Evento */}
+        {/* Linha 1: Tipo de evento e Status */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Status</label>
-            <select
-              value={editingEvent.eventStatus || 'Em configuração'}
-              disabled={isReadOnlyRegistration}
-              onChange={(event) => handleProtectedChange({ ...editingEvent, eventStatus: event.target.value as EventStatusOption })}
-              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
-            >
-              {EVENT_STATUS_OPTIONS.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 ml-1">Tipo de evento</label>
             <select
@@ -435,20 +423,51 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
               ))}
             </select>
           </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Status</label>
+            <select
+              value={editingEvent.eventStatus || 'Em configuração'}
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChange({ ...editingEvent, eventStatus: event.target.value as EventStatusOption })}
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+            >
+              {EVENT_STATUS_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Tipo pagamento</label>
-          <select
-            value={editingEvent.paymentType || 'manual'}
-            disabled={isReadOnlyRegistration}
-            onChange={(event) => handleProtectedChange({ ...editingEvent, paymentType: event.target.value as EventPaymentTypeOption })}
-            className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none cursor-pointer text-slate-700"
-          >
-            {EVENT_PAYMENT_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+        {/* Linha 2: Tipo pagamento e Tipo inscrição */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Tipo pagamento</label>
+            <select
+              value={editingEvent.paymentType || 'manual'}
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChange({ ...editingEvent, paymentType: event.target.value as EventPaymentTypeOption })}
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+            >
+              {EVENT_PAYMENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Tipo inscrição</label>
+            <select
+              value={editingEvent.registrationType || 'App'}
+              disabled={isReadOnlyRegistration}
+              onChange={(event) => handleProtectedChange({ ...editingEvent, registrationType: event.target.value as EventRegistrationTypeOption })}
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+            >
+              {EVENT_REGISTRATION_TYPE_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {editingEvent.paymentType === 'mercadopago' && (

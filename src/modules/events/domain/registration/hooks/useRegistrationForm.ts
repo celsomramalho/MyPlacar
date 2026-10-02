@@ -48,6 +48,9 @@ export interface UseRegistrationFormResult {
   availableCategories: EventCategory[];
   isTeamDrawPreDefined: boolean;
   requiresPartnerDetails: boolean;
+  isSimplified: boolean;
+  nameConflictWarning: string | null;
+  conflictingCategoryIds: string[];
   isStepValid: (step: RegistrationStep) => { isValid: boolean; error?: string };
   canProceedToNext: boolean;
   getSubmissionEntry: () => TournamentEntry;
@@ -80,11 +83,76 @@ export function useRegistrationForm({
     gender: entry.gender || 'M',
     categoryIds: entry.categoryIds || [],
     categoryPartners: entry.categoryPartners ? { ...entry.categoryPartners } : {},
-    regulationAccepted: false,
+    regulationAccepted: Boolean(
+      entry.regulationAccepted ??
+      ((entry.joinedAt && entry.joinedAt > 0) || !event.regulationUrl)
+    ),
   }));
 
-  // ─── Detecção do Método de Formação de Duplas ──────────────────────────────
+  // Sincroniza se a inscrição existente for carregada ou atualizada com aceite prévio
+  useEffect(() => {
+    if (entry.regulationAccepted !== undefined) {
+      setFormData((prev) => ({
+        ...prev,
+        regulationAccepted: Boolean(entry.regulationAccepted),
+      }));
+    } else if (entry.joinedAt && entry.joinedAt > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        regulationAccepted: true,
+      }));
+    }
+  }, [entry.regulationAccepted, entry.joinedAt]);
+
+  // ─── Detecção do Método de Formação de Duplas e Tipo de Inscrição ──────────
   const isTeamDrawPreDefined = isPreDefinedTeamDraw(event.teamDrawType);
+  const isSimplified = event.registrationType === 'Simplificada';
+
+  // ─── Unicidade do Apelido / Nome como quer ser chamado por Categoria ────────
+  const conflictingCategoryIds = useMemo(() => {
+    const trimmed = formData.nickname.trim().toLowerCase();
+    if (!trimmed) return [];
+    const currentEmail = (formData.email || entry.email || '').toLowerCase().trim();
+    const currentPin = (entry.pin || '').toUpperCase().trim();
+
+    const ids: string[] = [];
+    for (const cat of event.categories || []) {
+      const conflict = liveEntries.some((other) => {
+        const otherEmail = (other.email || '').toLowerCase().trim();
+        const otherPin = (other.pin || '').toUpperCase().trim();
+        const isSelf = (currentEmail && otherEmail === currentEmail) || (currentPin && otherPin === currentPin);
+        if (isSelf) return false;
+        const otherName = (other.nickname || other.name || '').trim().toLowerCase();
+        return otherName === trimmed && (other.categoryIds || []).includes(cat.id);
+      });
+      if (conflict) {
+        ids.push(cat.id);
+      }
+    }
+    return ids;
+  }, [formData.nickname, formData.email, entry.email, entry.pin, liveEntries, event.categories]);
+
+  const nameConflictWarning = useMemo(() => {
+    const trimmed = formData.nickname.trim().toLowerCase();
+    if (!trimmed) return null;
+
+    // Se já selecionou categoria(s)
+    if (formData.categoryIds.length > 0) {
+      const conflictCatId = formData.categoryIds.find((id) => conflictingCategoryIds.includes(id));
+      if (conflictCatId) {
+        const cat = (event.categories || []).find((c) => c.id === conflictCatId);
+        return `Já existe um participante com o nome "${formData.nickname.trim()}" na categoria ${cat?.name || 'selecionada'}. Por favor, troque ou complemente o nome.`;
+      }
+    } else if (conflictingCategoryIds.length > 0) {
+      const catNames = (event.categories || [])
+        .filter((c) => conflictingCategoryIds.includes(c.id))
+        .map((c) => c.name)
+        .join(', ');
+      return `O nome "${formData.nickname.trim()}" já está em uso na categoria ${catNames}. Se você for disputar essa categoria, troque ou complemente o nome.`;
+    }
+    return null;
+  }, [formData.nickname, formData.categoryIds, conflictingCategoryIds, event.categories]);
+
   const requiresPartnerDetails = useMemo(
     () => shouldRequirePartnerDetails(event.teamDrawType, event.categories || [], formData.categoryIds),
     [event.categories, event.teamDrawType, formData.categoryIds]
@@ -202,14 +270,25 @@ export function useRegistrationForm({
   const isStepValid = useCallback(
     (step: RegistrationStep): { isValid: boolean; error?: string } => {
       if (step === 'identity') {
-        if (!formData.name.trim()) return { isValid: false, error: 'O nome completo é obrigatório.' };
-        if (!formData.nickname.trim()) return { isValid: false, error: 'O apelido/nome de jogo é obrigatório.' };
+        if (!isSimplified && !formData.name.trim()) return { isValid: false, error: 'O nome completo é obrigatório.' };
+        if (!formData.nickname.trim()) return { isValid: false, error: 'O nome como quer ser chamado é obrigatório.' };
+        if (formData.categoryIds.length > 0 && nameConflictWarning) {
+          return { isValid: false, error: nameConflictWarning };
+        }
         return { isValid: true };
       }
 
       if (step === 'categories') {
         if (formData.categoryIds.length === 0) {
           return { isValid: false, error: 'Selecione pelo menos uma categoria.' };
+        }
+        const hasConflictInSelected = formData.categoryIds.some((catId) => conflictingCategoryIds.includes(catId));
+        if (hasConflictInSelected) {
+          const conflictingCat = (event.categories || []).find((c) => conflictingCategoryIds.includes(c.id));
+          return {
+            isValid: false,
+            error: `Já existe um participante com o nome "${formData.nickname.trim()}" na categoria ${conflictingCat?.name || 'selecionada'}. Por favor, volte ao passo anterior e troque ou complemente o nome.`,
+          };
         }
         for (const catId of formData.categoryIds) {
           const vacancy = categoryVacancyMap[catId];
@@ -234,12 +313,21 @@ export function useRegistrationForm({
           const cat = categories.find((c) => c.id === catId);
           if (cat && cat.format === 'Duplas') {
             const partner = formData.categoryPartners[catId];
-            const cleanedPhone = (partner?.phone || '').replace(/\D/g, '');
-            if (!partner || !partner.name?.trim() || !partner.email?.trim() || !cleanedPhone) {
-              return {
-                isValid: false,
-                error: `Preencha todos os dados do parceiro(a) (nome, e-mail e WhatsApp) para a categoria ${cat.name}.`,
-              };
+            if (isSimplified) {
+              if (!partner || !partner.name?.trim()) {
+                return {
+                  isValid: false,
+                  error: `Preencha o nome do parceiro(a) para a categoria ${cat.name}.`,
+                };
+              }
+            } else {
+              const cleanedPhone = (partner?.phone || '').replace(/\D/g, '');
+              if (!partner || !partner.name?.trim() || !partner.email?.trim() || !cleanedPhone) {
+                return {
+                  isValid: false,
+                  error: `Preencha todos os dados do parceiro(a) (nome, e-mail e WhatsApp) para a categoria ${cat.name}.`,
+                };
+              }
             }
           }
         }
@@ -248,7 +336,7 @@ export function useRegistrationForm({
 
       return { isValid: true };
     },
-    [formData, categoryVacancyMap, event.categories, event.regulationUrl, requiresPartnerDetails]
+    [formData, isSimplified, nameConflictWarning, conflictingCategoryIds, categoryVacancyMap, event.categories, event.regulationUrl, requiresPartnerDetails]
   );
 
   const canProceedToNext = useMemo(() => isStepValid(currentStep).isValid, [currentStep, isStepValid]);
@@ -285,14 +373,24 @@ export function useRegistrationForm({
 
   // ─── Objeto Final para Submissão ───────────────────────────────────────────
   const getSubmissionEntry = useCallback((): TournamentEntry => {
+    const finalNickname = formData.nickname.trim();
+    const finalName = isSimplified ? (formData.name.trim() || finalNickname) : formData.name.trim();
+    const finalGender = formData.gender || 'M';
+    const fallbackEmail = isSimplified
+      ? `${finalNickname.toLowerCase().replace(/[^a-z0-9]/g, '') || 'atleta'}_${Date.now().toString(36)}@simplificada.local`
+      : '';
+    const finalEmail = formData.email.trim() || entry.email || fallbackEmail;
+    const finalPin = entry.pin || (isSimplified ? `SIMP${Math.random().toString(36).slice(2, 7).toUpperCase()}` : '');
+
     return {
       ...(entry as TournamentEntry),
-      name: formData.name.trim(),
-      nickname: formData.nickname.trim(),
-      email: formData.email.trim(),
+      name: finalName,
+      nickname: finalNickname,
+      email: finalEmail,
+      pin: finalPin,
       phone: formData.phone.trim(),
       shirtSize: formData.shirtSize,
-      gender: formData.gender,
+      gender: finalGender,
       categoryIds: formData.categoryIds,
       categoryPartners: formData.categoryPartners,
       dueAmount: pricing.dueAmount,
@@ -301,8 +399,12 @@ export function useRegistrationForm({
         : (entry.paymentStatus || (pricing.isFree ? 'Confirmado' : 'Pendente')),
       registrationId: formData.registrationId,
       joinedAt: entry.joinedAt || Date.now(),
+      regulationAccepted: formData.regulationAccepted,
+      regulationAcceptedAt: formData.regulationAccepted
+        ? (entry.regulationAcceptedAt || Date.now())
+        : undefined,
     };
-  }, [entry, formData, pricing.dueAmount, pricing.isFree]);
+  }, [entry, formData, pricing.dueAmount, pricing.isFree, isSimplified]);
 
   // ─── Helpers de Formação de Time ───────────────────────────────────────────
   const getPairForCategory = useCallback((categoryId: string): TournamentPair | undefined => {
@@ -362,6 +464,9 @@ export function useRegistrationForm({
     availableCategories,
     isTeamDrawPreDefined,
     requiresPartnerDetails,
+    isSimplified,
+    nameConflictWarning,
+    conflictingCategoryIds,
     isStepValid,
     canProceedToNext,
     getSubmissionEntry,

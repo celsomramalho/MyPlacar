@@ -173,6 +173,17 @@ export const EVENT_PAYMENT_TYPE_OPTIONS: Array<{ value: EventPaymentTypeOption; 
   { value: 'mercadopago', label: 'Automático (Mercado Pago)' },
 ];
 
+export type EventRegistrationTypeOption = 'App' | 'Simplificada';
+
+export const EVENT_REGISTRATION_TYPE_OPTIONS: EventRegistrationTypeOption[] = [
+  'App',
+  'Simplificada',
+];
+
+export const isSimplifiedRegistrationEvent = (event?: Partial<TournamentEvent> | null): boolean => {
+  return event?.registrationType === 'Simplificada';
+};
+
 export interface EventCategory {
   id: string;
   name: string;
@@ -232,6 +243,7 @@ export interface TournamentEvent {
   marketplaceFeePercent?: number;
   eventStatus?: EventStatusOption;
   eventType?: EventTypeOption;
+  registrationType?: EventRegistrationTypeOption;
   setsCount?: 1 | 3 | 5;
   gamesPerSet?: number;
   teamDrawType?: TeamDrawTypeOption;
@@ -306,6 +318,8 @@ export interface TournamentEntry {
   categoryPartners?: Record<string, CategoryPartnerInfo>;
   disabled?: boolean;
   disabledReason?: string;
+  regulationAccepted?: boolean;
+  regulationAcceptedAt?: number;
 }
 
 /**

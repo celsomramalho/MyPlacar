@@ -67,6 +67,8 @@ interface FirebaseTournamentEntry {
   categoryPartners?: Record<string, { name: string; email: string; phone: string }>;
   disabled?: boolean;
   disabledReason?: string;
+  regulationAccepted?: boolean;
+  regulationAcceptedAt?: number;
   information?: string;
 }
 
@@ -111,6 +113,7 @@ export interface FirebaseTournamentEvent {
   rankingMatchesPerTeam?: number;
   groupsPerBracket?: number;
   paymentType?: 'manual' | 'mercadopago';
+  registrationType?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

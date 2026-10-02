@@ -10,6 +10,8 @@ export interface CategorySelectionStepProps {
   categoryVacancyMap: Record<string, CategoryVacancyResult>;
   pricing: PricingCalculationResult;
   readOnly?: boolean;
+  conflictingCategoryIds?: string[];
+  nickname?: string;
 }
 
 export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
@@ -19,6 +21,8 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
   categoryVacancyMap,
   pricing,
   readOnly = false,
+  conflictingCategoryIds = [],
+  nickname = '',
 }) => {
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
@@ -79,6 +83,12 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
                     <p className="text-xs text-slate-500 font-bold mt-1 line-clamp-2">
                       {cat.description}
                     </p>
+                  )}
+                  {conflictingCategoryIds.includes(cat.id) && (
+                    <div className="mt-2.5 p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold flex items-center gap-1.5 animate-in fade-in">
+                      <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                      <span>Nome "{nickname}" já em uso nesta categoria</span>
+                    </div>
                   )}
                 </div>
 

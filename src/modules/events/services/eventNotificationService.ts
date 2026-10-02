@@ -12,6 +12,7 @@ export const eventNotificationService = {
     entry: TournamentEntry,
   ) => {
     try {
+      if (event.registrationType === 'Simplificada') return;
       const userPin = (entry.pin || '').trim();
       const userEmail = (entry.email || '').trim().toLowerCase();
       if (!userPin && !userEmail) return;
@@ -69,6 +70,7 @@ export const eventNotificationService = {
     payment: PaymentItem,
   ) => {
     try {
+      if (event.registrationType === 'Simplificada') return;
       const userPin = (entry.pin || '').trim();
       const userEmail = (entry.email || '').trim().toLowerCase();
       if (!userPin && !userEmail) return;
@@ -113,6 +115,7 @@ export const eventNotificationService = {
     category: EventCategory,
   ) => {
     try {
+      if (event.registrationType === 'Simplificada') return;
       const userPin = (entry.pin || '').trim();
       const userEmail = (entry.email || '').trim().toLowerCase();
       if (!userPin && !userEmail) return;
@@ -151,6 +154,7 @@ export const eventNotificationService = {
     pendingAmount: number,
   ) => {
     try {
+      if (event.registrationType === 'Simplificada') return;
       const userPin = (entry.pin || '').trim();
       const userEmail = (entry.email || '').trim().toLowerCase();
       if (!userPin && !userEmail) return;
@@ -189,6 +193,7 @@ export const eventNotificationService = {
     _userNickname?: string,
   ) => {
     try {
+      if (event.registrationType === 'Simplificada') return;
       const target = (userPinOrEmail || '').trim();
       if (!target) return;
 

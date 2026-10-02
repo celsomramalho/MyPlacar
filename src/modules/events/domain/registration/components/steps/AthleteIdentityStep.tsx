@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Phone, Mail, Hash, Shield } from 'lucide-react';
+import { User, Phone, Mail, Hash, AlertTriangle } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import type { RegistrationFormData } from '../../types';
 
@@ -9,6 +9,8 @@ export interface AthleteIdentityStepProps {
   canEditIdentity?: boolean;
   isAdmin?: boolean;
   readOnly?: boolean;
+  isSimplified?: boolean;
+  nameConflictWarning?: string | null;
 }
 
 const formatPhone = (value: string) => {
@@ -25,6 +27,8 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
   canEditIdentity = false,
   isAdmin = false,
   readOnly = false,
+  isSimplified = false,
+  nameConflictWarning = null,
 }) => {
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
@@ -34,59 +38,76 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
           Dados do Atleta
         </h3>
         <p className="text-xs text-slate-400 font-bold mt-0.5">
-          Informações de identificação do participante no torneio.
+          {isSimplified
+            ? 'Informe como o atleta quer ser chamado no placar e seu gênero.'
+            : 'Informações de identificação do participante no torneio.'}
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Nome Completo */}
-        <div className="space-y-1.5 sm:col-span-2">
-          <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-            Nome Completo <span className="text-rose-500">*</span>
-          </label>
-          <input
-            type="text"
-            disabled={readOnly}
-            value={formData.name}
-            onChange={(e) => updateField('name', e.target.value)}
-            placeholder="Nome e Sobrenome"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
-          />
-        </div>
+        {/* Na inscrição simplificada, renderiza APENAS Apelido/Nome e Gênero */}
+        {!isSimplified && (
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+              Nome Completo <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              disabled={readOnly}
+              value={formData.name}
+              onChange={(e) => updateField('name', e.target.value)}
+              placeholder="Nome e Sobrenome"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
+            />
+          </div>
+        )}
 
         {/* Apelido / Como quer ser chamado */}
-        <div className="space-y-1.5">
+        <div className={`space-y-1.5 ${isSimplified ? 'sm:col-span-2' : ''}`}>
           <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-            Como quer ser chamado no placar? <span className="text-rose-500">*</span>
+            Nome como quer ser chamado <span className="text-rose-500">*</span>
           </label>
           <input
             type="text"
             disabled={readOnly}
             value={formData.nickname}
-            onChange={(e) => updateField('nickname', e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              updateField('nickname', val);
+              if (isSimplified) {
+                updateField('name', val);
+              }
+            }}
             placeholder="Ex: Celsinho, Rafa..."
             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
           />
+          {nameConflictWarning && (
+            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-bold animate-in fade-in">
+              <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <span>{nameConflictWarning}</span>
+            </div>
+          )}
         </div>
 
-        {/* Telefone / WhatsApp */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-            <Phone size={14} className="text-slate-400" />
-            WhatsApp
-          </label>
-          <input
-            type="tel"
-            disabled={readOnly}
-            value={formData.phone}
-            onChange={(e) => updateField('phone', formatPhone(e.target.value))}
-            placeholder="(00) 00000-0000"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
-          />
-        </div>
+        {!isSimplified && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+              <Phone size={14} className="text-slate-400" />
+              WhatsApp
+            </label>
+            <input
+              type="tel"
+              disabled={readOnly}
+              value={formData.phone}
+              onChange={(e) => updateField('phone', formatPhone(e.target.value))}
+              placeholder="(00) 00000-0000"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
+            />
+          </div>
+        )}
 
-        {/* Gênero */}
-        <div className="space-y-1.5">
+        {/* Gênero (default Masculino) */}
+        <div className={`space-y-1.5 ${isSimplified ? 'sm:col-span-2' : ''}`}>
           <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
             Gênero
           </label>
@@ -96,7 +117,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
               disabled={readOnly}
               onClick={() => updateField('gender', 'M')}
               className={`py-2 px-3 rounded-xl border text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
-                formData.gender === 'M'
+                (formData.gender || 'M') === 'M'
                   ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-xs'
                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
@@ -120,32 +141,33 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
           </div>
         </div>
 
-        {/* Tamanho da Camiseta */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-            Tamanho da Camiseta
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {(['P', 'M', 'G'] as const).map((size) => (
-              <button
-                key={size}
-                type="button"
-                disabled={readOnly}
-                onClick={() => updateField('shirtSize', size)}
-                className={`py-2 rounded-xl border text-xs font-black flex items-center justify-center transition-all ${
-                  formData.shirtSize === size
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-xs'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {size}
-              </button>
-            ))}
+        {!isSimplified && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+              Tamanho da Camiseta
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['P', 'M', 'G'] as const).map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => updateField('shirtSize', size)}
+                  className={`py-2 rounded-xl border text-xs font-black flex items-center justify-center transition-all ${
+                    formData.shirtSize === size
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Campos Administrativos (E-mail e PIN quando em modo Admin ou Nova Inscrição) */}
-        {(isAdmin || canEditIdentity) && (
+        {!isSimplified && (isAdmin || canEditIdentity) && (
           <>
             <div className="space-y-1.5">
               <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">

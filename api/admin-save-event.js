@@ -93,6 +93,7 @@ export default async function handler(req, res) {
         active: existingEventData.active,
         eventStatus: existingEventData.eventStatus,
         eventType: existingEventData.eventType,
+        registrationType: existingEventData.registrationType,
         setsCount: existingEventData.setsCount,
         gamesPerSet: existingEventData.gamesPerSet,
         teamDrawType: existingEventData.teamDrawType,

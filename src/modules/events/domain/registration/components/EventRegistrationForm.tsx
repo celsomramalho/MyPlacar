@@ -256,6 +256,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             updateField={form.updateField}
             isAdmin={isAdmin}
             readOnly={readOnly}
+            isSimplified={form.isSimplified}
+            nameConflictWarning={form.nameConflictWarning}
           />
         )}
 
@@ -268,6 +270,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
               categoryVacancyMap={form.categoryVacancyMap}
               pricing={form.pricing}
               readOnly={readOnly}
+              conflictingCategoryIds={form.conflictingCategoryIds}
+              nickname={form.formData.nickname}
             />
             <RegulationStep
               event={event}
