@@ -1,10 +1,10 @@
 import React, { createContext, useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import type { doc, setDoc, updateDoc, deleteField, FieldValue } from 'firebase/firestore';
-import { getDb } from '@infra/firebase';
 import type { ControllerRecord, GameState, LiveLogEntry, LivePapel, LiveType } from '../../types.ts';
 import type { LiveContextValue, LiveProviderProps } from './types.ts';
 import { getPersistedLiveOwnerPin } from './liveHelpers.ts';
 import { isWatchDevice } from '@shared/utils/device';
+import { performSafeLiveExit } from './domain/liveTeardown.ts';
+
 
 // ─── Contexto ─────────────────────────────────────────────────────────────────
 // Valor padrão é undefined — o hook useLive() vai detectar se está fora do Provider.
@@ -259,97 +259,17 @@ export const LiveProvider: React.FC<LiveProviderProps> = ({
   // gameState e activeLives NÃO entram no dep array — são lidos via ref
   // para que o handler não seja recriado (e o exitTimer cancelado) a cada ponto.
   useEffect(() => {
-    const performExit = async () => {
-      // Se a flag 'alive' existe, o app foi montado recentemente — é um reload,
-      // não uma saída definitiva. Consome a flag e aborta para não fechar a live.
-      try {
-        if (sessionStorage.getItem('myPlacar_alive')) {
-          sessionStorage.removeItem('myPlacar_alive');
-          return;
-        }
-      } catch {}
-
-      // Lê estado atual via refs — evita closure stale e mantém o dep array estável.
-      const gs = gameStateRef.current;
-      const lives = activeLivesRef.current;
-      if (!gs?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
-      const db = getDb();
-      if (!db) return;
-      const { doc, setDoc, updateDoc, deleteField } = await import('firebase/firestore');
-      const myPin = userProfile.pin?.toUpperCase();
-      const judgeMatch = lives.find(
-        l => l.judgePin?.toUpperCase() === myPin || l.judge?.pin?.toUpperCase() === myPin,
-      );
-
-      // Calcula isOwner via refs (não via closure) — evita stale value em devices
-      // secundários do mesmo usuário que ainda não receberam o snapshot com ownerDeviceId.
-      // Exclui relógio desta definição para ele nunca fechar a live.
-      const gsOwnerDeviceId = gs.ownerDeviceId;
-      const isOwnerByDeviceId = !isWatchDevice() && !!gsOwnerDeviceId && gsOwnerDeviceId === deviceId;
-      const isOwnerByPin = !isWatchDevice() && !gsOwnerDeviceId &&
-        gs.ownerPin?.toUpperCase() === myPin &&
-        !lives.some(l => l.ownerDeviceId && l.ownerDeviceId !== deviceId && l.ownerPin?.toUpperCase() === myPin);
-      const isOwnerViaRef = isOwnerByDeviceId || isOwnerByPin;
-
-      // Usa apenas PIN autorizado: live própria do usuário logado ou live onde ele é juiz.
-      const targetPin = (judgeMatch && judgeMatch.ownerPin)
-        ? judgeMatch.ownerPin.toUpperCase()
-        : (isOwnerViaRef && myPin ? myPin : null);
-      if (!targetPin) return;
-
-      const isController = gs.commandOwnerId === deviceId;
-
-      // Grace period de 30s após perder o controle.
-      const justLostControl = (Date.now() - lostControlAtRef.current) < 30000;
-      // Grace period de 15s após assumir o controle.
-      const justTookControl = (Date.now() - tookControlAtRef.current) < 15000;
-
-      // Regra: o owner só fecha a live via performExit se ELE é o controller ativo.
-      // Se outro device (relógio, juiz) está controlando, o owner saindo da tela
-      // apenas remove sua presença — a live continua sob o controle do outro device.
-      if (isOwnerViaRef && isController && !justLostControl && !justTookControl) {
-        // Owner saiu sendo o controller ativo: verifica se há judge ou outro owner ativo.
-        const hasActiveJudge = !!(gs.judgePin && Object.values(gs.controllers || {}).some(
-          (c: ControllerRecord) => c.role === 'judge' && (Date.now() - (c.lastSeen || 0)) < 60000
-        ));
-        const controllersEntries = Object.entries(gs.controllers || {});
-        const hasActiveOwnerDevice = controllersEntries.some(([id, c]) =>
-          id !== deviceId &&
-          (c as ControllerRecord).role === 'owner' &&
-          (Date.now() - ((c as ControllerRecord).lastSeen || 0)) < 60000
-        );
-
-        if (hasActiveJudge || hasActiveOwnerDevice) {
-          // Há outro device ativo — apenas remove a presença deste
-          const presenceUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
-            [`controllers.${deviceId}`]: deleteField(),
-            commandOwnerId: null,
-            commandOwner: null,
-          };
-          updateDoc(doc(db, 'live_matches', targetPin), presenceUpdate).catch(() => {});
-        } else {
-          // Owner era o único controlador ativo — fecha a live
-          updateDoc(doc(db, 'live_matches', targetPin), { isLiveClosed: true, isMirroringActive: false }).catch(() => {});
-        }
-      } else if (isOwnerViaRef && !isController) {
-        // Owner saiu mas NÃO era o controller — apenas remove sua presença.
-        // A live continua ativa sob controle do outro device.
-        updateDoc(doc(db, 'live_matches', targetPin), {
-          [`controllers.${deviceId}`]: deleteField(),
-        }).catch(() => {});
-      } else {
-        // Judge ou observer saiu — remove apenas o registro deste device via field-path.
-        // Se era o controller ativo, libera o controle (commandOwnerId = null).
-        const presenceUpdate: Record<string, FieldValue | null | string | number | boolean | object | undefined> = {
-          [`controllers.${deviceId}`]: deleteField(),
-        };
-        if (isController) {
-          presenceUpdate.commandOwnerId = null;
-          presenceUpdate.commandOwner = null;
-        }
-        updateDoc(doc(db, 'live_matches', targetPin), presenceUpdate).catch(() => {});
-      }
+    const performExit = () => {
+      performSafeLiveExit({
+        deviceId,
+        userProfile,
+        currentGs: gameStateRef.current,
+        activeLives: activeLivesRef.current,
+        tookControlAt: tookControlAtRef.current,
+        lostControlAt: lostControlAtRef.current,
+      }).catch(() => {});
     };
+
 
     // visibilitychange é o sinal mais confiável em mobile (iOS/Android).
     // Grace period de 2500ms: se o app voltar para 'visible' dentro desse tempo

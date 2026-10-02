@@ -61,3 +61,24 @@ export interface LiveContextValue {
    */
   resolveTargetPin: (context: string) => string | null;
 }
+
+// ─── Interfaces para o Publisher e Subscriber ────────────────────────────────
+export interface LivePublisherParams {
+  deviceId: string;
+  currentFullDeviceName: string;
+  lastSentStateRef?: React.MutableRefObject<string>;
+}
+
+export interface LivePublisherReturn {
+  lastSentStateRef: React.MutableRefObject<string>;
+  markStateAsSent: (state: GameState) => void;
+}
+
+export interface LiveSubscriberParams {
+  deviceId: string;
+  currentFullDeviceName: string;
+  initialSpectatorPin: string | null;
+  markStateAsSent?: (state: GameState) => void;
+}
+
+
