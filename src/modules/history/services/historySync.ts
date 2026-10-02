@@ -1,5 +1,4 @@
 import { countCloudMatches, deleteAllCloudMatches, downloadMatchesFromFirebase, syncMatchesToFirebase } from '@infra/firebase/matches';
-import { deleteAllSupabaseMatches, mirrorMatches } from '@infra/supabase';
 import type { Firestore, FieldValue } from 'firebase/firestore';
 import type { MatchHistoryItem } from '../types';
 import { getUnsyncedHistory } from './getUnsyncedHistory';
@@ -62,7 +61,6 @@ export const syncHistoryBatch = async ({
 
   if (validUnsynced.length === 0) return { updatedHistory: history, syncedCount: 0 };
 
-  mirrorMatches(validUnsynced, ownerEmail, ownerPin);
   const syncedIds = new Set(validUnsynced.map((match) => match.id));
   return {
     updatedHistory: markHistoryAsSynced(history, syncedIds),
@@ -104,5 +102,4 @@ export const clearCloudHistory = async ({
 }: ClearHistoryParams): Promise<void> => {
   if (!db || !ownerEmail) return;
   await deleteAllCloudMatches(db, ownerEmail);
-  deleteAllSupabaseMatches(ownerEmail);
 };

@@ -8,6 +8,7 @@ export interface CategoryEntriesTabProps {
   category: EventCategory;
   event: TournamentEvent;
   entries: TournamentEntry[];
+  emptyMessage?: string;
   categoryMatches: TournamentMatch[];
   pairsById?: Record<string, TournamentPair>;
   playerStandingsMap: Map<string, PlayerStanding>;
@@ -31,6 +32,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   category,
   event,
   entries,
+  emptyMessage,
   categoryMatches,
   pairsById,
   playerStandingsMap,
@@ -85,7 +87,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
 
       {entries.length === 0 ? (
         <div className="p-10 text-center text-sm font-bold text-slate-400">
-          Nenhum inscrito nesta categoria.
+          {emptyMessage || 'Nenhum inscrito nesta categoria.'}
         </div>
       ) : isRanking ? (
         <div>

@@ -13,6 +13,7 @@ import {
   type PlayerStanding,
 } from '@modules/events/types';
 import {
+  isCategoryMixed,
   generateSystemMatchesForCategory,
   generateSuper8MatchesForCategory,
   generateSuper8DuplasMatchesForCategory,
@@ -355,27 +356,38 @@ export const EventCategoriesManager: React.FC<Props> = ({
     });
   }, [isIndividualRanking, categoryEntries, sortBy, playerStandingsMap, pairs, selectedCategory?.id]);
 
+  const selectedEntryGender = selectedEntries.size === 1
+    ? categoryEntries.find((entry) => entry.email === selectedEntries.values().next().value)?.gender
+    : undefined;
+  const selectionFilterGender = selectedCategory && isCategoryMixed(selectedCategory)
+    ? selectedEntryGender === 'M' ? 'F' : selectedEntryGender === 'F' ? 'M' : undefined
+    : undefined;
+  const visibleCategoryEntries = selectionFilterGender
+    ? sortedCategoryEntries.filter((entry) => entry.gender === selectionFilterGender)
+    : sortedCategoryEntries;
+
   const pairForEntry = (entry: TournamentEntry) => {
-    return pairs.find(
-      (p) =>
-        (p.categoryId === selectedCategory?.id || !p.categoryId) &&
-        (p.p1.email === entry.email || p.p2.email === entry.email || p.p1.pin === entry.pin || p.p2.pin === entry.pin)
+    return categoryPairs.find(
+      (pair) =>
+        pair.p1.email === entry.email ||
+        pair.p2.email === entry.email ||
+        pair.p1.pin === entry.pin ||
+        pair.p2.pin === entry.pin
     );
   };
 
   const selectedPair = useMemo(() => {
     if (isRanking || selectedEntries.size !== 2) return null;
     const [e1, e2] = Array.from(selectedEntries);
-    const found = pairs.find(
+    const found = categoryPairs.find(
       (p) =>
-        (p.categoryId === selectedCategory?.id || !p.categoryId) &&
         ((p.p1.email === e1 && p.p2.email === e2) || (p.p1.email === e2 && p.p2.email === e1))
     );
     if (!found) return null;
     const isPairSelected =
       selectedEntries.has(found.p1.email) && selectedEntries.has(found.p2.email);
     return isPairSelected ? found : null;
-  }, [isRanking, pairs, selectedCategory?.id, selectedEntries]);
+  }, [isRanking, categoryPairs, selectedEntries]);
 
   const toggleEntrySelection = (entry: TournamentEntry) => {
     // Jogadores com inscrição desativada ou cancelada não podem ser selecionados para formar times
@@ -1512,7 +1524,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                       <CategoryEntriesTab
                         category={cat}
                         event={event}
-                        entries={sortedCategoryEntries}
+                        entries={visibleCategoryEntries}
+                        emptyMessage={selectionFilterGender ? 'Nenhum inscrito do gênero oposto disponível nesta categoria.' : undefined}
                         categoryMatches={categoryMatches}
                         pairsById={pairsById}
                         playerStandingsMap={playerStandingsMap}

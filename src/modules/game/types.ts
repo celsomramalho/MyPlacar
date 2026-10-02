@@ -222,7 +222,7 @@ export interface GameContextValue {
 
   /**
    * Salva o `userProfile` no localStorage e, se online, faz upsert no
-   * Firestore (`users/<email>`) e espelha no Supabase via `mirrorUser`.
+   * Firestore (`users/<email>`).
    */
   handleSaveProfile: () => Promise<void>;
 }

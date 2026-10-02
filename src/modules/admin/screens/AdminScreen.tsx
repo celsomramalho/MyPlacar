@@ -11,16 +11,14 @@ import { deleteLiveMatchesByIds, fetchLiveMatchesStats as fetchFirebaseLiveMatch
 import { linkLegacyMatchesToOwnerEmail } from '@infra/firebase/matches';
 import { fetchSystemConfig, saveSystemConfigPatch } from '@infra/firebase/systemConfig';
 import { searchUserProfilesByEmailPrefix } from '@infra/firebase/users';
-import { migrateFirebaseAdminDataToSupabase } from '@infra/supabase/adminMigration';
 import { AdminConfirmModals, type AdminDeleteConfirm } from '@modules/admin/components/AdminConfirmModals';
 import { AdminEventsPanel } from '@modules/admin/components/AdminEventsPanel';
 import { AdminHeader } from '@modules/admin/components/AdminHeader';
 import { AdminHiddenFileInputs } from '@modules/admin/components/AdminHiddenFileInputs';
 import { AdminStatusAlert, type AdminStatus } from '@modules/admin/components/AdminStatusAlert';
-import { AdminSupabaseMigrationCard, type AdminMigrationResult } from '@modules/admin/components/AdminSupabaseMigrationCard';
 import { AdminUsersPanel } from '@modules/admin/components/AdminUsersPanel';
 import { AdminVoiceRulesPanel } from '@modules/admin/components/AdminVoiceRulesPanel';
-import { deleteAdminIconAndMirror, saveAdminIconAndMirror, updateAdminUserPlan } from '@modules/admin/services/adminPersistence';
+import { deleteAdminIcon, saveAdminIcon, updateAdminUserPlan } from '@modules/admin/services/adminPersistence';
 import { clearAdminFirestoreCache } from '@modules/admin/services/adminTechnicalActions';
 import type { AdminIconUploadTarget, AdminTab } from '@modules/admin/types';
 import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../../../constants';
@@ -54,8 +52,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [loading, setLoading] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
   const [showConfirmFix, setShowConfirmFix] = useState(false);
-  const [isMigrating, setIsMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<AdminMigrationResult | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<AdminDeleteConfirm | null>(null);
   const [status, setStatus] = useState<AdminStatus | null>(null);
 
@@ -379,7 +375,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       const db = getDb();
       if (!db) return;
       try {
-        await deleteAdminIconAndMirror(db, type, id);
+        await deleteAdminIcon(db, type, id);
         if (type === 'category') { setCategories(prev => prev.filter(c => c.id !== id)); setSelectedCatId(""); }
         else { setSports(prev => prev.filter(s => s.id !== id)); setSelectedSportId(""); }
         setStatus({ type: 'success', msg: "Excluído com sucesso." });
@@ -414,22 +410,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       setStatus({ type: 'success', msg: `Usuário ${user.nickname} agora é ${nextPlan === 'premium' ? 'premium' : 'free'}` });
       setTimeout(() => setStatus(null), 2000);
     } catch (_e) { setStatus({ type: 'error', msg: "Falha ao atualizar plano." }); }
-  };
-
-  const executeMigrateToSupabase = async () => {
-    const db = getDb();
-    if (!db) return;
-    setIsMigrating(true);
-    setMigrationResult(null);
-    try {
-      const result = await migrateFirebaseAdminDataToSupabase(db);
-      setMigrationResult(result);
-    } catch (e) {
-      console.error('Migração Supabase:', e);
-      setStatus({ type: 'error', msg: 'Erro durante a migração. Verifique o console.' });
-    } finally {
-      setIsMigrating(false);
-    }
   };
 
   const executeFixLegacyMatches = async () => {
@@ -498,7 +478,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     setLoading(item.id);
     try {
       const itemWithTimestamp = { ...item, updatedAt: new Date().toISOString() };
-      await saveAdminIconAndMirror(db, type, itemWithTimestamp);
+      await saveAdminIcon(db, type, itemWithTimestamp);
       setStatus({ type: 'success', msg: "Salvo com sucesso!" });
       setIsEditingId(false);
       if (type === 'category') setIsCatSaved(true);
@@ -785,11 +765,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                 onUpdateCommandField={updateCommandField}
               />
 
-              <AdminSupabaseMigrationCard
-                isMigrating={isMigrating}
-                migrationResult={migrationResult}
-                onMigrate={executeMigrateToSupabase}
-              />
             </div>
           </>
         )}

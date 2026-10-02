@@ -12,7 +12,7 @@
 - **Framework**: React 18.x com TypeScript.
 - **Styling**: Tailwind CSS v4 (Utility-first).
 - **Build Tool**: Vite.
-- **Backend/Database**: Firebase (Firestore) + Supabase (Auth/Edge Functions).
+- **Backend/Database**: Firebase (Authentication + Firestore).
 - **Icons**: Lucide React (Exclusivo).
 - **AI Integration**: Google Gemini AI (@google/genai).
 

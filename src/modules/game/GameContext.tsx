@@ -35,7 +35,6 @@ import { getDb } from '@infra/firebase/client';
 import { findUserByPin } from '@infra/firebase/users';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import type { Firestore, FieldValue } from 'firebase/firestore';
-import { mirrorUser } from '@infra/supabase';
 import { markTournamentMatchFinished, markTournamentMatchLive, markTournamentMatchScore } from '@modules/events/services/updateTournamentMatchProgress';
 import type { MatchSetScore, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { createHistoryItem } from '@modules/history/services/createHistoryItem';
@@ -223,7 +222,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({
             passkeyPublicKey: userProfile.passkeyPublicKey || null,
             updatedAt: serverTimestamp()
           }, { merge: true });
-          mirrorUser(userProfile);
 
           // Propaga a alteração de gênero para todas as inscrições do usuário em eventos
           try {

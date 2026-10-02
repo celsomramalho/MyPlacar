@@ -55,8 +55,6 @@ src/
     firebase/
       client.ts
       clientLite.ts
-    supabase/
-      client.ts
     email/
     storage/
     notifications/
@@ -108,8 +106,8 @@ Para módulos pequenos, manter `components`, `screens`, `hooks` e `services` at�
 | Utils genéricos | `src/shared/utils` | Formatadores e helpers sem domínio |
 | Regras de jogo | `src/modules/game/domain` | Engines, validações e regras esportivas |
 | Sync live | `src/modules/live` | Hooks e serviços de live |
-| Clientes externos | `src/infrastructure/*/client.ts` | Firebase, Supabase, email |
-| Repositórios/adapters de domínio | `src/modules/<domain>/infrastructure` | Quando precisar isolar Firebase/Supabase do domínio |
+| Clientes externos | `src/infrastructure/*/client.ts` | Firebase, email |
+| Repositórios/adapters de domínio | `src/modules/<domain>/infrastructure` | Quando precisar isolar Firebase do domínio |
 
 Pastas que devem parar de receber novos arquivos:
 
@@ -334,9 +332,9 @@ Cada rodada foi desenhada para caber em uma sessão curta. Quando a rodada ficar
 ### Rodada 9 — Infrastructure e Repositories
 
 **Status:** Concluida em 2026-06-05  
-**Objetivo:** reduzir conhecimento de Firebase/Supabase espalhado pelos módulos.
+**Objetivo:** reduzir conhecimento de Firebase espalhado pelos módulos.
 
-- [x] Manter clientes brutos em `src/infrastructure/firebase/client.ts` e `src/infrastructure/supabase/client.ts`.
+- [x] Manter o cliente bruto em `src/infrastructure/firebase/client.ts`. A integração Supabase descrita no plano original foi removida em 2026-10-01.
 - [x] Avaliar mover repositórios concretos para `modules/<domain>/infrastructure/adapters` (avaliado e decidido manter centralizado em `src/infrastructure` para simplicidade).
 - [x] Evitar que `infrastructure` importe telas, hooks ou app shell (verificado e garantido).
 - [x] Reduzir uso de barrels grandes como `@infra/firebase` onde causarem acoplamento (validado).

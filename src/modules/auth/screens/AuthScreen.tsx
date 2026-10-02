@@ -6,7 +6,6 @@ import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { UserProfile } from '../types';
 import { createWatchLoginToken, deleteWatchLoginToken, fetchEventByPin, fetchUserProfile, fetchUserProfileFromServer, findUserByPin, findUserProfileByPasskeyCredentialId, getAuthInstance, getDb, saveNewUserProfile, subscribeWatchLoginToken } from '@infra/firebase';
-import { mirrorUser } from '@infra/supabase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { emailService } from '@infra/email';
@@ -256,7 +255,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         };
 
         await saveNewUserProfile(db, cleanEmail, newProfile);
-        mirrorUser(newProfile as unknown as UserProfile);
         onAuthSuccess(newProfile, rememberMe);
       };
 
@@ -720,7 +718,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       };
       
       await saveNewUserProfile(db, cleanEmail, newProfile);
-      mirrorUser(newProfile as unknown as UserProfile);
       const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
       await emailService.sendEmail('welcome', {
         to_name: newProfile.nickname,
@@ -1046,7 +1043,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           };
           
           await saveNewUserProfile(db, cleanEmail, newProfile);
-          mirrorUser(newProfile as unknown as UserProfile);
           onAuthSuccess(newProfile as unknown as UserProfile, rememberMe);
         }
       }

@@ -15,7 +15,6 @@ import { useGame } from '@modules/game/useGame';
 import { Input } from '@shared/components/Input';
 import { findUserByPin, findUsersByPins, findUsersReferredByPin, getDb } from '@infra/firebase'; 
 import { getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'firebase/firestore'; 
-import { mirrorUser, mirrorPartners } from '@infra/supabase';
 import { LiveIndicator } from '@modules/live'; 
 import { formatPortugueseName, maskPin } from '@shared/utils/formatters';
 import { copyToClipboard } from '@shared/utils/clipboard';
@@ -370,8 +369,6 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
         await setDoc(docRef, payload, { merge: true }); // lança se falhar de novo
       }
 
-      mirrorUser(userProfile);
-      mirrorPartners(userProfile.email, currentPartners);
       // Atualiza os contadores da nuvem:
       // own = backup da lista própria, total = backup próprio + indicados
       setCloudOwnCount(currentPartners.length);
@@ -400,9 +397,6 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
         addedAt: Date.now(),
         gender,
       });
-      // Espelha imediatamente no Supabase — mirrorUser garante que o owner existe na tabela users
-      mirrorUser(userProfile);
-      mirrorPartners(userProfile.email, next);
       return next;
     });
     setPinInput(''); setLookupName(''); setLookupFullName('');
@@ -414,8 +408,6 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
     if (id === 'me') return;
     setPartners(prev => {
       const next = prev.map(p => p.id === id ? { ...p, gender: (p.gender === 'M' ? 'F' : 'M') as 'M' | 'F' } : p);
-      mirrorUser(userProfile);
-      mirrorPartners(userProfile.email, next);
       return next;
     });
   };

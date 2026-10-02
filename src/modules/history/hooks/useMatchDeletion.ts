@@ -1,6 +1,5 @@
 import { getDb } from '@infra/firebase/client';
 import { deleteCloudMatch, deleteCloudMatches } from '@infra/firebase/matches';
-import { deleteSupabaseMatch, deleteSupabaseMatches } from '@infra/supabase';
 import { removeHistoryMatches } from '@modules/history/services/removeHistoryMatches';
 import type { Firestore } from 'firebase/firestore';
 import type { MatchHistoryItem } from '@modules/history/types';
@@ -40,7 +39,6 @@ export function useMatchDeletion({
         const cleanEmail = userProfile.email?.toLowerCase().trim();
         if (db && cleanEmail && navigator.onLine) {
           deleteCloudMatch(db as Firestore, id).catch(() => {});
-          deleteSupabaseMatch(id);
         }
       },
       onCancel: () => setModalConfig(null),
@@ -60,7 +58,6 @@ export function useMatchDeletion({
         const cleanEmail = userProfile.email?.toLowerCase().trim();
         if (db && cleanEmail && navigator.onLine) {
           deleteCloudMatches(db as Firestore, ids).catch(() => {});
-          deleteSupabaseMatches([...ids]);
         }
       },
       onCancel: () => setModalConfig(null),
