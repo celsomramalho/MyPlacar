@@ -8,7 +8,7 @@ import type { TournamentEvent } from '../types';
 export const isRankingEvent = (event?: Partial<TournamentEvent> | null): boolean => {
   if (!event) return false;
   const type = (event.eventType || '').trim().toLowerCase();
-  if (type === 'ranking') return true;
+  if (type) return type === 'ranking';
   const name = (event.name || '').trim().toLowerCase();
   if (name.includes('ranking')) return true;
   if (Boolean(event.rankingMatchesPerTeam && event.rankingMatchesPerTeam > 0)) return true;
@@ -24,8 +24,7 @@ export const isRankingEvent = (event?: Partial<TournamentEvent> | null): boolean
 export const isSuper8Event = (event?: Partial<TournamentEvent> | null): boolean => {
   if (!event) return false;
   const type = (event.eventType || '').trim().toLowerCase();
-  if (type === 'super 8 duplas') return false;
-  if (type === 'super 8' || type === 'super8' || type === 'super 8 individual') return true;
+  if (type) return type === 'super 8' || type === 'super8' || type === 'super 8 individual';
   const name = (event.name || '').trim().toLowerCase();
   if (name.includes('super 8 duplas') || name.includes('super8 duplas')) return false;
   if (name.includes('super 8') || name.includes('super8')) return true;
@@ -46,7 +45,7 @@ export const isSuper8IndividualEvent = (event?: Partial<TournamentEvent> | null)
 export const isSuper8DuplasEvent = (event?: Partial<TournamentEvent> | null): boolean => {
   if (!event) return false;
   const type = (event.eventType || '').trim().toLowerCase();
-  if (type === 'super 8 duplas') return true;
+  if (type) return type === 'super 8 duplas';
   const name = (event.name || '').trim().toLowerCase();
   if (name.includes('super 8 duplas') || name.includes('super8 duplas') || name.includes('super 8 dupla')) return true;
   return false;

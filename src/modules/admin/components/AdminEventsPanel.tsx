@@ -61,6 +61,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
 
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
   const [coAdminNamesByPin, setCoAdminNamesByPin] = useState<Record<string, string>>({});
+  const [initialConfigBlock, setInitialConfigBlock] = useState<string | undefined>(undefined);
   const isPrimaryAdmin = isPrimaryAdminEmail(adminEmail);
   const isReadOnlyRegistration = !isPrimaryAdmin;
   const canManageEventAdmins = isPrimaryAdmin;
@@ -247,9 +248,13 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         bannerInputRef={bannerInputRef}
         coAdminNamesByPin={coAdminNamesByPin}
         adminEmail={adminEmail}
+        initialBlock={initialConfigBlock}
         onChangeEditingEvent={onChangeEditingEvent}
         onSaveEvent={handleSaveEventAndSyncDashboard}
-        onClose={() => onChangeEditingEvent(null)}
+        onClose={() => {
+          setInitialConfigBlock(undefined);
+          onChangeEditingEvent(null);
+        }}
       />
     );
   }
@@ -266,7 +271,14 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             onBackToTournaments();
           }
         }}
-        onEditEventConfig={() => (onStartEditEvent ? onStartEditEvent(currentDashboardEvent) : onChangeEditingEvent(currentDashboardEvent))}
+        onEditEventConfig={(blockKey) => {
+          setInitialConfigBlock(blockKey);
+          if (onStartEditEvent) {
+            onStartEditEvent(currentDashboardEvent);
+          } else {
+            onChangeEditingEvent(currentDashboardEvent);
+          }
+        }}
         onUpdateEvent={handleUpdateDashboardEvent}
         adminEmail={adminEmail}
       />

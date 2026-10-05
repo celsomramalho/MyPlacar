@@ -85,7 +85,7 @@ export const EventCoAdminsManager: React.FC<EventCoAdminsManagerProps> = ({
               disabled={isReadOnlyRegistration}
               onChange={(e) => setCoAdminPin(e.target.value.toUpperCase())}
               placeholder="PIN do usuário (5 dígitos)"
-              className="flex-1 h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-mono font-black text-xs uppercase outline-none"
+              className="flex-1 h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-mono font-black text-xs uppercase placeholder:normal-case outline-none"
             />
             <button
               type="button"

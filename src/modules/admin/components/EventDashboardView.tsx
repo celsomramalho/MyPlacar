@@ -10,9 +10,11 @@ import {
   Settings,
   Award,
   ShieldAlert,
+  Menu,
 } from 'lucide-react';
 import type { TournamentEvent, EventCategory, TournamentEntry, EventSponsor } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
+import { EVENT_CONFIG_BLOCKS } from './events/EventConfigForm';
 import { EventCategoriesManager } from './EventCategoriesManager';
 import { EventRegistrationsManager } from './EventRegistrationsManager';
 import { EventFormedTeamsView } from './EventFormedTeamsView';
@@ -36,7 +38,7 @@ interface Props {
   activeSports: FirebaseAdminSportIcon[];
   adminEmail?: string;
   onBackToEvents: () => void;
-  onEditEventConfig: () => void;
+  onEditEventConfig: (initialBlock?: string) => void;
   onUpdateEvent: (updatedEvent: TournamentEvent) => void;
 }
 
@@ -48,6 +50,21 @@ export const EventDashboardView: React.FC<Props> = ({
   onEditEventConfig,
   onUpdateEvent,
 }) => {
+  const blockMenuRef = React.useRef<HTMLDivElement>(null);
+  const [isBlockMenuOpen, setIsBlockMenuOpen] = useState(false);
+
+  // Fecha menu de blocos ao clicar fora
+  React.useEffect(() => {
+    if (!isBlockMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (blockMenuRef.current && !blockMenuRef.current.contains(e.target as Node)) {
+        setIsBlockMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isBlockMenuOpen]);
+
   const [activeTab, setActiveTab] = useState<EventDashboardTab>(() => {
     try {
       const targetTab = sessionStorage.getItem('admin_target_dashboard_tab');
@@ -159,14 +176,60 @@ export const EventDashboardView: React.FC<Props> = ({
               {event.name}
             </h1>
 
-            {/* Botão Chevron no canto superior direito - abre direto o cadastro */}
-            <button
-              onClick={onEditEventConfig}
-              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl active:scale-95 transition-all shrink-0"
-              title={isPrimaryAdminEmail(adminEmail) ? 'Editar cadastro do evento' : 'Visualizar cadastro do evento'}
-            >
-              <ChevronDown size={20} />
-            </button>
+            {/* Botões Menu de Blocos e Chevron no canto superior direito */}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative" ref={blockMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsBlockMenuOpen((prev) => !prev)}
+                  className="w-10 h-10 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center hover:bg-slate-200 active:scale-95 transition-all cursor-pointer"
+                  title="Acessar blocos do evento"
+                >
+                  <Menu size={18} />
+                </button>
+                {isBlockMenuOpen && (
+                  <div className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95">
+                    <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
+                      <p className="text-[10px] font-black text-slate-400 tracking-wider">Acessar bloco</p>
+                    </div>
+                    {EVENT_CONFIG_BLOCKS.map((block) => {
+                      const BlockIcon = block.icon;
+                      return (
+                        <button
+                          key={block.key}
+                          type="button"
+                          onClick={() => {
+                            setIsBlockMenuOpen(false);
+                            onEditEventConfig(block.key);
+                          }}
+                          className="w-full flex items-center justify-between px-3.5 py-2.5 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <BlockIcon size={16} className="text-slate-500 shrink-0" />
+                            <span className="text-xs font-black text-slate-700">{block.label}</span>
+                          </div>
+                          {block.isAdminOnly && (
+                            <span className="text-[9px] bg-amber-100 text-amber-700 font-black px-1.5 py-0.5 rounded-full">
+                              Admin
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Botão Chevron no canto superior direito - abre direto o cadastro */}
+              <button
+                type="button"
+                onClick={() => onEditEventConfig()}
+                className="w-10 h-10 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0 cursor-pointer"
+                title={isPrimaryAdminEmail(adminEmail) ? 'Editar cadastro do evento' : 'Visualizar cadastro do evento'}
+              >
+                <ChevronDown size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Second line: Badges (PIN & Status) + Botão Voltar (canto inferior direito) */}
