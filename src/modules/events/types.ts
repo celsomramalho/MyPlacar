@@ -1,3 +1,6 @@
+export * from './domain/rules/eventMatchRules';
+import type { EventSportRules } from './domain/rules/eventMatchRules';
+
 export interface TournamentPair {
   id: string;
   p1: TournamentEntry;
@@ -244,6 +247,10 @@ export interface TournamentEvent {
   eventStatus?: EventStatusOption;
   eventType?: EventTypeOption;
   registrationType?: EventRegistrationTypeOption;
+  sportGroup?: string;
+  sportId?: string;
+  sportName?: string;
+  sportRules?: EventSportRules;
   setsCount?: 1 | 3 | 5;
   gamesPerSet?: number;
   teamDrawType?: TeamDrawTypeOption;

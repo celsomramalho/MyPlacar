@@ -84,37 +84,36 @@ export default async function handler(req, res) {
     // Remover entries do documento principal (salvo em subcoleção)
     let { entries: _entries, ...eventWithoutEntries } = event;
 
-    // Se for co-admin (e não admin global), preserva dados cadastrais intocados
+    // Se for co-admin (e não admin global), preserva blocos 1, 2 e 3 (edição exclusiva do admin global)
     if (isCoAdmin && !isAdminUser && existingEventData) {
       eventWithoutEntries = {
         ...eventWithoutEntries,
+        // Bloco 1: Evento
+        active: existingEventData.active,
         name: existingEventData.name,
         pin: existingEventData.pin,
-        active: existingEventData.active,
         eventStatus: existingEventData.eventStatus,
+        // Bloco 2: Configurações
         eventType: existingEventData.eventType,
         registrationType: existingEventData.registrationType,
-        setsCount: existingEventData.setsCount,
-        gamesPerSet: existingEventData.gamesPerSet,
+        paymentType: existingEventData.paymentType,
+        organizerEmail: existingEventData.organizerEmail,
+        marketplaceFeePercent: existingEventData.marketplaceFeePercent,
         teamDrawType: existingEventData.teamDrawType,
+        allowUserTeamFormation: existingEventData.allowUserTeamFormation,
+        allowUserScoreEntry: existingEventData.allowUserScoreEntry,
+        maxPlayersPerCategory: existingEventData.maxPlayersPerCategory,
         bracketDrawType: existingEventData.bracketDrawType,
         matchDrawType: existingEventData.matchDrawType,
-        showRegisteredParticipants: existingEventData.showRegisteredParticipants,
-        allowUserScoreEntry: existingEventData.allowUserScoreEntry,
-        rankingMatchesPerTeam: existingEventData.rankingMatchesPerTeam,
-        startDate: existingEventData.startDate,
-        endDate: existingEventData.endDate,
-        eventDateText: existingEventData.eventDateText,
-        location: existingEventData.location,
-        registrationFee: existingEventData.registrationFee,
-        extraCategoryFee: existingEventData.extraCategoryFee,
         courtsCount: existingEventData.courtsCount,
         courtNames: existingEventData.courtNames,
+        rankingMatchesPerTeam: existingEventData.rankingMatchesPerTeam,
+        groupsPerBracket: existingEventData.groupsPerBracket,
         coAdminPins: existingEventData.coAdminPins,
-        bannerUrl: existingEventData.bannerUrl,
-        regulationUrl: existingEventData.regulationUrl,
-        regulationFileName: existingEventData.regulationFileName,
-        information: existingEventData.information,
+        showRegisteredParticipants: existingEventData.showRegisteredParticipants,
+        // Bloco 3: Valores
+        registrationFee: existingEventData.registrationFee,
+        extraCategoryFee: existingEventData.extraCategoryFee,
       };
     }
 

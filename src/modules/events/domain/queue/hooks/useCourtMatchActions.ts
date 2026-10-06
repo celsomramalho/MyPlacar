@@ -18,6 +18,7 @@
 import { useRef, useCallback } from 'react';
 import type { TournamentEvent, TournamentMatch, MatchSetScore } from '@modules/events/types';
 import { updatePlayoffProgression } from '@modules/events/services/matchProgression';
+import { resolveMatchRules } from '../../rules/eventMatchRules';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import type { FirebaseTournamentEvent } from '@infra/firebase/events';
@@ -111,12 +112,16 @@ export function useCourtMatchActions({
   // ─── Parsing de Sets ───────────────────────────────────────────────────────
 
   const parseMatchSets = useCallback(
-    (match: TournamentMatch, totalSets: number): ParseMatchSetsResult => {
-      const gamesPerSet = Number(
-        event.gamesPerSet ||
-        event.config?.gamesPerSet ||
-        (event.eventType === 'Super 8' ? 4 : 6)
+    (match: TournamentMatch, customTotalSets?: number): ParseMatchSetsResult => {
+      const resolved = resolveMatchRules(
+        event.sportRules,
+        match.phase,
+        (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+        Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6))
       );
+      const totalSets = customTotalSets ?? resolved.setsCount;
+      const gamesPerSet = resolved.gamesPerSet;
+
       const scores: MatchSetScore[] = Array.from({ length: totalSets }, (_, i) => {
         if (match.scores?.[i]) return match.scores[i];
         if (match.result) {
@@ -143,7 +148,7 @@ export function useCourtMatchActions({
 
       return { scores, setsWon1, setsWon2 };
     },
-    [event.gamesPerSet, event.config?.gamesPerSet, event.eventType]
+    [event.gamesPerSet, event.config?.gamesPerSet, event.eventType, event.setsCount, event.config?.sets, event.sportRules]
   );
 
   // ─── Ação: Vincular partida a uma quadra ───────────────────────────────────
@@ -196,7 +201,7 @@ export function useCourtMatchActions({
       const nextMatches = (event.matches || []).map((m) => {
         if (m.id !== matchId) return m;
 
-        const { setsWon1, setsWon2, scores } = parseMatchSets(m, totalSets);
+        const { setsWon1, setsWon2, scores } = parseMatchSets(m);
         let winnerPairId = m.winnerPairId;
         let loserPairId = m.loserPairId;
 
@@ -270,13 +275,17 @@ export function useCourtMatchActions({
   const handleScoreInputChange = useCallback(
     (matchId: string, setIndex: number, player: 'p1' | 'p2', rawVal: string) => {
       if (isReadOnly) return;
-      const totalSets = (event.setsCount || event.config?.sets || 1) as number;
-      const gamesPerSet = Number(
-        event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6)
-      );
-
       const nextMatches = (event.matches || []).map((m) => {
         if (m.id !== matchId) return m;
+
+        const resolved = resolveMatchRules(
+          event.sportRules,
+          m.phase,
+          (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+          Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6))
+        );
+        const totalSets = resolved.setsCount;
+        const gamesPerSet = resolved.gamesPerSet;
 
         const currentScores: MatchSetScore[] = Array.from({ length: totalSets }, (_, i) => ({
           p1: m.scores?.[i]?.p1 !== undefined ? m.scores[i].p1 : null,

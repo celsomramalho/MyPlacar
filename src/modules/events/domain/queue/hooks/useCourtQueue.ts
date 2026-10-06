@@ -16,6 +16,7 @@
 
 import { useMemo, useEffect, useRef, useCallback, useState } from 'react';
 import type { TournamentEvent, TournamentMatch, TournamentPair, MatchSetScore } from '@modules/events/types';
+import { resolveMatchRules } from '../../rules/eventMatchRules';
 import { calculateQueueState } from '../engine/queueEngine';
 import type { QueueCalculationResult } from '../types';
 
@@ -128,12 +129,15 @@ export function useCourtQueue(
   );
 
   const parseMatchSets = useCallback(
-    (match: TournamentMatch, sets: number) => {
-      const gpS = Number(
-        event.gamesPerSet ||
-        event.config?.gamesPerSet ||
-        (event.eventType === 'Super 8' ? 4 : 6)
+    (match: TournamentMatch, customSets?: number) => {
+      const resolved = resolveMatchRules(
+        event.sportRules,
+        match.phase,
+        (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+        Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6))
       );
+      const sets = customSets ?? resolved.setsCount;
+      const gpS = resolved.gamesPerSet;
       const scores: MatchSetScore[] = Array.from({ length: sets }, (_, i) => {
         if (match.scores?.[i]) return match.scores[i];
         if (match.result) {
@@ -160,7 +164,7 @@ export function useCourtQueue(
 
       return { scores, setsWon1, setsWon2 };
     },
-    [event.gamesPerSet, event.config?.gamesPerSet, event.eventType]
+    [event.gamesPerSet, event.config?.gamesPerSet, event.eventType, event.setsCount, event.config?.sets, event.sportRules]
   );
 
   return {

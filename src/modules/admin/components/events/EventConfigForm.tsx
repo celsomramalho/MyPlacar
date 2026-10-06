@@ -39,6 +39,11 @@ import { Toggle } from '@shared/components/Toggle';
 import { isRankingEvent, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import { openPdfOrUrl } from '@modules/events/services/openRegulationPdf';
 import { EventCoAdminsManager } from './EventCoAdminsManager';
+import { EventMatchRulesEditor } from './EventMatchRulesEditor';
+import { SPORT_GROUPS, SPORT_LIST } from '../../../../constants';
+import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
+import type { EventSportRules } from '@modules/events/types';
+import { getDefaultRulesForSport } from '@modules/events/domain/rules/eventMatchRules';
 
 // ─── Bloco Accordion & Itens de Menu ──────────────────────────────────────────
 
@@ -118,6 +123,7 @@ export interface EventConfigFormProps {
   coAdminNamesByPin: Record<string, string>;
   adminEmail?: string;
   initialBlock?: string;
+  activeSports?: FirebaseAdminSportIcon[];
   onChangeEditingEvent: (event: TournamentEvent | null) => void;
   onSaveEvent: () => void;
   onClose: () => void;
@@ -134,6 +140,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   coAdminNamesByPin,
   adminEmail,
   initialBlock,
+  activeSports,
   onChangeEditingEvent,
   onSaveEvent,
   onClose,
@@ -141,6 +148,119 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   const regulationInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // ── Esporte e Categoria do Esporte ──────────────────────────────────────────
+  const allSports = React.useMemo(() => {
+    if (activeSports && activeSports.length > 0) {
+      return activeSports;
+    }
+    return SPORT_LIST.map((s) => ({
+      id: s.id,
+      name: s.name,
+      url: s.defaultIcon || '',
+      group: s.group,
+      engine: s.engine,
+      isActive: s.isActive,
+    }));
+  }, [activeSports]);
+
+  const currentSportId = editingEvent.sportId || editingEvent.config?.sportType || 'beach-tennis';
+  const currentSport = allSports.find((s) => s.id === currentSportId);
+  const currentSportGroup = editingEvent.sportGroup || currentSport?.group || 'raquetes';
+
+  const availableSportsForGroup = React.useMemo(() => {
+    const list = allSports.filter((s) => (s.group || 'raquetes') === currentSportGroup);
+    return list.length > 0 ? list : allSports;
+  }, [allSports, currentSportGroup]);
+
+  const handleSportGroupChange = (newGroup: string) => {
+    const sportsInGroup = allSports.filter((s) => (s.group || 'raquetes') === newGroup);
+    const firstSport = sportsInGroup[0];
+    const newSportId = firstSport?.id || '';
+    const newSportName = firstSport?.name || '';
+    const defaultRules = getDefaultRulesForSport(newSportId);
+    const newSportRules: EventSportRules = {
+      defaultRules,
+      customPhasesEnabled: false,
+      phaseRules: {},
+    };
+    handleProtectedChange({
+      ...editingEvent,
+      sportGroup: newGroup,
+      sportId: newSportId,
+      sportName: newSportName,
+      sportRules: newSportRules,
+      setsCount: defaultRules.setsCount,
+      gamesPerSet: defaultRules.gamesPerSet,
+      config: {
+        ...editingEvent.config,
+        sportType: newSportId,
+        sets: defaultRules.setsCount,
+        gamesPerSet: defaultRules.gamesPerSet,
+        noAd: defaultRules.noAd,
+        tieBreak: defaultRules.tieBreak,
+        tieBreakAt: defaultRules.tieBreakAt,
+        tieBreakPoints: defaultRules.tieBreakPoints,
+        tieBreakWinByTwo: defaultRules.tieBreakWinByTwo,
+        switchSidesOdd: defaultRules.switchSidesOdd,
+        pickleballScoringMode: defaultRules.pickleballScoringMode,
+      } as any,
+    });
+  };
+
+  const handleSportIdChange = (newSportId: string) => {
+    const sportObj = allSports.find((s) => s.id === newSportId);
+    const defaultRules = getDefaultRulesForSport(newSportId);
+    const newSportRules: EventSportRules = {
+      defaultRules,
+      customPhasesEnabled: false,
+      phaseRules: {},
+    };
+    handleProtectedChange({
+      ...editingEvent,
+      sportId: newSportId,
+      sportName: sportObj?.name || '',
+      sportGroup: sportObj?.group || currentSportGroup,
+      sportRules: newSportRules,
+      setsCount: defaultRules.setsCount,
+      gamesPerSet: defaultRules.gamesPerSet,
+      config: {
+        ...editingEvent.config,
+        sportType: newSportId,
+        sets: defaultRules.setsCount,
+        gamesPerSet: defaultRules.gamesPerSet,
+        noAd: defaultRules.noAd,
+        tieBreak: defaultRules.tieBreak,
+        tieBreakAt: defaultRules.tieBreakAt,
+        tieBreakPoints: defaultRules.tieBreakPoints,
+        tieBreakWinByTwo: defaultRules.tieBreakWinByTwo,
+        switchSidesOdd: defaultRules.switchSidesOdd,
+        pickleballScoringMode: defaultRules.pickleballScoringMode,
+      } as any,
+    });
+  };
+
+  const handleSportRulesChange = (rules: EventSportRules) => {
+    handleProtectedChange({
+      ...editingEvent,
+      sportRules: rules,
+      setsCount: rules.defaultRules.setsCount,
+      gamesPerSet: rules.defaultRules.gamesPerSet,
+      config: {
+        ...editingEvent.config,
+        sportType: editingEvent.sportId || editingEvent.config?.sportType || 'beach-tennis',
+        sets: rules.defaultRules.setsCount,
+        gamesPerSet: rules.defaultRules.gamesPerSet,
+        noAd: rules.defaultRules.noAd,
+        tieBreak: rules.defaultRules.tieBreak,
+        tieBreakAt: rules.defaultRules.tieBreakAt,
+        tieBreakPoints: rules.defaultRules.tieBreakPoints,
+        tieBreakWinByTwo: rules.defaultRules.tieBreakWinByTwo,
+        switchSidesOdd: rules.defaultRules.switchSidesOdd,
+        pickleballScoringMode: rules.defaultRules.pickleballScoringMode,
+      } as any,
+    });
+  };
   const [organizerStatus, setOrganizerStatus] = useState<{
     loading: boolean;
     connected?: boolean;
@@ -1109,64 +1229,44 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         isOpen={openSections.esporte}
         onToggle={() => toggleSection('esporte')}
       >
-        {/* Set melhor de */}
-        <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 h-12">
-          <span className="text-sm font-black text-slate-700">Set melhor de</span>
-          <div
-            className={`flex bg-slate-100 rounded-xl p-1 gap-1 ${
-              isReadOnlyRegistration ? 'pointer-events-none opacity-80' : ''
-            }`}
-          >
-            {([1, 3, 5] as const).map((num) => (
-              <button
-                key={num}
-                type="button"
-                disabled={isReadOnlyRegistration}
-                onClick={() => handleProtectedChange({ ...editingEvent, setsCount: num })}
-                className={`w-10 h-8 rounded-lg text-xs font-black transition-all ${
-                  (editingEvent.setsCount ?? 1) === num
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-700'
-                }`}
-              >
-                {num}
-              </button>
-            ))}
+        {/* Categoria e Esporte (simples, no início do bloco) */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Categoria</label>
+            <select
+              value={currentSportGroup}
+              disabled={isReadOnlyRegistration}
+              onChange={(e) => handleSportGroupChange(e.target.value)}
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+            >
+              {SPORT_GROUPS.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
+            <select
+              value={currentSportId}
+              disabled={isReadOnlyRegistration}
+              onChange={(e) => handleSportIdChange(e.target.value)}
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+            >
+              {availableSportsForGroup.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Games por set */}
-        <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 h-12">
-          <span className="text-sm font-black text-slate-700">Games por set</span>
-          <div
-            className={`flex bg-slate-100 rounded-xl p-1 gap-1 ${
-              isReadOnlyRegistration ? 'pointer-events-none opacity-80' : ''
-            }`}
-          >
-            {([4, 6] as const).map((num) => (
-              <button
-                key={num}
-                type="button"
-                disabled={isReadOnlyRegistration}
-                onClick={() =>
-                  handleProtectedChange({
-                    ...editingEvent,
-                    gamesPerSet: num,
-                    config: { ...editingEvent.config, gamesPerSet: num } as any,
-                  })
-                }
-                className={`w-10 h-8 rounded-lg text-xs font-black transition-all ${
-                  (editingEvent.gamesPerSet ??
-                    (editingEvent.eventType === 'Super 8' ? 4 : 6)) === num
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-700'
-                }`}
-              >
-                {num}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Editor de Regras da Partida (Padrão e por Fase) */}
+        <EventMatchRulesEditor
+          sportRules={editingEvent.sportRules}
+          sportId={currentSportId}
+          isReadOnly={isReadOnlyRegistration}
+          onChangeSportRules={handleSportRulesChange}
+        />
       </FormBlock>
 
       {/* ── Botões de Ação ────────────────────────────────────────────────────── */}

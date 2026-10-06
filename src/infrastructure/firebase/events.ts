@@ -101,6 +101,10 @@ export interface FirebaseTournamentEvent {
   regulationFileName?: string;
   information?: string;
   eventType?: string;
+  sportGroup?: string;
+  sportId?: string;
+  sportName?: string;
+  sportRules?: Record<string, unknown>;
   setsCount?: number;
   gamesPerSet?: number;
   teamDrawType?: string;

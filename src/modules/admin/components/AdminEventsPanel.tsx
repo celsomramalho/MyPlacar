@@ -249,6 +249,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         coAdminNamesByPin={coAdminNamesByPin}
         adminEmail={adminEmail}
         initialBlock={initialConfigBlock}
+        activeSports={activeSports}
         onChangeEditingEvent={onChangeEditingEvent}
         onSaveEvent={handleSaveEventAndSyncDashboard}
         onClose={() => {

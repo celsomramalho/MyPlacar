@@ -37,6 +37,7 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import type { Firestore, FieldValue } from 'firebase/firestore';
 import { markTournamentMatchFinished, markTournamentMatchLive, markTournamentMatchScore } from '@modules/events/services/updateTournamentMatchProgress';
 import type { MatchSetScore, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
+import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
 import { createHistoryItem } from '@modules/history/services/createHistoryItem';
 import { clearLiveOwnerPin, persistLiveOwnerPin } from '../live/liveHelpers.ts';
 import { getDeviceId, getDeviceType, resolveWatchMode } from '@shared/utils/device';
@@ -1292,6 +1293,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (tournamentOverride) {
        const { match, pair1, pair2, event } = tournamentOverride;
        const courtColors = getCourtColors(match.court || 0);
+       const sportId = event.sportId || event.config?.sportType || matchSettings.sportType || 'beach-tennis';
+       const resolvedRules = resolveMatchRules(
+         event.sportRules,
+         match.phase,
+         (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+         Number(event.gamesPerSet || event.config?.gamesPerSet || 6),
+         sportId
+       );
        configToUse = {
           ...matchSettings,
           p1Name: pair1.p1.nickname,
@@ -1302,7 +1311,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           p2Color: courtColors.p2Color,
           isDoubles: true,
           p1Verified: true, p1PartnerVerified: true, p2Verified: true, p2PartnerVerified: true,
-          ...(event.config || {})
+          ...(event.config || {}),
+          sportType: sportId,
+          sets: resolvedRules.setsCount,
+          gamesPerSet: resolvedRules.gamesPerSet,
+          noAd: resolvedRules.noAd,
+          tieBreak: resolvedRules.tieBreak,
+          tieBreakAt: resolvedRules.tieBreakAt,
+          tieBreakPoints: resolvedRules.tieBreakPoints,
+          tieBreakWinByTwo: resolvedRules.tieBreakWinByTwo,
+          switchSidesOdd: resolvedRules.switchSidesOdd,
+          ...(resolvedRules.pickleballScoringMode ? { pickleballScoringMode: resolvedRules.pickleballScoringMode } : {}),
        };
        tournamentMeta = {
           tournamentMatchId: match.id,
