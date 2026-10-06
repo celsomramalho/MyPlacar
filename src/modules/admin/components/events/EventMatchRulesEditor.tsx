@@ -255,25 +255,27 @@ export const EventMatchRulesEditor: React.FC<EventMatchRulesEditorProps> = ({
                 type="button"
                 disabled={readOnly}
                 onClick={() => onUpdate({ pickleballScoringMode: 'side-out' })}
-                className={`py-2.5 px-2 rounded-xl text-[11px] font-black transition-all border ${
+                className={`py-2 px-2 rounded-xl text-[11px] font-black transition-all border flex flex-col items-center justify-center text-center ${
                   (rules.pickleballScoringMode ?? 'rally') === 'side-out'
                     ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                     : 'bg-white text-slate-700 border-slate-200'
                 }`}
               >
-                Tradicional (Side-out)
+                <span>Tradicional</span>
+                <span className="text-[10px] font-bold opacity-90 leading-tight">(Side-out)</span>
               </button>
               <button
                 type="button"
                 disabled={readOnly}
                 onClick={() => onUpdate({ pickleballScoringMode: 'rally' })}
-                className={`py-2.5 px-2 rounded-xl text-[11px] font-black transition-all border ${
+                className={`py-2 px-2 rounded-xl text-[11px] font-black transition-all border flex flex-col items-center justify-center text-center ${
                   (rules.pickleballScoringMode ?? 'rally') === 'rally'
                     ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                     : 'bg-white text-slate-700 border-slate-200'
                 }`}
               >
-                Rally (Ponto é ponto)
+                <span>Rally</span>
+                <span className="text-[10px] font-bold opacity-90 leading-tight">(Ponto é ponto)</span>
               </button>
             </div>
             <p className="text-[10px] text-slate-400 mt-1">
@@ -399,7 +401,7 @@ export const EventMatchRulesEditor: React.FC<EventMatchRulesEditorProps> = ({
       {/* ── Regras Gerais do Torneio ────────────────────────────────────────── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider ml-1">
+          <label className="text-[10px] font-black text-slate-500 ml-1">
             Formato padrão de partida
           </label>
           <span className="text-[10px] text-blue-600 font-bold flex items-center gap-1">

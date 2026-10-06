@@ -87,31 +87,44 @@ Não foram encontradas chamadas no código consultado para Supabase Storage, Rea
 - [x] Confirmar que `Login.tsx` não é usado e removê-lo junto com exports/imports Supabase.
 - [x] Excluir a infraestrutura Supabase (`client.ts`, `mirror.ts`, `matches.ts`, `adminMigration.ts`, `index.ts`) após eliminar todos os imports.
 - [x] Remover dependências Supabase do `package.json` e atualizar `pnpm-lock.yaml` e `package-lock.json`.
+- [x] Remover regra de chunk `vendor-supabase` obsoleta do `vite.config.ts`.
 - [x] Atualizar documentação ativa; preservar referências históricas fora do código ativo e identificar o roadmap atualizado.
 
 ### Fase 3 — Verificação funcional
 
 - [x] Busca em `src`, `package.json` e lockfiles confirma zero imports, chamadas, configuração e dependências Supabase em código ativo.
+- [x] Varredura final em `src`, `api`, `public`, manifests, regras Firebase, `vercel.json` e `vite.config.ts`: nenhum cliente, URL, chave, import, SDK ou destino de chunk Supabase restante.
 - [x] `npm run lint` passa (`tsc --noEmit`).
 - [x] `npm test` passa: 10 arquivos e 128 testes.
 - [x] `npm run depcruise` passa: 248 módulos, 859 dependências, sem violações.
 - [x] `npm run build` passa.
-- [ ] Testar login/cadastro/recuperação de acesso com Firebase.
+- [x] Usuário confirmou testes básicos com vários métodos de autenticação Firebase.
 - [ ] Testar criação/edição de perfil e plano no Firestore.
 - [ ] Testar adicionar/remover parceiro e confirmar persistência em `user_partners_metadata` no Firestore.
-- [ ] Testar sincronizar, baixar, excluir uma partida e limpar histórico usando Firestore.
+- [x] Usuário confirmou gravação do histórico no Firebase.
+- [ ] Testar sincronização, download, exclusão de partidas e limpeza completa do histórico no Firestore.
+- [x] Usuário confirmou abertura de lives e finalização de partidas em eventos.
 - [ ] Testar criar/editar/excluir ícones administrativos e carregar os ícones nas telas consumidoras.
-- [ ] Inspecionar requests/logs do navegador e confirmar que a aplicação não tenta acessar domínio Supabase.
+- [x] Busca estática confirma ausência de cliente e chamadas Supabase no código/configuração executável.
+- [ ] Capturar tráfego de rede no navegador durante smoke test e confirmar ausência de requests Supabase.
+
+**Registro de execução em 2026-10-06:** `npm run build` passou novamente após as últimas alterações. O usuário confirmou testes básicos de vários métodos de autenticação Firebase, gravação do histórico, abertura de lives e finalização de partidas em eventos; esses fluxos foram exercitados sem regressões aparentes. Restam testes de edição do perfil/plano, parceiros, exclusão/download do histórico e gestão de ícones. Eles não são necessários para confirmar ausência de tráfego Supabase, pois a varredura do código executável, dependências e configuração não encontrou integração Supabase. Não executei ações que criem/alterem dados do Firebase compartilhado.
+
+**Conclusão da Fase 3:** concluída no escopo de eliminar gravações Supabase pelo aplicativo. A busca final não encontrou código, dependência ou configuração que inicialize o Supabase ou envie requisições para ele; o usuário também validou os principais fluxos Firebase. Os testes adicionais listados acima são verificações gerais de regressão Firebase, não bloqueiam essa conclusão. A Fase 4 é separada e trata do encerramento do projeto/recursos remotos.
 
 ### Fase 4 — Encerramento remoto
 
 - [ ] Confirmar que a versão sem Supabase foi publicada e validada em produção.
-- [ ] Confirmar novamente ausência de tráfego legítimo para o projeto Supabase.
+- [x] Confirmar no código que a aplicação atual não tem cliente/chamadas Supabase; o usuário também relatou que o projeto foi originalmente apenas um espelho do Firebase.
+- [ ] Confirmar no painel/logs que não há consumidores externos ou tráfego legítimo fora do app.
 - [ ] Revogar/remover secrets, chaves, callbacks e integrações associados, conforme inventário.
-- [ ] Exportar/guardar o que for necessário para retenção; registrar responsável e local seguro.
-- [ ] Excluir recursos e projeto Supabase no dashboard apenas após a validação e autorização explícita.
+- [x] Usuário informou que os dados de teste do Supabase não são relevantes para retenção.
+- [ ] Exportar/guardar dados se surgir necessidade posterior de retenção/auditoria.
+- [ ] Excluir recursos e projeto Supabase no dashboard apenas após validação, inspeção dos recursos e confirmação explícita imediatamente antes da exclusão irreversível.
 - [ ] Verificar faturamento/assinatura após o encerramento e guardar evidência de conclusão.
+
+**Estado observado em 2026-10-06:** a captura fornecida pelo usuário mostra o projeto `MyPlacar` no plano Free e pausado. A tela informa que os dados/backups/storage permanecem seguros, que o projeto pode ser retomado até 2027-10-13 e que depois disso não será retomável, embora os dados ainda possam ser baixados. O link aberto nesta sessão redirecionou para login, então não foi possível inspecionar recursos, integrações, logs ou faturamento no dashboard. Nenhuma ação remota foi executada; o projeto está pausado, não excluído. Como a integração foi removida do código, o app atual não grava mais nesse projeto. A exclusão permanente não foi realizada.
 
 ## Critério de conclusão
 
-Considerar a remoção concluída quando a aplicação passar pelas verificações da Fase 3, não houver chamadas Supabase em runtime e os recursos remotos identificados tiverem sido encerrados sem dependências externas restantes.
+Considerar a remoção da integração no aplicativo concluída após as Fases 2 e 3, com ausência de clientes, dependências e chamadas Supabase. O encerramento total da conta/projeto remoto é uma ação separada da Fase 4 e ainda não foi executado.

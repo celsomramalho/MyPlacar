@@ -48,11 +48,6 @@ src\infrastructure\firebase\systemConfig.ts     934
 src\infrastructure\firebase\userProfiles.ts     2363
 src\infrastructure\firebase\users.ts    4856
 src\infrastructure\firebase\watchTokens.ts      1085
-src\infrastructure\supabase\adminMigration.ts   2877
-src\infrastructure\supabase\client.ts   509
-src\infrastructure\supabase\index.ts    372
-src\infrastructure\supabase\matches.ts  2604
-src\infrastructure\supabase\mirror.ts   5346
 src\main.tsx    409
 src\modules\admin\components\AdminBottomNav.tsx 2094
 src\modules\admin\components\AdminConfirmModals.tsx     4609
@@ -60,7 +55,6 @@ src\modules\admin\components\AdminEventsPanel.tsx       13049
 src\modules\admin\components\AdminHeader.tsx    2359
 src\modules\admin\components\AdminHiddenFileInputs.tsx  2260
 src\modules\admin\components\AdminStatusAlert.tsx       644
-src\modules\admin\components\AdminSupabaseMigrationCard.tsx     1982
 src\modules\admin\components\AdminUsersPanel.tsx        3040
 src\modules\admin\components\AdminVoiceCommandItem.tsx  1626
 src\modules\admin\components\AdminVoiceRulesPanel.tsx   5464
