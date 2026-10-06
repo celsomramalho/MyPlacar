@@ -15,3 +15,5 @@ export { EventRegistrationForm } from './domain/registration';
 export type { EventRegistration, TournamentConfig, TournamentEntry, TournamentEvent, TournamentMatch, TournamentPair } from './types';
 export { getRegistrationPeriodStatus, isRegistrationPeriodOpen, type RegistrationPeriodInfo, type RegistrationPeriodStatus } from './services/eventRegistrationPeriod';
 export { isRankingEvent, isSuper8Event, isSuper8IndividualEvent, isSuper8DuplasEvent, isSinglePlayerEvent } from './services/eventTypeHelpers';
+export * from './domain/brackets';
+

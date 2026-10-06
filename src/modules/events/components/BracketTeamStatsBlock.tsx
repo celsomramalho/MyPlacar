@@ -1,5 +1,5 @@
 import React from 'react';
-import type { TeamStanding } from '../services/matchProgression';
+import type { TeamStanding } from '../domain/brackets';
 
 interface Props {
   standing: TeamStanding;

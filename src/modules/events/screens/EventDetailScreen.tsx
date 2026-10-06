@@ -62,9 +62,20 @@ import {
 } from '../components/registration/ParticipantMatchHistory';
 import { useEventPermissions } from '../domain/access/useEventPermissions';
 import { useEventRealtime } from '../domain/realtime/useEventRealtime';
-import { calculateSuper8PlayerStandings, calculateBracketStandings } from '../services/matchProgression';
+import { calculateSuper8PlayerStandings } from '../services/matchProgression';
+import {
+  buildPairsById,
+  calculateBracketStandings,
+  createTournamentPair,
+  filterEntriesByParticipantSearch,
+  findPairForEntry,
+  getCategoryEntries,
+  getCategoryMatches,
+  getCategoryPairs,
+  pairHasSameParticipants,
+  validateCategoryGenders,
+} from '../domain/brackets';
 import { calculateQueueState } from '../domain/queue';
-import { validateCategoryGenders } from '../services/matchGenerator';
 import { createMercadoPagoPreference, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
 import {
   getRegistrationPeriodStatus,
@@ -394,33 +405,27 @@ export const EventDetailScreen: React.FC<Props> = ({
   }, [event.categories, userCategories, userSelectedCategoryId]);
 
   // Dados filtrados pela categoria ativa
-  const categoryPairs = useMemo(() => {
-    if (!activeCategory) return [];
-    return (event.pairs || []).filter((p) => p.categoryId === activeCategory.id);
-  }, [event.pairs, activeCategory]);
+  const categoryPairs = useMemo(
+    () => getCategoryPairs(event.pairs || [], activeCategory, { includeEntryCategoryFallback: false }),
+    [event.pairs, activeCategory]
+  );
 
-  const findEntryPair = useCallback((entry: TournamentEntry) => categoryPairs.find((pair) => {
-    const email = entry.email?.toLowerCase().trim();
-    const pin = entry.pin?.toUpperCase().trim();
-    return (email && (pair.p1.email?.toLowerCase().trim() === email || pair.p2.email?.toLowerCase().trim() === email)) ||
-      (pin && (pair.p1.pin?.toUpperCase().trim() === pin || pair.p2.pin?.toUpperCase().trim() === pin));
-  }), [categoryPairs]);
+  const findEntryPair = useCallback(
+    (entry: TournamentEntry) => findPairForEntry(entry, categoryPairs),
+    [categoryPairs]
+  );
 
-  const categoryMatches = useMemo(() => {
-    if (!activeCategory) return [];
-    return (event.matches || []).filter((m) => m.categoryId === activeCategory.id);
-  }, [event.matches, activeCategory]);
+  const categoryMatches = useMemo(
+    () => getCategoryMatches(event.matches || [], event.pairs || [], activeCategory, { includePairCategoryFallback: false }),
+    [event.matches, event.pairs, activeCategory]
+  );
 
   const pairHasMatches = useCallback(
     (pairId: string) => (event.matches || []).some((match) => match.pair1Id === pairId || match.pair2Id === pairId),
     [event.matches]
   );
 
-  const pairsById = useMemo(() => {
-    const map = new Map<string, TournamentPair>();
-    (event.pairs || []).forEach((p) => map.set(p.id, p));
-    return map;
-  }, [event.pairs]);
+  const pairsById = useMemo(() => buildPairsById(event.pairs || []), [event.pairs]);
 
   const pairsMap = useMemo(() => Object.fromEntries(pairsById), [pairsById]);
 
@@ -531,20 +536,25 @@ export const EventDetailScreen: React.FC<Props> = ({
     }
 
 
-    const pairId = `pair_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const nextNumber = categoryPairs.length + 1;
-    const teamCode = `${String(nextNumber).padStart(3, '0')} - ${activeCategory.abbreviation}`;
+    const alreadyFormedPair = categoryPairs.find((pair) =>
+      pairHasSameParticipants(pair, first, second)
+    );
+    if (alreadyFormedPair) {
+      setModalConfig({
+        title: 'Time já formado',
+        message: `Este time já existe em ${alreadyFormedPair.teamCode || 'Times'}. Selecione uma combinação diferente de jogadores.`,
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
 
-    const newPair: TournamentPair = {
-      id: pairId,
-      p1: first,
-      p2: second,
-      categoryId: activeCategory.id,
-      teamNumber: nextNumber,
-      teamCode,
-      bracket: 1,
-      bracketOrder: categoryPairs.filter((pair) => (pair.bracket ?? 1) === 1).length + 1,
-    };
+    const newPair = createTournamentPair({
+      first,
+      second,
+      category: activeCategory,
+      pairs: event.pairs || [],
+      categoryPairs,
+    });
 
     const nextPairs = [...(event.pairs || []), newPair];
     setEvent((prev) => ({ ...prev, pairs: nextPairs }));
@@ -911,10 +921,10 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   // Inscritos na categoria ativa
-  const categoryEntries = useMemo(() => {
-    if (!activeCategory) return [];
-    return entries.filter((e) => e.categoryIds?.includes(activeCategory.id));
-  }, [entries, activeCategory]);
+  const categoryEntries = useMemo(
+    () => getCategoryEntries(entries, activeCategory),
+    [entries, activeCategory]
+  );
 
   // Classificações calculadas para a categoria ativa (Super 8 e Ranking possuem ranking individual por atleta)
   const isIndividualRanking = isSuper8 || isRanking;
@@ -988,13 +998,10 @@ export const EventDetailScreen: React.FC<Props> = ({
     return entries;
   }, [categoryEntries, isIndividualRanking, playerStandingsMap, canManageEvent, isCurrentUserEntry]);
 
-  const visibleCategoryEntries = useMemo(() => {
-    const query = participantSearch.trim().toLocaleLowerCase();
-    if (!query) return sortedCategoryEntries;
-    return sortedCategoryEntries.filter((entry) =>
-      `${entry.name || ''} ${entry.nickname || ''}`.toLocaleLowerCase().includes(query)
-    );
-  }, [sortedCategoryEntries, participantSearch]);
+  const visibleCategoryEntries = useMemo(
+    () => filterEntriesByParticipantSearch(sortedCategoryEntries, participantSearch),
+    [sortedCategoryEntries, participantSearch]
+  );
 
   const canAthleteFormTeam = !canManageEvent && event.allowUserTeamFormation === true &&
     hasActiveRegistration && !isSuper8;

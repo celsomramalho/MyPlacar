@@ -1,7 +1,7 @@
 import React from 'react';
 import { Shuffle } from 'lucide-react';
 import type { EventCategory, TournamentPair, TournamentMatch } from '@modules/events/types';
-import type { TeamStanding } from '@modules/events/services/matchProgression';
+import type { TeamStanding } from '@modules/events/domain/brackets';
 import { TeamCard } from '@modules/events/components/teams/TeamCard';
 
 export interface CategoryTeamsTabProps {

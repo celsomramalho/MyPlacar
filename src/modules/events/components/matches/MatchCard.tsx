@@ -1,8 +1,7 @@
 import React from 'react';
 import { Trophy, Clock, Trash2, Calendar, Check, Wifi } from 'lucide-react';
 import type { TournamentMatch, TournamentPair } from '../../types';
-import { getPhaseLabel } from '../../services/matchGenerator';
-import { parseMatchSets } from '../../services/matchProgression';
+import { getPhaseLabel, parseMatchSets } from '../../domain/brackets';
 
 type LegacyScoreChangeHandler = (matchId: string, player: 'p1' | 'p2', value: string) => void;
 type SetScoreChangeHandler = (

@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Trophy, X, Play, Clock, ChevronDown, ChevronUp, Swords, UsersRound, Calendar, MapPin } from 'lucide-react';
 import type { TournamentEntry, TournamentMatch, TournamentPair, EventCategory } from '../../types';
-import { parseScoresFromMatch } from '../../services/matchProgression';
-import { formatMatchNumber, getPhaseLabel } from '../../services/matchGenerator';
+import {
+  formatMatchNumber,
+  getPhaseLabel,
+  parseScoresFromMatch,
+} from '../../domain/brackets';
 
 export interface ParticipantMatchHistoryProps {
   entry: TournamentEntry;

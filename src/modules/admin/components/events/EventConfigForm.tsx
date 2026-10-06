@@ -59,7 +59,7 @@ export type EventConfigBlockKey =
 export interface EventBlockMenuItem {
   key: EventConfigBlockKey;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   isAdminOnly?: boolean;
 }
 
@@ -76,7 +76,7 @@ export const EVENT_CONFIG_BLOCKS: EventBlockMenuItem[] = [
 interface FormBlockProps {
   id?: string;
   title: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   isOpen: boolean;
   onToggle: () => void;
   isAdminOnly?: boolean;

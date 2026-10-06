@@ -1,7 +1,7 @@
 import React from 'react';
 import { Trophy, UserRound, Check, X } from 'lucide-react';
 import type { TournamentPair, TournamentMatch, EventCategory } from '../../types';
-import type { TeamStanding } from '../../services/matchProgression';
+import type { TeamStanding } from '../../domain/brackets';
 import { BracketTeamStatsBlock } from '../BracketTeamStatsBlock';
 
 export interface TeamCardProps {

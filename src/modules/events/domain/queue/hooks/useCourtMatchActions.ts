@@ -17,7 +17,7 @@
 
 import { useRef, useCallback } from 'react';
 import type { TournamentEvent, TournamentMatch, MatchSetScore } from '@modules/events/types';
-import { updatePlayoffProgression } from '@modules/events/services/matchProgression';
+import { updatePlayoffProgression } from '@modules/events/domain/brackets/engine/bracketProgressionEngine';
 import { resolveMatchRules } from '../../rules/eventMatchRules';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';

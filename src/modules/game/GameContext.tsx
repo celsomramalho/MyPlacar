@@ -25,7 +25,7 @@ import { persistLocalHistory } from '@modules/history/services/persistLocalHisto
 import { safeJsonParse } from '@shared/utils/safeJsonParse';
 import { isWatchDevice } from '@shared/utils/device';
 import { DEFAULT_TENNIS_SETTINGS, APP_VERSION, getCourtColors } from '../../constants.ts';
-import type { GameState, MatchSettings, PointType } from '../../types.ts';
+import type { GameState, MatchSettings, PointType, TieBreakAt } from '../../types.ts';
 import { initPickleballState } from '@modules/game/domain/pickleballEngine';
 import { getEngineForSport } from '@modules/game/domain/sportEngine';
 import { incrementScore, undoPoint } from '@modules/game/domain/tennisEngine';
@@ -1317,7 +1317,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           gamesPerSet: resolvedRules.gamesPerSet,
           noAd: resolvedRules.noAd,
           tieBreak: resolvedRules.tieBreak,
-          tieBreakAt: resolvedRules.tieBreakAt,
+          tieBreakAt: resolvedRules.tieBreakAt as TieBreakAt,
           tieBreakPoints: resolvedRules.tieBreakPoints,
           tieBreakWinByTwo: resolvedRules.tieBreakWinByTwo,
           switchSidesOdd: resolvedRules.switchSidesOdd,

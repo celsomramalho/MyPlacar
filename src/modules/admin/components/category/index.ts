@@ -4,3 +4,6 @@ export * from './CategoryMatchesTab';
 export * from './CategoryTeamsTab';
 export * from './CategoryEntriesTab';
 export * from './Super8DuplasDrawModal';
+export * from './CategorySelectionActionBar';
+export * from './CategoryBoardPanel';
+
