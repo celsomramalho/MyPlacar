@@ -3,6 +3,7 @@ export interface OnboardingStep {
   title: string;
   description: string;
   example?: string;
+  placement?: 'top' | 'bottom';
 }
 
 export interface ScreenOnboardingConfig {
@@ -64,6 +65,7 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
         targetId: 'home-item-versao',
         title: 'Versão do app',
         description: 'Verifique se há novas atualizações disponíveis para o seu MyPlacar com apenas um toque.',
+        placement: 'top',
       },
     ],
   },
@@ -150,6 +152,7 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
         targetId: 'event-detail-history-card',
         title: 'Meu histórico',
         description: 'Acompanhe os resultados e estatísticas das suas partidas já disputadas neste evento.',
+        placement: 'top',
       },
       {
         targetId: 'event-detail-categories-selector',
@@ -160,6 +163,7 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
         targetId: 'event-detail-subtabs-container',
         title: 'Inscritos, times e jogos',
         description: 'Navegue entre a lista de atletas inscritos, as duplas formadas e o calendário de partidas.',
+        placement: 'bottom',
       },
     ],
   },

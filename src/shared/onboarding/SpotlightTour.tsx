@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { OnboardingStep } from './onboardingConfig';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -19,27 +19,61 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
 }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tooltipHeight, setTooltipHeight] = useState(210);
 
   const step = steps[currentStepIndex];
+
+  // Observa a altura real do balão de forma reativa
+  useEffect(() => {
+    if (!tooltipRef.current) return;
+    const updateHeight = () => {
+      if (tooltipRef.current) {
+        const h = tooltipRef.current.offsetHeight;
+        if (h > 0) setTooltipHeight(h);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(tooltipRef.current);
+    return () => observer.disconnect();
+  }, [step, currentStepIndex]);
 
   useEffect(() => {
     if (!isActive || !step) return;
 
+    const el = document.getElementById(step.targetId);
+    if (!el) {
+      setTargetRect(null);
+      return;
+    }
+
+    // Rola suavemente até o elemento apenas uma vez ao mudar de passo
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
     const updatePosition = () => {
-      const el = document.getElementById(step.targetId);
-      if (el) {
-        setTargetRect(el.getBoundingClientRect());
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const target = document.getElementById(step.targetId);
+      if (target) {
+        setTargetRect(target.getBoundingClientRect());
       } else {
         setTargetRect(null);
       }
     };
 
     updatePosition();
+
+    // Sincroniza com as fases da animação de scroll
+    const timer1 = setTimeout(updatePosition, 100);
+    const timer2 = setTimeout(updatePosition, 250);
+    const timer3 = setTimeout(updatePosition, 450);
+
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
 
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
     };
@@ -67,8 +101,41 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
     }
   };
 
-  // Calcula melhor posição para o balão (acima ou abaixo do elemento focado)
-  const isTargetInBottomHalf = targetRect ? targetRect.top > window.innerHeight / 2 : false;
+  // Calcula melhor posição para o balão com folga segura para nunca sobrepor o elemento focado
+  const gap = 16;
+  const spaceAbove = targetRect ? targetRect.top : 0;
+  const spaceBelow = targetRect ? window.innerHeight - targetRect.bottom : 0;
+
+  let placeAbove = false;
+  if (step?.placement === 'top') {
+    placeAbove = true;
+  } else if (step?.placement === 'bottom') {
+    placeAbove = false;
+  } else {
+    // Decisão inteligente automática:
+    // Se o elemento estiver na metade inferior da tela E couber acima com folga:
+    if (spaceAbove >= tooltipHeight + gap + 10 && targetRect && targetRect.top > window.innerHeight / 2) {
+      placeAbove = true;
+    } else if (spaceBelow >= tooltipHeight + gap + 10) {
+      // Se couber abaixo com folga suficiente:
+      placeAbove = false;
+    } else {
+      // Caso contrário, fica no lado com mais espaço
+      placeAbove = spaceAbove > spaceBelow;
+    }
+  }
+
+  // Cálculo da coordenada top do balão
+  let tooltipTop: number | undefined;
+  if (targetRect) {
+    if (placeAbove) {
+      // Fica acima: o rodapé do balão fica a `gap` pixels do topo do alvo.
+      tooltipTop = Math.max(16, targetRect.top - tooltipHeight - gap);
+    } else {
+      // Fica abaixo: o topo do balão fica a `gap` pixels do rodapé do alvo.
+      tooltipTop = Math.min(window.innerHeight - tooltipHeight - 16, targetRect.bottom + gap);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[10000] overflow-hidden pointer-events-auto">
@@ -95,15 +162,12 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
 
       {/* Balão do Tour */}
       <div
+        ref={tooltipRef}
         className="fixed z-20 w-[92%] max-w-sm bg-white rounded-2xl p-4 shadow-2xl border border-slate-100 flex flex-col gap-3 transition-all duration-300 animate-in fade-in zoom-in-95 pointer-events-auto"
         style={{
           left: '50%',
           transform: 'translateX(-50%)',
-          top: targetRect
-            ? isTargetInBottomHalf
-              ? Math.max(20, targetRect.top - 170)
-              : Math.min(window.innerHeight - 200, targetRect.bottom + 12)
-            : 'auto',
+          top: tooltipTop !== undefined ? `${tooltipTop}px` : 'auto',
           bottom: !targetRect ? '24px' : undefined,
         }}
       >

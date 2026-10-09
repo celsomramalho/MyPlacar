@@ -407,8 +407,8 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
         </div>
 
         {/* TORNEIOS DISPONÍVEIS */}
-        <div id="tournaments-available-section" className="space-y-4">
-          <div className="flex items-center gap-2 px-1">
+        <div className="space-y-4">
+          <div id="tournaments-available-section" className="flex items-center gap-2 px-1">
             <Zap size={18} className="text-emerald-600" />
             <h3 className="text-sm font-black text-black tracking-tight">Torneios disponíveis</h3>
           </div>
@@ -496,8 +496,8 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
         </div>
 
         {/* MINHAS INSCRIÇÕES */}
-        <div id="tournaments-registrations-section" className="space-y-4">
-          <div className="flex items-center gap-2 px-1">
+        <div className="space-y-4">
+          <div id="tournaments-registrations-section" className="flex items-center gap-2 px-1">
             <Ticket size={18} className="text-blue-500" />
             <h3 className="text-sm font-black text-black tracking-tight">Minhas inscrições</h3>
           </div>
