@@ -221,7 +221,7 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
       {
         targetId: 'times-start-match',
         title: 'Iniciar partida',
-        description: 'Com os nomes preenchidos e o esporte selecionado, toque no botão para abrir o placar eletrônico e começar a partida.',
+        description: 'Com os nomes preenchidos e o esporte selecionado, toque no botão para abrir o placar eletrônico e começar a partida. Caso o esporte esteja errado é só escolher no menu Regras',
         placement: 'top',
       },
     ],
