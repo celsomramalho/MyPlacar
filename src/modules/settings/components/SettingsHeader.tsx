@@ -4,6 +4,7 @@ import { Play, User, X, Clock, Trash2, Share2, Check, Bell, Menu, LogOut, Users 
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { LiveIndicator } from '@modules/live';
 import { isWatchDevice } from '@shared/utils/device';
+import { getOnboardingStatus } from '@shared/onboarding';
 
 interface Props {
   isSelectionMode: boolean;
@@ -24,6 +25,7 @@ interface Props {
   onOpenMenu?: () => void;
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
+  onOpenHelp?: () => void;
 }
 
 export const SettingsHeader: React.FC<Props> = ({ 
@@ -45,6 +47,7 @@ export const SettingsHeader: React.FC<Props> = ({
   onOpenMenu,
   isOfflineMode = false,
   onExitOffline,
+  onOpenHelp,
 }) => {
   const isHistory = activeTab === 'history';
   const isProfile = activeTab === 'profile';
@@ -135,23 +138,42 @@ export const SettingsHeader: React.FC<Props> = ({
               {isHistory ? 'Histórico' : 'Nova partida'}
             </h1>
           </div>
-          {onOpenCommunications ? (
-            <button
-              type="button"
-              onClick={onOpenCommunications}
-              className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all relative"
-              title="Comunicados e avisos"
-            >
-              <Bell size={20} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white animate-pulse">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          ) : (
-            <div className="w-10" />
-          )}
+          <div className="flex items-center gap-1.5">
+            {activeTab === 'config' && onOpenHelp && (
+              <button
+                type="button"
+                onClick={onOpenHelp}
+                className={`p-1 rounded-full text-xs w-8 h-8 flex items-center justify-center shrink-0 border transition-all active:scale-90 hover:scale-110 shadow-xs cursor-pointer ${
+                  getOnboardingStatus('config') === 'completed'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-300 font-black'
+                    : getOnboardingStatus('config') === 'partial'
+                    ? 'text-sky-600 bg-sky-50 border-sky-200 font-extrabold'
+                    : 'text-amber-500 bg-amber-50/90 border-amber-200 font-bold'
+                }`}
+                title="Ajuda e tour de times"
+                aria-label="Ajuda"
+              >
+                ?
+              </button>
+            )}
+            {onOpenCommunications ? (
+              <button
+                type="button"
+                onClick={onOpenCommunications}
+                className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all relative"
+                title="Comunicados e avisos"
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <div className="w-10" />
+            )}
+          </div>
         </>
       )}
     </header>

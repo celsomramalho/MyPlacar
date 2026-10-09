@@ -412,7 +412,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     });
   };
 
-  const renderPlayerInput = (label: string, field: keyof MatchSettings, genderKey: string) => {
+  const renderPlayerInput = (label: string, field: keyof MatchSettings, genderKey: string, containerId?: string) => {
     const currentName = settings[field] as string;
     const verifiedKey = `${field.replace('Name', '')}Verified` as keyof MatchSettings;
     const isKnownPartner = !!settings[verifiedKey]; 
@@ -422,7 +422,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     const currentGender = (settings[`${genderKey}Gender` as keyof MatchSettings] as Gender) || genders[genderKey] || 'M';
 
     return (
-      <div className={`flex gap-2 items-end transition-all duration-300 ${isShuffling ? 'opacity-50 scale-[0.97]' : 'opacity-100'}`}>
+      <div id={containerId} className={`flex gap-2 items-end transition-all duration-300 ${isShuffling ? 'opacity-50 scale-[0.97]' : 'opacity-100'}`}>
         <div className="flex-1">
           <Input 
             disabled={isReadOnly}
@@ -464,6 +464,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
     <div className="flex flex-col gap-2 animate-in fade-in duration-300 pb-16">
       <div className={`flex gap-2 mb-4 ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`}>
         <button 
+          id="times-clear-names"
           disabled={isReadOnly}
           onClick={handleClearNames}
           className="flex-1 py-4 bg-white border-2 border-red-500 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 font-black text-red-500 text-sm active:scale-95 transition-all shadow-md disabled:cursor-not-allowed"
@@ -472,6 +473,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
           <span className="leading-tight text-center">Limpar nomes</span>
         </button>
         <button 
+          id="times-record-history"
           disabled={isReadOnly}
           onClick={() => handleToggleHistory(!settings.isHistoryEnabled)}
           className={`flex-1 py-4 bg-white border-2 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 font-black text-sm active:scale-95 transition-all shadow-md disabled:cursor-not-allowed ${settings.isHistoryEnabled ? 'border-blue-600 text-blue-600' : 'border-gray-200 text-gray-400'}`}
@@ -489,7 +491,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
       <section className="space-y-4">
         <div className="flex flex-col gap-3 px-1 mt-2">
           <h2 className="text-base font-black text-slate-800 tracking-tight">Times / jogadores</h2>
-          <div className="flex gap-1">
+          <div id="times-modality-selector" className="flex gap-1">
             <button 
               disabled={isReadOnly}
               onClick={() => setSettings(p => ({...p, isDoubles: false, p1Partner: '', p2Partner: '', p1PartnerVerified: false, p2PartnerVerified: false}))}
@@ -506,7 +508,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
             </button>
           </div>
           
-          <div className={`grid ${settings.isDoubles ? 'grid-cols-2' : 'grid-cols-1'} gap-1 mt-4`}>
+          <div id="times-shuffle-actions" className={`grid ${settings.isDoubles ? 'grid-cols-2' : 'grid-cols-1'} gap-1 mt-4`}>
             <button 
               disabled={isReadOnly}
               onClick={randomizeServerOrder}
@@ -551,7 +553,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
                     <ArrowUpDown size={16} /> 
                   </button> 
                 )}
-                <div className="relative">
+                <div id="times-team-colors" className="relative">
                   <select 
                     disabled={isReadOnly} 
                     value={settings.p1Color} 
@@ -565,12 +567,13 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
               </div>
             </div>
             <div className="space-y-4">
-              {renderPlayerInput("1º sacador *", "p1Name", "p1")}
+              {renderPlayerInput("1º sacador *", "p1Name", "p1", "times-player-input")}
               {settings.isDoubles && renderPlayerInput("3º sacador *", "p1Partner", "p1Partner")}
             </div>
           </div>
           <div className="flex justify-center my-1 relative z-20">
             <button 
+              id="times-swap-players"
               disabled={isReadOnly}
               onClick={handleSwapTeams} 
               className={`w-14 h-14 bg-white rounded-full border-2 border-gray-200 shadow-xl flex items-center justify-center text-blue-600 active:scale-90 transition-all ${isReadOnly ? 'opacity-50 pointer-events-none cursor-not-allowed text-blue-400/50 shadow-none border-gray-100' : ''}`} 
@@ -603,7 +606,7 @@ export const TeamSection = forwardRef<{ triggerStart: () => void }, Props>(({ se
         </div>
       </section>
 
-      <div className="pt-6 pb-6 px-1 flex flex-col gap-3">
+      <div id="times-start-match" className="pt-6 pb-6 px-1 flex flex-col gap-3">
         <Button 
           onClick={() => {
             if (canStart) {

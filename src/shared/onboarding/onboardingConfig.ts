@@ -167,4 +167,63 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
       },
     ],
   },
+  config: {
+    screenName: 'Times',
+    intro: {
+      title: 'Configuração dos times',
+      description: 'Escale os jogadores, escolha as modalidades, organize ordens de saque e personalize cores para começar o jogo.',
+      durationMs: 5000,
+    },
+    steps: [
+      {
+        targetId: 'times-clear-names',
+        title: 'Limpar nomes',
+        description: 'Apague rapidamente o nome de todos os jogadores para começar uma nova escalação.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'times-record-history',
+        title: 'Gravar histórico',
+        description: 'Mantenha ativo para salvar a partida nas suas estatísticas ou desative para uma disputa sem registro.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'times-modality-selector',
+        title: 'Simples ou duplas',
+        description: 'Alterne entre partida individual (1 contra 1) ou jogo em duplas (2 contra 2).',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'times-shuffle-actions',
+        title: 'Sorteio de saque e formação',
+        description: 'Sorteie a ordem de sacadores e, em duplas, embaralhe a formação dos times usando o botão Sortear formação, caso seja duplas mistas para embaralhar a formação use o botão de Sortear Misto.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'times-team-colors',
+        title: 'Cores dos times',
+        description: 'Defina a cor de cada time para identificação rápida e destaque visual no placar.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'times-player-input',
+        title: 'Recursos do jogador',
+        description: 'cadastre um novo parceiro lendo o QR Code do atleta, dite nomes pelo microfone, escolha parceiros salvos e selecione o gênero.',
+        example: 'Toque na câmera para lêr o QR Code ou no microfone para voz.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'times-swap-players',
+        title: 'Inverter times e posições',
+        description: 'Inverta a ordem dos sacadores da dupla pelo botão no topo do time ou troque os dois times de lado pelo botão central.',
+        placement: 'top',
+      },
+      {
+        targetId: 'times-start-match',
+        title: 'Iniciar partida',
+        description: 'Com os nomes preenchidos e o esporte selecionado, toque no botão para abrir o placar eletrônico e começar a partida.',
+        placement: 'top',
+      },
+    ],
+  },
 };

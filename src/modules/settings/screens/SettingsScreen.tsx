@@ -11,6 +11,7 @@ import { TeamSection } from '../components/TeamSection';
 import { SettingsTabs } from '../components/SettingsTabs.tsx';
 import { getDb } from '@infra/firebase';
 import { doc, getDocFromServer, setDoc } from 'firebase/firestore';
+import { useScreenOnboarding, ScreenIntroCard, SpotlightTour } from '@shared/onboarding';
 
 interface Props {
   onDeleteMatch: (id: string) => void;
@@ -148,6 +149,18 @@ export const SettingsScreen: React.FC<Props> = (props) => {
   const teamSectionRef = useRef<{ triggerStart: () => void }>(null);
   const prevTabRef = useRef(props.activeTab);
 
+  // ─── Onboarding da tela Times (aba config) ───────────────────────────────────
+  const {
+    config: onboardingConfig,
+    showIntro,
+    showTour,
+    handleDismissIntro,
+    handleStepChange,
+    handleCompleteTour,
+    handleSkipTour,
+    replayTour,
+  } = useScreenOnboarding('config');
+
   // MC1: Salvamento automático ao sair da aba perfil
   useEffect(() => {
     if (prevTabRef.current === 'profile' && props.activeTab !== 'profile' && props.isProfileSaved === false) {
@@ -234,6 +247,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           onOpenMenu={props.onOpenMenu}
           isOfflineMode={props.isOfflineMode}
           onExitOffline={props.onExitOffline}
+          onOpenHelp={props.activeTab === 'config' ? replayTour : undefined}
         />
       )}
       <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} pb-6 no-scrollbar`}>
@@ -241,6 +255,24 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           {renderActiveContent()}
         </div>
       </div>
+
+      {/* Onboarding da tela Times */}
+      {props.activeTab === 'config' && onboardingConfig && (
+        <ScreenIntroCard
+          config={onboardingConfig}
+          isOpen={showIntro}
+          onDismiss={handleDismissIntro}
+        />
+      )}
+      {props.activeTab === 'config' && onboardingConfig && (
+        <SpotlightTour
+          steps={onboardingConfig.steps}
+          isActive={showTour}
+          onComplete={handleCompleteTour}
+          onSkip={handleSkipTour}
+          onStepChange={handleStepChange}
+        />
+      )}
     </div>
   );
 };
