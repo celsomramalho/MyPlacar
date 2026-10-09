@@ -9,12 +9,13 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import type {
-  TournamentEvent,
-  TournamentEntry,
-  TournamentPair,
-  EventCategory,
-  CategoryPartnerInfo,
+import {
+  type TournamentEvent,
+  type TournamentEntry,
+  type TournamentPair,
+  type EventCategory,
+  type CategoryPartnerInfo,
+  isSimplifiedRegistrationEvent,
 } from '@modules/events/types';
 import type {
   RegistrationStep,
@@ -31,6 +32,7 @@ export interface UseRegistrationFormOptions {
   liveEntries?: TournamentEntry[];
   mode?: 'admin' | 'user';
   initialStep?: RegistrationStep;
+  isNew?: boolean;
 }
 
 export interface UseRegistrationFormResult {
@@ -68,6 +70,7 @@ export function useRegistrationForm({
   liveEntries = [],
   mode = 'user',
   initialStep = 'identity',
+  isNew = false,
 }: UseRegistrationFormOptions): UseRegistrationFormResult {
   const isAdmin = mode === 'admin';
 
@@ -83,30 +86,29 @@ export function useRegistrationForm({
     gender: entry.gender || 'M',
     categoryIds: entry.categoryIds || [],
     categoryPartners: entry.categoryPartners ? { ...entry.categoryPartners } : {},
-    regulationAccepted: Boolean(
-      entry.regulationAccepted ??
-      ((entry.joinedAt && entry.joinedAt > 0) || !event.regulationUrl)
-    ),
+    regulationAccepted: Boolean(!isNew && entry.regulationAccepted === true),
   }));
 
   // Sincroniza se a inscrição existente for carregada ou atualizada com aceite prévio
   useEffect(() => {
-    if (entry.regulationAccepted !== undefined) {
+    if (isNew) {
+      setFormData((prev) => ({
+        ...prev,
+        regulationAccepted: false,
+      }));
+      return;
+    }
+    if (typeof entry.regulationAccepted === 'boolean') {
       setFormData((prev) => ({
         ...prev,
         regulationAccepted: Boolean(entry.regulationAccepted),
       }));
-    } else if (entry.joinedAt && entry.joinedAt > 0) {
-      setFormData((prev) => ({
-        ...prev,
-        regulationAccepted: true,
-      }));
     }
-  }, [entry.regulationAccepted, entry.joinedAt]);
+  }, [entry.regulationAccepted, isNew]);
 
   // ─── Detecção do Método de Formação de Duplas e Tipo de Inscrição ──────────
   const isTeamDrawPreDefined = isPreDefinedTeamDraw(event.teamDrawType);
-  const isSimplified = event.registrationType === 'Simplificada';
+  const isSimplified = isSimplifiedRegistrationEvent(event);
 
   // ─── Unicidade do Apelido / Nome como quer ser chamado por Categoria ────────
   const conflictingCategoryIds = useMemo(() => {
@@ -159,8 +161,8 @@ export function useRegistrationForm({
   );
   const stepOrder = useMemo<RegistrationStep[]>(
     () => requiresPartnerDetails || event.allowUserTeamFormation === true
-      ? ['identity', 'categories', 'partners', 'payment', 'confirmation']
-      : ['identity', 'categories', 'payment', 'confirmation'],
+      ? ['identity', 'information', 'categories', 'partners', 'payment', 'confirmation']
+      : ['identity', 'information', 'categories', 'payment', 'confirmation'],
     [requiresPartnerDetails, event.allowUserTeamFormation]
   );
 
@@ -272,8 +274,26 @@ export function useRegistrationForm({
       if (step === 'identity') {
         if (!isSimplified && !formData.name.trim()) return { isValid: false, error: 'O nome completo é obrigatório.' };
         if (!formData.nickname.trim()) return { isValid: false, error: 'O nome como quer ser chamado é obrigatório.' };
+        if (!isSimplified) {
+          if (!formData.email.trim()) return { isValid: false, error: 'O e-mail é obrigatório.' };
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(formData.email.trim())) {
+            return { isValid: false, error: 'Informe um e-mail válido.' };
+          }
+          const cleanPhone = (formData.phone || '').replace(/\D/g, '');
+          if (!cleanPhone || cleanPhone.length < 10) {
+            return { isValid: false, error: 'O WhatsApp é obrigatório com DDD (mínimo 10 dígitos).' };
+          }
+        }
         if (formData.categoryIds.length > 0 && nameConflictWarning) {
           return { isValid: false, error: nameConflictWarning };
+        }
+        return { isValid: true };
+      }
+
+      if (step === 'information') {
+        if (!formData.regulationAccepted) {
+          return { isValid: false, error: 'Você precisa ler e concordar com o regulamento e regras de participação do torneio para continuar.' };
         }
         return { isValid: true };
       }
@@ -296,9 +316,6 @@ export function useRegistrationForm({
             const catName = (event.categories || []).find((c) => c.id === catId)?.name || 'selecionada';
             return { isValid: false, error: `Vagas esgotadas na categoria ${catName}.` };
           }
-        }
-        if (event.regulationUrl && !formData.regulationAccepted) {
-          return { isValid: false, error: 'Você precisa ler e concordar com o regulamento do torneio para continuar.' };
         }
         return { isValid: true };
       }

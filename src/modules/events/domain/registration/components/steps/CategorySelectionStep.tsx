@@ -29,7 +29,7 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
       <div className="border-b border-slate-100 pb-3">
         <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
           <Layers size={18} className="text-blue-600" />
-          Categorias Disponíveis
+          Categorias disponíveis
         </h3>
         <p className="text-xs text-slate-400 font-bold mt-0.5">
           Selecione uma ou mais categorias que deseja disputar.
@@ -68,8 +68,8 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 uppercase tracking-wider">
-                      {cat.abbreviation || 'CAT'}
+                    <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 tracking-wider">
+                      {cat.abbreviation || 'Cat'}
                     </span>
                     <span className="text-[11px] font-bold text-slate-400">
                       {cat.format}
@@ -98,7 +98,7 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
                     {isFull ? (
                       <span className="text-rose-600 flex items-center gap-1">
                         <AlertTriangle size={12} />
-                        Vagas Esgotadas ({confirmedCount}/{limit})
+                        Vagas esgotadas ({confirmedCount}/{limit})
                       </span>
                     ) : (
                       <span className="text-slate-500 flex items-center gap-1">
@@ -135,8 +135,8 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
             <div>
               <p className="text-xs font-black text-slate-800">
                 {pricing.isFree
-                  ? 'Inscrição Gratuita'
-                  : `Valor Total: R$ ${pricing.dueAmount.toFixed(2)}`}
+                  ? 'Inscrição gratuita'
+                  : `Valor total: R$ ${pricing.dueAmount.toFixed(2)}`}
               </p>
               <p className="text-[11px] font-bold text-slate-400">
                 {selectedCategoryIds.length === 1

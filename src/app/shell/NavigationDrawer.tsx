@@ -6,6 +6,7 @@ import { Screen } from '@game/types';
 import { useGame } from '@modules/game';
 import { useGameRules } from '@modules/game/hooks/useGameRules';
 import { useUI } from '@modules/ui';
+import { getOnboardingStatus, OnboardingStatus } from '@shared/onboarding';
 
 interface Props {
   isOpen: boolean;
@@ -18,6 +19,7 @@ interface Props {
   isAdmin: boolean;
   canStartMatch: boolean;
   isOfflineMode?: boolean;
+  onReplayTour?: (screen: Screen, tab?: string) => void;
 }
 
 export const NavigationDrawer: React.FC<Props> = ({ 
@@ -30,7 +32,8 @@ export const NavigationDrawer: React.FC<Props> = ({
   onExitOffline,
   isAdmin,
   canStartMatch: _unused_canStartMatch,
-  isOfflineMode = false
+  isOfflineMode = false,
+  onReplayTour
 }) => {
   const { userProfile, initGameState } = useGame();
   const { canStartMatch, persistMatchSettings } = useGameRules();
@@ -66,8 +69,8 @@ export const NavigationDrawer: React.FC<Props> = ({
       items: [
         { id: 'home', label: 'Home', icon: Home, screen: 'home' as Screen },
         { id: 'config', label: 'Times', icon: Users, screen: 'settings' as Screen, tab: 'config' },
-        { id: 'partners', label: 'Meus parceiros', icon: Users, screen: 'partners' as Screen },
-        { id: 'tournaments', label: 'Meus torneios', icon: Trophy, screen: 'tournaments' as Screen },
+        { id: 'partners', label: 'Parceiros', icon: Users, screen: 'partners' as Screen },
+        { id: 'tournaments', label: 'Torneios', icon: Trophy, screen: 'tournaments' as Screen },
       ]
     },
     {
@@ -91,8 +94,8 @@ export const NavigationDrawer: React.FC<Props> = ({
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       items: [
-        { id: 'history', label: 'Meus históricos', icon: History, screen: 'settings' as Screen, tab: 'history' },
-        { id: 'location', label: 'Minha localidades', icon: MapPin, screen: 'location' as Screen },
+        { id: 'history', label: 'Histórico', icon: History, screen: 'settings' as Screen, tab: 'history' },
+        { id: 'location', label: 'Localidades', icon: MapPin, screen: 'location' as Screen },
       ]
     },
     {
@@ -100,7 +103,7 @@ export const NavigationDrawer: React.FC<Props> = ({
       color: 'text-pink-600',
       bgColor: 'bg-pink-50',
       items: [
-        { id: 'profile', label: 'Meu perfil', icon: User, screen: 'settings' as Screen, tab: 'profile' },
+        { id: 'profile', label: 'Perfil', icon: User, screen: 'settings' as Screen, tab: 'profile' },
       ]
     },
     {
@@ -279,17 +282,56 @@ export const NavigationDrawer: React.FC<Props> = ({
                     const isActive = currentScreen === item.screen && (!item.tab || item.tab === currentTab);
                     const iconColor = item.id === 'home' ? 'text-orange-500' : group.color;
                     const activeBg = item.id === 'home' ? 'bg-orange-50' : group.bgColor;
+                    const screenKey = item.screen === 'tournaments' ? 'tournaments' : item.id === 'home' ? 'home' : item.id;
+                    const status = getOnboardingStatus(screenKey);
+
+                    // Cores da interrogação com base no progresso de aprendizado:
+                    // a) Amarelo claro: ainda não viu (unseen)
+                    // b) Azul do help: viu parcialmente (partial)
+                    // c) Verde escuro: viu totalmente (completed)
+                    const statusStyle =
+                      status === 'completed'
+                        ? 'text-emerald-700 bg-emerald-50 border-emerald-300 font-black'
+                        : status === 'partial'
+                        ? 'text-sky-600 bg-sky-50 border-sky-200 font-extrabold'
+                        : 'text-amber-500 bg-amber-50/90 border-amber-200 font-bold';
+
+                    const statusTitle =
+                      status === 'completed'
+                        ? `Tour de ${item.label} concluído (toque para rever)`
+                        : status === 'partial'
+                        ? `Tour de ${item.label} visto parcialmente (toque para continuar)`
+                        : `Novo tour disponível para ${item.label}`;
+
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        onClick={item.action ? item.action : () => handleNavigate(item.screen, item.tab)}
-                        className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all active:scale-[0.98] ${
+                        className={`group w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all ${
                           isActive ? activeBg : 'hover:bg-slate-50'
                         }`}
                       >
-                        <item.icon size={20} className={iconColor} />
-                        <span className="text-sm font-bold text-black">{item.label}</span>
-                      </button>
+                        <button
+                          onClick={item.action ? item.action : () => handleNavigate(item.screen, item.tab)}
+                          className="flex items-center gap-4 flex-1 text-left active:scale-[0.98] transition-transform"
+                        >
+                          <item.icon size={20} className={iconColor} />
+                          <span className="text-sm font-bold text-black">{item.label}</span>
+                        </button>
+                        {onReplayTour && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onReplayTour(item.screen, item.tab);
+                              onClose();
+                            }}
+                            className={`p-1 rounded-full text-xs w-6 h-6 flex items-center justify-center shrink-0 border transition-all active:scale-90 hover:scale-110 shadow-xs ${statusStyle}`}
+                            title={statusTitle}
+                            aria-label={statusTitle}
+                          >
+                            ?
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

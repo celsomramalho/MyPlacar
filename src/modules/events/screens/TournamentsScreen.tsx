@@ -9,6 +9,7 @@ import type { UserProfile } from '@modules/auth/types';
 import { EventRegistrationForm } from '../domain/registration';
 import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
+import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
 
 interface Props {
   registrations: EventRegistration[];
@@ -21,9 +22,11 @@ interface Props {
   onOpenCommunications?: () => void;
   unreadCount?: number;
   onRefreshRegistrations?: () => Promise<void> | void;
+  onRegisterReplayTour?: (replayFn: () => void) => void;
+  onProfileSync?: (updates: { phone?: string; gender?: 'M' | 'F' }) => void;
 }
 
-export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onSelectAdminEvent, onOpenMenu, userProfile, onOpenCommunications, unreadCount = 0, onRefreshRegistrations }) => {
+export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onSelectAdminEvent, onOpenMenu, userProfile, onOpenCommunications, unreadCount = 0, onRefreshRegistrations, onRegisterReplayTour, onProfileSync }) => {
   const [pinInput, setPinInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [joiningPin, setJoiningPin] = useState<string | null>(null);
@@ -39,6 +42,34 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
   // Mapa suplementar: eventos das inscrições do usuário que não estão em activeEvents
   const [registeredEventsMap, setRegisteredEventsMap] = useState<Map<string, TournamentEvent>>(new Map());
   const refreshRegistrationsRef = useRef(onRefreshRegistrations);
+
+  const {
+    config: onboardingConfig,
+    showIntro,
+    showTour,
+    handleDismissIntro,
+    handleStepChange,
+    handleCompleteTour,
+    handleSkipTour,
+    replayTour,
+  } = useScreenOnboarding('tournaments');
+
+  const {
+    config: athleteRegOnboardingConfig,
+    showIntro: showAthleteRegIntro,
+    showTour: showAthleteRegTour,
+    handleDismissIntro: handleDismissAthleteRegIntro,
+    handleStepChange: handleAthleteRegStepChange,
+    handleCompleteTour: handleCompleteAthleteRegTour,
+    handleSkipTour: handleSkipAthleteRegTour,
+    replayTour: replayAthleteRegTour,
+  } = useScreenOnboarding('athlete-registration');
+
+  useEffect(() => {
+    if (onRegisterReplayTour) {
+      onRegisterReplayTour(replayTour);
+    }
+  }, [onRegisterReplayTour, replayTour]);
 
   useEffect(() => {
     refreshRegistrationsRef.current = onRefreshRegistrations;
@@ -88,7 +119,8 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
       activeEventPins.map(async (eventPin) => {
         try {
           const entry = await fetchEventEntry(db as Firestore, eventPin, email);
-          return entry ? eventPin.toUpperCase() : null;
+          if (!entry || entry.disabled || entry.paymentStatus === 'Cancelado') return null;
+          return eventPin.toUpperCase();
         } catch {
           return null;
         }
@@ -207,7 +239,8 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
       shirtSize: (userProfile as unknown as { shirtSize?: 'P' | 'M' | 'G' })?.shirtSize || 'M',
       gender: userProfile?.gender || 'M',
       categoryIds: [],
-      joinedAt: Date.now(),
+      joinedAt: 0,
+      regulationAccepted: false,
       dueAmount: pendingEvent?.registrationFee ?? 0,
       paidAmount: 0,
       paymentStatus: 'Pendente',
@@ -225,30 +258,42 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     );
   }, [activeEvents, userProfile?.pin, userProfile?.email]);
 
-  const registeredPins = useMemo(
-    () => new Set([
-      ...registrations.map((registration) => registration.pin.trim().toUpperCase()),
-      ...directRegistrationPins,
-    ]),
-    [registrations, directRegistrationPins]
-  );
+  const registeredPins = useMemo(() => {
+    const pins = new Set<string>();
+    const activePinsSet = new Set(activeEventPins.map((p) => p.toUpperCase()));
+
+    // Inscrições de eventos inativos/histórico
+    registrations.forEach((registration) => {
+      if (registration.paymentStatus === 'Cancelado') return;
+      const pinUpper = registration.pin.trim().toUpperCase();
+      if (!activePinsSet.has(pinUpper)) {
+        pins.add(pinUpper);
+      }
+    });
+
+    // Para eventos ativos, a checagem em tempo real no Firestore é a autoridade máxima
+    directRegistrationPins.forEach((pin) => {
+      pins.add(pin);
+    });
+
+    return pins;
+  }, [registrations, directRegistrationPins, activeEventPins]);
 
   const normalizedSearch = pinInput.trim().toLowerCase();
 
-  // Torneios disponíveis: inscrições abertas sem inscrição prévia ou acesso administrativo.
+  // Torneios disponíveis: inscrições abertas onde o usuário não possui inscrição ativa
   const availableEvents = useMemo(() => {
     return activeEvents.filter((ev) => {
       const eventPin = ev.pin.trim().toUpperCase();
       const isNotRegistered = !registeredPins.has(eventPin);
-      const isNotAdmin = !adminEventPins.has(eventPin);
       const isRegistrationOpen = getRegistrationPeriodStatus(ev).isOpen;
-      if (!isNotRegistered || !isNotAdmin || !isRegistrationOpen) return false;
+      if (!isNotRegistered || !isRegistrationOpen) return false;
       if (!normalizedSearch) return true;
       const matchName = ev.name?.toLowerCase().includes(normalizedSearch);
       const matchPin = ev.pin?.toLowerCase().includes(normalizedSearch);
       return matchName || matchPin;
     });
-  }, [activeEvents, registeredPins, adminEventPins, normalizedSearch]);
+  }, [activeEvents, registeredPins, normalizedSearch]);
 
   // Mapa de eventos ativos por PIN
   const activeEventsMap = useMemo(() => {
@@ -261,7 +306,18 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
 
   // Combina inscrições do usuário com eventos ativos onde ele foi cadastrado como administrador
   const allUserEvents = useMemo(() => {
-    const list = [...registrations];
+    const activePinsSet = new Set(activeEventPins.map((p) => p.toUpperCase()));
+
+    // Filtra inscrições canceladas ou que já foram excluídas no Firestore
+    const list = registrations.filter((r) => {
+      if (r.paymentStatus === 'Cancelado') return false;
+      const pinUpper = r.pin.trim().toUpperCase();
+      if (activePinsSet.has(pinUpper) && !directRegistrationPins.has(pinUpper)) {
+        return false;
+      }
+      return true;
+    });
+
     activeEvents.forEach((ev) => {
       const pinUpper = ev.pin?.trim().toUpperCase();
       if (!pinUpper || !adminEventPins.has(pinUpper)) return;
@@ -276,7 +332,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
       }
     });
     return list;
-  }, [registrations, activeEvents, adminEventPins]);
+  }, [registrations, activeEvents, adminEventPins, activeEventPins, directRegistrationPins]);
 
   // Minhas inscrições: todos os eventos nos quais o usuário já se inscreveu (mesmo inativos) + eventos que administra
   const filteredRegistrations = useMemo(() => {
@@ -323,7 +379,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
       <div className="flex-1 overflow-y-auto p-5 space-y-8 no-scrollbar pb-6">
 
         {/* BUSCAR EVENTO POR PIN OU NOME */}
-        <div className="space-y-4">
+        <div id="tournaments-search-bar" className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Search size={18} className="text-amber-500" />
             <h3 className="text-sm font-black text-black tracking-tight">Localizar torneios</h3>
@@ -351,7 +407,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
         </div>
 
         {/* TORNEIOS DISPONÍVEIS */}
-        <div className="space-y-4">
+        <div id="tournaments-available-section" className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Zap size={18} className="text-emerald-600" />
             <h3 className="text-sm font-black text-black tracking-tight">Torneios disponíveis</h3>
@@ -397,7 +453,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                               <Calendar size={12} /><span>{ev.eventDateText}</span>
                             </div>
                           )}
-                          <span className="bg-amber-50 text-amber-600 font-black px-2 py-0.5 rounded-md uppercase">PIN: {ev.pin}</span>
+                          <span className="bg-amber-50 text-amber-600 font-black px-2 py-0.5 rounded-md">PIN: {ev.pin}</span>
                           {(ev.registrationFee ?? 0) > 0 && (
                             <span className="bg-emerald-50 text-emerald-600 font-black px-2 py-0.5 rounded-md">
                               R$ {ev.registrationFee?.toFixed(2)}
@@ -419,7 +475,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                       {isJoiningThis ? (
                         <Loader2 size={20} className="animate-spin text-emerald-500" />
                       ) : period.isOpen ? (
-                        <span className="bg-emerald-500 text-white text-[11px] font-black uppercase px-3 py-1.5 rounded-xl group-hover:bg-emerald-600 transition-colors shadow-sm">
+                        <span className="bg-emerald-500 text-white text-[11px] font-black px-3 py-1.5 rounded-xl group-hover:bg-emerald-600 transition-colors shadow-sm">
                           Inscrever-se
                         </span>
                       ) : (
@@ -440,7 +496,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
         </div>
 
         {/* MINHAS INSCRIÇÕES */}
-        <div className="space-y-4">
+        <div id="tournaments-registrations-section" className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Ticket size={18} className="text-blue-500" />
             <h3 className="text-sm font-black text-black tracking-tight">Minhas inscrições</h3>
@@ -462,9 +518,14 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                 const isUserAdmin =
                   isPrimaryAdminEmail(userProfile?.email) ||
                   (eventObj ? canUseEventAdminAccess(eventObj, userProfile?.pin) : false);
-                const isActualRegistration = registrations.some(
-                  (registration) => registration.pin.trim().toUpperCase() === pin.trim().toUpperCase()
-                );
+                const isActualRegistration =
+                  directRegistrationPins.has(pin.toUpperCase()) ||
+                  (!activeEventsMap.has(pin.toUpperCase()) &&
+                    registrations.some(
+                      (registration) =>
+                        registration.pin.trim().toUpperCase() === pin.trim().toUpperCase() &&
+                        registration.paymentStatus !== 'Cancelado'
+                    ));
 
                 // Badge de status de inscrição
                 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -548,15 +609,37 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
             {/* Header fixo */}
             <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-slate-100 shrink-0">
               <div>
-                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Inscrição no evento</p>
+                <p className="text-[10px] font-bold text-emerald-600 tracking-widest">Inscrição no evento</p>
                 <h2 className="text-base font-black text-slate-900 leading-tight mt-0.5">{preJoinEventName}</h2>
               </div>
-              <button
-                onClick={handleCancelPreJoin}
-                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 active:scale-90 transition-all"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const regStatus = getOnboardingStatus('athlete-registration');
+                  const regStatusStyle =
+                    regStatus === 'completed'
+                      ? 'text-emerald-700 bg-emerald-50 border-emerald-300 font-black'
+                      : regStatus === 'partial'
+                      ? 'text-sky-600 bg-sky-50 border-sky-200 font-extrabold'
+                      : 'text-amber-500 bg-amber-50/90 border-amber-200 font-bold';
+                  return (
+                    <button
+                      type="button"
+                      onClick={replayAthleteRegTour}
+                      className={`p-1 rounded-full text-xs w-7 h-7 flex items-center justify-center shrink-0 border transition-all active:scale-90 hover:scale-110 shadow-xs cursor-pointer ${regStatusStyle}`}
+                      title="Ajuda e tour das etapas de inscrição"
+                      aria-label="Ajuda e tour das etapas de inscrição"
+                    >
+                      ?
+                    </button>
+                  );
+                })()}
+                <button
+                  onClick={handleCancelPreJoin}
+                  className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 active:scale-90 transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Formulário completo e idêntico */}
@@ -566,6 +649,9 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                 event={pendingEvent}
                 entry={initialUserEntry}
                 mode="user"
+                isNew={true}
+                userProfile={userProfile}
+                onProfileSync={onProfileSync}
                 onSave={async (savedEntry) => {
                   await onJoin(pendingEvent.pin, savedEntry);
                   setPendingEvent(null);
@@ -586,6 +672,44 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
             </div>
           </div>
         </div>
+      )}
+
+      {/* Camada 1: Cartão de Boas-Vindas */}
+      {onboardingConfig && (
+        <ScreenIntroCard
+          config={onboardingConfig}
+          isOpen={showIntro}
+          onDismiss={handleDismissIntro}
+        />
+      )}
+
+      {/* Camada 2: Spotlight Tour dos elementos */}
+      {onboardingConfig && (
+        <SpotlightTour
+          steps={onboardingConfig.steps}
+          isActive={showTour}
+          onComplete={handleCompleteTour}
+          onSkip={handleSkipTour}
+          onStepChange={handleStepChange}
+        />
+      )}
+
+      {/* Onboarding da Inscrição do Atleta (Modal Pre-join) */}
+      {showPreJoin && athleteRegOnboardingConfig && (
+        <>
+          <ScreenIntroCard
+            config={athleteRegOnboardingConfig}
+            isOpen={showAthleteRegIntro}
+            onDismiss={handleDismissAthleteRegIntro}
+          />
+          <SpotlightTour
+            steps={athleteRegOnboardingConfig.steps}
+            isActive={showAthleteRegTour}
+            onComplete={handleCompleteAthleteRegTour}
+            onSkip={handleSkipAthleteRegTour}
+            onStepChange={handleAthleteRegStepChange}
+          />
+        </>
       )}
     </div>
   );

@@ -23,13 +23,16 @@ import { fetchEventEntries } from '@infra/firebase/events';
 import type { Firestore } from 'firebase/firestore';
 import { useRegistrationForm } from '../hooks/useRegistrationForm';
 import { useRegistrationPayment } from '../hooks/useRegistrationPayment';
+import type { RegistrationStep } from '../types';
 import {
   AthleteIdentityStep,
+  EventInformationStep,
   CategorySelectionStep,
   PartnerSelectionStep,
   PaymentCheckoutStep,
-  RegulationStep,
 } from './steps';
+
+import type { UserProfile } from '@modules/auth/types';
 
 export interface EventRegistrationFormProps {
   event: TournamentEvent;
@@ -43,6 +46,10 @@ export interface EventRegistrationFormProps {
   onCancel?: () => void;
   onPhoneSync?: (phone: string) => void;
   readOnly?: boolean;
+  /** Perfil do usuário autenticado — usado para travar nome/email e sincronizar phone/gender */
+  userProfile?: UserProfile;
+  /** Callback para sincronizar phone e/ou gender de volta ao perfil do usuário */
+  onProfileSync?: (updates: { phone?: string; gender?: 'M' | 'F' }) => void;
 }
 
 export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
@@ -56,8 +63,13 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   onDelete,
   onCancel,
   readOnly = false,
+  userProfile,
+  onProfileSync,
 }) => {
   const isAdmin = mode === 'admin';
+  // Trava nome/email quando o usuário já tem cadastro (não é nova inscrição via admin)
+  // Trava nome/email quando o usuário já tem cadastro (independente de ser nova inscrição)
+  const disableIdentity = !isAdmin && Boolean(userProfile?.email);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -89,6 +101,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     liveEntries,
     mode,
     initialStep: 'identity',
+    isNew,
   });
 
   const payment = useRegistrationPayment({
@@ -162,12 +175,12 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
   const handleSubmit = async () => {
     setFeedback(null);
-    const submission = form.getSubmissionEntry();
-
-    if (!submission.name.trim()) {
-      setFeedback('Informe o nome completo do atleta.');
+    const identityValidation = form.isStepValid('identity');
+    if (!identityValidation.isValid) {
+      setFeedback(identityValidation.error || 'Preencha os dados do atleta.');
       return;
     }
+    const submission = form.getSubmissionEntry();
     if (!submission.categoryIds || submission.categoryIds.length === 0) {
       setFeedback('Selecione pelo menos uma categoria.');
       return;
@@ -185,6 +198,20 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     setIsSubmitting(true);
     try {
       await onSave(submission);
+      // Sincroniza WhatsApp e Gênero de volta ao perfil do usuário se tiver mudado
+      if (onProfileSync && userProfile) {
+        const updates: { phone?: string; gender?: 'M' | 'F' } = {};
+        if (submission.phone && submission.phone !== userProfile.phone) {
+          updates.phone = submission.phone;
+        }
+        const submissionGender = submission.gender as 'M' | 'F' | undefined;
+        if (submissionGender && submissionGender !== userProfile.gender) {
+          updates.gender = submissionGender;
+        }
+        if (Object.keys(updates).length > 0) {
+          onProfileSync(updates);
+        }
+      }
     } catch (err: any) {
       console.error('[EventRegistrationForm] Erro ao salvar inscrição:', err);
       setFeedback(err.message || 'Erro ao processar a inscrição.');
@@ -194,26 +221,29 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   };
 
   const isSelfCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
-  const registrationSteps = form.requiresPartnerDetails
-    ? ['identity', 'categories', 'partners', 'payment'] as const
-    : ['identity', 'categories', 'payment'] as const;
-  const stepLabels = {
+  const registrationSteps = (form.requiresPartnerDetails || event.allowUserTeamFormation === true)
+    ? ['identity', 'information', 'categories', 'partners', 'payment'] as const
+    : ['identity', 'information', 'categories', 'payment'] as const;
+  const stepLabels: Record<RegistrationStep, string> = {
     identity: 'Atleta',
+    information: 'Informações',
     categories: 'Categorias',
     partners: 'Duplas',
     payment: 'Pagamento',
-  } as const;
+    confirmation: 'Confirmação',
+  };
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto p-4 sm:p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
       {/* Barra de Progresso dos Steps */}
       <div className="flex items-start gap-2 border-b border-slate-100 pb-3">
-        <div className="grid flex-1 min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className={`grid flex-1 min-w-0 grid-cols-2 gap-2 ${registrationSteps.length === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
           {registrationSteps.map((stepKey, idx) => {
             const isActive = form.currentStep === stepKey;
             return (
               <button
                 key={stepKey}
+                id={`reg-step-${stepKey}`}
                 type="button"
                 onClick={() => form.goToStep(stepKey)}
                 className={`flex min-w-0 items-center justify-center gap-1 text-[11px] font-black px-2 py-2 rounded-xl transition-all sm:text-xs ${
@@ -258,6 +288,18 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             readOnly={readOnly}
             isSimplified={form.isSimplified}
             nameConflictWarning={form.nameConflictWarning}
+            disableIdentity={disableIdentity}
+          />
+        )}
+
+        {form.currentStep === 'information' && (
+          <EventInformationStep
+            event={event}
+            accepted={form.formData.regulationAccepted}
+            onToggleAccept={() =>
+              form.updateField('regulationAccepted', !form.formData.regulationAccepted)
+            }
+            readOnly={readOnly}
           />
         )}
 
@@ -272,14 +314,6 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
               readOnly={readOnly}
               conflictingCategoryIds={form.conflictingCategoryIds}
               nickname={form.formData.nickname}
-            />
-            <RegulationStep
-              event={event}
-              accepted={form.formData.regulationAccepted}
-              onToggleAccept={() =>
-                form.updateField('regulationAccepted', !form.formData.regulationAccepted)
-              }
-              readOnly={readOnly}
             />
           </div>
         )}
@@ -322,7 +356,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
               className="px-3.5 py-2 rounded-xl text-xs font-black text-rose-600 hover:bg-rose-50 border border-rose-200 flex items-center gap-1.5 transition-all"
             >
               <Trash2 size={14} />
-              Excluir Inscrição
+              Excluir inscrição
             </button>
           )}
         </div>
@@ -356,7 +390,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
               className="px-6 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 shadow-xs transition-all active:scale-95 disabled:opacity-50"
             >
               <Check size={16} />
-              {isSubmitting ? 'Salvando...' : 'Finalizar Inscrição'}
+              {isSubmitting ? 'Salvando...' : 'Finalizar inscrição'}
             </button>
           )}
         </div>

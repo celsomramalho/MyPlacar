@@ -9,6 +9,7 @@ import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import { isWatchDevice } from '@shared/utils/device';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
+import { useScreenOnboarding, ScreenIntroCard, SpotlightTour } from '@shared/onboarding';
 
 interface HomeScreenProps {
   userProfile: UserProfile;
@@ -17,6 +18,7 @@ interface HomeScreenProps {
   onLogout: () => void;
   onCheckUpdate: () => Promise<string | null>;
   onOpenMenu: () => void;
+  onRegisterReplayTour?: (replayFn: () => void) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -26,9 +28,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onLogout,
   onCheckUpdate,
   onOpenMenu,
+  onRegisterReplayTour,
 }) => {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
+
+  const {
+    config: onboardingConfig,
+    showIntro,
+    showTour,
+    handleDismissIntro,
+    handleStepChange,
+    handleCompleteTour,
+    handleSkipTour,
+    replayTour,
+  } = useScreenOnboarding('home');
+
+  React.useEffect(() => {
+    if (onRegisterReplayTour) {
+      onRegisterReplayTour(replayTour);
+    }
+  }, [onRegisterReplayTour, replayTour]);
 
   const { initGameState, matchSettings } = useGame();
   const { cloudLiveExists } = useLive();
@@ -98,14 +118,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const gridItems = [
-    { label: 'Times',     icon: <Users     size={36} className="text-sky-600" />,                    colorClass: 'bg-sky-50/60 text-sky-600 border-sky-100/50 hover:bg-sky-100/50',           action: () => onNavigate('settings', 'config') },
-    { label: 'Play',      icon: <Play      size={36} className="text-emerald-500 fill-emerald-500" />, colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: handlePlayShortcut, showLiveIndicator: isLiveActive },
-    { label: 'Regras',    icon: <Settings  size={36} className="text-amber-500" />,                    colorClass: 'bg-amber-50/60 text-amber-600 border-amber-100/50 hover:bg-amber-100/50',     action: () => onNavigate('new-game') },
-    { label: 'Parceiros', icon: <UserCheck size={36} className="text-teal-700" />,                     colorClass: 'bg-[#40E0D0]/10 text-teal-700 border-teal-100/30 hover:bg-[#40E0D0]/20',    action: () => onNavigate('partners') },
-    { label: 'Histórico', icon: <History   size={36} className="text-emerald-500" />,                  colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: () => onNavigate('settings', 'history') },
-    { label: 'Torneios',  icon: <Trophy    size={36} className="text-blue-500" />,                     colorClass: 'bg-blue-50/60 text-blue-600 border-blue-100/50 hover:bg-blue-100/50',        action: () => onNavigate('tournaments') },
-    { label: 'Ajuda',     icon: <HelpCircle size={36} className="text-gray-500" />,                   colorClass: 'bg-gray-50/60 text-gray-600 border-gray-100/50 hover:bg-gray-100/50',        action: () => onNavigate('settings', 'help') },
-    { label: 'Sair',      icon: <LogOut    size={36} className="text-red-500" />,                      colorClass: 'bg-red-50/60 text-red-600 border-red-100/50 hover:bg-red-100/50',            action: onLogout },
+    { id: 'home-item-times',     label: 'Times',     icon: <Users     size={36} className="text-sky-600" />,                    colorClass: 'bg-sky-50/60 text-sky-600 border-sky-100/50 hover:bg-sky-100/50',           action: () => onNavigate('settings', 'config') },
+    { id: 'home-item-play',      label: 'Play',      icon: <Play      size={36} className="text-emerald-500 fill-emerald-500" />, colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: handlePlayShortcut, showLiveIndicator: isLiveActive },
+    { id: 'home-item-regras',    label: 'Regras',    icon: <Settings  size={36} className="text-amber-500" />,                    colorClass: 'bg-amber-50/60 text-amber-600 border-amber-100/50 hover:bg-amber-100/50',     action: () => onNavigate('new-game') },
+    { id: 'home-item-parceiros', label: 'Parceiros', icon: <UserCheck size={36} className="text-teal-700" />,                     colorClass: 'bg-[#40E0D0]/10 text-teal-700 border-teal-100/30 hover:bg-[#40E0D0]/20',    action: () => onNavigate('partners') },
+    { id: 'home-item-historico', label: 'Histórico', icon: <History   size={36} className="text-emerald-500" />,                  colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: () => onNavigate('settings', 'history') },
+    { id: 'home-item-torneios',  label: 'Torneios',  icon: <Trophy    size={36} className="text-blue-500" />,                     colorClass: 'bg-blue-50/60 text-blue-600 border-blue-100/50 hover:bg-blue-100/50',        action: () => onNavigate('tournaments') },
+    { id: 'home-item-ajuda',     label: 'Ajuda',     icon: <HelpCircle size={36} className="text-gray-500" />,                   colorClass: 'bg-gray-50/60 text-gray-600 border-gray-100/50 hover:bg-gray-100/50',        action: () => onNavigate('settings', 'help') },
+    { id: 'home-item-sair',      label: 'Sair',      icon: <LogOut    size={36} className="text-red-500" />,                      colorClass: 'bg-red-50/60 text-red-600 border-red-100/50 hover:bg-red-100/50',            action: onLogout },
   ];
 
   return (
@@ -145,6 +165,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {/* Botão de Perfil */}
         <button
+          id="home-item-perfil"
           onClick={() => onNavigate('settings', 'profile')}
           className="w-full bg-white border border-gray-100 text-slate-700 py-4 px-6 rounded-3xl font-black text-sm flex items-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50"
         >
@@ -161,6 +182,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {gridItems.map((item) => (
             <button
               key={item.label}
+              id={item.id}
               onClick={item.action}
               className={`flex flex-col items-center justify-center gap-2 p-4 bg-white rounded-3xl border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all aspect-[3/2] relative ${item.colorClass}`}
             >
@@ -179,6 +201,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {/* Botão de Versão */}
         <button
+          id="home-item-versao"
           onClick={handleUpdateCheck}
           disabled={isCheckingUpdate}
           className="w-full bg-white border border-gray-100 text-slate-700 py-4 px-6 rounded-3xl font-black text-sm flex items-center justify-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50 disabled:opacity-70"
@@ -191,6 +214,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <span className="text-[21px]">{updateFeedback || `Versão ${APP_VERSION}`}</span>
         </button>
       </main>
+
+      {/* Camada 1: Cartão de Boas-Vindas */}
+      {onboardingConfig && (
+        <ScreenIntroCard
+          config={onboardingConfig}
+          isOpen={showIntro}
+          onDismiss={handleDismissIntro}
+        />
+      )}
+
+      {/* Camada 2: Spotlight Tour dos elementos */}
+      {onboardingConfig && (
+        <SpotlightTour
+          steps={onboardingConfig.steps}
+          isActive={showTour}
+          onComplete={handleCompleteTour}
+          onSkip={handleSkipTour}
+          onStepChange={handleStepChange}
+        />
+      )}
     </div>
   );
 };

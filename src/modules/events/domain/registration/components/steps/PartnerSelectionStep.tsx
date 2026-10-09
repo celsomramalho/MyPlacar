@@ -69,7 +69,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
       <div className="border-b border-slate-100 pb-3">
         <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
           <Users size={18} className="text-blue-600" />
-          Indicação de Parceiro(a)
+          Indicação de parceiro(a)
         </h3>
         <p className="text-xs text-slate-400 font-bold mt-0.5">
           {isTeamDrawPreDefined
@@ -131,8 +131,8 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
               {/* Cabeçalho da categoria */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <div>
-                  <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                    {cat.abbreviation || 'DUPLAS'}
+                  <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md tracking-wider">
+                    {cat.abbreviation || 'Duplas'}
                   </span>
                   <h4 className="text-sm font-black text-slate-800 mt-1">{cat.name}</h4>
                 </div>
@@ -152,7 +152,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                 <div className="space-y-1">
                   <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
                     <Mail size={12} className="text-slate-400" />
-                    E-mail do Parceiro
+                    E-mail do parceiro
                     {isTeamDrawPreDefined ? (
                       <span className="text-rose-500 font-black">*</span>
                     ) : (
@@ -173,7 +173,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                 {/* Nome */}
                 <div className="space-y-1 sm:col-span-1">
                   <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
-                    Nome do Parceiro(a)
+                    Nome do parceiro(a)
                     {isTeamDrawPreDefined ? (
                       <span className="text-rose-500 font-black">*</span>
                     ) : (

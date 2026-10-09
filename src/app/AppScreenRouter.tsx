@@ -121,6 +121,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
 
   const {
     userProfile,
+    setUserProfile,
     gameState,
     handleCloseCloudLive,
     handleDeleteJudge,
@@ -145,6 +146,8 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
 
   const isAdmin = userProfile.isAdmin === true;
   const offlineAllowedScreens = currentScreen === 'scoreboard' || currentScreen === 'new-game' || currentScreen === 'settings';
+  const replayTourHomeRef = React.useRef<(() => void) | null>(null);
+  const replayTourTournamentsRef = React.useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (isOfflineMode && gameState && !offlineAllowedScreens) {
@@ -163,6 +166,19 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
     else if (tab) { setActiveTab(tab as Tab); }
   };
 
+  const handleReplayTourFromDrawer = (screen: Parameters<typeof setCurrentScreen>[0], tab?: string) => {
+    handleDrawerNavigate(screen, tab);
+    if (screen === 'home' && replayTourHomeRef.current) {
+      setTimeout(() => {
+        replayTourHomeRef.current?.();
+      }, 150);
+    } else if (screen === 'tournaments' && replayTourTournamentsRef.current) {
+      setTimeout(() => {
+        replayTourTournamentsRef.current?.();
+      }, 150);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-gray-50 flex flex-col">
 
@@ -177,6 +193,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
         isAdmin={isAdmin}
         canStartMatch={canStartMatch}
         isOfflineMode={isOfflineMode}
+        onReplayTour={handleReplayTourFromDrawer}
       />
 
       <GlobalOverlays
@@ -231,6 +248,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             onLogout={handleLogout}
             onCheckUpdate={handleCheckUpdate}
             onOpenMenu={() => setIsMenuOpen(true)}
+            onRegisterReplayTour={(fn) => { replayTourHomeRef.current = fn; }}
           />
         )}
 
@@ -345,6 +363,8 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
                 return fetchUserRegistrations(userProfile.email);
               }
             }}
+            onRegisterReplayTour={(fn) => { replayTourTournamentsRef.current = fn; }}
+            onProfileSync={(updates) => setUserProfile(prev => ({ ...prev, ...updates }))}
           />
         )}
 

@@ -184,7 +184,7 @@ export const EVENT_REGISTRATION_TYPE_OPTIONS: EventRegistrationTypeOption[] = [
 ];
 
 export const isSimplifiedRegistrationEvent = (event?: Partial<TournamentEvent> | null): boolean => {
-  return event?.registrationType === 'Simplificada';
+  return String(event?.registrationType || '').trim().toLowerCase() === 'simplificada';
 };
 
 export interface EventCategory {

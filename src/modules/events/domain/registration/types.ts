@@ -17,6 +17,7 @@ import type {
 
 export type RegistrationStep =
   | 'identity'      // Identificação do atleta (nome, fone, camiseta, gênero)
+  | 'information'   // Informações do evento, local, datas, regulamento e aceite
   | 'categories'    // Seleção de categorias disponíveis e visualização de vagas
   | 'partners'      // Definição e validação de duplas para categorias em dupla
   | 'payment'       // Checkout: escolha entre Pix (Mercado Pago) ou Manual

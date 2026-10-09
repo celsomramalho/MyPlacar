@@ -26,7 +26,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
         <div className="border-b border-slate-100 pb-3">
           <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
             <DollarSign size={18} className="text-emerald-600" />
-            Pagamento da Inscrição
+            Pagamento da inscrição
           </h3>
           <p className="text-xs text-slate-400 font-bold mt-0.5">
             Este evento possui participação gratuita.
@@ -34,7 +34,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
         </div>
         <div className="p-8 text-center bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-800 font-bold text-xs flex flex-col items-center gap-2">
           <CheckCircle2 size={28} className="text-emerald-500" />
-          <span>Inscrição Gratuita — Nenhuma taxa é cobrada para este torneio. Avance para confirmar.</span>
+          <span>Inscrição gratuita — Nenhuma taxa é cobrada para este torneio. Avance para confirmar.</span>
         </div>
       </div>
     );
@@ -58,7 +58,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
       <div className="border-b border-slate-100 pb-3">
         <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
           <CreditCard size={18} className="text-blue-600" />
-          Forma de Pagamento
+          Forma de pagamento
         </h3>
         <p className="text-xs text-slate-400 font-bold mt-0.5">
           Escolha como deseja realizar o pagamento da sua taxa de inscrição.
@@ -68,15 +68,15 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
       {/* Resumo do Valor */}
       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
         <div>
-          <span className="text-xs font-bold text-slate-400">Total a Pagar</span>
+          <span className="text-xs font-bold text-slate-400">Total a pagar</span>
           <h4 className="text-2xl font-black text-slate-800">
             R$ {pricing.dueAmount.toFixed(2)}
           </h4>
         </div>
         <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-blue-100 text-blue-700">
           {pricing.extraCategoriesCount > 0
-            ? `Taxa Base + ${pricing.extraCategoriesCount} adicional(is)`
-            : 'Taxa de Inscrição'}
+            ? `Taxa base + ${pricing.extraCategoriesCount} adicional(is)`
+            : 'Taxa de inscrição'}
         </span>
       </div>
 
@@ -96,7 +96,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
               <QrCode size={20} />
             </div>
             <h4 className="text-sm font-black text-slate-800">
-              Pix Instantâneo (Mercado Pago)
+              Pix instantâneo (Mercado Pago)
             </h4>
             <p className="text-xs text-slate-500 font-bold">
               Gera QR Code na hora com aprovação imediata e confirmação automática.
@@ -104,7 +104,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
           </div>
           <span className="text-[11px] font-black text-emerald-600 flex items-center gap-1">
             <CheckCircle2 size={12} />
-            Recomendado · Sem Espera
+            Recomendado · Sem espera
           </span>
         </div>
 
@@ -157,7 +157,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
             ) : (
               <>
                 <QrCode size={16} />
-                <span>Gerar QR Code Pix para Pagar</span>
+                <span>Gerar QR Code Pix para pagar</span>
               </>
             )}
           </button>
@@ -165,7 +165,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
       ) : (
         <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
           <label className="text-xs font-black text-slate-700 block">
-            Anexar Comprovante de Pagamento
+            Anexar comprovante de pagamento
           </label>
           <input
             type="file"

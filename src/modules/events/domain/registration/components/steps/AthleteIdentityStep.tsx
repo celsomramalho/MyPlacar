@@ -1,5 +1,4 @@
-import React from 'react';
-import { User, Phone, Mail, Hash, AlertTriangle } from 'lucide-react';
+import { User, Phone, Mail, AlertTriangle } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import type { RegistrationFormData } from '../../types';
 
@@ -11,6 +10,8 @@ export interface AthleteIdentityStepProps {
   readOnly?: boolean;
   isSimplified?: boolean;
   nameConflictWarning?: string | null;
+  /** Quando true, desabilita Nome Completo e E-mail (campos vinculados ao cadastro do usuário) */
+  disableIdentity?: boolean;
 }
 
 const formatPhone = (value: string) => {
@@ -29,13 +30,14 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
   readOnly = false,
   isSimplified = false,
   nameConflictWarning = null,
+  disableIdentity = false,
 }) => {
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       <div className="border-b border-slate-100 pb-3">
         <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
           <User size={18} className="text-blue-600" />
-          Dados do Atleta
+          Dados do atleta
         </h3>
         <p className="text-xs text-slate-400 font-bold mt-0.5">
           {isSimplified
@@ -49,16 +51,19 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
         {!isSimplified && (
           <div className="space-y-1.5 sm:col-span-2">
             <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-              Nome Completo <span className="text-rose-500">*</span>
+              Nome completo <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
-              disabled={readOnly}
+              disabled={readOnly || disableIdentity}
               value={formData.name}
               onChange={(e) => updateField('name', e.target.value)}
-              placeholder="Nome e Sobrenome"
+              placeholder="Nome e sobrenome"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
             />
+            {disableIdentity && (
+              <p className="text-[10px] text-slate-400 font-semibold">Vinculado ao seu cadastro</p>
+            )}
           </div>
         )}
 
@@ -92,8 +97,29 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
         {!isSimplified && (
           <div className="space-y-1.5">
             <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+              <Mail size={14} className="text-slate-400" />
+              E-mail <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="email"
+              disabled={readOnly || disableIdentity}
+              value={formData.email}
+              onChange={(e) => updateField('email', e.target.value)}
+              placeholder="atleta@email.com"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
+            />
+            {disableIdentity && (
+              <p className="text-[10px] text-slate-400 font-semibold">Vinculado ao seu cadastro</p>
+            )}
+          </div>
+        )}
+
+        {/* WhatsApp */}
+        {!isSimplified && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
               <Phone size={14} className="text-slate-400" />
-              WhatsApp
+              WhatsApp <span className="text-rose-500">*</span>
             </label>
             <input
               type="tel"
@@ -106,7 +132,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
           </div>
         )}
 
-        {/* Gênero (default Masculino) */}
+        {/* Gênero */}
         <div className={`space-y-1.5 ${isSimplified ? 'sm:col-span-2' : ''}`}>
           <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
             Gênero
@@ -141,10 +167,11 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
           </div>
         </div>
 
+        {/* Tamanho da camiseta */}
         {!isSimplified && (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 sm:col-span-2">
             <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-              Tamanho da Camiseta
+              Tamanho da camiseta
             </label>
             <div className="grid grid-cols-3 gap-2">
               {(['P', 'M', 'G'] as const).map((size) => (
@@ -164,41 +191,6 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
               ))}
             </div>
           </div>
-        )}
-
-        {/* Campos Administrativos (E-mail e PIN quando em modo Admin ou Nova Inscrição) */}
-        {!isSimplified && (isAdmin || canEditIdentity) && (
-          <>
-            <div className="space-y-1.5">
-              <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                <Mail size={14} className="text-slate-400" />
-                E-mail
-              </label>
-              <input
-                type="email"
-                disabled={readOnly}
-                value={formData.email}
-                onChange={(e) => updateField('email', e.target.value)}
-                placeholder="atleta@email.com"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                <Hash size={14} className="text-slate-400" />
-                PIN
-              </label>
-              <input
-                type="text"
-                disabled={readOnly}
-                value={formData.phone || ''}
-                readOnly
-                placeholder="Gerado automaticamente"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-500 bg-slate-50 outline-none"
-              />
-            </div>
-          </>
         )}
       </div>
     </div>

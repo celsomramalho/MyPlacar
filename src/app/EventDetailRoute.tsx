@@ -22,7 +22,7 @@ export function EventDetailRoute({
   setModalConfig,
   unreadCommsCount = 0,
 }: EventDetailRouteProps) {
-  const { userProfile, partners, setPartners, initGameState } = useGame();
+  const { userProfile, setUserProfile, partners, setPartners, initGameState } = useGame();
   const { setCurrentScreen } = useUI();
 
   const handleAddTournamentPartner = (pin: string, nickname: string, gender: 'M' | 'F', name?: string) => {
@@ -45,6 +45,7 @@ export function EventDetailRoute({
       setModalConfig={setModalConfig}
       onOpenCommunications={() => setCurrentScreen('communications')}
       unreadCount={unreadCommsCount}
+      onProfileSync={(updates) => setUserProfile(prev => ({ ...prev, ...updates }))}
     />
   );
 }

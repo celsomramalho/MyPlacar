@@ -25,6 +25,7 @@ import {
   Check,
   Search,
 } from 'lucide-react';
+import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
 import type {
   TournamentEvent,
   TournamentEntry,
@@ -105,6 +106,7 @@ interface Props {
   appUrl: string;
   onOpenCommunications?: () => void;
   unreadCount?: number;
+  onProfileSync?: (updates: { phone?: string; gender?: 'M' | 'F' }) => void;
 }
 
 export const EventDetailScreen: React.FC<Props> = ({
@@ -117,6 +119,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   appUrl,
   onOpenCommunications,
   unreadCount = 0,
+  onProfileSync,
 }) => {
   // Sincronização em tempo real unificada
   const { event, setEvent, entries, liveScores, refreshEntries } = useEventRealtime(initialEvent);
@@ -155,6 +158,17 @@ export const EventDetailScreen: React.FC<Props> = ({
   const [myHistoryOpen, setMyHistoryOpen] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
 
+  const {
+    config: onboardingConfig,
+    showIntro,
+    showTour,
+    handleDismissIntro,
+    handleStepChange,
+    handleCompleteTour,
+    handleSkipTour,
+    replayTour,
+  } = useScreenOnboarding('event-detail');
+
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
@@ -178,6 +192,7 @@ export const EventDetailScreen: React.FC<Props> = ({
       gender: userProfile?.gender || 'M',
       categoryIds: [],
       joinedAt: 0,
+      regulationAccepted: false,
       dueAmount: isFree ? 0 : (event?.registrationFee ?? 0),
       paidAmount: 0,
       paymentStatus: isFree ? 'Confirmado' : 'Pendente',
@@ -1029,23 +1044,45 @@ export const EventDetailScreen: React.FC<Props> = ({
             {event.name}
           </h1>
         </div>
-        {onOpenCommunications ? (
-          <button
-            type="button"
-            onClick={onOpenCommunications}
-            className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all relative cursor-pointer"
-            title="Comunicados e avisos"
-          >
-            <Bell size={20} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white animate-pulse">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-        ) : (
-          <div className="w-10" />
-        )}
+        <div className="flex items-center gap-2">
+          {(() => {
+            const detailStatus = getOnboardingStatus('event-detail');
+            const detailStatusStyle =
+              detailStatus === 'completed'
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-300 font-black'
+                : detailStatus === 'partial'
+                ? 'text-sky-600 bg-sky-50 border-sky-200 font-extrabold'
+                : 'text-amber-500 bg-amber-50/90 border-amber-200 font-bold';
+            return (
+              <button
+                type="button"
+                onClick={replayTour}
+                className={`p-1 rounded-full text-xs w-7 h-7 flex items-center justify-center shrink-0 border transition-all active:scale-90 hover:scale-110 shadow-xs cursor-pointer ${detailStatusStyle}`}
+                title="Ajuda e tour do painel do torneio"
+                aria-label="Ajuda e tour do painel do torneio"
+              >
+                ?
+              </button>
+            );
+          })()}
+          {onOpenCommunications ? (
+            <button
+              type="button"
+              onClick={onOpenCommunications}
+              className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all relative cursor-pointer"
+              title="Comunicados e avisos"
+            >
+              <Bell size={20} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          ) : (
+            <div className="w-10" />
+          )}
+        </div>
       </header>
 
       {/* Conteúdo com Scroll */}
@@ -1057,7 +1094,7 @@ export const EventDetailScreen: React.FC<Props> = ({
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
             <div className="absolute bottom-6 left-6 right-6">
               <h2 className="text-white font-black text-2xl tracking-tight leading-tight">{event.name}</h2>
-              <p className="text-amber-400 font-bold text-xs uppercase mt-1">
+              <p className="text-amber-400 font-bold text-xs mt-1">
                 Evento oficial • PIN: {event.pin}
               </p>
             </div>
@@ -1095,7 +1132,7 @@ export const EventDetailScreen: React.FC<Props> = ({
               const isCheckedIn = isEntryCheckedInToday(currentUserEntry, event.matches, pairsById, todayStr);
 
               return (
-                <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div id="event-detail-registration-card" className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-black text-slate-800">Minha inscrição no evento</p>
@@ -1215,7 +1252,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                       {period.message}
                     </p>
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-slate-200 text-slate-600">
+                  <span className="text-[10px] font-black tracking-wider px-2.5 py-1 rounded-lg bg-slate-200 text-slate-600">
                     {period.status === 'not_started' ? 'Em breve' : 'Encerradas'}
                   </span>
                 </div>
@@ -1224,7 +1261,7 @@ export const EventDetailScreen: React.FC<Props> = ({
           )}
 
           {/* Ações e Compartilhamento (QR Code / WhatsApp) */}
-          <div className="bg-[#0f172a] rounded-[2.5rem] p-6 shadow-xl border border-white/10 flex flex-col items-center gap-5">
+          <div id="event-detail-actions-card" className="bg-[#0f172a] rounded-[2.5rem] p-6 shadow-xl border border-white/10 flex flex-col items-center gap-5">
             <div className="bg-white p-3 rounded-2xl shadow-xl w-40 h-40 flex items-center justify-center shrink-0 border-4 border-sky-500/20">
               <img src={qrCodeUrl} alt="Convite evento" className="w-full h-full object-contain" />
             </div>
@@ -1272,7 +1309,7 @@ export const EventDetailScreen: React.FC<Props> = ({
 
             {/* ─── MEU HISTÓRICO (quando há partidas do usuário) ─── */}
             {myHistoryMatches.length > 0 && activeUserEntry && (
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div id="event-detail-history-card" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 {/* Cabeçalho colapsável */}
                 <button
                   type="button"
@@ -1324,7 +1361,7 @@ export const EventDetailScreen: React.FC<Props> = ({
             ) : (
               <div className="space-y-4">
                 {/* Abas Seletoras de Categoria */}
-                <div className="grid grid-cols-2 gap-2">
+                <div id="event-detail-categories-selector" className="grid grid-cols-2 gap-2">
                   {userCategories.map((cat) => {
                     const isSelected = activeCategory?.id === cat.id;
                     return (
@@ -1403,7 +1440,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                     )}
 
                     <div className="flex items-center justify-between pb-1">
-                      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+                      <div id="event-detail-subtabs-container" className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
                         <button
                           type="button"
                           onClick={() => setUserCategoryView('entries')}
@@ -1780,7 +1817,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                 event={event}
                 entry={currentUserEntry || defaultUserEntry}
                 mode="user"
-                isNew={!currentUserEntry}
+                isNew={!currentUserEntry || currentUserEntry.paymentStatus === 'Cancelado' || Boolean(currentUserEntry.disabled)}
+                userProfile={userProfile}
+                onProfileSync={onProfileSync}
                 onSave={async (updated) => {
                   const db = getDb();
                   if (db) {
@@ -1830,9 +1869,21 @@ export const EventDetailScreen: React.FC<Props> = ({
                     const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
                     await deleteEventEntry(db as Firestore, event.pin, targetEmail);
                     await deleteUserEventRegistration(db as Firestore, targetEmail, event.pin).catch(() => {});
+
+                    try {
+                      const stored = JSON.parse(localStorage.getItem('myPlacarRegisteredEvents') || '[]');
+                      if (Array.isArray(stored)) {
+                        const updated = stored.filter((r: any) => r.pin?.toUpperCase() !== event.pin.toUpperCase());
+                        localStorage.setItem('myPlacarRegisteredEvents', JSON.stringify(updated));
+                      }
+                    } catch {}
                   }
                   await refreshEntries();
                   setShowMyRegistrationModal(false);
+
+                  if (!canManageEvent) {
+                    onExitTournament();
+                  }
                 }}
                 onCancel={async () => {
                   await refreshEntries();
@@ -1926,6 +1977,26 @@ export const EventDetailScreen: React.FC<Props> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Camada 1: Cartão de Boas-Vindas */}
+      {onboardingConfig && (
+        <ScreenIntroCard
+          config={onboardingConfig}
+          isOpen={showIntro}
+          onDismiss={handleDismissIntro}
+        />
+      )}
+
+      {/* Camada 2: Spotlight Tour dos elementos */}
+      {onboardingConfig && (
+        <SpotlightTour
+          steps={onboardingConfig.steps}
+          isActive={showTour}
+          onComplete={handleCompleteTour}
+          onSkip={handleSkipTour}
+          onStepChange={handleStepChange}
+        />
       )}
     </div>
   );
