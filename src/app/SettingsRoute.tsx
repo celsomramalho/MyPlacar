@@ -33,6 +33,7 @@ interface SettingsRouteProps {
   setShowInstallPwa: React.Dispatch<React.SetStateAction<boolean>>;
   installPromptShownSession: boolean;
   setInstallPromptShownSession: React.Dispatch<React.SetStateAction<boolean>>;
+  onRegisterReplayTour?: (fn: () => void) => void;
 }
 
 export function SettingsRoute({
@@ -56,6 +57,7 @@ export function SettingsRoute({
   setShowInstallPwa,
   installPromptShownSession,
   setInstallPromptShownSession,
+  onRegisterReplayTour,
 }: SettingsRouteProps) {
   const {
     setCurrentScreen,
@@ -198,6 +200,7 @@ export function SettingsRoute({
       onOpenCommunications={() => setCurrentScreen('communications')}
       unreadCount={unreadCommsCount}
       onOpenMenu={onOpenMenu}
+      onRegisterReplayTour={onRegisterReplayTour}
     />
   );
 }

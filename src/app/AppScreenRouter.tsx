@@ -148,6 +148,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   const offlineAllowedScreens = currentScreen === 'scoreboard' || currentScreen === 'new-game' || currentScreen === 'settings';
   const replayTourHomeRef = React.useRef<(() => void) | null>(null);
   const replayTourTournamentsRef = React.useRef<(() => void) | null>(null);
+  const replayTourConfigRef = React.useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (isOfflineMode && gameState && !offlineAllowedScreens) {
@@ -176,6 +177,10 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
       setTimeout(() => {
         replayTourTournamentsRef.current?.();
       }, 150);
+    } else if (screen === 'settings' && tab === 'config' && replayTourConfigRef.current) {
+      setTimeout(() => {
+        replayTourConfigRef.current?.();
+      }, 250);
     }
   };
 
@@ -284,6 +289,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             setShowInstallPwa={setShowInstallPwa}
             installPromptShownSession={installPromptShownSession}
             setInstallPromptShownSession={setInstallPromptShownSession}
+            onRegisterReplayTour={(fn) => { replayTourConfigRef.current = fn; }}
           />
         )}
 

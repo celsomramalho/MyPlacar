@@ -60,6 +60,7 @@ interface Props {
   onNavigateToTab?: (tab: Tab) => void;
   appUrl: string;
   onVersionTap?: () => void;
+  onRegisterReplayTour?: (fn: () => void) => void;
 }
 
 // ─── Aprovação de login do relógio ────────────────────────────────────────────
@@ -160,6 +161,13 @@ export const SettingsScreen: React.FC<Props> = (props) => {
     handleSkipTour,
     replayTour,
   } = useScreenOnboarding('config');
+
+  // Registra replayTour para chamada externa (menu lateral)
+  useEffect(() => {
+    if (props.onRegisterReplayTour) {
+      props.onRegisterReplayTour(replayTour);
+    }
+  }, [props.onRegisterReplayTour, replayTour]);
 
   // MC1: Salvamento automático ao sair da aba perfil
   useEffect(() => {
