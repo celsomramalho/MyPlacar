@@ -16,6 +16,7 @@ interface NewGameRouteProps {
   onOpenMenu: () => void;
   setActiveTab: (tab: Tab) => void;
   onVersionTap: () => void;
+  onRegisterReplayTour?: (fn: () => void) => void;
 }
 
 export function NewGameRoute({
@@ -26,6 +27,7 @@ export function NewGameRoute({
   onOpenMenu,
   setActiveTab,
   onVersionTap,
+  onRegisterReplayTour,
 }: NewGameRouteProps) {
   const { setCurrentScreen, setShowLiveControlOverlay, isSettingsInicialSaved, isSettingsRegrasSaved } =
     useUI();
@@ -57,6 +59,7 @@ export function NewGameRoute({
       isOfflineMode={isOfflineMode}
       onExitOffline={onExitOffline}
       onVersionTap={onVersionTap}
+      onRegisterReplayTour={onRegisterReplayTour}
     />
   );
 }

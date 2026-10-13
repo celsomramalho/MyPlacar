@@ -61,6 +61,8 @@ interface Props {
   appUrl: string;
   onVersionTap?: () => void;
   onRegisterReplayTour?: (fn: () => void) => void;
+  onRegisterReplayTourHistory?: (fn: () => void) => void;
+  onRegisterReplayTourProfile?: (fn: () => void) => void;
 }
 
 // ─── Aprovação de login do relógio ────────────────────────────────────────────
@@ -169,6 +171,44 @@ export const SettingsScreen: React.FC<Props> = (props) => {
     }
   }, [props.onRegisterReplayTour, replayTour]);
 
+  // ─── Onboarding da tela Histórico (aba history) ──────────────────────────────
+  const {
+    config: onboardingConfigHistory,
+    showIntro: showIntroHistory,
+    showTour: showTourHistory,
+    handleDismissIntro: handleDismissIntroHistory,
+    handleStepChange: handleStepChangeHistory,
+    handleCompleteTour: handleCompleteTourHistory,
+    handleSkipTour: handleSkipTourHistory,
+    replayTour: replayTourHistory,
+  } = useScreenOnboarding('history');
+
+  // Registra replayTour do histórico para chamada externa (menu lateral)
+  useEffect(() => {
+    if (props.onRegisterReplayTourHistory) {
+      props.onRegisterReplayTourHistory(replayTourHistory);
+    }
+  }, [props.onRegisterReplayTourHistory, replayTourHistory]);
+
+  // ─── Onboarding da tela Perfil (aba profile) ───────────────────────────────
+  const {
+    config: onboardingConfigProfile,
+    showIntro: showIntroProfile,
+    showTour: showTourProfile,
+    handleDismissIntro: handleDismissIntroProfile,
+    handleStepChange: handleStepChangeProfile,
+    handleCompleteTour: handleCompleteTourProfile,
+    handleSkipTour: handleSkipTourProfile,
+    replayTour: replayTourProfile,
+  } = useScreenOnboarding('profile');
+
+  // Registra replayTour do perfil para chamada externa (menu lateral)
+  useEffect(() => {
+    if (props.onRegisterReplayTourProfile) {
+      props.onRegisterReplayTourProfile(replayTourProfile);
+    }
+  }, [props.onRegisterReplayTourProfile, replayTourProfile]);
+
   // MC1: Salvamento automático ao sair da aba perfil
   useEffect(() => {
     if (prevTabRef.current === 'profile' && props.activeTab !== 'profile' && props.isProfileSaved === false) {
@@ -255,7 +295,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           onOpenMenu={props.onOpenMenu}
           isOfflineMode={props.isOfflineMode}
           onExitOffline={props.onExitOffline}
-          onOpenHelp={props.activeTab === 'config' ? replayTour : undefined}
+          onOpenHelp={props.activeTab === 'config' ? replayTour : props.activeTab === 'history' ? replayTourHistory : props.activeTab === 'profile' ? replayTourProfile : undefined}
         />
       )}
       <div className={`flex-1 overflow-y-auto ${props.activeTab === 'help' ? 'p-0' : 'p-5'} pb-6 no-scrollbar`}>
@@ -279,6 +319,42 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           onComplete={handleCompleteTour}
           onSkip={handleSkipTour}
           onStepChange={handleStepChange}
+        />
+      )}
+
+      {/* Onboarding da tela Histórico */}
+      {props.activeTab === 'history' && onboardingConfigHistory && (
+        <ScreenIntroCard
+          config={onboardingConfigHistory}
+          isOpen={showIntroHistory}
+          onDismiss={handleDismissIntroHistory}
+        />
+      )}
+      {props.activeTab === 'history' && onboardingConfigHistory && (
+        <SpotlightTour
+          steps={onboardingConfigHistory.steps}
+          isActive={showTourHistory}
+          onComplete={handleCompleteTourHistory}
+          onSkip={handleSkipTourHistory}
+          onStepChange={handleStepChangeHistory}
+        />
+      )}
+
+      {/* Onboarding da tela Perfil */}
+      {props.activeTab === 'profile' && onboardingConfigProfile && (
+        <ScreenIntroCard
+          config={onboardingConfigProfile}
+          isOpen={showIntroProfile}
+          onDismiss={handleDismissIntroProfile}
+        />
+      )}
+      {props.activeTab === 'profile' && onboardingConfigProfile && (
+        <SpotlightTour
+          steps={onboardingConfigProfile.steps}
+          isActive={showTourProfile}
+          onComplete={handleCompleteTourProfile}
+          onSkip={handleSkipTourProfile}
+          onStepChange={handleStepChangeProfile}
         />
       )}
     </div>

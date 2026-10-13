@@ -378,7 +378,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
   return (
     <div className="flex flex-col gap-6 pb-6 animate-in fade-in duration-500">
       <section className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 space-y-8">
-        <div className="flex items-center gap-4 border-b border-gray-50 pb-6 relative">
+        <div id="profile-header" className="flex items-center gap-4 border-b border-gray-50 pb-6 relative">
           <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 relative">
             <User size={32} />
             {isAdmin && <div className="absolute -top-1 -right-1 bg-blue-600 text-white p-1 rounded-full border-2 border-white shadow-sm"><ShieldCheck size={12} fill="currentColor" /></div>}
@@ -397,29 +397,31 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         </div>
 
         <div className="space-y-6">
-          <Input 
-            label={<div className="flex items-center gap-2"><User size={16} className="text-blue-600" /> <span>Nome completo</span></div>} 
-            value={profile.name} 
-            onChange={(e) => handleNameChange(e.target.value)} 
-          />
-          
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <Input 
-                label={<div className="flex items-center gap-2"><Mic size={16} className="text-blue-600" /> <span>Como quer ser chamado</span></div>} 
-                value={profile.nickname} 
-                onChange={(e) => setProfile({ ...profile, nickname: formatPortugueseName(e.target.value) })} 
-              />
+          <div id="profile-name" className="space-y-6">
+            <Input 
+              label={<div className="flex items-center gap-2"><User size={16} className="text-blue-600" /> <span>Nome completo</span></div>} 
+              value={profile.name} 
+              onChange={(e) => handleNameChange(e.target.value)} 
+            />
+            
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <Input 
+                  label={<div className="flex items-center gap-2"><Mic size={16} className="text-blue-600" /> <span>Como quer ser chamado</span></div>} 
+                  value={profile.nickname} 
+                  onChange={(e) => setProfile({ ...profile, nickname: formatPortugueseName(e.target.value) })} 
+                />
+              </div>
+              <button 
+                onClick={() => setProfile({ ...profile, gender: profile.gender === 'M' ? 'F' : 'M' })} 
+                className={`w-[42px] h-[44px] rounded-2xl border-2 flex items-center justify-center shrink-0 transition-all active:scale-90 ${profile.gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}
+              >
+                {profile.gender === 'F' ? <VenusIcon /> : <MarsIcon />}
+              </button>
             </div>
-            <button 
-              onClick={() => setProfile({ ...profile, gender: profile.gender === 'M' ? 'F' : 'M' })} 
-              className={`w-[42px] h-[44px] rounded-2xl border-2 flex items-center justify-center shrink-0 transition-all active:scale-90 ${profile.gender === 'F' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}
-            >
-              {profile.gender === 'F' ? <VenusIcon /> : <MarsIcon />}
-            </button>
           </div>
           
-          <div className="flex gap-2 items-end">
+          <div id="profile-device-name" className="flex gap-2 items-end">
             <div className="flex-1">
               <Input 
                 label={<div className="flex items-center gap-2"><Smartphone size={16} className="text-blue-600" /> <span>Nome deste aparelho</span></div>} 
@@ -440,19 +442,21 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
             </div>
           </div>
 
-          <Input 
-            label={<div className="flex items-center gap-2"><Hash size={16} className="text-blue-600" /> <span>Seu pin</span></div>} 
-            value={profile.pin} 
-            readOnly 
-            type={showPin ? "text" : "password"}
-            rightAction={
-              <button onClick={() => setShowPin(!showPin)} className={`p-2 transition-colors ${showPin ? 'text-green-500' : 'text-red-500'}`}>
-                {showPin ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            }
-          />
+          <div id="profile-pin">
+            <Input 
+              label={<div className="flex items-center gap-2"><Hash size={16} className="text-blue-600" /> <span>Seu pin</span></div>} 
+              value={profile.pin} 
+              readOnly 
+              type={showPin ? "text" : "password"}
+              rightAction={
+                <button onClick={() => setShowPin(!showPin)} className={`p-2 transition-colors ${showPin ? 'text-green-500' : 'text-red-500'}`}>
+                  {showPin ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              }
+            />
+          </div>
 
-          <div>
+          <div id="profile-phone">
             <label className="block text-[11px] font-black text-slate-500 ml-1 mb-1">
               <span className="flex items-center gap-1.5"><Smartphone size={14} className="text-blue-600" /> Seu telefone</span>
             </label>
@@ -474,7 +478,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
         )}
       </section>
 
-      <section className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100">
+      <section id="profile-privacy" className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
@@ -687,13 +691,15 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
           </div>
         )}
 
-        <Button 
-          onClick={async () => { setIsSaving(true); await onSave(); setIsSaving(false); }} 
-          disabled={isSaving} 
-          className="w-full py-6 rounded-[2rem] shadow-xl font-black bg-blue-600 tracking-tight text-lg text-white flex items-center justify-center gap-4"
-        >
-          {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={24} /> Salvar perfil</>}
-        </Button>
+        <div id="profile-save">
+          <Button 
+            onClick={async () => { setIsSaving(true); await onSave(); setIsSaving(false); }} 
+            disabled={isSaving} 
+            className="w-full py-6 rounded-[2rem] shadow-xl font-black bg-blue-600 tracking-tight text-lg text-white flex items-center justify-center gap-4"
+          >
+            {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={24} /> Salvar perfil</>}
+          </Button>
+        </div>
       </div>
     </div>
   );

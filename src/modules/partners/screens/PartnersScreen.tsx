@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, Plus, Play, CloudDownload, CloudUpload, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Wifi, Dices, ArrowRightLeft, History, CheckSquare, Mic, Clock, Gavel, Menu } from 'lucide-react';
+import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
+import { Users, Search, Camera, Trash2, Star, QrCode, ArrowLeft, CheckCircle2, Loader2, Database, Smartphone, UserPlus, Cloud, Hash, User, Plus, Play, CloudDownload, CloudUpload, RefreshCw, ChevronRight, X, Keyboard, Share2, Copy, Wifi, Dices, ArrowRightLeft, History, CheckSquare, Mic, Clock, Gavel, Menu, Bell } from 'lucide-react';
 import { addPartnerToState, hasPartnerWithPin, normalizePartnerPin } from '../services/addPartnerToState';
 import { createQueuePartner } from '../services/createQueuePartner';
 import { createReferralPartner } from '../services/createReferralPartner';
@@ -38,6 +39,9 @@ interface Props {
   appUrl: string;
   isAuthReady?: boolean;
   onOpenMenu: () => void;
+  onRegisterReplayTour?: (fn: () => void) => void;
+  onOpenCommunications?: () => void;
+  unreadCount?: number;
 }
 
 const SOLID_COLORS_BG: Record<string, string> = {
@@ -61,10 +65,30 @@ const LIGHT_BG_COLORS: Record<string, string> = {
   lilas: 'bg-violet-50', verde: 'bg-green-50', vermelho: 'bg-red-50', roxo: 'bg-purple-50',
 };
 
-export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, activeEvent, appUrl, isAuthReady = false, onOpenMenu }) => {
+export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, onBack: onBackProp, onConfirmSelection, isDoubles, onUpdateSettings, p1Color, p2Color, onWatchLive, onDeletePartners, onSelectPartner, activeLives, activeEvent, appUrl, isAuthReady = false, onOpenMenu, onRegisterReplayTour, onOpenCommunications, unreadCount = 0 }) => {
   const { partners, setPartners, userProfile, matchSettings } = useGame();
   const [activeTab, setActiveTab] = useState<'list' | 'queue'>('list');
   const [isShuffling, setIsShuffling] = useState(false);
+
+  // ─── Onboarding da tela Parceiros ────────────────────────────────────────────
+  const {
+    config: onboardingConfig,
+    showIntro,
+    showTour,
+    handleDismissIntro,
+    handleStepChange,
+    handleCompleteTour,
+    handleSkipTour,
+    replayTour,
+  } = useScreenOnboarding('partners');
+
+  // Registra replayTour para chamada externa (menu lateral)
+  useEffect(() => {
+    if (onRegisterReplayTour) {
+      onRegisterReplayTour(replayTour);
+    }
+  }, [onRegisterReplayTour, replayTour]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [lookupName, setLookupName] = useState('');
@@ -628,9 +652,47 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
               <Users size={22} className="text-[#40E0D0] stroke-[2.5]" />
               <h1 className="text-lg font-black text-black tracking-tight">Meus parceiros</h1>
             </div>
-            <div className="w-10"></div>
+            <div className="flex items-center gap-1.5">
+              {(() => {
+                const status = getOnboardingStatus('partners');
+                const statusStyle =
+                  status === 'completed'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-300 font-black'
+                    : status === 'partial'
+                    ? 'text-sky-600 bg-sky-50 border-sky-200 font-extrabold'
+                    : 'text-amber-500 bg-amber-50/90 border-amber-200 font-bold';
+                return (
+                  <button
+                    type="button"
+                    onClick={replayTour}
+                    className={`p-1 rounded-full text-xs w-8 h-8 flex items-center justify-center shrink-0 border transition-all active:scale-90 hover:scale-110 shadow-xs cursor-pointer ${statusStyle}`}
+                    title="Ajuda e tour de parceiros"
+                    aria-label="Ajuda"
+                  >
+                    ?
+                  </button>
+                );
+              })()}
+              {onOpenCommunications ? (
+                <button
+                  type="button"
+                  onClick={onOpenCommunications}
+                  className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all relative"
+                  title="Comunicados e avisos"
+                >
+                  <Bell size={20} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              ) : (
+                <div className="w-10" />
+              )}
+            </div>
           </div>
-          <div className={`flex bg-gray-100 p-1 rounded-2xl mb-2 mx-1 grid grid-cols-2`}>
+          <div id="partners-tabs" className={`flex bg-gray-100 p-1 rounded-2xl mb-2 mx-1 grid grid-cols-2`}>
             <button onClick={() => { setActiveTab('list'); setPendingQueueIndex(null); }} className={`py-3 text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>
               <Users size={16} /> Lista
             </button>
@@ -681,7 +743,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
                   <h3 className="text-sm font-black text-black tracking-tight">Sincronização nuvem</h3>
                   {hasPendingSync && <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" title="Há parceiros locais não sincronizados" />}
                 </div>
-                <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+                <div id="partners-cloud-sync" className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 flex items-center justify-between">
                     <div className="flex flex-wrap gap-2 flex-1">
                       <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100"><Database size={12} className="text-blue-600" /><span className="text-[11px] font-black text-blue-800">{cloudDisplayCount} <span className="opacity-40 font-bold">Cloud</span></span></div>
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${hasPendingSync ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
@@ -715,7 +777,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
             {!isSelectionMode && pendingQueueIndex === null && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 px-1 text-amber-500"><Star size={18} /><h3 className="text-sm font-black text-black tracking-tight">Indique e ganhe</h3></div>
-                <div className="bg-[#0f172a] rounded-[3rem] p-8 shadow-2xl border border-white/10 flex flex-col items-center gap-6 overflow-hidden">
+                <div id="partners-referral" className="bg-[#0f172a] rounded-[3rem] p-8 shadow-2xl border border-white/10 flex flex-col items-center gap-6 overflow-hidden">
                    <div className="flex flex-col items-center gap-8 w-full">
                       <div className="bg-white p-3 rounded-3xl shadow-2xl w-48 h-48 flex items-center justify-center shrink-0 border-4 border-sky-500/20"><img src={qrCodeShareUrl} alt="Meu convite" className="w-full h-full object-contain" /></div>
                       <div className="flex-1 space-y-5 w-full text-center">
@@ -729,7 +791,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
             {!isSelectionMode && pendingQueueIndex === null && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 px-1 text-emerald-500"><UserPlus size={18} /><h3 className="text-sm font-black text-black tracking-tight">Novo parceiro</h3></div>
-                <div className="space-y-3">
+                <div id="partners-add-new" className="space-y-3">
                     <div className="relative" onClick={() => scannerInputRef.current?.startScanner?.()}><div className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 z-10 pointer-events-none"><QrCode size={20} /></div><Input ref={scannerInputRef} enableCamera readOnly placeholder="Escanear qr code" onVoiceComplexResult={(n, p) => handleAddPartner(p, n, 'qrcode')} className="h-[56px] pl-12 text-[14px] font-bold border-2 border-emerald-500 rounded-2xl shadow-sm cursor-pointer" /></div>
                     <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-gray-100 space-y-4">
                       <div className="flex gap-2">
@@ -756,7 +818,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
                 )}
               </div>
               <div className="relative"><input placeholder="Procurar na lista..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-14 pl-12 pr-12 bg-white border border-gray-100 rounded-3xl shadow-sm text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" /><Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" /></div>
-              <div className="space-y-3 pt-2">
+              <div id="partners-list" className="space-y-3 pt-2">
                 {filteredPartners.map(p => {
                   const team = selections[p.id];
                   const teamColor = team === 1 ? p1Color : p2Color;
@@ -799,7 +861,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
 
         {activeTab === 'queue' && (
           <div className="space-y-6 animate-in fade-in">
-             <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 space-y-5">
+             <div id="partners-queue-section" className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 space-y-5">
                 <div className="flex items-center justify-between">
                    <div className="flex items-center gap-2 text-slate-400">
                      <History size={18} className="text-sky-500"/>
@@ -857,7 +919,23 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
         )}
       </div>
 
-
+      {/* Onboarding da tela Parceiros */}
+      {onboardingConfig && (
+        <ScreenIntroCard
+          config={onboardingConfig}
+          isOpen={showIntro}
+          onDismiss={handleDismissIntro}
+        />
+      )}
+      {onboardingConfig && (
+        <SpotlightTour
+          steps={onboardingConfig.steps}
+          isActive={showTour}
+          onComplete={handleCompleteTour}
+          onSkip={handleSkipTour}
+          onStepChange={handleStepChange}
+        />
+      )}
     </div>
   );
 };

@@ -100,7 +100,7 @@ export const HistorySection: React.FC<Props> = ({
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <h3 className="text-xl font-black text-gray-900 tracking-tight leading-none">Meus registros</h3>
-              <div className="flex flex-wrap gap-x-3 gap-y-2 mt-4">
+              <div id="history-sync-stats" className="flex flex-wrap gap-x-3 gap-y-2 mt-4">
                 <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
                   <Smartphone size={12} className="text-blue-600" />
                   <span className="text-[11px] font-black text-blue-800">{history.length} / <span className="text-orange-500">{realUnsyncedCount}</span> <span className="font-bold opacity-60">Local</span></span>
@@ -111,7 +111,7 @@ export const HistorySection: React.FC<Props> = ({
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div id="history-cloud-actions" className="flex gap-2">
               <button
                 onClick={() => onSyncAll(true)}
                 disabled={isSyncingAll || history.length === 0}
@@ -130,7 +130,7 @@ export const HistorySection: React.FC<Props> = ({
             </div>
           </div>
         </div>
-        <div className="relative">
+        <div id="history-search" className="relative">
           <Input
             placeholder="Buscar por nome ou resultado..."
             value={searchQuery}
@@ -149,7 +149,7 @@ export const HistorySection: React.FC<Props> = ({
       ) : (
         Object.entries(grouped).map(([originalDate, items]) => (
           <div key={originalDate} className="space-y-4">
-            <div className="flex items-center justify-between px-6 mt-6">
+            <div id="history-day-group" className="flex items-center justify-between px-6 mt-6">
               <div className="flex items-center gap-2">
                 <Calendar size={14} className="text-gray-400" />
                 <span className="text-[13px] font-black text-gray-900 tracking-tight">{originalDate}</span>
@@ -162,7 +162,7 @@ export const HistorySection: React.FC<Props> = ({
               </button>
             </div>
 
-            {items.map((item) => {
+            {items.map((item, itemIdx) => {
               const isExpanded = expandedMatch === item.id;
               const isSelected = selectedMatches.has(item.id);
               const setsP1 = item.p1Sets || [];
@@ -174,7 +174,7 @@ export const HistorySection: React.FC<Props> = ({
               const dateDDMMAA = formatDateShort(item.date);
 
               return (
-                <div key={item.id} className={`bg-white rounded-[3.5rem] overflow-hidden shadow-sm border-2 transition-all duration-300 ${isSelected ? 'border-blue-500 ring-8 ring-blue-50' : 'border-white'}`}>
+                <div key={item.id} id={itemIdx === 0 ? "history-match-card" : undefined} className={`bg-white rounded-[3.5rem] overflow-hidden shadow-sm border-2 transition-all duration-300 ${isSelected ? 'border-blue-500 ring-8 ring-blue-50' : 'border-white'}`}>
                   <div className="p-4 md:p-6 flex items-center gap-0.5">
                     <div className="relative" onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}>
                       <div className={`w-6 h-6 rounded-lg border-2 transition-all flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-200'}`}>
@@ -223,7 +223,7 @@ export const HistorySection: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    <button onClick={() => setExpandedMatch(isExpanded ? null : item.id)} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:text-black active:scale-90 transition-all">
+                    <button id={itemIdx === 0 ? "history-match-details" : undefined} onClick={() => setExpandedMatch(isExpanded ? null : item.id)} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:text-black active:scale-90 transition-all">
                       {isExpanded ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
                     </button>
                   </div>

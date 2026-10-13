@@ -12,6 +12,9 @@ interface PartnersRouteProps {
   activeEvent: TournamentEvent | null;
   setSpectatorPin: React.Dispatch<React.SetStateAction<string | null>>;
   onOpenMenu: () => void;
+  onRegisterReplayTour?: (fn: () => void) => void;
+  onOpenCommunications?: () => void;
+  unreadCount?: number;
 }
 
 export function PartnersRoute({
@@ -20,6 +23,9 @@ export function PartnersRoute({
   activeEvent,
   setSpectatorPin,
   onOpenMenu,
+  onRegisterReplayTour,
+  onOpenCommunications,
+  unreadCount,
 }: PartnersRouteProps) {
   const { userProfile, setPartners, matchSettings, setMatchSettings, handleObserveLive } = useGame();
   const { activeLives } = useLive();
@@ -103,6 +109,9 @@ export function PartnersRoute({
         })
       }
       activeEvent={activeEvent}
+      onRegisterReplayTour={onRegisterReplayTour}
+      onOpenCommunications={onOpenCommunications}
+      unreadCount={unreadCount}
     />
   );
 }

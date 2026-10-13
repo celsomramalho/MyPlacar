@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
 import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, Menu } from 'lucide-react';
 import { Toggle } from '@shared/components/Toggle';
 import { MatchSettings, SportType, GameState, TieBreakAt, TieBreakSideSwitchMode, SportDefinition, Tab } from '../../../types';
@@ -38,6 +39,7 @@ interface Props {
   isOfflineMode?: boolean;
   onExitOffline?: () => void;
   onVersionTap?: () => void;
+  onRegisterReplayTour?: (fn: () => void) => void;
 }
 
 type DbCategory = {
@@ -56,8 +58,27 @@ type DbSport = {
   isActive: boolean;
 };
 
-export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, isController, onOpenMenu, isOfflineMode, onExitOffline, onHome }) => {
+export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, isController, onOpenMenu, isOfflineMode, onExitOffline, onHome, onRegisterReplayTour }) => {
   const { userProfile, matchSettings: settings, setMatchSettings: setSettings } = useGame();
+
+  // ─── Onboarding da tela Regras ───────────────────────────────────────────────
+  const {
+    config: onboardingConfig,
+    showIntro,
+    showTour,
+    handleDismissIntro,
+    handleStepChange,
+    handleCompleteTour,
+    handleSkipTour,
+    replayTour,
+  } = useScreenOnboarding('rules');
+
+  // Registra replayTour para chamada externa (menu lateral)
+  useEffect(() => {
+    if (onRegisterReplayTour) {
+      onRegisterReplayTour(replayTour);
+    }
+  }, [onRegisterReplayTour, replayTour]);
   const [activeGroupId, setActiveGroupId] = useState<string>(() => (SPORT_LIST.find(s => s.id === settings.sportType)?.group as string) || 'raquetes');
   const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
   const [dbSports, setDbSports] = useState<DbSport[]>([]);
@@ -247,7 +268,27 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
             Regras
           </h1>
         </div>
-        <div className="flex-1 flex justify-end">
+        <div className="flex-1 flex justify-end items-center gap-1.5">
+          {(() => {
+            const status = getOnboardingStatus('rules');
+            const statusStyle =
+              status === 'completed'
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-300 font-black'
+                : status === 'partial'
+                ? 'text-sky-600 bg-sky-50 border-sky-200 font-extrabold'
+                : 'text-amber-500 bg-amber-50/90 border-amber-200 font-bold';
+            return (
+              <button
+                type="button"
+                onClick={replayTour}
+                className={`p-1 rounded-full text-xs w-8 h-8 flex items-center justify-center shrink-0 border transition-all active:scale-90 hover:scale-110 shadow-xs cursor-pointer ${statusStyle}`}
+                title="Ajuda e tour de regras"
+                aria-label="Ajuda"
+              >
+                ?
+              </button>
+            );
+          })()}
           {isOfflineMode ? (
             <button
               onPointerDown={startResetPress}
@@ -266,6 +307,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
             </button>
           ) : (
             <button
+              id="rules-play-button"
               onClick={onPlayShortcut}
               className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-emerald-500 shadow-md active:scale-95 transition-transform"
               title="Iniciar partida"
@@ -277,7 +319,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
       </header>
 
       <div className="flex-1 px-4 pt-6 pb-6 space-y-6 max-w-2xl mx-auto w-full no-scrollbar overflow-y-auto">
-        <div className="space-y-3">
+        <div id="rules-score-optimization" className="space-y-3">
           <div className="flex items-center gap-2 px-2"><Watch size={20} className="text-indigo-600" /><h2 className="text-sm font-black text-black">Otimização do placar</h2></div>
           <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
             <Toggle 
@@ -305,7 +347,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div id="rules-categories" className="space-y-3">
           <div className="flex items-center gap-2 px-2"><LayoutGrid size={20} className="text-blue-600" /><h2 className="text-sm font-black text-black">Categorias</h2></div>
           <div className={`bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 flex items-center justify-between ${isReadOnly ? 'opacity-70 grayscale-[0.3]' : ''}`}>
             <div className="flex-1 space-y-1">
@@ -328,7 +370,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div id="rules-sports" className="space-y-3">
           <div className="flex items-center gap-2 px-2"><Trophy size={20} className="text-emerald-600" /><h2 className="text-sm font-black text-black">Esportes</h2></div>
           <div className={`bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 flex items-center justify-between ${isReadOnly ? 'opacity-70 grayscale-[0.3]' : ''}`}>
             <div className="flex-1 space-y-1">
@@ -345,7 +387,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div id="rules-match-rules" className="space-y-3">
           <div className="flex items-center gap-2 px-2"><Activity size={20} className="text-red-500" /><h2 className="text-sm font-black text-black">Regras da partida</h2></div>
           <div className={`bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-6 ${isReadOnly ? 'opacity-70 pointer-events-none' : ''}`}>
             <div className="flex items-center justify-between">
@@ -396,7 +438,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           </div>
         </div>
 
-        <div className={`bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-6 ${isReadOnly ? 'opacity-70 pointer-events-none' : ''}`}>
+        <div id="rules-tie-break" className={`bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-6 ${isReadOnly ? 'opacity-70 pointer-events-none' : ''}`}>
           <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><Target size={20} /></div><h2 className="text-sm font-black text-black">Tie break</h2></div>
           <Toggle disabled={isReadOnly || (settings.sets === 1 && settings.sportType !== 'tennis' && settings.sportType !== 'beach-tennis')} id="toggle-tb" label="Habilitar tie break" checked={settings.tieBreak} onChange={v => setSettings({...settings, tieBreak: v})} />
           {settings.tieBreak && (
@@ -437,7 +479,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
         </div>
 
         {!isOfflineMode && (
-          <div className="space-y-3">
+          <div id="rules-voice-narration" className="space-y-3">
             <div className="flex items-center gap-2 px-2"><Sparkles size={20} className="text-blue-500" /><h2 className="text-sm font-black text-black">Narrador contextual (ia)</h2></div>
             <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-4">
               <Toggle disabled={isReadOnly} id="toggle-gemini-voice" label="Ativar inteligência artificial" checked={settings.useGeminiVoice} onChange={v => setSettings({...settings, useGeminiVoice: v})} />
@@ -457,7 +499,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
         )}
 
         {!isOfflineMode && (
-          <div className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-2 shadow-sm border border-white space-y-2">
+          <div id="rules-local-settings" className="bg-white/70 backdrop-blur-md rounded-[2.5rem] p-2 shadow-sm border border-white space-y-2">
             <button onClick={() => setIsGeneralOpen(!isGeneralOpen)} className="w-full flex items-center justify-between p-4 px-6 text-black">
                <div className="flex items-center gap-3"><Settings size={20} /><span className="text-sm font-black">Configurações locais</span></div>
                {isGeneralOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
@@ -535,6 +577,24 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
           </div>
         )}
       </div>
+
+      {/* Onboarding da tela Regras */}
+      {onboardingConfig && (
+        <ScreenIntroCard
+          config={onboardingConfig}
+          isOpen={showIntro}
+          onDismiss={handleDismissIntro}
+        />
+      )}
+      {onboardingConfig && (
+        <SpotlightTour
+          steps={onboardingConfig.steps}
+          isActive={showTour}
+          onComplete={handleCompleteTour}
+          onSkip={handleSkipTour}
+          onStepChange={handleStepChange}
+        />
+      )}
     </div>
   );
 };

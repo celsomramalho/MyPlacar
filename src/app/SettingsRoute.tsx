@@ -34,6 +34,8 @@ interface SettingsRouteProps {
   installPromptShownSession: boolean;
   setInstallPromptShownSession: React.Dispatch<React.SetStateAction<boolean>>;
   onRegisterReplayTour?: (fn: () => void) => void;
+  onRegisterReplayTourHistory?: (fn: () => void) => void;
+  onRegisterReplayTourProfile?: (fn: () => void) => void;
 }
 
 export function SettingsRoute({
@@ -58,6 +60,8 @@ export function SettingsRoute({
   installPromptShownSession,
   setInstallPromptShownSession,
   onRegisterReplayTour,
+  onRegisterReplayTourHistory,
+  onRegisterReplayTourProfile,
 }: SettingsRouteProps) {
   const {
     setCurrentScreen,
@@ -201,6 +205,8 @@ export function SettingsRoute({
       unreadCount={unreadCommsCount}
       onOpenMenu={onOpenMenu}
       onRegisterReplayTour={onRegisterReplayTour}
+      onRegisterReplayTourHistory={onRegisterReplayTourHistory}
+      onRegisterReplayTourProfile={onRegisterReplayTourProfile}
     />
   );
 }

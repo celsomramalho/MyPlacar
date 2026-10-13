@@ -149,6 +149,10 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   const replayTourHomeRef = React.useRef<(() => void) | null>(null);
   const replayTourTournamentsRef = React.useRef<(() => void) | null>(null);
   const replayTourConfigRef = React.useRef<(() => void) | null>(null);
+  const replayTourPartnersRef = React.useRef<(() => void) | null>(null);
+  const replayTourRulesRef = React.useRef<(() => void) | null>(null);
+  const replayTourHistoryRef = React.useRef<(() => void) | null>(null);
+  const replayTourProfileRef = React.useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (isOfflineMode && gameState && !offlineAllowedScreens) {
@@ -180,6 +184,22 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
     } else if (screen === 'settings' && tab === 'config' && replayTourConfigRef.current) {
       setTimeout(() => {
         replayTourConfigRef.current?.();
+      }, 250);
+    } else if (screen === 'settings' && tab === 'history' && replayTourHistoryRef.current) {
+      setTimeout(() => {
+        replayTourHistoryRef.current?.();
+      }, 250);
+    } else if (screen === 'settings' && tab === 'profile' && replayTourProfileRef.current) {
+      setTimeout(() => {
+        replayTourProfileRef.current?.();
+      }, 250);
+    } else if (screen === 'partners' && replayTourPartnersRef.current) {
+      setTimeout(() => {
+        replayTourPartnersRef.current?.();
+      }, 250);
+    } else if (screen === 'new-game' && replayTourRulesRef.current) {
+      setTimeout(() => {
+        replayTourRulesRef.current?.();
       }, 250);
     }
   };
@@ -290,6 +310,8 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             installPromptShownSession={installPromptShownSession}
             setInstallPromptShownSession={setInstallPromptShownSession}
             onRegisterReplayTour={(fn) => { replayTourConfigRef.current = fn; }}
+            onRegisterReplayTourHistory={(fn) => { replayTourHistoryRef.current = fn; }}
+            onRegisterReplayTourProfile={(fn) => { replayTourProfileRef.current = fn; }}
           />
         )}
 
@@ -300,6 +322,9 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             activeEvent={activeEvent}
             setSpectatorPin={setSpectatorPin}
             onOpenMenu={() => setIsMenuOpen(true)}
+            onRegisterReplayTour={(fn) => { replayTourPartnersRef.current = fn; }}
+            onOpenCommunications={() => setCurrentScreen('communications')}
+            unreadCount={unreadCommsCount}
           />
         )}
 
@@ -312,6 +337,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             onOpenMenu={() => setIsMenuOpen(true)}
             setActiveTab={setActiveTab}
             onVersionTap={handleVersionTap}
+            onRegisterReplayTour={(fn) => { replayTourRulesRef.current = fn; }}
           />
         )}
 
