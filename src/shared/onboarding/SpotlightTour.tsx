@@ -48,8 +48,9 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
       return;
     }
 
-    // Rola suavemente até o elemento apenas uma vez ao mudar de passo
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Rola suavemente até o elemento com alinhamento que maximize espaço para o balão
+    const blockAlign: ScrollLogicalPosition = step.placement === 'top' ? 'end' : step.placement === 'bottom' ? 'start' : 'center';
+    el.scrollIntoView({ behavior: 'smooth', block: blockAlign });
 
     const updatePosition = () => {
       const target = document.getElementById(step.targetId);
@@ -106,21 +107,21 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
   const spaceAbove = targetRect ? targetRect.top : 0;
   const spaceBelow = targetRect ? window.innerHeight - targetRect.bottom : 0;
 
+  const minSpaceNeeded = tooltipHeight + gap + 10;
   let placeAbove = false;
   if (step?.placement === 'top') {
-    placeAbove = true;
+    // Prefere acima, a menos que não caiba e haja espaço melhor abaixo
+    placeAbove = spaceAbove >= minSpaceNeeded || spaceAbove >= spaceBelow;
   } else if (step?.placement === 'bottom') {
-    placeAbove = false;
+    // Prefere abaixo, a menos que não caiba e haja espaço melhor acima
+    placeAbove = !(spaceBelow >= minSpaceNeeded || spaceBelow >= spaceAbove);
   } else {
     // Decisão inteligente automática:
-    // Se o elemento estiver na metade inferior da tela E couber acima com folga:
-    if (spaceAbove >= tooltipHeight + gap + 10 && targetRect && targetRect.top > window.innerHeight / 2) {
-      placeAbove = true;
-    } else if (spaceBelow >= tooltipHeight + gap + 10) {
-      // Se couber abaixo com folga suficiente:
+    if (spaceBelow >= minSpaceNeeded && spaceAbove < minSpaceNeeded) {
       placeAbove = false;
+    } else if (spaceAbove >= minSpaceNeeded && spaceBelow < minSpaceNeeded) {
+      placeAbove = true;
     } else {
-      // Caso contrário, fica no lado com mais espaço
       placeAbove = spaceAbove > spaceBelow;
     }
   }

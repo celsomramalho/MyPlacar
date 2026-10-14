@@ -169,6 +169,24 @@ export const EventDetailScreen: React.FC<Props> = ({
     replayTour,
   } = useScreenOnboarding('event-detail');
 
+  const effectiveOnboardingConfig = useMemo(() => {
+    if (!onboardingConfig) return null;
+    if (!isRanking) return onboardingConfig;
+    return {
+      ...onboardingConfig,
+      steps: onboardingConfig.steps.map((step) => {
+        if (step.targetId === 'event-detail-subtabs-container') {
+          return {
+            ...step,
+            description:
+              'Navegue entre a lista de atletas inscritos, as duplas formadas e o calendário de partidas. Em Inscritos: selecione 2 parceiros para formar times. Em Times: selecione 2 times para formar uma partida. Em Jogos: preencha o placar e a data.',
+          };
+        }
+        return step;
+      }),
+    };
+  }, [onboardingConfig, isRanking]);
+
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
@@ -1307,8 +1325,8 @@ export const EventDetailScreen: React.FC<Props> = ({
           {canViewEventDetails ? (
             <div className="space-y-4">
 
-            {/* ─── MEU HISTÓRICO (quando há partidas do usuário) ─── */}
-            {myHistoryMatches.length > 0 && activeUserEntry && (
+            {/* ─── MEU HISTÓRICO (sempre visível para participantes inscritos) ─── */}
+            {activeUserEntry && (
               <div id="event-detail-history-card" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 {/* Cabeçalho colapsável */}
                 <button
@@ -1332,14 +1350,20 @@ export const EventDetailScreen: React.FC<Props> = ({
                 {/* Conteúdo colapsável */}
                 {myHistoryOpen && (
                   <div className="border-t border-slate-100 px-4 py-3">
-                    <ParticipantMatchHistory
-                      entry={activeUserEntry}
-                      matches={event.matches || []}
-                      categories={event.categories}
-                      pairsById={pairsMap}
-                      allPairs={event.pairs}
-                      defaultExpanded
-                    />
+                    {myHistoryMatches.length > 0 ? (
+                      <ParticipantMatchHistory
+                        entry={activeUserEntry}
+                        matches={event.matches || []}
+                        categories={event.categories}
+                        pairsById={pairsMap}
+                        allPairs={event.pairs}
+                        defaultExpanded
+                      />
+                    ) : (
+                      <p className="text-xs font-bold text-slate-400 text-center py-2">
+                        Nenhuma partida disputada ainda neste evento.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1980,18 +2004,18 @@ export const EventDetailScreen: React.FC<Props> = ({
       )}
 
       {/* Camada 1: Cartão de Boas-Vindas */}
-      {onboardingConfig && (
+      {effectiveOnboardingConfig && (
         <ScreenIntroCard
-          config={onboardingConfig}
+          config={effectiveOnboardingConfig}
           isOpen={showIntro}
           onDismiss={handleDismissIntro}
         />
       )}
 
       {/* Camada 2: Spotlight Tour dos elementos */}
-      {onboardingConfig && (
+      {effectiveOnboardingConfig && (
         <SpotlightTour
-          steps={onboardingConfig.steps}
+          steps={effectiveOnboardingConfig.steps}
           isActive={showTour}
           onComplete={handleCompleteTour}
           onSkip={handleSkipTour}

@@ -158,7 +158,7 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
         targetId: 'event-detail-history-card',
         title: 'Meu histórico',
         description: 'Acompanhe os resultados e estatísticas das suas partidas já disputadas neste evento.',
-        placement: 'top',
+        placement: 'bottom',
       },
       {
         targetId: 'event-detail-categories-selector',

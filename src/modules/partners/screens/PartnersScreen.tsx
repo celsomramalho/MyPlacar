@@ -933,7 +933,15 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
           isActive={showTour}
           onComplete={handleCompleteTour}
           onSkip={handleSkipTour}
-          onStepChange={handleStepChange}
+          onStepChange={(stepIndex) => {
+            handleStepChange(stepIndex);
+            const targetStep = onboardingConfig.steps[stepIndex];
+            if (targetStep?.targetId === 'partners-queue-section') {
+              setActiveTab('queue');
+            } else {
+              setActiveTab('list');
+            }
+          }}
         />
       )}
     </div>
