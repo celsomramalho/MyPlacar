@@ -62,6 +62,12 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
         description: 'Acompanhe inscrições, suas partidas e pontuação dos seus torneios e eventos.',
       },
       {
+        targetId: 'home-item-ajuda',
+        title: 'Central de tutoriais',
+        description: 'Acesse o índice completo de tutoriais de todas as telas do app, reinicie seu aprendizado e envie sugestões ao desenvolvedor.',
+        placement: 'top',
+      },
+      {
         targetId: 'home-item-versao',
         title: 'Versão do app',
         description: 'Verifique se há novas atualizações disponíveis para o seu MyPlacar com apenas um toque.',
@@ -256,7 +262,7 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
       {
         targetId: 'partners-add-new',
         title: 'Adicionar parceiro',
-        description: 'Escaneie o QR code do parceiro com a câmera ou digite o pin de 5 letras manualmente. O nome é preenchido automaticamente ao digitar um pin válido.',
+        description: 'Escaneie o QR code do parceiro com a câmera ou digite o PIN de 5 letras manualmente. O nome é preenchido automaticamente ao digitar um PIN válido.',
         placement: 'bottom',
       },
       {
@@ -408,8 +414,8 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
       },
       {
         targetId: 'profile-pin',
-        title: 'Seu pin exclusivo',
-        description: 'Código de cinco letras único da sua conta. Use o botão de olho para revelar ou ocultar. Compartilhe seu pin com parceiros para que possam adicioná-lo.',
+        title: 'Seu PIN exclusivo',
+        description: 'Código de cinco letras único da sua conta. Use o botão de olho para revelar ou ocultar. Compartilhe seu PIN com parceiros para que possam adicioná-lo.',
         placement: 'bottom',
       },
       {
@@ -421,13 +427,78 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
       {
         targetId: 'profile-privacy',
         title: 'Privacidade e permissões',
-        description: 'Gerencie as permissões de microfone (para comandos e narração), localização (para registrar onde o jogo ocorreu), câmera (para qr code) e biometria.',
+        description: 'Gerencie as permissões de microfone (para comandos e narração), localização (para registrar onde o jogo ocorreu), câmera (para ler QR code) e biometria.',
         placement: 'top',
       },
       {
         targetId: 'profile-save',
         title: 'Salvar perfil',
         description: 'Toque para salvar todas as alterações realizadas nos seus dados cadastrais e preferências.',
+        placement: 'top',
+      },
+    ],
+  },
+
+  scoreboard: {
+    screenName: 'Placar do jogo',
+    intro: {
+      title: 'Placar eletrônico da partida',
+      description: 'Controle os pontos, acompanhe o cronômetro, dite comandos por voz, alterne sacadores e compartilhe o placar em tempo real.',
+      durationMs: 5000,
+    },
+    steps: [
+      {
+        targetId: 'play-sport-header',
+        title: 'Modalidade e narração do placar',
+        description: 'Exibe o esporte atual. Toque no ícone ou no nome para que a narração por voz anuncie o placar completo da partida a qualquer momento.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'play-voice-mic',
+        title: 'Comando de voz',
+        description: 'Ative o microfone para marcar pontos por voz sem tocar na tela. Diga frases como "Ponto azul", "Ponto vermelho", "Ace" ou "Voltar ponto".',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'play-match-timer',
+        title: 'Cronômetro e pausa',
+        description: 'Acompanhe a duração da partida em tempo real. Use o botão ao lado para pausar a contagem em intervalos e retomar quando a bola rolar.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'play-teams-row',
+        title: 'Escalação, sacador e lados',
+        description: 'O atleta em destaque verde é o sacador atual da rodada. Toque no botão de setas duplas para inverter as posições na quadra e use o ícone de gênero para alternar masculino ou feminino.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'play-score-areas',
+        title: 'Placar e pontuação',
+        description: 'Toque na metade azul para somar ponto ao time azul ou na metade vermelha para o time vermelho. Os números nos cantos indicam os sets e games da partida.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'play-quick-controls',
+        title: 'Controles rápidos da partida',
+        description: 'Botões centrais: seta para desfazer o último ponto; raio para registrar ace do sacador; botão verde para opções: Live,  Modos de exibição, Regras e Zerar partida; e X para erro de saque.',
+        placement: 'top',
+      },
+      {
+        targetId: 'play-command-logs',
+        title: 'Log de comandos',
+        description: 'Consulte o histórico dos últimos comandos processados por voz, relógio ou toques na tela, com horário e tempo de resposta.',
+        placement: 'top',
+      },
+      {
+        targetId: 'play-match-timeline',
+        title: 'Cronologia da partida',
+        description: 'Acompanhe visualmente a trajetória dos pontos e viradas ao longo de cada set disputado na partida.',
+        placement: 'top',
+      },
+      {
+        targetId: 'play-live-card',
+        title: 'Abrir Live e transmissão',
+        description: 'Ative a transmissão em tempo real para permitir que amigos, juízes e torcedores acompanhem o placar ao vivo pelo celular ou relógio.',
         placement: 'top',
       },
     ],

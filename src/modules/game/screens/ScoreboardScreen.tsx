@@ -24,6 +24,7 @@ import { useGame } from '@modules/game';
 import { ScoreboardDisplay } from '../presentation/components/ScoreboardDisplay';
 import { PickleballCourtView } from '../presentation/components/PickleballCourtView';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
+import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
 
 interface CommandLogEntry {
   id: string;
@@ -112,6 +113,7 @@ interface Props {
   voiceLogs?: {id: string, startTime: string, before: string, after: string, text: string, latency: number, timestamp: number, isError?: boolean, winner?: 1 | 2, isRemote?: boolean, liveSequence?: number, liveId?: number, source: string}[];
   setVoiceLogs?: (logs: any[] | ((prev: any[]) => any[])) => void;
   onToggleScoreboardMode?: () => void;
+  onRegisterReplayTour?: (fn: () => void) => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -303,7 +305,25 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { onScoreUpdate, onUndo, onSwitchServer, onSwapSides, onToggleGender, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode } = props;
+  const { onScoreUpdate, onUndo, onSwitchServer, onSwapSides, onToggleGender, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode, onRegisterReplayTour } = props;
+
+  // ── Onboarding / Tour Guiado ─────────────────────────────────────────────
+  const {
+    config: onboardingConfig,
+    showIntro,
+    showTour,
+    handleDismissIntro,
+    handleStepChange,
+    handleCompleteTour,
+    handleSkipTour,
+    replayTour,
+  } = useScreenOnboarding('scoreboard');
+
+  useEffect(() => {
+    if (onRegisterReplayTour) {
+      onRegisterReplayTour(replayTour);
+    }
+  }, [onRegisterReplayTour, replayTour]);
 
   // ── Contexto Game (Passo 3.2 ✅) ──────────────────────────────────────────
   // gameState lido exclusivamente do GameContext.
@@ -1323,7 +1343,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           )}
         </div>
         <div className="flex-1 flex items-center justify-center gap-2">
-          <button onClick={() => announceFullScore()} className="flex items-center gap-3 active:scale-95 transition-transform">
+          <button id="play-sport-header" onClick={() => announceFullScore()} className="flex items-center gap-3 active:scale-95 transition-transform" title="Toque para narrar o placar completo">
             <LazySportIcon sportId={effectiveGameState.matchConfig.sportType} defaultIcon={currentSportDef.defaultIcon} className="w-10 h-10 rounded-full shadow-sm" />
             <span className="text-xl font-black tracking-tighter text-gray-900 flex items-center gap-1">
               {currentSportDef.name} 
@@ -1333,8 +1353,27 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
         </div>
         <div className="flex items-center gap-2">
           {!isLiveActive && isWatchConnected && <div className="p-2 bg-sky-100 text-sky-600 rounded-xl animate-pulse flex items-center gap-2 px-3 border border-sky-200" title="Relógio conectado"><Watch size={18} /><span className="text-[9px] font-black tracking-tight hidden md:inline">Relógio conectado</span></div>}
-          {/* Badge Modo Lite Offline — sempre visível quando espelhamento está ativo */}
-          <div className="w-10" />
+          {/* Botão de ajuda e tour (?) */}
+          {(() => {
+            const status = getOnboardingStatus('scoreboard');
+            const statusStyle =
+              status === 'completed'
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-300 font-black'
+                : status === 'partial'
+                ? 'text-sky-600 bg-sky-50 border-sky-200 font-extrabold'
+                : 'text-amber-500 bg-amber-50/90 border-amber-200 font-bold';
+            return (
+              <button
+                type="button"
+                onClick={replayTour}
+                className={`p-1 rounded-full text-xs w-8 h-8 flex items-center justify-center shrink-0 border transition-all active:scale-90 hover:scale-110 shadow-xs cursor-pointer ${statusStyle}`}
+                title="Ajuda e tour do placar"
+                aria-label="Ajuda"
+              >
+                ?
+              </button>
+            );
+          })()}
         </div>
       </header>
 
@@ -1348,7 +1387,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                <div className="flex items-center gap-2"></div>
                <div className="flex flex-col items-center justify-center -mt-12 md:-mt-16">
                  {!isOfflineMode && (
-                   <button onClick={handleVoiceToggle} disabled={effectiveGameState.isConfirmedFinished || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver} className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-2 ${isVoiceActive ? 'bg-blue-600 border-blue-700' : 'bg-white border-blue-600'}`}>
+                   <button id="play-voice-mic" onClick={handleVoiceToggle} disabled={effectiveGameState.isConfirmedFinished || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver} className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-2 ${isVoiceActive ? 'bg-blue-600 border-blue-700' : 'bg-white border-blue-600'}`}>
                      <div className="relative flex items-center justify-center">
                        <Mic size={32} strokeWidth={isVoiceActive ? 3.5 : 2} className={isVoiceActive ? 'text-white' : 'text-blue-600'} />
                        {(voiceWasManuallyStopped || !effectiveGameState.matchConfig.voiceEnabled || (effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) || !isCommandOwner || effectiveGameState.isMatchOver) && (
@@ -1358,10 +1397,10 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                    </button>
                  )}
                </div>
-               <div className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${effectiveGameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(displayTime)}</span><button onClick={() => onTogglePause?.()} disabled={effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400" : effectiveGameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{effectiveGameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
+               <div id="play-match-timer" className="flex items-center gap-3"><span className={`text-2xl font-black tracking-tighter ${effectiveGameState.isPaused ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>{formatTime(displayTime)}</span><button onClick={() => onTogglePause?.()} disabled={effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver} className={`p-3 rounded-2xl active:scale-90 transition-all shadow-md ${effectiveGameState.isConfirmedFinished || effectiveGameState.isMatchOver ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400" : effectiveGameState.isPaused ? 'bg-green-600 text-white' : 'bg-red-50 text-red-500'}`}>{effectiveGameState.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} />}</button></div>
              </div>
              
-              <div className="flex flex-col w-full mt-4">
+              <div id="play-teams-row" className="flex flex-col w-full mt-4">
                 {(() => {
                   const isActive = !effectiveGameState.isConfirmedFinished && !effectiveGameState.isMatchOver && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed);
                   const o = effectiveGameState.servingOrderOffset;
@@ -1725,12 +1764,12 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           };
 
           return (
-            <div className="-mx-4 mt-6 bg-black flex flex-col select-none touch-pan-y overflow-hidden" style={{ height: '580px' }}>
+            <div id="play-score-areas" className="-mx-4 mt-6 bg-black flex flex-col select-none touch-pan-y overflow-hidden" style={{ height: '580px' }}>
               {/* Time 1 */}
               {renderTeamBlockNew(1)}
 
               {/* Faixa central: 4 botões idênticos ao WatchBoard */}
-              <div className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 pt-2 shrink-0 z-10 relative overflow-hidden">
+              <div id="play-quick-controls" className="h-20 bg-black border-y border-white/10 flex items-center justify-around px-2 pt-2 shrink-0 z-10 relative overflow-hidden">
                 {isLiveActiveNew && (
                   <div className="absolute top-1 left-6 right-6 h-2 z-20 pointer-events-none bg-white/20 rounded-full overflow-hidden">
                     <div
@@ -1892,7 +1931,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
 
         {!isOfflineMode && (
           <div className="flex flex-col gap-5 mt-8">
-            <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">
+            <div id="play-command-logs" className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">
                <div 
                  className="flex items-center justify-between mb-0 border-b border-gray-50 pb-3 cursor-pointer select-none"
                  onClick={() => setIsLogsOpen(!isLogsOpen)}
@@ -1940,7 +1979,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                )}
             </div>
             {effectiveGameState.matchConfig.isHistoryEnabled && (
-              <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">
+              <div id="play-match-timeline" className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-gray-100 w-full overflow-hidden">
                  <div 
                    className="flex items-center justify-between mb-0 cursor-pointer select-none"
                    onClick={() => setIsTimelineOpen(!isTimelineOpen)}
@@ -1962,7 +2001,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
                  )}
               </div>
             )}
-            <div className={`bg-[#0f172a] rounded-[3rem] p-4 pl-6 pr-6 shadow-2xl border border-white/50 w-full animate-in fade-in duration-700 flex flex-col gap-4 overflow-hidden transition-all duration-500 ${effectiveGameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+            <div id="play-live-card" className={`bg-[#0f172a] rounded-[3rem] p-4 pl-6 pr-6 shadow-2xl border border-white/50 w-full animate-in fade-in duration-700 flex flex-col gap-4 overflow-hidden transition-all duration-500 ${effectiveGameState.isConfirmedFinished ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                      <div className={`w-12 h-12 rounded-2xl transition-all duration-500 flex items-center justify-center shadow-lg ${effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed) ? 'bg-sky-500' : 'bg-slate-800'}`}><QrCode size={24} className="text-white" /></div>
@@ -2278,6 +2317,24 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           </div>
         )}
       </main>
+
+      {/* Onboarding da tela Play (Scoreboard) */}
+      {onboardingConfig && (
+        <ScreenIntroCard
+          config={onboardingConfig}
+          isOpen={showIntro}
+          onDismiss={handleDismissIntro}
+        />
+      )}
+      {onboardingConfig && (
+        <SpotlightTour
+          steps={onboardingConfig.steps}
+          isActive={showTour}
+          onComplete={handleCompleteTour}
+          onSkip={handleSkipTour}
+          onStepChange={handleStepChange}
+        />
+      )}
     </div>
   );
 };

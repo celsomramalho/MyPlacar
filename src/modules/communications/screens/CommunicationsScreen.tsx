@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, Loader2 } from 'lucide-react';
+import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, Loader2, LifeBuoy, TrendingUp } from 'lucide-react';
 import type { Communication, Reply } from '@modules/communications/types';
 import { useGame } from '@modules/game';
 import { getDb } from '@infra/firebase';
@@ -9,6 +9,7 @@ import {
   subscribeUserCommunications,
   updateCommunicationPoll,
   updateCommunicationReactions,
+  updateCommunicationNpsVote,
 } from '@infra/firebase/communications';
 import { Button } from '@shared/components/Button';
 
@@ -45,12 +46,40 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
   const [replyText, setReplyText] = useState<Record<string, string>>({});
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({});
   const [isVoting, setIsVoting] = useState<Record<string, boolean>>({});
+  const [npsScores, setNpsScores] = useState<Record<string, number>>({});
+  const [npsComments, setNpsComments] = useState<Record<string, string>>({});
+  const [isVotingNps, setIsVotingNps] = useState<Record<string, boolean>>({});
+
+  const handleVoteNps = async (commId: string) => {
+    const score = npsScores[commId];
+    if (score === undefined) return;
+    const db = getDb();
+    if (!db) return;
+
+    setIsVotingNps(prev => ({ ...prev, [commId]: true }));
+    try {
+      const userKey = userProfile.pin || userProfile.email;
+      const comment = npsComments[commId] || '';
+      await updateCommunicationNpsVote(
+        db,
+        commId,
+        userKey,
+        score,
+        comment,
+        userProfile.nickname || userProfile.name
+      );
+    } catch (e) {
+      console.error('Erro ao votar NPS:', e);
+    } finally {
+      setIsVotingNps(prev => ({ ...prev, [commId]: false }));
+    }
+  };
 
   useEffect(() => {
     const db = getDb();
     if (!db) { setIsLoading(false); return; }
 
-    const unsubscribe = subscribeUserCommunications(db, { pin: userProfile.pin, email: userProfile.email }, (docs) => {
+    const unsubscribe = subscribeUserCommunications(db, { pin: userProfile.pin, email: userProfile.email, isAdmin: userProfile.isAdmin }, (docs) => {
       setCommunications(docs);
       setIsLoading(false);
 
@@ -172,8 +201,24 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${comm.type === 'poll' ? 'bg-amber-50 text-amber-600' : 'bg-brand-50 text-brand-600'}`}>
-                      {comm.type === 'poll' ? <PieChart size={20} /> : <MessageSquare size={20} />}
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                      comm.type === 'poll'
+                        ? 'bg-amber-50 text-amber-600'
+                        : comm.type === 'nps'
+                        ? 'bg-indigo-50 text-indigo-600'
+                        : comm.type === 'support'
+                        ? 'bg-teal-50 text-teal-600'
+                        : 'bg-brand-50 text-brand-600'
+                    }`}>
+                      {comm.type === 'poll' ? (
+                        <PieChart size={20} />
+                      ) : comm.type === 'nps' ? (
+                        <TrendingUp size={20} />
+                      ) : comm.type === 'support' ? (
+                        <LifeBuoy size={20} />
+                      ) : (
+                        <MessageSquare size={20} />
+                      )}
                     </div>
                     <div>
                       <h3 className="font-black text-slate-900 leading-tight">{comm.title}</h3>
@@ -193,6 +238,86 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
                 <div className={`text-slate-600 text-sm leading-relaxed whitespace-pre-wrap ${isEventComm ? 'mb-0' : 'mb-6'}`}>
                   {comm.content}
                 </div>
+
+                {comm.type === 'nps' && (
+                  <div className="space-y-4 mb-6 p-4 bg-slate-50/80 rounded-2xl border border-slate-200">
+                    {(() => {
+                      const userKey = userProfile.pin || userProfile.email;
+                      const userScore = comm.nps?.scores?.[userKey];
+                      const hasVoted = userScore !== undefined;
+                      const selectedScore = npsScores[comm.id];
+
+                      if (hasVoted) {
+                        return (
+                          <div className="flex items-center gap-3 p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl">
+                            <CheckCircle2 size={22} className="text-emerald-600 shrink-0" />
+                            <div>
+                              <p className="text-xs font-black text-emerald-800">
+                                Avaliação registrada: Nota {userScore}
+                              </p>
+                              <p className="text-[11px] font-bold text-emerald-600">
+                                Obrigado por nos ajudar a melhorar o MyPlacar!
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-3">
+                          <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider">
+                            Escolha uma nota de 0 a 10:
+                          </label>
+                          <div className="grid grid-cols-11 gap-1">
+                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => {
+                              const isSelected = selectedScore === val;
+                              const btnColor =
+                                val <= 6
+                                  ? isSelected ? 'bg-red-500 text-white border-red-500 scale-105 shadow-sm' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'
+                                  : val <= 8
+                                  ? isSelected ? 'bg-amber-400 text-slate-900 border-amber-400 scale-105 shadow-sm font-black' : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'
+                                  : isSelected ? 'bg-emerald-600 text-white border-emerald-600 scale-105 shadow-sm' : 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50';
+
+                              return (
+                                <button
+                                  key={val}
+                                  type="button"
+                                  onClick={() => setNpsScores(prev => ({ ...prev, [comm.id]: val }))}
+                                  className={`h-10 rounded-xl border text-xs font-black flex items-center justify-center transition-all active:scale-95 ${btnColor}`}
+                                >
+                                  {val}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex justify-between text-[9px] font-bold text-slate-400 px-1">
+                            <span>0 (Pouco provável)</span>
+                            <span>10 (Muito provável)</span>
+                          </div>
+
+                          {selectedScore !== undefined && (
+                            <div className="space-y-2 pt-2 animate-in fade-in duration-300">
+                              <input
+                                type="text"
+                                placeholder="Conte o motivo da sua nota (opcional)..."
+                                value={npsComments[comm.id] || ''}
+                                onChange={(e) => setNpsComments(prev => ({ ...prev, [comm.id]: e.target.value }))}
+                                className="w-full h-11 bg-white border border-slate-200 rounded-xl px-3 text-xs font-bold text-slate-700 outline-none focus:border-brand-500"
+                              />
+                              <Button
+                                onClick={() => handleVoteNps(comm.id)}
+                                disabled={isVotingNps[comm.id]}
+                                className="w-full py-3 rounded-xl font-black text-xs !bg-brand-600 text-white flex items-center justify-center gap-2"
+                              >
+                                {isVotingNps[comm.id] ? <Loader2 size={16} className="animate-spin" /> : 'Confirmar avaliação'}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 {comm.type === 'poll' && comm.poll && (
                   <div className="space-y-3 mb-6">

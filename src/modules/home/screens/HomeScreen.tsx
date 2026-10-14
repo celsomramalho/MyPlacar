@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight, Menu } from 'lucide-react';
+import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight, Menu, BookOpen } from 'lucide-react';
 import type { UserProfile } from '@modules/auth/types';
 import { APP_VERSION } from '../../../constants';
 import { SettingsTabs } from '@modules/settings';
@@ -124,7 +124,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     { id: 'home-item-parceiros', label: 'Parceiros', icon: <UserCheck size={36} className="text-teal-700" />,                     colorClass: 'bg-[#40E0D0]/10 text-teal-700 border-teal-100/30 hover:bg-[#40E0D0]/20',    action: () => onNavigate('partners') },
     { id: 'home-item-historico', label: 'Histórico', icon: <History   size={36} className="text-emerald-500" />,                  colorClass: 'bg-emerald-50/60 text-emerald-600 border-emerald-100/50 hover:bg-emerald-100/50', action: () => onNavigate('settings', 'history') },
     { id: 'home-item-torneios',  label: 'Torneios',  icon: <Trophy    size={36} className="text-blue-500" />,                     colorClass: 'bg-blue-50/60 text-blue-600 border-blue-100/50 hover:bg-blue-100/50',        action: () => onNavigate('tournaments') },
-    { id: 'home-item-ajuda',     label: 'Ajuda',     icon: <HelpCircle size={36} className="text-gray-500" />,                   colorClass: 'bg-gray-50/60 text-gray-600 border-gray-100/50 hover:bg-gray-100/50',        action: () => onNavigate('settings', 'help') },
+    { id: 'home-item-ajuda',     label: 'Tutoriais', icon: <BookOpen   size={36} className="text-blue-500" />,                     colorClass: 'bg-blue-50/60 text-blue-600 border-blue-100/50 hover:bg-blue-100/50',        action: () => onNavigate('settings', 'help') },
     { id: 'home-item-sair',      label: 'Sair',      icon: <LogOut    size={36} className="text-red-500" />,                      colorClass: 'bg-red-50/60 text-red-600 border-red-100/50 hover:bg-red-100/50',            action: onLogout },
   ];
 

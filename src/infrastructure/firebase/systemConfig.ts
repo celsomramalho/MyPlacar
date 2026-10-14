@@ -8,6 +8,7 @@ export interface FirebaseSystemConfig {
   errorSoundType?: ErrorSoundType;
   goldenRuleEnabled?: boolean;
   voiceCommands?: VoiceCommands;
+  supportChannelEnabled?: boolean;
 }
 
 const SYSTEM_CONFIG_COLLECTION = 'system';

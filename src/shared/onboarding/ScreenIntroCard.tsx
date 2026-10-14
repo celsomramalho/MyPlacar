@@ -16,6 +16,7 @@ export const ScreenIntroCard: React.FC<ScreenIntroCardProps> = ({
   const [progress, setProgress] = useState(100);
   const duration = config.intro.durationMs || 5000;
 
+  // Effect 1: only touches local state (avoids "setState during render" warning)
   useEffect(() => {
     if (!isOpen) {
       setProgress(100);
@@ -26,18 +27,18 @@ export const ScreenIntroCard: React.FC<ScreenIntroCardProps> = ({
     const stepDecrement = (intervalTime / duration) * 100;
 
     const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev <= 0) {
-          clearInterval(timer);
-          onDismiss();
-          return 0;
-        }
-        return Math.max(0, prev - stepDecrement);
-      });
+      setProgress((prev) => Math.max(0, prev - stepDecrement));
     }, intervalTime);
 
     return () => clearInterval(timer);
-  }, [isOpen, duration, onDismiss]);
+  }, [isOpen, duration]);
+
+  // Effect 2: triggers parent callback after render, not inside setState updater
+  useEffect(() => {
+    if (isOpen && progress <= 0) {
+      onDismiss();
+    }
+  }, [isOpen, progress, onDismiss]);
 
   if (!isOpen) return null;
 

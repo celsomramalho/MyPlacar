@@ -153,6 +153,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   const replayTourRulesRef = React.useRef<(() => void) | null>(null);
   const replayTourHistoryRef = React.useRef<(() => void) | null>(null);
   const replayTourProfileRef = React.useRef<(() => void) | null>(null);
+  const replayTourScoreboardRef = React.useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (isOfflineMode && gameState && !offlineAllowedScreens) {
@@ -200,6 +201,10 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
     } else if (screen === 'new-game' && replayTourRulesRef.current) {
       setTimeout(() => {
         replayTourRulesRef.current?.();
+      }, 250);
+    } else if (screen === 'scoreboard' && replayTourScoreboardRef.current) {
+      setTimeout(() => {
+        replayTourScoreboardRef.current?.();
       }, 250);
     }
   };
@@ -312,6 +317,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             onRegisterReplayTour={(fn) => { replayTourConfigRef.current = fn; }}
             onRegisterReplayTourHistory={(fn) => { replayTourHistoryRef.current = fn; }}
             onRegisterReplayTourProfile={(fn) => { replayTourProfileRef.current = fn; }}
+            onReplayTour={handleReplayTourFromDrawer}
           />
         )}
 
@@ -363,6 +369,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
               onOpenMenu={() => setIsMenuOpen(true)}
               setActiveTab={setActiveTab}
               setInitialConfirmDeleteJudge={setInitialConfirmDeleteJudge}
+              onRegisterReplayTour={(fn) => { replayTourScoreboardRef.current = fn; }}
             />
           )}
 

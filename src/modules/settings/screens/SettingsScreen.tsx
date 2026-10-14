@@ -63,6 +63,7 @@ interface Props {
   onRegisterReplayTour?: (fn: () => void) => void;
   onRegisterReplayTourHistory?: (fn: () => void) => void;
   onRegisterReplayTourProfile?: (fn: () => void) => void;
+  onReplayTour?: (screen: any, tab?: string) => void;
 }
 
 // ─── Aprovação de login do relógio ────────────────────────────────────────────
@@ -256,7 +257,7 @@ export const SettingsScreen: React.FC<Props> = (props) => {
           />
         );
       case 'help':
-        return <HelpScreen profile={userProfile} onNavigateToTab={props.setActiveTab} onOpenRules={props.onOpenRules} onPlay={props.onPlayShortcut} canStartMatch={props.canStartMatch} onOpenMenu={props.onOpenMenu} />;
+        return <HelpScreen profile={userProfile} onNavigateToTab={props.setActiveTab} onOpenRules={props.onOpenRules} onPlay={props.onPlayShortcut} canStartMatch={props.canStartMatch} onOpenMenu={props.onOpenMenu} onReplayTour={props.onReplayTour} onOpenCommunications={props.onOpenCommunications} />;
       case 'config':
       default:
         return <TeamSection 

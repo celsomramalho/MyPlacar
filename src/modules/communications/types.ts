@@ -15,7 +15,7 @@ export interface Reply {
 
 export interface Communication {
   id: string;
-  type: 'message' | 'poll';
+  type: 'message' | 'poll' | 'support' | 'nps';
   title: string;
   content: string;
   authorId: string;
@@ -28,6 +28,15 @@ export interface Communication {
     options: PollOption[];
     totalVotes: number;
     closed: boolean;
+  };
+  nps?: {
+    scores: Record<string, number>; // user identifier (PIN/email) -> score 0..10
+    comments?: Record<string, { comment: string; authorName: string; createdAt: number }>;
+    totalResponses: number;
+    closed?: boolean;
+  };
+  supportConfig?: {
+    isActive: boolean;
   };
   reactions?: Record<string, string[]>; // emoji -> [userIds]
   readBy?: string[]; // [userIds]

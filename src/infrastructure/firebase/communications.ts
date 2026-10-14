@@ -51,11 +51,12 @@ export const subscribeRecentCommunications = (
 
 export const subscribeUserCommunications = (
   db: Firestore,
-  userIdentifier: { pin?: string; email?: string } | string,
+  userIdentifier: { pin?: string; email?: string; isAdmin?: boolean } | string,
   onCommunications: (communications: FirebaseCommunication[]) => void,
 ): Unsubscribe => {
   const pin = (typeof userIdentifier === 'string' ? userIdentifier : (userIdentifier.pin || '')).trim();
   const email = (typeof userIdentifier === 'string' ? '' : (userIdentifier.email || '')).trim().toLowerCase();
+  const isAdmin = typeof userIdentifier === 'string' ? false : (userIdentifier.isAdmin ?? false);
 
   const communicationsQuery = query(
     communicationsCollection(db),
@@ -72,6 +73,7 @@ export const subscribeUserCommunications = (
         const tEmail = ((comm as unknown as { targetUserEmail?: string }).targetUserEmail || '').trim().toLowerCase();
         const tPin = ((comm as unknown as { targetUserPin?: string }).targetUserPin || '').trim();
         if (t === 'all') return true;
+        if (isAdmin && t === 'admin') return true;
         if (pin && (t.toUpperCase() === pin.toUpperCase() || tPin.toUpperCase() === pin.toUpperCase())) return true;
         if (email && (t.toLowerCase() === email || tEmail === email)) return true;
         return false;
@@ -86,11 +88,12 @@ export const subscribeUserCommunications = (
 
 export const subscribeUnreadCommunicationsCount = (
   db: Firestore,
-  userIdentifier: { pin?: string; email?: string } | string,
+  userIdentifier: { pin?: string; email?: string; isAdmin?: boolean } | string,
   onCount: (count: number) => void,
 ): Unsubscribe => {
   const pin = (typeof userIdentifier === 'string' ? userIdentifier : (userIdentifier.pin || '')).trim();
   const email = (typeof userIdentifier === 'string' ? '' : (userIdentifier.email || '')).trim().toLowerCase();
+  const isAdmin = typeof userIdentifier === 'string' ? false : (userIdentifier.isAdmin ?? false);
 
   const communicationsQuery = query(
     communicationsCollection(db),
@@ -109,6 +112,7 @@ export const subscribeUnreadCommunicationsCount = (
         
         const isForUser = 
           t === 'all' || 
+          (isAdmin && t === 'admin') ||
           (pin && (t.toUpperCase() === pin.toUpperCase() || tPin.toUpperCase() === pin.toUpperCase())) ||
           (email && (t.toLowerCase() === email || tEmail === email));
 
@@ -197,3 +201,24 @@ export const updateCommunicationReactions = (
   communicationId: string,
   reactions: Record<string, string[]>,
 ) => updateDoc(communicationDocument(db, communicationId), { reactions });
+
+export const updateCommunicationNpsVote = (
+  db: Firestore,
+  communicationId: string,
+  userKey: string,
+  score: number,
+  comment?: string,
+  authorName?: string,
+) => {
+  const updateData: Record<string, any> = {
+    [`nps.scores.${userKey}`]: score,
+  };
+  if (comment && comment.trim()) {
+    updateData[`nps.comments.${userKey}`] = {
+      comment: comment.trim(),
+      authorName: authorName || 'Usuário',
+      createdAt: Date.now(),
+    };
+  }
+  return updateDoc(communicationDocument(db, communicationId), updateData);
+};

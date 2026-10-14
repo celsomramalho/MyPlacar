@@ -36,6 +36,7 @@ interface SettingsRouteProps {
   onRegisterReplayTour?: (fn: () => void) => void;
   onRegisterReplayTourHistory?: (fn: () => void) => void;
   onRegisterReplayTourProfile?: (fn: () => void) => void;
+  onReplayTour?: (screen: any, tab?: string) => void;
 }
 
 export function SettingsRoute({
@@ -62,6 +63,7 @@ export function SettingsRoute({
   onRegisterReplayTour,
   onRegisterReplayTourHistory,
   onRegisterReplayTourProfile,
+  onReplayTour,
 }: SettingsRouteProps) {
   const {
     setCurrentScreen,
@@ -207,6 +209,7 @@ export function SettingsRoute({
       onRegisterReplayTour={onRegisterReplayTour}
       onRegisterReplayTourHistory={onRegisterReplayTourHistory}
       onRegisterReplayTourProfile={onRegisterReplayTourProfile}
+      onReplayTour={onReplayTour}
     />
   );
 }
