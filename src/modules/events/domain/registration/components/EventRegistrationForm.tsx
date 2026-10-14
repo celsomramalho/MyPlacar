@@ -13,6 +13,7 @@ import {
   getNextRegistrationId,
   orderPairEntriesForMixed,
   minifyEntryForPair,
+  isSimplifiedRegistrationEvent,
   type TournamentEvent,
   type TournamentEntry,
   type TournamentPair,
@@ -67,9 +68,9 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   onProfileSync,
 }) => {
   const isAdmin = mode === 'admin';
-  // Trava nome/email quando o usuário já tem cadastro (não é nova inscrição via admin)
-  // Trava nome/email quando o usuário já tem cadastro (independente de ser nova inscrição)
-  const disableIdentity = !isAdmin && Boolean(userProfile?.email);
+  const isSimplified = isSimplifiedRegistrationEvent(event);
+  // Trava nome/email quando o usuário já tem cadastro, exceto em inscrição simplificada
+  const disableIdentity = !isAdmin && Boolean(userProfile?.email) && !isSimplified;
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 

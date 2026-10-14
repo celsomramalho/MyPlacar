@@ -132,6 +132,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             allowUserScoreEntry: freshEventDoc.allowUserScoreEntry ?? freshestEvent.allowUserScoreEntry,
             showRegisteredParticipants: freshEventDoc.showRegisteredParticipants ?? freshestEvent.showRegisteredParticipants,
             allowUserTeamFormation: freshEventDoc.allowUserTeamFormation ?? freshestEvent.allowUserTeamFormation,
+            allowUserPartnerRegistration: freshEventDoc.allowUserPartnerRegistration ?? freshestEvent.allowUserPartnerRegistration,
             startDate: freshEventDoc.startDate ?? freshestEvent.startDate,
             endDate: freshEventDoc.endDate ?? freshestEvent.endDate,
             tournamentStartDate: freshEventDoc.tournamentStartDate ?? freshestEvent.tournamentStartDate,

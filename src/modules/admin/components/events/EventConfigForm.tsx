@@ -33,6 +33,7 @@ import {
   type EventPaymentTypeOption,
   type EventRegistrationTypeOption,
   type TournamentEvent,
+  isSimplifiedRegistrationEvent,
 } from '@modules/events/types';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
@@ -842,6 +843,19 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
               }
             />
           </div>
+          {isSimplifiedRegistrationEvent(editingEvent) && (
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
+              <Toggle
+                id="event-allow-user-partner-registration"
+                label="Usuário inscreve parceiros"
+                checked={editingEvent.allowUserPartnerRegistration === true}
+                disabled={isAdminOnlyDisabled}
+                onChange={(checked) =>
+                  handleProtectedChange({ ...editingEvent, allowUserPartnerRegistration: checked })
+                }
+              />
+            </div>
+          )}
         </div>
 
         {/* Separador: Quadras */}

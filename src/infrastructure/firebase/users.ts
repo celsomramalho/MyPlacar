@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, getDocsFromServer, query, setDoc, updateDoc, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, getDocsFromServer, query, setDoc, updateDoc, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
 import type { PlanType, UserProfile } from '@modules/auth/types';
 
 export interface FirebaseUserByPin {
@@ -32,7 +32,7 @@ const getResolvedNickname = (
 const getUserAddedAt = (data: DocumentData) => data.createdAt?.toMillis?.() || data.joinedAt || data.addedAt || 0;
 
 const mapUserDocByPin = (
-  docSnapshot: QueryDocumentSnapshot<DocumentData>,
+  docSnapshot: QueryDocumentSnapshot<DocumentData> | { id: string; data: () => DocumentData },
   options?: FirebaseUserLookupOptions,
 ): FirebaseUserByPin => {
   const data = docSnapshot.data();
@@ -57,6 +57,7 @@ export const findUserByPin = async (
   options?: FirebaseUserLookupOptions,
 ): Promise<FirebaseUserByPin | null> => {
   const normalizedPin = normalizeUserPin(pin);
+  if (!normalizedPin) return null;
   const usersQuery = query(collection(db, 'users'), where('pin', '==', normalizedPin));
   const snapshot = await getDocs(usersQuery);
 
@@ -65,6 +66,53 @@ export const findUserByPin = async (
   }
 
   return mapUserDocByPin(snapshot.docs[0], options);
+};
+
+export const findUserByEmail = async (
+  db: Firestore,
+  email: string,
+  options?: FirebaseUserLookupOptions,
+): Promise<FirebaseUserByPin | null> => {
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!normalizedEmail) return null;
+
+  try {
+    const userDocRef = doc(db, 'users', normalizedEmail);
+    const userSnap = await getDoc(userDocRef);
+    if (userSnap.exists()) {
+      return mapUserDocByPin(userSnap, options);
+    }
+  } catch {
+    // Continua para query
+  }
+
+  const usersQuery = query(collection(db, 'users'), where('email', '==', normalizedEmail));
+  const snapshot = await getDocs(usersQuery);
+
+  if (snapshot.empty) {
+    return null;
+  }
+
+  return mapUserDocByPin(snapshot.docs[0], options);
+};
+
+export const findUserByPinOrEmail = async (
+  db: Firestore,
+  term: string,
+  options?: FirebaseUserLookupOptions,
+): Promise<FirebaseUserByPin | null> => {
+  const clean = term.trim();
+  if (!clean) return null;
+
+  if (clean.includes('@')) {
+    return findUserByEmail(db, clean, options);
+  }
+
+  const userByPin = await findUserByPin(db, clean, options);
+  if (userByPin) return userByPin;
+
+  // Tenta por email caso não tenha @ mas seja email ou doc ID
+  return findUserByEmail(db, clean, options);
 };
 
 export const findUsersByPins = async (

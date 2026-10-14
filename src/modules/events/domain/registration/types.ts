@@ -27,6 +27,7 @@ export type RegistrationStep =
 
 export interface RegistrationFormData {
   registrationId?: number;
+  pin?: string;
   name: string;
   nickname: string;
   email: string;

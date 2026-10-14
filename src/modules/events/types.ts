@@ -259,6 +259,8 @@ export interface TournamentEvent {
   showRegisteredParticipants?: boolean;
   allowUserTeamFormation?: boolean;
   allowUserScoreEntry?: boolean;
+  /** Permite que qualquer usuário inscrito inscreva parceiros não cadastrados (inscrição simplificada) */
+  allowUserPartnerRegistration?: boolean;
   rankingMatchesPerTeam?: number;
   /** Número de grupos por chave no Super 8 duplas (padrão 2, ex: A1, A2 por chave) */
   groupsPerBracket?: number;

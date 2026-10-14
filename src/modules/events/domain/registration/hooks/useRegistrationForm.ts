@@ -78,6 +78,7 @@ export function useRegistrationForm({
   const [currentStep, setCurrentStep] = useState<RegistrationStep>(initialStep);
   const [formData, setFormData] = useState<RegistrationFormData>(() => ({
     registrationId: entry.registrationId,
+    pin: entry.pin || '',
     name: entry.name || '',
     nickname: entry.nickname || '',
     email: entry.email || '',
@@ -86,25 +87,23 @@ export function useRegistrationForm({
     gender: entry.gender || 'M',
     categoryIds: entry.categoryIds || [],
     categoryPartners: entry.categoryPartners ? { ...entry.categoryPartners } : {},
-    regulationAccepted: Boolean(!isNew && entry.regulationAccepted === true),
+    regulationAccepted: typeof entry.regulationAccepted === 'boolean' ? entry.regulationAccepted : true,
   }));
 
   // Sincroniza se a inscrição existente for carregada ou atualizada com aceite prévio
   useEffect(() => {
-    if (isNew) {
-      setFormData((prev) => ({
-        ...prev,
-        regulationAccepted: false,
-      }));
-      return;
-    }
     if (typeof entry.regulationAccepted === 'boolean') {
       setFormData((prev) => ({
         ...prev,
-        regulationAccepted: Boolean(entry.regulationAccepted),
+        regulationAccepted: entry.regulationAccepted,
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        regulationAccepted: true,
       }));
     }
-  }, [entry.regulationAccepted, isNew]);
+  }, [entry.regulationAccepted]);
 
   // ─── Detecção do Método de Formação de Duplas e Tipo de Inscrição ──────────
   const isTeamDrawPreDefined = isPreDefinedTeamDraw(event.teamDrawType);
@@ -272,9 +271,9 @@ export function useRegistrationForm({
   const isStepValid = useCallback(
     (step: RegistrationStep): { isValid: boolean; error?: string } => {
       if (step === 'identity') {
-        if (!isSimplified && !formData.name.trim()) return { isValid: false, error: 'O nome completo é obrigatório.' };
         if (!formData.nickname.trim()) return { isValid: false, error: 'O nome como quer ser chamado é obrigatório.' };
         if (!isSimplified) {
+          if (!formData.name.trim()) return { isValid: false, error: 'O nome completo é obrigatório.' };
           if (!formData.email.trim()) return { isValid: false, error: 'O e-mail é obrigatório.' };
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
           if (!emailRegex.test(formData.email.trim())) {
@@ -283,6 +282,13 @@ export function useRegistrationForm({
           const cleanPhone = (formData.phone || '').replace(/\D/g, '');
           if (!cleanPhone || cleanPhone.length < 10) {
             return { isValid: false, error: 'O WhatsApp é obrigatório com DDD (mínimo 10 dígitos).' };
+          }
+        } else {
+          if (formData.email.trim()) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(formData.email.trim())) {
+              return { isValid: false, error: 'Informe um e-mail válido.' };
+            }
           }
         }
         if (formData.categoryIds.length > 0 && nameConflictWarning) {
@@ -391,13 +397,13 @@ export function useRegistrationForm({
   // ─── Objeto Final para Submissão ───────────────────────────────────────────
   const getSubmissionEntry = useCallback((): TournamentEntry => {
     const finalNickname = formData.nickname.trim();
-    const finalName = isSimplified ? (formData.name.trim() || finalNickname) : formData.name.trim();
+    const finalName = formData.name.trim() || finalNickname;
     const finalGender = formData.gender || 'M';
     const fallbackEmail = isSimplified
       ? `${finalNickname.toLowerCase().replace(/[^a-z0-9]/g, '') || 'atleta'}_${Date.now().toString(36)}@simplificada.local`
       : '';
     const finalEmail = formData.email.trim() || entry.email || fallbackEmail;
-    const finalPin = entry.pin || (isSimplified ? `SIMP${Math.random().toString(36).slice(2, 7).toUpperCase()}` : '');
+    const finalPin = formData.pin?.trim() || entry.pin || (isSimplified ? `SIMP${Math.random().toString(36).slice(2, 7).toUpperCase()}` : '');
 
     return {
       ...(entry as TournamentEntry),

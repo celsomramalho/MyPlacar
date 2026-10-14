@@ -87,6 +87,7 @@ import {
   getTodayDateStr,
 } from '../services/eventRegistrationPeriod';
 import { isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
+import { isSimplifiedRegistrationEvent } from '../types';
 import { openPdfOrUrl } from '../services/openRegulationPdf';
 
 interface Props {
@@ -149,6 +150,7 @@ export const EventDetailScreen: React.FC<Props> = ({
     isChaveEvent ? 'teams' : 'entries'
   );
   const [showMyRegistrationModal, setShowMyRegistrationModal] = useState(false);
+  const [showPartnerRegistrationModal, setShowPartnerRegistrationModal] = useState(false);
   const [isStartingPayment, setIsStartingPayment] = useState(false);
   const [pixPaymentData, setPixPaymentData] = useState<PixPaymentResult | null>(null);
   const pixPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -241,6 +243,27 @@ export const EventDetailScreen: React.FC<Props> = ({
       payments: [],
     };
   }, [userProfile, event]);
+
+  /** Entrada em branco para inscrição de parceiro (inscrição simplificada) */
+  const blankPartnerEntry: TournamentEntry = useMemo(() => {
+    const isFree = (event?.registrationFee ?? 0) === 0 && (event?.extraCategoryFee ?? 0) === 0;
+    return {
+      email: '',
+      name: '',
+      nickname: '',
+      pin: `TEMP${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      phone: '',
+      shirtSize: 'M',
+      gender: 'M',
+      categoryIds: [],
+      joinedAt: 0,
+      regulationAccepted: true,
+      dueAmount: isFree ? 0 : (event?.registrationFee ?? 0),
+      paidAmount: 0,
+      paymentStatus: isFree ? 'Confirmado' : 'Pendente',
+      payments: [],
+    };
+  }, [event]);
 
   const currentEntryDueAmount = currentUserEntry?.dueAmount ?? event.registrationFee ?? 0;
   const currentEntryPaidAmount = currentUserEntry?.paidAmount ?? currentUserEntry?.payments?.reduce((sum, item) => sum + Number(item.amount || 0), 0) ?? 0;
@@ -1544,6 +1567,22 @@ export const EventDetailScreen: React.FC<Props> = ({
                       </label>
                     )}
 
+                    {/* Botão Nova inscrição: visível quando inscrição simplificada + allowUserPartnerRegistration + usuário inscrito (ou admin) */}
+                    {userCategoryView === 'entries' &&
+                      isSimplifiedRegistrationEvent(event) &&
+                      (event.allowUserPartnerRegistration === true || canManageEvent) &&
+                      (hasActiveRegistration || canManageEvent) && (
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setShowPartnerRegistrationModal(true)}
+                          className="px-8 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-full text-xs font-black transition-all cursor-pointer shadow-sm text-center flex items-center justify-center"
+                        >
+                          Nova inscrição
+                        </button>
+                      </div>
+                    )}
+
                     {/* ABA: INSCRITOS */}
                     {userCategoryView === 'entries' && (
                       <div className="space-y-2">
@@ -1939,6 +1978,81 @@ export const EventDetailScreen: React.FC<Props> = ({
                 onCancel={async () => {
                   await refreshEntries();
                   setShowMyRegistrationModal(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal / Bottom Sheet: Inscrição de Parceiro (Simplificada) */}
+      {showPartnerRegistrationModal && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setShowPartnerRegistrationModal(false)}
+          />
+          <div className="relative bg-white rounded-t-[2.5rem] shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] flex flex-col">
+            <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-slate-100">
+              <h2 className="text-base font-black text-slate-900">
+                Nova inscrição
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowPartnerRegistrationModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-6 py-4 space-y-4 no-scrollbar">
+              <EventRegistrationForm
+                event={event}
+                entry={blankPartnerEntry}
+                mode="user"
+                onSave={async (updated) => {
+                  const db = getDb();
+                  if (db) {
+                    try {
+                      await saveEventEntry(db as Firestore, event.pin, updated as any);
+                      if (updated.email) {
+                        const { saveUserEventRegistration } = await import('@infra/firebase/events');
+                        await saveUserEventRegistration(db as Firestore, updated.email, event.pin, {
+                          pin: event.pin,
+                          name: event.name || event.pin,
+                          joinedAt: updated.joinedAt || Date.now(),
+                          bannerUrl: event.bannerUrl || null,
+                        }).catch(() => {});
+                      }
+                      await refreshEntries();
+                      setShowPartnerRegistrationModal(false);
+                      setModalConfig({
+                        title: 'Sucesso',
+                        message: 'Inscrição realizada com sucesso!',
+                        onConfirm: () => setModalConfig(null),
+                      });
+                    } catch (err) {
+                      console.error('Erro ao salvar inscrição de parceiro:', err);
+                    }
+                  }
+                }}
+                onSaveDraft={async (updated) => {
+                  const db = getDb();
+                  if (!db) return;
+                  await saveEventEntry(db as Firestore, event.pin, updated as any);
+                  await refreshEntries();
+                }}
+                onUpdateEvent={(updatedEvent) => {
+                  const db = getDb();
+                  if (!db) return;
+                  setEvent((currentEvent) => currentEvent
+                    ? { ...currentEvent, pairs: updatedEvent.pairs }
+                    : currentEvent);
+                  void updateEvent(db as Firestore, updatedEvent.pin, { pairs: updatedEvent.pairs });
+                }}
+                onCancel={async () => {
+                  await refreshEntries();
+                  setShowPartnerRegistrationModal(false);
                 }}
               />
             </div>
