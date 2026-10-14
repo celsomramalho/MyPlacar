@@ -172,18 +172,42 @@ export const EventDetailScreen: React.FC<Props> = ({
   const effectiveOnboardingConfig = useMemo(() => {
     if (!onboardingConfig) return null;
     if (!isRanking) return onboardingConfig;
+
+    // Para eventos de ranking, detalha as 3 sub-abas em passos individuais (total 8 passos)
+    const baseSteps = onboardingConfig.steps.filter(
+      (s) => s.targetId !== 'event-detail-subtabs-container'
+    );
+
+    const rankingSteps = [
+      {
+        targetId: 'event-detail-subtabs-container',
+        title: 'Etapas do ranking',
+        description: 'O ranking funciona em 3 etapas simples: inscrição de atletas, formação de times e realização dos jogos.',
+        placement: 'bottom' as const,
+      },
+      {
+        targetId: 'event-detail-subtab-entries',
+        title: '1. Formar times',
+        description: 'Na aba Inscritos, selecione 2 parceiros para formar uma dupla oficial para a disputa.',
+        placement: 'bottom' as const,
+      },
+      {
+        targetId: 'event-detail-subtab-teams',
+        title: '2. Criar partidas',
+        description: 'Na aba Times, selecione 2 duplas formadas para gerar uma nova partida na rodada.',
+        placement: 'bottom' as const,
+      },
+      {
+        targetId: 'event-detail-subtab-matches',
+        title: '3. Lançar placar',
+        description: 'Na aba Jogos, preencha o placar e a data do confronto para atualizar a classificação do ranking.',
+        placement: 'bottom' as const,
+      },
+    ];
+
     return {
       ...onboardingConfig,
-      steps: onboardingConfig.steps.map((step) => {
-        if (step.targetId === 'event-detail-subtabs-container') {
-          return {
-            ...step,
-            description:
-              'Navegue entre a lista de atletas inscritos, as duplas formadas e o calendário de partidas. Em Inscritos: selecione 2 parceiros para formar times. Em Times: selecione 2 times para formar uma partida. Em Jogos: preencha o placar e a data.',
-          };
-        }
-        return step;
-      }),
+      steps: [...baseSteps, ...rankingSteps],
     };
   }, [onboardingConfig, isRanking]);
 
@@ -1466,6 +1490,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                     <div className="flex items-center justify-between pb-1">
                       <div id="event-detail-subtabs-container" className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
                         <button
+                          id="event-detail-subtab-entries"
                           type="button"
                           onClick={() => setUserCategoryView('entries')}
                           className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
@@ -1478,6 +1503,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                         </button>
                         {!isSuper8 && (
                           <button
+                            id="event-detail-subtab-teams"
                             type="button"
                             onClick={() => setUserCategoryView('teams')}
                             className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
@@ -1490,6 +1516,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                           </button>
                         )}
                         <button
+                          id="event-detail-subtab-matches"
                           type="button"
                           onClick={() => setUserCategoryView('matches')}
                           className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
@@ -2019,7 +2046,19 @@ export const EventDetailScreen: React.FC<Props> = ({
           isActive={showTour}
           onComplete={handleCompleteTour}
           onSkip={handleSkipTour}
-          onStepChange={handleStepChange}
+          onStepChange={(stepIndex) => {
+            handleStepChange(stepIndex);
+            if (isRanking && effectiveOnboardingConfig) {
+              const targetStep = effectiveOnboardingConfig.steps[stepIndex];
+              if (targetStep?.targetId === 'event-detail-subtab-entries' || targetStep?.targetId === 'event-detail-subtabs-container') {
+                setUserCategoryView('entries');
+              } else if (targetStep?.targetId === 'event-detail-subtab-teams') {
+                setUserCategoryView('teams');
+              } else if (targetStep?.targetId === 'event-detail-subtab-matches') {
+                setUserCategoryView('matches');
+              }
+            }
+          }}
         />
       )}
     </div>
