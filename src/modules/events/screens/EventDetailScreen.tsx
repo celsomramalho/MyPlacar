@@ -1848,7 +1848,14 @@ export const EventDetailScreen: React.FC<Props> = ({
                               !entry.disabled && entry.paymentStatus !== 'Cancelado';
 
                             const isSimplified = isSimplifiedEntry(entry, event);
-                            const canUserEditSimplified = (hasActiveRegistration || isParticipant || canManageEvent) && isSimplified && !isCurrentUser;
+                            // Only allow editing if the entry is UNBOUND — still has a temp/simp email or PIN.
+                            // Once confirmed via modal (real email + real PIN), the edit button must not appear.
+                            const isUnboundSimplified = isSimplified && (
+                              (entry.email?.toLowerCase().includes('@simplificada.local')) ||
+                              (entry.pin?.toUpperCase().startsWith('TEMP')) ||
+                              (entry.pin?.toUpperCase().startsWith('SIMP'))
+                            );
+                            const canUserEditSimplified = (hasActiveRegistration || isParticipant || canManageEvent) && isUnboundSimplified && !isCurrentUser;
 
                             return (
                               <ParticipantRow
@@ -1856,6 +1863,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 entry={entry}
                                 category={activeCategory}
                                 isCurrentUser={isCurrentUser}
+                                isSimplified={isUnboundSimplified}
                                 pair={pair}
                                 standing={standing}
                                 isIndividualRanking={isIndividualRanking}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Users, UsersRound, Check, Pencil } from 'lucide-react';
+import { User, Users, UsersRound, Check, Pencil, Clock } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { maskPin } from '@shared/utils/formatters';
 import type { TournamentEntry, TournamentPair, EventCategory, TournamentMatch, PlayerStanding } from '../../types';
@@ -14,6 +14,7 @@ export interface ParticipantRowProps {
   category?: EventCategory;
   categories?: EventCategory[];
   isCurrentUser?: boolean;
+  isSimplified?: boolean;
   canViewHistory?: boolean;
   pair?: TournamentPair | null;
   standing?: PlayerStanding | null;
@@ -35,6 +36,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
   category,
   categories,
   isCurrentUser = false,
+  isSimplified = false,
   canViewHistory,
   pair,
   standing,
@@ -84,16 +86,22 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
               className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
                 isCurrentUser
                   ? 'bg-[#4B0082] text-white'
+                  : isSimplified
+                  ? 'bg-amber-50 text-amber-500 border border-amber-200'
                   : entry.gender === 'F'
                   ? 'bg-pink-50 text-pink-500'
                   : 'bg-sky-50 text-sky-500'
               }`}
             >
-              <User size={20} fill={isCurrentUser ? 'currentColor' : 'none'} />
+              {isSimplified && !isCurrentUser
+                ? <Clock size={20} />
+                : <User size={20} fill={isCurrentUser ? 'currentColor' : 'none'} />}
             </div>
             <div
               className={`p-1.5 rounded-xl border flex items-center justify-center shrink-0 ${
-                entry.gender === 'F'
+                isSimplified && !isCurrentUser
+                  ? 'bg-amber-50 text-amber-500 border-amber-200'
+                  : entry.gender === 'F'
                   ? 'bg-pink-50 text-pink-500 border-pink-100'
                   : 'bg-sky-50 text-sky-500 border-sky-100'
               }`}
@@ -126,6 +134,16 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
                   title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição cancelada ou desativada'}
                 >
                   {entry.paymentStatus === 'Cancelado' ? 'CANCELADO' : 'DESATIVADO'}
+                </span>
+              )}
+
+              {/* Badge TEMPORÁRIO — inscrição simplificada ainda não vinculada */}
+              {isSimplified && !isCurrentUser && !isCancelled && (
+                <span
+                  className="bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider"
+                  title="Cadastro temporário — aguardando vinculação ao perfil do atleta"
+                >
+                  Temporário
                 </span>
               )}
 
