@@ -21,6 +21,7 @@ import {
 } from '@modules/events/types';
 import { getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
+import type { FirebaseUserByPin } from '@infra/firebase/users';
 import type { Firestore } from 'firebase/firestore';
 import { useRegistrationForm } from '../hooks/useRegistrationForm';
 import { useRegistrationPayment } from '../hooks/useRegistrationPayment';
@@ -40,6 +41,8 @@ export interface EventRegistrationFormProps {
   entry: TournamentEntry;
   mode: 'admin' | 'user';
   isNew?: boolean;
+  /** Indica se a inscrição está sendo realizada para um terceiro via botão "Nova inscrição" */
+  isPartnerRegistration?: boolean;
   onSave: (entry: TournamentEntry) => Promise<void>;
   onSaveDraft?: (entry: TournamentEntry) => Promise<void>;
   onUpdateEvent?: (event: TournamentEvent) => void;
@@ -58,6 +61,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   entry,
   mode,
   isNew = false,
+  isPartnerRegistration = false,
   onSave,
   onSaveDraft,
   onUpdateEvent,
@@ -68,9 +72,19 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   onProfileSync,
 }) => {
   const isAdmin = mode === 'admin';
-  const isSimplified = isSimplifiedRegistrationEvent(event);
-  // Trava nome/email quando o usuário já tem cadastro, exceto em inscrição simplificada
-  const disableIdentity = !isAdmin && Boolean(userProfile?.email) && !isSimplified;
+  const hasExistingRealUser = Boolean(
+    entry.email &&
+    !entry.email.toLowerCase().includes('@simplificada.local') &&
+    entry.pin &&
+    !entry.pin.toUpperCase().startsWith('TEMP') &&
+    !entry.pin.toUpperCase().startsWith('SIMP')
+  );
+  const [isConfirmedUserBound, setIsConfirmedUserBound] = useState(hasExistingRealUser);
+
+  // Trava nome/email quando o usuário já tem cadastro ou quando foi vinculado a um cadastro confirmado
+  const disableIdentity =
+    (!isAdmin && !isPartnerRegistration && Boolean(userProfile?.email)) ||
+    (!isAdmin && isConfirmedUserBound);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -234,11 +248,47 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     confirmation: 'Confirmação',
   };
 
+  const handleConfirmUser = async (user: FirebaseUserByPin) => {
+    setFeedback(null);
+    setIsConfirmedUserBound(true);
+    if (user.name) form.updateField('name', user.name);
+    if (user.nickname) form.updateField('nickname', user.nickname);
+    if (user.email) form.updateField('email', user.email);
+    if (user.phone) form.updateField('phone', user.phone);
+    if (user.pin) form.updateField('pin', user.pin);
+    if (user.gender) form.updateField('gender', user.gender);
+    if (user.shirtSize) form.updateField('shirtSize', user.shirtSize);
+
+    // Salva imediatamente os dados da aba Atleta
+    const current = form.getSubmissionEntry();
+    const resolvedEmail = (user.email || current.email || '').toLowerCase().trim();
+    const resolvedPin = (user.pin || current.pin || '').toUpperCase().trim();
+    const resolvedName = (user.name || current.name || user.nickname || current.nickname || '').trim();
+    const resolvedNickname = (user.nickname || current.nickname || user.name || current.name || '').trim();
+
+    const updatedEntry: TournamentEntry = {
+      ...current,
+      name: resolvedName,
+      nickname: resolvedNickname,
+      email: resolvedEmail,
+      phone: user.phone || current.phone,
+      pin: resolvedPin,
+      gender: user.gender || current.gender,
+      shirtSize: user.shirtSize || current.shirtSize,
+    };
+
+    if (onSaveDraft) {
+      await onSaveDraft(updatedEntry);
+    } else if (onSave) {
+      await onSave(updatedEntry);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto p-4 sm:p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
       {/* Barra de Progresso dos Steps */}
       <div className="flex items-start gap-2 border-b border-slate-100 pb-3">
-        <div className={`grid flex-1 min-w-0 grid-cols-2 gap-2 ${registrationSteps.length === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
+        <div className="grid flex-1 min-w-0 grid-cols-2 gap-2">
           {registrationSteps.map((stepKey, idx) => {
             const isActive = form.currentStep === stepKey;
             return (
@@ -247,7 +297,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
                 id={`reg-step-${stepKey}`}
                 type="button"
                 onClick={() => form.goToStep(stepKey)}
-                className={`flex min-w-0 items-center justify-center gap-1 text-[11px] font-black px-2 py-2 rounded-xl transition-all sm:text-xs ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 text-xs font-black px-3 py-2.5 rounded-xl transition-all ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
@@ -289,7 +339,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             readOnly={readOnly}
             isSimplified={form.isSimplified}
             nameConflictWarning={form.nameConflictWarning}
-            disableIdentity={disableIdentity}
+            disableIdentity={disableIdentity || isConfirmedUserBound}
+            onConfirmUser={handleConfirmUser}
           />
         )}
 

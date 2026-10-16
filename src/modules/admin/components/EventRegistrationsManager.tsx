@@ -841,7 +841,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
               <div className="flex flex-wrap gap-2">
                 {availableCategoriesForGender.map((cat) => {
                   const isSelected = selectedCategoryIds.includes(cat.id);
-                  const limit = cat.maxPlayers ?? event.maxPlayersPerCategory ?? 8;
+                  const limit = cat.maxPlayers ?? 8;
                   const confirmed = categoryConfirmedCountMap[cat.id] || 0;
                   const isFull = confirmed >= limit;
                   return (

@@ -87,7 +87,7 @@ import {
   getTodayDateStr,
 } from '../services/eventRegistrationPeriod';
 import { isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
-import { isSimplifiedRegistrationEvent } from '../types';
+import { isSimplifiedRegistrationEvent, isSimplifiedEntry } from '../types';
 import { openPdfOrUrl } from '../services/openRegulationPdf';
 
 interface Props {
@@ -123,7 +123,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   onProfileSync,
 }) => {
   // Sincronização em tempo real unificada
-  const { event, setEvent, entries, liveScores, refreshEntries } = useEventRealtime(initialEvent);
+  const { event, setEvent, entries, setEntries, liveScores, refreshEntries } = useEventRealtime(initialEvent);
 
   // Permissões e papéis unificados
   const permissions = useEventPermissions(event, userProfile, entries);
@@ -151,6 +151,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   );
   const [showMyRegistrationModal, setShowMyRegistrationModal] = useState(false);
   const [showPartnerRegistrationModal, setShowPartnerRegistrationModal] = useState(false);
+  const [editingSimplifiedEntry, setEditingSimplifiedEntry] = useState<TournamentEntry | null>(null);
   const [isStartingPayment, setIsStartingPayment] = useState(false);
   const [pixPaymentData, setPixPaymentData] = useState<PixPaymentResult | null>(null);
   const pixPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -159,6 +160,228 @@ export const EventDetailScreen: React.FC<Props> = ({
   const [isSendingDeleteRequest, setIsSendingDeleteRequest] = useState(false);
   const [myHistoryOpen, setMyHistoryOpen] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+
+  const handleSaveSimplifiedEntry = useCallback(
+    async (updated: TournamentEntry, isDraft = false) => {
+      const db = getDb();
+      if (!db || !editingSimplifiedEntry) return;
+
+      try {
+        const oldEmail = (editingSimplifiedEntry.email || '').toLowerCase().trim();
+        const oldPin = (editingSimplifiedEntry.pin || '').toUpperCase().trim();
+        const newEmail = (updated.email || '').toLowerCase().trim();
+        const newPin = (updated.pin || '').toUpperCase().trim();
+
+        // Se o email mudou (ex: de simplificada.local para o email real do usuário)
+        if (oldEmail && newEmail && oldEmail !== newEmail) {
+          await deleteEventEntry(db as Firestore, event.pin, oldEmail).catch(() => {});
+          await deleteUserEventRegistration(db as Firestore, oldEmail, event.pin).catch(() => {});
+        }
+
+        await saveEventEntry(db as Firestore, event.pin, updated as any);
+
+        if (newEmail && !newEmail.includes('@simplificada.local')) {
+          const { saveUserEventRegistration } = await import('@infra/firebase/events');
+          await saveUserEventRegistration(db as Firestore, newEmail, event.pin, {
+            pin: event.pin,
+            name: event.name || event.pin,
+            joinedAt: updated.joinedAt || Date.now(),
+            bannerUrl: event.bannerUrl || null,
+            paymentStatus: updated.paymentStatus,
+          }).catch(() => {});
+        }
+
+        // Atualiza duplas/times formados se o atleta já participava de algum
+        let pairsChanged = false;
+        const pairsMap = new Map<string, TournamentPair>();
+        const updatedPairs = (event.pairs || []).map((pair) => {
+          let pChanged = false;
+          const p1 = { ...pair.p1 };
+          const p2 = { ...pair.p2 };
+          if (
+            (oldEmail && p1.email?.toLowerCase().trim() === oldEmail) ||
+            (oldPin && p1.pin?.toUpperCase().trim() === oldPin)
+          ) {
+            p1.email = updated.email;
+            p1.pin = updated.pin || p1.pin;
+            p1.name = updated.name || p1.name;
+            p1.nickname = updated.nickname || p1.nickname;
+            if (updated.gender) p1.gender = updated.gender as 'M' | 'F';
+            pChanged = true;
+          }
+          if (
+            (oldEmail && p2.email?.toLowerCase().trim() === oldEmail) ||
+            (oldPin && p2.pin?.toUpperCase().trim() === oldPin)
+          ) {
+            p2.email = updated.email;
+            p2.pin = updated.pin || p2.pin;
+            p2.name = updated.name || p2.name;
+            p2.nickname = updated.nickname || p2.nickname;
+            if (updated.gender) p2.gender = updated.gender as 'M' | 'F';
+            pChanged = true;
+          }
+          const finalPair = pChanged ? { ...pair, p1, p2 } : pair;
+          if (pChanged) pairsChanged = true;
+          pairsMap.set(finalPair.id, finalPair);
+          return finalPair;
+        });
+
+        // Função auxiliar para atualizar atletas em um par
+        const updatePairAthlete = (p?: TournamentPair): { pair: TournamentPair | undefined; changed: boolean } => {
+          if (!p) return { pair: undefined, changed: false };
+          let pChanged = false;
+          const p1 = { ...p.p1 };
+          const p2 = { ...p.p2 };
+          if (
+            (oldEmail && p1.email?.toLowerCase().trim() === oldEmail) ||
+            (oldPin && p1.pin?.toUpperCase().trim() === oldPin)
+          ) {
+            p1.email = updated.email;
+            p1.pin = updated.pin || p1.pin;
+            p1.name = updated.name || p1.name;
+            p1.nickname = updated.nickname || p1.nickname;
+            if (updated.gender) p1.gender = updated.gender as 'M' | 'F';
+            pChanged = true;
+          }
+          if (
+            (oldEmail && p2.email?.toLowerCase().trim() === oldEmail) ||
+            (oldPin && p2.pin?.toUpperCase().trim() === oldPin)
+          ) {
+            p2.email = updated.email;
+            p2.pin = updated.pin || p2.pin;
+            p2.name = updated.name || p2.name;
+            p2.nickname = updated.nickname || p2.nickname;
+            if (updated.gender) p2.gender = updated.gender as 'M' | 'F';
+            pChanged = true;
+          }
+          return { pair: pChanged ? { ...p, p1, p2 } : p, changed: pChanged };
+        };
+
+        // Se os times mudaram, sincroniza também os dados embutidos nas partidas (matches)
+        // Isso é fundamental para eventos do tipo Ranking e Super 8 Individual, onde a pontuação é do atleta
+        let matchesChanged = false;
+        const updatedMatches = (event.matches || []).map((match) => {
+          let mChanged = false;
+          let pair1 = match.pair1;
+          let pair2 = match.pair2;
+          let nextOwnerPin = match.ownerPin;
+
+          if (match.pair1Id && pairsMap.has(match.pair1Id)) {
+            pair1 = pairsMap.get(match.pair1Id);
+            mChanged = true;
+          } else if (pair1) {
+            const res1 = updatePairAthlete(pair1);
+            if (res1.changed) {
+              pair1 = res1.pair;
+              mChanged = true;
+            }
+          }
+
+          if (match.pair2Id && pairsMap.has(match.pair2Id)) {
+            pair2 = pairsMap.get(match.pair2Id);
+            mChanged = true;
+          } else if (pair2) {
+            const res2 = updatePairAthlete(pair2);
+            if (res2.changed) {
+              pair2 = res2.pair;
+              mChanged = true;
+            }
+          }
+
+          if (match.ownerPin && oldPin && match.ownerPin.toUpperCase().trim() === oldPin) {
+            nextOwnerPin = updated.pin || match.ownerPin;
+            mChanged = true;
+          }
+
+          if (mChanged) {
+            matchesChanged = true;
+            return { ...match, pair1, pair2, ownerPin: nextOwnerPin };
+          }
+          return match;
+        });
+
+        if (pairsChanged || matchesChanged) {
+          setEvent((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  pairs: pairsChanged ? updatedPairs : prev.pairs,
+                  matches: matchesChanged ? updatedMatches : prev.matches,
+                }
+              : prev
+          );
+          void updateEvent(db as Firestore, event.pin, {
+            ...(pairsChanged ? { pairs: updatedPairs.map(minifyPairForStorage) } : {}),
+            ...(matchesChanged ? { matches: updatedMatches } : {}),
+          });
+        }
+
+        // Atualiza o estado local das inscrições imediatamente
+        setEntries((prev) => {
+          const exists = prev.some(
+            (e) =>
+              (oldEmail && e.email?.toLowerCase().trim() === oldEmail) ||
+              (oldPin && e.pin?.toUpperCase().trim() === oldPin) ||
+              (newEmail && e.email?.toLowerCase().trim() === newEmail)
+          );
+          if (exists) {
+            return prev.map((e) =>
+              (oldEmail && e.email?.toLowerCase().trim() === oldEmail) ||
+              (oldPin && e.pin?.toUpperCase().trim() === oldPin) ||
+              (newEmail && e.email?.toLowerCase().trim() === newEmail)
+                ? updated
+                : e
+            );
+          }
+          return [...prev, updated];
+        });
+
+        setEvent((prev) =>
+          !prev
+            ? prev
+            : {
+                ...prev,
+                entries: (prev.entries || []).map((e) =>
+                  (oldEmail && e.email?.toLowerCase().trim() === oldEmail) ||
+                  (oldPin && e.pin?.toUpperCase().trim() === oldPin) ||
+                  (newEmail && e.email?.toLowerCase().trim() === newEmail)
+                    ? updated
+                    : e
+                ),
+              }
+        );
+
+        // Atualiza a referência de editingSimplifiedEntry
+        setEditingSimplifiedEntry(updated);
+
+        await refreshEntries();
+
+        if (!isDraft) {
+          setEditingSimplifiedEntry(null);
+          setModalConfig({
+            title: 'Sucesso',
+            message: 'Inscrição atualizada com sucesso!',
+            onConfirm: () => setModalConfig(null),
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao atualizar inscrição simplificada:', err);
+        if (!isDraft) {
+          setModalConfig({
+            title: 'Erro',
+            message: 'Não foi possível atualizar a inscrição. Tente novamente.',
+            onConfirm: () => setModalConfig(null),
+          });
+        }
+      }
+    },
+    [editingSimplifiedEntry, event, refreshEntries, setEntries, setEvent]
+  );
+
+  const handleCloseSimplifiedModal = useCallback(async () => {
+    await refreshEntries();
+    setEditingSimplifiedEntry(null);
+  }, [refreshEntries]);
 
   const {
     config: onboardingConfig,
@@ -262,6 +485,7 @@ export const EventDetailScreen: React.FC<Props> = ({
       paidAmount: 0,
       paymentStatus: isFree ? 'Confirmado' : 'Pendente',
       payments: [],
+      isSimplified: true,
     };
   }, [event]);
 
@@ -1608,7 +1832,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                             {participantSearch.trim() ? 'Nenhum participante encontrado.' : 'Nenhum inscrito nesta categoria ainda.'}
                           </div>
                         ) : (
-                          visibleCategoryEntries.map((entry) => {
+                          visibleCategoryEntries.map((entry, entryIndex) => {
                             const isCurrentUser = isCurrentUserEntry(entry);
                             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
                             const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
@@ -1623,9 +1847,12 @@ export const EventDetailScreen: React.FC<Props> = ({
                             const canAthleteSelectEntry = canAthleteFormTeam && (isRanking || !athleteEntryPair) &&
                               !entry.disabled && entry.paymentStatus !== 'Cancelado';
 
+                            const isSimplified = isSimplifiedEntry(entry, event);
+                            const canUserEditSimplified = (hasActiveRegistration || isParticipant || canManageEvent) && isSimplified && !isCurrentUser;
+
                             return (
                               <ParticipantRow
-                                key={entry.email || entry.pin}
+                                key={`${entry.registrationId || entry.email || entry.pin}-${entryIndex}`}
                                 entry={entry}
                                 category={activeCategory}
                                 isCurrentUser={isCurrentUser}
@@ -1638,8 +1865,8 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 canSelect={(canManageEvent && !pair && !isSuper8) || canAthleteSelectEntry}
                                 hasCategoryMatches={categoryMatches.length > 0}
                                 onToggleSelect={toggleEntrySelection}
+                                onEdit={canUserEditSimplified ? (targetEntry) => setEditingSimplifiedEntry(targetEntry) : undefined}
                               />
-
                             );
                           })
                         )}
@@ -2010,6 +2237,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                 event={event}
                 entry={blankPartnerEntry}
                 mode="user"
+                isPartnerRegistration
                 onSave={async (updated) => {
                   const db = getDb();
                   if (db) {
@@ -2054,6 +2282,49 @@ export const EventDetailScreen: React.FC<Props> = ({
                   await refreshEntries();
                   setShowPartnerRegistrationModal(false);
                 }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal / Bottom Sheet: Edição de Inscrição Simplificada */}
+      {editingSimplifiedEntry && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-xs animate-in fade-in"
+            onClick={handleCloseSimplifiedModal}
+          />
+          <div className="relative bg-white rounded-t-[2.5rem] shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] flex flex-col">
+            <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-slate-100">
+              <h2 className="text-base font-black text-slate-900">
+                Editar inscrição: {editingSimplifiedEntry.nickname || editingSimplifiedEntry.name || 'Participante'}
+              </h2>
+              <button
+                type="button"
+                onClick={handleCloseSimplifiedModal}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-6 py-4 space-y-4 no-scrollbar">
+              <EventRegistrationForm
+                event={event}
+                entry={editingSimplifiedEntry}
+                mode="user"
+                isPartnerRegistration
+                onSave={(updated) => handleSaveSimplifiedEntry(updated, false)}
+                onSaveDraft={(updated) => handleSaveSimplifiedEntry(updated, true)}
+                onUpdateEvent={(updatedEvent) => {
+                  const db = getDb();
+                  if (!db) return;
+                  setEvent((currentEvent) =>
+                    currentEvent ? { ...currentEvent, pairs: updatedEvent.pairs } : currentEvent
+                  );
+                  void updateEvent(db as Firestore, updatedEvent.pin, { pairs: updatedEvent.pairs });
+                }}
+                onCancel={handleCloseSimplifiedModal}
               />
             </div>
           </div>

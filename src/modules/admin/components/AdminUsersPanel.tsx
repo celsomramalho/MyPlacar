@@ -5,6 +5,8 @@ import { applyGoldenRule } from '@shared/utils/formatters';
 interface AdminUsersPanelProps {
   userSearch: string;
   foundUsers: UserProfile[];
+  userCount: number | null;
+  isLoadingUserCount: boolean;
   isSearchingUsers: boolean;
   onUserSearchChange: (value: string) => void;
   onSearchUsers: () => void;
@@ -14,6 +16,8 @@ interface AdminUsersPanelProps {
 export const AdminUsersPanel = ({
   userSearch,
   foundUsers,
+  userCount,
+  isLoadingUserCount,
   isSearchingUsers,
   onUserSearchChange,
   onSearchUsers,
@@ -25,7 +29,14 @@ export const AdminUsersPanel = ({
         <div className="w-10 h-10 bg-blue-100 text-black rounded-xl flex items-center justify-center">
           <User size={20} />
         </div>
-        <h3 className="font-black text-black">Gestão de usuários</h3>
+        <div>
+          <h3 className="font-black text-black">Gestão de usuários</h3>
+          <p className="text-xs font-semibold text-slate-500 mt-1">
+            {isLoadingUserCount
+              ? 'Contando usuários cadastrados…'
+              : `${userCount === null ? '—' : userCount.toLocaleString('pt-BR')} usuários cadastrados`}
+          </p>
+        </div>
       </div>
       <div className="relative">
         <input

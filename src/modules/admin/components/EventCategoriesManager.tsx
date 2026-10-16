@@ -71,7 +71,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [abbreviation, setAbbreviation] = useState('');
   const [gender1, setGender1] = useState<'M' | 'F'>('M');
   const [gender2, setGender2] = useState<'M' | 'F'>('M');
-  const [maxPlayers, setMaxPlayers] = useState<number>(event.maxPlayersPerCategory ?? 8);
+  const [maxPlayers, setMaxPlayers] = useState<number>(8);
 
   const isSuper8 = isSuper8Event(event);
   const isSuper8Duplas = isSuper8DuplasEvent(event);
@@ -111,9 +111,17 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setAbbreviation('');
     setGender1('M');
     setGender2('M');
-    setMaxPlayers(event.maxPlayersPerCategory ?? 8);
+    setMaxPlayers(8);
     setIsAdding(false);
     setEditingId(null);
+  };
+
+  const handleImportMatches = async (nextPairs: TournamentPair[], nextMatches: TournamentMatch[]) => {
+    const nextEvent = { ...event, pairs: nextPairs, matches: nextMatches };
+    const db = getDb();
+    if (!db) throw new Error('Não foi possível conectar ao banco de dados.');
+    await updateEvent(db as Firestore, event.pin, { pairs: nextPairs, matches: nextMatches });
+    onUpdateEvent(nextEvent);
   };
 
   const handleStartAdd = () => {
@@ -134,7 +142,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setAbbreviation(cat.abbreviation || '');
     setGender1(cat.gender1 || 'M');
     setGender2(cat.gender2 || 'M');
-    setMaxPlayers(cat.maxPlayers ?? event.maxPlayersPerCategory ?? 8);
+    setMaxPlayers(cat.maxPlayers ?? 8);
     setEditingId(cat.id);
     setIsAdding(true);
   };
@@ -161,7 +169,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
               abbreviation: abbreviation.trim(),
               gender1,
               gender2: format === 'Duplas' ? gender2 : undefined,
-              maxPlayers: maxPlayers > 0 ? maxPlayers : (event.maxPlayersPerCategory ?? 8),
+              maxPlayers: maxPlayers > 0 ? maxPlayers : 8,
             }
           : c
       );
@@ -177,7 +185,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
         abbreviation: abbreviation.trim(),
         gender1,
         gender2: format === 'Duplas' ? gender2 : undefined,
-        maxPlayers: maxPlayers > 0 ? maxPlayers : (event.maxPlayersPerCategory ?? 8),
+        maxPlayers: maxPlayers > 0 ? maxPlayers : 8,
       };
       updated = [...categories, newCategory];
     }
@@ -595,6 +603,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onGenerateMatches={handleGenerateSystemMatches}
                     onGenerateBlankPdf={handleGenerateBlankPdf}
                     onDeleteAllCategoryMatches={handleDeleteAllCategoryMatches}
+                    onImportMatches={handleImportMatches}
                   />
                 )}
               </React.Fragment>

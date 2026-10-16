@@ -72,6 +72,7 @@ export interface CategoryBoardPanelProps {
   onGenerateMatches: () => Promise<void>;
   onGenerateBlankPdf: () => void;
   onDeleteAllCategoryMatches: () => void;
+  onImportMatches: (pairs: TournamentPair[], matches: TournamentMatch[]) => Promise<void>;
 }
 
 export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
@@ -126,6 +127,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   onGenerateMatches,
   onGenerateBlankPdf,
   onDeleteAllCategoryMatches,
+  onImportMatches,
 }) => {
   return (
     <div className="mt-2 space-y-4">
@@ -192,6 +194,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
 
       {categoryPanelView === 'matches' && (
         <CategoryMatchesTab
+          event={event}
           category={category}
           categoryMatches={categoryMatches}
           pairsById={pairsById}
@@ -213,6 +216,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
           onGenerateMatches={onGenerateMatches}
           onGenerateBlankPdf={onGenerateBlankPdf}
           onDeleteAllCategoryMatches={onDeleteAllCategoryMatches}
+          onImportMatches={onImportMatches}
         />
       )}
     </div>

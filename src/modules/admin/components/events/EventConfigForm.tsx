@@ -859,28 +859,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         </div>
 
         {/* Separador: Quadras */}
-        <p className="text-[10px] font-black text-slate-400 tracking-wider pt-1 border-t border-slate-100">Jogadores &amp; quadras</p>
-
-        {/* Limite jogadores por categoria */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">
-            Limite de jogadores por categoria (padrão)
-          </label>
-          <input
-            type="number"
-            min={1}
-            disabled={isAdminOnlyDisabled}
-            value={editingEvent.maxPlayersPerCategory ?? 8}
-            onChange={(e) =>
-              handleProtectedChange({
-                ...editingEvent,
-                maxPlayersPerCategory: e.target.value ? Math.max(1, Number(e.target.value)) : 8,
-              })
-            }
-            placeholder="8"
-            className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-black text-sm outline-none"
-          />
-        </div>
+        <p className="text-[10px] font-black text-slate-400 tracking-wider pt-1 border-t border-slate-100">Quadras</p>
 
         {/* Quantidade de quadras */}
         <div className="space-y-1">

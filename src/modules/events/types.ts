@@ -187,6 +187,23 @@ export const isSimplifiedRegistrationEvent = (event?: Partial<TournamentEvent> |
   return String(event?.registrationType || '').trim().toLowerCase() === 'simplificada';
 };
 
+export const isSimplifiedEntry = (
+  entry?: Partial<TournamentEntry> | null,
+  event?: Partial<TournamentEvent> | null
+): boolean => {
+  if (!entry) return false;
+  if (entry.isSimplified === true) return true;
+  const pinUpper = (entry.pin || '').toUpperCase();
+  if (pinUpper.startsWith('TEMP') || pinUpper.startsWith('SIMP')) return true;
+  if (entry.email?.toLowerCase().includes('@simplificada.local')) return true;
+  if (isSimplifiedRegistrationEvent(event)) {
+    if (!entry.email || pinUpper.startsWith('TEMP') || pinUpper.startsWith('SIMP')) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export interface EventCategory {
   id: string;
   name: string;
@@ -240,7 +257,6 @@ export interface TournamentEvent {
   registrationFee?: number;
   extraCategoryFee?: number;
   /** Limite de jogadores com pagamento confirmado por categoria (padrão 8) */
-  maxPlayersPerCategory?: number;
   paymentType?: EventPaymentTypeOption;
   organizerEmail?: string;
   marketplaceFeePercent?: number;
@@ -329,6 +345,7 @@ export interface TournamentEntry {
   disabledReason?: string;
   regulationAccepted?: boolean;
   regulationAcceptedAt?: number;
+  isSimplified?: boolean;
 }
 
 /**

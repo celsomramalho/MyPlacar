@@ -10,7 +10,7 @@ import {
 import { deleteLiveMatchesByIds, fetchLiveMatchesStats as fetchFirebaseLiveMatchesStats } from '@infra/firebase/liveMatches';
 import { linkLegacyMatchesToOwnerEmail } from '@infra/firebase/matches';
 import { fetchSystemConfig, saveSystemConfigPatch } from '@infra/firebase/systemConfig';
-import { searchUserProfilesByEmailPrefix } from '@infra/firebase/users';
+import { countUserProfiles, searchUserProfilesByEmailPrefix } from '@infra/firebase/users';
 import { AdminConfirmModals, type AdminDeleteConfirm } from '@modules/admin/components/AdminConfirmModals';
 import { AdminEventsPanel } from '@modules/admin/components/AdminEventsPanel';
 import { AdminHeader } from '@modules/admin/components/AdminHeader';
@@ -105,6 +105,27 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [userSearch, setUserSearch] = useState('');
   const [foundUsers, setFoundUsers] = useState<UserProfile[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [userCount, setUserCount] = useState<number | null>(null);
+  const [isLoadingUserCount, setIsLoadingUserCount] = useState(false);
+
+  useEffect(() => {
+    if (adminTab !== 'users') return;
+    const db = getDb();
+    if (!db) return;
+
+    let isCurrent = true;
+    setIsLoadingUserCount(true);
+    countUserProfiles(db)
+      .then(count => {
+        if (isCurrent) setUserCount(count);
+      })
+      .catch(error => console.error('Falha ao contar usuários cadastrados:', error))
+      .finally(() => {
+        if (isCurrent) setIsLoadingUserCount(false);
+      });
+
+    return () => { isCurrent = false; };
+  }, [adminTab]);
 
   const [isOpenCVP, setIsOpenCVP] = useState(false);
   const [isOpenCVS, setIsOpenCVS] = useState(false);
@@ -161,7 +182,6 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       paymentType: 'manual',
       organizerEmail: userProfile?.email || '',
       marketplaceFeePercent: 10,
-      maxPlayersPerCategory: 8,
       courtsCount: 1,
       courtNames: ['Quadra 1'],
       groupsPerBracket: 2,
@@ -774,6 +794,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
           <AdminUsersPanel
             userSearch={userSearch}
             foundUsers={foundUsers}
+            userCount={userCount}
+            isLoadingUserCount={isLoadingUserCount}
             isSearchingUsers={isSearchingUsers}
             onUserSearchChange={setUserSearch}
             onSearchUsers={handleSearchUsers}

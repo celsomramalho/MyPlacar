@@ -92,18 +92,40 @@ export function useRegistrationForm({
 
   // Sincroniza se a inscrição existente for carregada ou atualizada com aceite prévio
   useEffect(() => {
-    if (typeof entry.regulationAccepted === 'boolean') {
+    const isAccepted = typeof entry.regulationAccepted === 'boolean' ? entry.regulationAccepted : true;
+    setFormData((prev) => ({
+      ...prev,
+      regulationAccepted: isAccepted,
+    }));
+  }, [entry.regulationAccepted]);
+
+  // Sincroniza formData caso os dados da inscrição (entry) sejam atualizados externamente
+  useEffect(() => {
+    if (entry.email || entry.pin || entry.name || entry.nickname) {
       setFormData((prev) => ({
         ...prev,
-        regulationAccepted: entry.regulationAccepted,
-      }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        regulationAccepted: true,
+        pin: entry.pin ?? prev.pin,
+        name: entry.name ?? prev.name,
+        nickname: entry.nickname ?? prev.nickname,
+        email: entry.email ?? prev.email,
+        phone: entry.phone ?? prev.phone,
+        gender: entry.gender ?? prev.gender,
+        shirtSize: entry.shirtSize ?? prev.shirtSize,
+        categoryIds: entry.categoryIds ?? prev.categoryIds,
+        registrationId: entry.registrationId ?? prev.registrationId,
       }));
     }
-  }, [entry.regulationAccepted]);
+  }, [
+    entry.email,
+    entry.pin,
+    entry.name,
+    entry.nickname,
+    entry.phone,
+    entry.gender,
+    entry.shirtSize,
+    entry.categoryIds,
+    entry.registrationId,
+  ]);
 
   // ─── Detecção do Método de Formação de Duplas e Tipo de Inscrição ──────────
   const isTeamDrawPreDefined = isPreDefinedTeamDraw(event.teamDrawType);
@@ -223,7 +245,7 @@ export function useRegistrationForm({
     for (const cat of categories) {
       const isAlreadyInEntry = (entry.categoryIds || []).includes(cat.id);
       const confirmed = confirmedCountMap[cat.id] || 0;
-      map[cat.id] = calculateCategoryVacancy(cat, event, confirmed, isAlreadyInEntry);
+      map[cat.id] = calculateCategoryVacancy(cat, confirmed, isAlreadyInEntry);
     }
     return map;
   }, [event, entry.categoryIds, confirmedCountMap]);
@@ -426,6 +448,7 @@ export function useRegistrationForm({
       regulationAcceptedAt: formData.regulationAccepted
         ? (entry.regulationAcceptedAt || Date.now())
         : undefined,
+      isSimplified: isSimplified || Boolean(entry.isSimplified),
     };
   }, [entry, formData, pricing.dueAmount, pricing.isFree, isSimplified]);
 

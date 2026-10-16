@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Users, UsersRound, Check } from 'lucide-react';
+import { User, Users, UsersRound, Check, Pencil } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { maskPin } from '@shared/utils/formatters';
 import type { TournamentEntry, TournamentPair, EventCategory, TournamentMatch, PlayerStanding } from '../../types';
@@ -181,14 +181,29 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
           </div>
         </div>
 
-        {/* Lado Direito: Número de Inscrição Super 8 */}
-        {isSuper8 && (
-          <div className="flex items-center gap-3 shrink-0">
+        {/* Lado Direito: Botão de Edição e/ou Número de Inscrição Super 8 */}
+        <div className="flex items-center gap-2 shrink-0">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(entry);
+              }}
+              title="Editar inscrição"
+              aria-label="Editar inscrição"
+              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+            >
+              <Pencil size={15} />
+            </button>
+          )}
+
+          {isSuper8 && (
             <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
               {formatRegistrationId(entry.registrationId)}
             </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Estatísticas de Ranking ou Super 8 Individual */}

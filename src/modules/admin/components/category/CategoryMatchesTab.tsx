@@ -1,9 +1,11 @@
-import React from 'react';
-import { Sparkles, FileText, Trash2 } from 'lucide-react';
-import type { EventCategory, TournamentMatch, TournamentPair } from '@modules/events/types';
+import React, { useState } from 'react';
+import { Sparkles, FileText, Trash2, Upload } from 'lucide-react';
+import type { EventCategory, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { MatchCard } from '@modules/events/components/matches/MatchCard';
+import { RankingMatchImportModal } from './RankingMatchImportModal';
 
 export interface CategoryMatchesTabProps {
+  event: TournamentEvent;
   category: EventCategory;
   categoryMatches: TournamentMatch[];
   pairsById: Record<string, TournamentPair>;
@@ -22,9 +24,11 @@ export interface CategoryMatchesTabProps {
   onGenerateMatches: () => void;
   onGenerateBlankPdf: () => void;
   onDeleteAllCategoryMatches: () => void;
+  onImportMatches: (pairs: TournamentPair[], matches: TournamentMatch[]) => Promise<void>;
 }
 
 export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
+  event,
   category,
   categoryMatches,
   pairsById,
@@ -43,7 +47,9 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   onGenerateMatches,
   onGenerateBlankPdf,
   onDeleteAllCategoryMatches,
+  onImportMatches,
 }) => {
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
   const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
   const semiMatches = categoryMatches.filter((m) => m.phase === 'semifinal');
@@ -99,6 +105,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
 
         {/* Botões de Ação */}
         <div className="flex flex-wrap items-center gap-2">
+          {isRanking && !isReadOnly && <button type="button" onClick={() => setIsImportOpen(true)} className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black"><Upload size={16}/><span>Importar partidas</span></button>}
           {!isRanking && !isReadOnly && categoryMatches.length > 0 && (
             <button
               type="button"
@@ -336,6 +343,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
           )}
         </div>
       )}
+      {isImportOpen && <RankingMatchImportModal event={event} category={category} onClose={() => setIsImportOpen(false)} onImport={onImportMatches}/>}
     </section>
   );
 };

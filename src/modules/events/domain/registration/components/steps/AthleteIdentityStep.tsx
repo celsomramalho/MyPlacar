@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { User, Phone, Mail, AlertTriangle, KeyRound, CheckCircle2, Loader2 } from 'lucide-react';
+import { User, Phone, Mail, AlertTriangle, KeyRound, CheckCircle2, Loader2, Check } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { getDb } from '@infra/firebase';
 import { findUserByPinOrEmail, type FirebaseUserByPin } from '@infra/firebase/users';
@@ -15,6 +15,8 @@ export interface AthleteIdentityStepProps {
   nameConflictWarning?: string | null;
   /** Quando true, desabilita Nome Completo e E-mail (campos vinculados ao cadastro do usuário) */
   disableIdentity?: boolean;
+  /** Callback para confirmar vínculo e salvar dados do atleta */
+  onConfirmUser?: (user: FirebaseUserByPin) => Promise<void> | void;
 }
 
 const formatPhone = (value: string) => {
@@ -32,10 +34,25 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
   isSimplified = false,
   nameConflictWarning = null,
   disableIdentity = false,
+  onConfirmUser,
 }) => {
   const [isSearchingUser, setIsSearchingUser] = useState(false);
   const [foundUserMessage, setFoundUserMessage] = useState<string | null>(null);
+  const [candidateUser, setCandidateUser] = useState<FirebaseUserByPin | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isSavingCandidate, setIsSavingCandidate] = useState(false);
+  const [isUserBound, setIsUserBound] = useState(false);
   const lastSearchTermRef = useRef<string>('');
+
+  const isRealUserBound = Boolean(
+    formData.pin &&
+      !formData.pin.toUpperCase().startsWith('TEMP') &&
+      !formData.pin.toUpperCase().startsWith('SIMP') &&
+      formData.email &&
+      !formData.email.includes('@simplificada.local')
+  );
+
+  const isIdentityLocked = disableIdentity || isUserBound || isRealUserBound;
 
   const handleLookup = useCallback(
     async (term: string) => {
@@ -50,17 +67,8 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
         setIsSearchingUser(true);
         const user = await findUserByPinOrEmail(db, clean);
         if (user) {
-          if (user.name) updateField('name', user.name);
-          if (user.nickname) updateField('nickname', user.nickname);
-          if (user.email) updateField('email', user.email);
-          if (user.phone) updateField('phone', formatPhone(user.phone));
-          if (user.pin) updateField('pin', user.pin);
-          if (user.gender) updateField('gender', user.gender);
-          if (user.shirtSize) updateField('shirtSize', user.shirtSize);
-
-          const displayName = user.nickname || user.name || user.pin;
-          setFoundUserMessage(`Cadastro localizado: ${displayName}`);
-          setTimeout(() => setFoundUserMessage(null), 4000);
+          setCandidateUser(user);
+          setShowConfirmModal(true);
         }
       } catch (err) {
         console.error('Erro ao buscar atleta por PIN ou e-mail:', err);
@@ -68,8 +76,42 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
         setIsSearchingUser(false);
       }
     },
-    [updateField]
+    []
   );
+
+  const handleConfirmCandidate = async () => {
+    if (!candidateUser) return;
+    setIsSavingCandidate(true);
+    try {
+      if (candidateUser.name) updateField('name', candidateUser.name);
+      if (candidateUser.nickname) updateField('nickname', candidateUser.nickname);
+      if (candidateUser.email) updateField('email', candidateUser.email);
+      if (candidateUser.phone) updateField('phone', formatPhone(candidateUser.phone));
+      if (candidateUser.pin) updateField('pin', candidateUser.pin);
+      if (candidateUser.gender) updateField('gender', candidateUser.gender);
+      if (candidateUser.shirtSize) updateField('shirtSize', candidateUser.shirtSize);
+
+      if (onConfirmUser) {
+        await onConfirmUser(candidateUser);
+      }
+
+      const displayName = candidateUser.nickname || candidateUser.name || candidateUser.pin;
+      setFoundUserMessage(`Cadastro vinculado e salvo: ${displayName}`);
+      setTimeout(() => setFoundUserMessage(null), 4000);
+      setIsUserBound(true);
+      setShowConfirmModal(false);
+      setCandidateUser(null);
+    } catch (err) {
+      console.error('Erro ao confirmar cadastro:', err);
+    } finally {
+      setIsSavingCandidate(false);
+    }
+  };
+
+  const handleCancelCandidate = () => {
+    setShowConfirmModal(false);
+    setCandidateUser(null);
+  };
 
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
@@ -101,14 +143,14 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
           </label>
           <input
             type="text"
-            disabled={readOnly || disableIdentity}
+            disabled={readOnly || isIdentityLocked}
             value={formData.name}
             onChange={(e) => updateField('name', e.target.value)}
             placeholder="Nome e sobrenome"
             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
           />
-          {disableIdentity && (
-            <p className="text-[10px] text-slate-400 font-semibold">Vinculado ao seu cadastro</p>
+          {isIdentityLocked && (
+            <p className="text-[10px] text-slate-400 font-semibold">Vinculado ao cadastro</p>
           )}
         </div>
 
@@ -150,7 +192,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
           </label>
           <input
             type="email"
-            disabled={readOnly || disableIdentity}
+            disabled={readOnly || isIdentityLocked}
             value={formData.email}
             onChange={(e) => {
               const val = e.target.value;
@@ -163,8 +205,8 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
             placeholder="atleta@email.com"
             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
           />
-          {disableIdentity && (
-            <p className="text-[10px] text-slate-400 font-semibold">Vinculado ao seu cadastro</p>
+          {isIdentityLocked && (
+            <p className="text-[10px] text-slate-400 font-semibold">Vinculado ao cadastro</p>
           )}
         </div>
 
@@ -195,7 +237,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
           </label>
           <input
             type="text"
-            disabled={readOnly}
+            disabled={readOnly || isIdentityLocked}
             value={formData.pin || ''}
             onChange={(e) => {
               const val = e.target.value;
@@ -208,6 +250,9 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
             placeholder="Ex: 1rankingbt"
             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
           />
+          {isIdentityLocked && (
+            <p className="text-[10px] text-slate-400 font-semibold">Vinculado ao cadastro</p>
+          )}
         </div>
 
         {/* Gênero */}
@@ -269,6 +314,88 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modal de Confirmação de Cadastro Localizado */}
+      {showConfirmModal && candidateUser && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs animate-in fade-in"
+            onClick={handleCancelCandidate}
+          />
+          <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Confirmar cadastro</h3>
+                <p className="text-xs font-bold text-slate-400">Cadastro localizado no sistema</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 text-xs font-bold text-slate-700">
+              {candidateUser.name && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">Nome:</span>
+                  <span className="text-slate-900 font-black truncate">{candidateUser.name}</span>
+                </div>
+              )}
+              {candidateUser.nickname && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">Nome como quer ser chamado:</span>
+                  <span className="text-slate-900 font-black truncate">{candidateUser.nickname}</span>
+                </div>
+              )}
+              {candidateUser.email && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">E-mail:</span>
+                  <span className="text-slate-900 font-black truncate">{candidateUser.email}</span>
+                </div>
+              )}
+              {candidateUser.phone && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">WhatsApp:</span>
+                  <span className="text-slate-900 font-black truncate">{formatPhone(candidateUser.phone)}</span>
+                </div>
+              )}
+              {candidateUser.pin && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">PIN:</span>
+                  <span className="text-slate-900 font-black truncate">{candidateUser.pin}</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500 font-semibold">
+              Deseja vincular esta inscrição ao cadastro localizado e salvar os dados do atleta?
+            </p>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelCandidate}
+                disabled={isSavingCandidate}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCandidate}
+                disabled={isSavingCandidate}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-black text-white flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                {isSavingCandidate ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Check size={14} className="stroke-[3]" />
+                )}
+                Confirmar e salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, getDocsFromServer, query, setDoc, updateDoc, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, doc, getCountFromServer, getDoc, getDocs, getDocsFromServer, query, setDoc, updateDoc, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
 import type { PlanType, UserProfile } from '@modules/auth/types';
 
 export interface FirebaseUserByPin {
@@ -21,6 +21,11 @@ interface FirebaseUserLookupOptions {
 }
 
 const USERS_BATCH_LIMIT = 30;
+
+export const countUserProfiles = async (db: Firestore): Promise<number> => {
+  const snapshot = await getCountFromServer(collection(db, 'users'));
+  return snapshot.data().count;
+};
 
 const normalizeUserPin = (pin: string) => pin.toUpperCase().trim();
 
