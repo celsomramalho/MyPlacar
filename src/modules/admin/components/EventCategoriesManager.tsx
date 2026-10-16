@@ -117,10 +117,27 @@ export const EventCategoriesManager: React.FC<Props> = ({
   };
 
   const handleImportMatches = async (nextPairs: TournamentPair[], nextMatches: TournamentMatch[]) => {
-    const nextEvent = { ...event, pairs: nextPairs, matches: nextMatches };
+    const pairsById = new Map(nextPairs.map((pair) => [pair.id, pair]));
+    const pairFromMatch = (pair: TournamentPair | undefined, categoryId?: string) => {
+      if (!pair) return;
+      const normalizedPair = { ...pair, categoryId: pair.categoryId || categoryId };
+      pairsById.set(normalizedPair.id, normalizedPair);
+    };
+    nextMatches.forEach((match) => {
+      if (match.categoryId !== selectedCategoryId) return;
+      pairFromMatch(match.pair1, match.categoryId);
+      pairFromMatch(match.pair2, match.categoryId);
+    });
+    const allPairs = Array.from(pairsById.values());
+    const matchesWithPairs = nextMatches.map((match) => match.categoryId !== selectedCategoryId ? match : ({
+      ...match,
+      pair1: match.pair1 || (match.pair1Id ? pairsById.get(match.pair1Id) : undefined),
+      pair2: match.pair2 || (match.pair2Id ? pairsById.get(match.pair2Id) : undefined),
+    }));
+    const nextEvent = { ...event, pairs: allPairs, matches: matchesWithPairs };
     const db = getDb();
     if (!db) throw new Error('Não foi possível conectar ao banco de dados.');
-    await updateEvent(db as Firestore, event.pin, { pairs: nextPairs, matches: nextMatches });
+    await updateEvent(db as Firestore, event.pin, { pairs: allPairs, matches: matchesWithPairs });
     onUpdateEvent(nextEvent);
   };
 

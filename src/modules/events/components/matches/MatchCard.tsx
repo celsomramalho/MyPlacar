@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Clock, Trash2, Calendar, Check, Wifi } from 'lucide-react';
+import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play } from 'lucide-react';
 import type { TournamentMatch, TournamentPair } from '../../types';
 import { getPhaseLabel, parseMatchSets } from '../../domain/brackets';
 
@@ -53,6 +53,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   onFinishMatch,
   onReopenMatch,
   onDeleteMatch,
+  onStartLiveMatch,
 }) => {
   const getPair = (pairId?: string, embedded?: TournamentPair): TournamentPair | undefined => {
     if (embedded) return embedded;
@@ -165,6 +166,20 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>
               {statusLabel}
             </span>
+            {isRanking && isWaiting && canSubmitScore && onStartLiveMatch && pair1 && pair2 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartLiveMatch(match, pair1, pair2);
+                }}
+                className="w-8 h-8 inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:scale-95 transition-all"
+                title="Iniciar partida"
+                aria-label="Iniciar partida"
+              >
+                <Play size={15} className="fill-current" />
+              </button>
+            )}
             {isInQueue && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black border bg-sky-50 text-sky-700 border-sky-200 whitespace-nowrap">
                 <Clock size={10} />
@@ -261,6 +276,20 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>
             {statusLabel}
           </span>
+          {isRanking && isWaiting && canSubmitScore && onStartLiveMatch && pair1 && pair2 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStartLiveMatch(match, pair1, pair2);
+              }}
+              className="w-8 h-8 inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:scale-95 transition-all"
+              title="Iniciar partida"
+              aria-label="Iniciar partida"
+            >
+              <Play size={15} className="fill-current" />
+            </button>
+          )}
           {isInQueue && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black border bg-sky-50 text-sky-700 border-sky-200 whitespace-nowrap">
               <Clock size={10} />

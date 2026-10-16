@@ -725,8 +725,13 @@ export const EventDetailScreen: React.FC<Props> = ({
   );
 
   const pairHasMatches = useCallback(
-    (pairId: string) => (event.matches || []).some((match) => match.pair1Id === pairId || match.pair2Id === pairId),
-    [event.matches]
+    (pairId: string) => {
+      const matchesInActiveCategory = activeCategory
+        ? getCategoryMatches(event.matches || [], event.pairs || [], activeCategory, { includePairCategoryFallback: false })
+        : event.matches || [];
+      return matchesInActiveCategory.some((match) => match.pair1Id === pairId || match.pair2Id === pairId);
+    },
+    [activeCategory, event.matches, event.pairs]
   );
 
   const pairsById = useMemo(() => buildPairsById(event.pairs || []), [event.pairs]);
@@ -801,6 +806,20 @@ export const EventDetailScreen: React.FC<Props> = ({
     });
   };
 
+  const togglePairSelection = (pair: TournamentPair) => {
+    if (!canManageEvent || isReadOnly || pairHasMatches(pair.id)) return;
+    setSelectedPairs((previous) => {
+      const next = new Set(previous);
+      if (next.has(pair.id)) {
+        next.delete(pair.id);
+      } else {
+        if (next.size >= 2) next.clear();
+        next.add(pair.id);
+      }
+      return next;
+    });
+  };
+
   const handleFormTeam = async () => {
     const canAthleteForm = !canManageEvent && event.allowUserTeamFormation === true && hasActiveRegistration &&
       !isSuper8;
@@ -870,6 +889,39 @@ export const EventDetailScreen: React.FC<Props> = ({
         await updateEvent(db as Firestore, event.pin, { pairs: nextPairs.map(minifyPairForStorage) });
       } catch (err) {
         console.error('Erro ao salvar dupla no Firestore:', err);
+      }
+    }
+  };
+
+  const handleFormMatch = async () => {
+    if (!canManageEvent || isReadOnly || selectedPairs.size !== 2 || !activeCategory) return;
+    const pairIds = Array.from(selectedPairs);
+    const categoryMatchesForNumber = getCategoryMatches(event.matches || [], event.pairs || [], activeCategory, { includePairCategoryFallback: false });
+    const matchNumber = Math.max(0, ...categoryMatchesForNumber.map((match) => match.matchNumber || 0)) + 1;
+    const newMatch: TournamentMatch = {
+      id: `match_${Date.now()}`,
+      matchNumber,
+      categoryId: activeCategory.id,
+      phase: 'chave1',
+      pair1Id: pairIds[0],
+      pair2Id: pairIds[1],
+      status: 'waiting',
+      order: matchNumber,
+    };
+    const nextMatches = [...(event.matches || []), newMatch];
+    setEvent((currentEvent) => currentEvent ? { ...currentEvent, matches: nextMatches } : currentEvent);
+    setSelectedPairs(new Set());
+    const db = getDb();
+    if (db) {
+      try {
+        await updateEventMatches(db as Firestore, event.pin, nextMatches);
+      } catch (error) {
+        console.error('Erro ao formar partida:', error);
+        setModalConfig({
+          title: 'Erro ao formar partida',
+          message: 'Não foi possível salvar a partida. Tente novamente.',
+          onConfirm: () => setModalConfig(null),
+        });
       }
     }
   };
@@ -1734,6 +1786,38 @@ export const EventDetailScreen: React.FC<Props> = ({
                       </header>
                     )}
 
+                    {canManageEvent && userCategoryView === 'teams' && selectedPairs.size > 0 && (
+                      <header className="fixed inset-x-0 top-0 z-[60] flex min-h-[76px] items-center justify-between gap-3 bg-sky-600 px-5 py-3 text-white shadow-lg animate-in slide-in-from-top duration-200">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPairs(new Set())}
+                            className="shrink-0 p-1 text-white hover:text-sky-100"
+                            title="Limpar seleção"
+                          >
+                            <X size={21} />
+                          </button>
+                          <span className="truncate text-sm font-black">
+                            {selectedPairs.size} {selectedPairs.size === 1 ? 'time selecionado' : 'times selecionados'}
+                          </span>
+                        </div>
+                        {selectedPairs.size === 2 ? (
+                          <button
+                            type="button"
+                            onClick={handleFormMatch}
+                            className="flex shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-3.5 py-2.5 text-xs font-black text-white shadow-sm transition-colors hover:bg-emerald-600"
+                          >
+                            <Trophy size={15} />
+                            <span>Formar partida</span>
+                          </button>
+                        ) : (
+                          <span className="shrink-0 rounded-xl bg-sky-700/60 px-3 py-2 text-xs font-bold text-sky-100">
+                            Selecione +1
+                          </span>
+                        )}
+                      </header>
+                    )}
+
                     <div className="flex items-center justify-between pb-1">
                       <div id="event-detail-subtabs-container" className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
                         <button
@@ -1905,6 +1989,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 thirdMatch={thirdMatch}
                                 index={idx}
                                 isRanking={isRanking}
+                                isSelected={selectedPairs.has(pair.id)}
+                                canSelect={canManageEvent && !isReadOnly && !pairHasMatches(pair.id)}
+                                onToggleSelect={togglePairSelection}
                                 canManage={canManageEvent}
                                 canChangeBracket={(canManageEvent || (event.allowUserTeamFormation === true && hasActiveRegistration)) &&
                                   !isReadOnly &&

@@ -40,7 +40,7 @@ export const RankingMatchImportModal: React.FC<Props> = ({ event, category, onCl
     };
     const key = `${item.row.date}|${[norm(item.p1!.p1.email || item.p1!.p1.pin), norm(item.p1!.p2.email || item.p1!.p2.pin)].sort().join('&')}|${[norm(item.p2!.p1.email || item.p2!.p1.pin), norm(item.p2!.p2.email || item.p2!.p2.pin)].sort().join('&')}|${Math.min(item.row.ga, item.row.gb)}-${Math.max(item.row.ga, item.row.gb)}`;
     const duplicate = seenInFile.has(key) || existingMatches.some(m => {
-      const x = (event.pairs || []).find(p => p.id === m.pair1Id); const y = (event.pairs || []).find(p => p.id === m.pair2Id);
+      const x = m.pair1 || (event.pairs || []).find(p => p.id === m.pair1Id); const y = m.pair2 || (event.pairs || []).find(p => p.id === m.pair2Id);
       return !!x && !!y && dateScoreSame(m, false) && samePlayers(x, item.p1!.p1, item.p1!.p2) && samePlayers(y, item.p2!.p1, item.p2!.p2) || !!x && !!y && dateScoreSame(m, true) && samePlayers(x, item.p2!.p1, item.p2!.p2) && samePlayers(y, item.p1!.p1, item.p1!.p2);
     });
     seenInFile.add(key);
@@ -48,6 +48,7 @@ export const RankingMatchImportModal: React.FC<Props> = ({ event, category, onCl
     });
   }, [prepared, existingMatches, event.pairs]);
   const invalid = results.filter(r => r.error).length; const duplicates = results.filter(r => r.duplicate).length; const importable = results.length - invalid - duplicates;
+  const rowsWithTeams = results.filter(r => !r.error && r.p1 && r.p2);
 
   const processMatrix = (matrix: string[][], preferUsMdy = false) => {
     if (!matrix.length) { setPrepared([]); setFeedback('A aba selecionada não contém linhas para importar.'); return; }
@@ -60,7 +61,8 @@ export const RankingMatchImportModal: React.FC<Props> = ({ event, category, onCl
     const ix = { date: col(['data']), a1: col(['jogador a1']), a2: col(['jogador a2']), ga: col(['games a']), gb: col(['games b']), b1: col(['jogador b1']), b2: col(['jogador b2']) };
     if (Object.values(ix).some(i => i < 0)) { setPrepared([]); setFeedback('Não encontrei todos os cabeçalhos esperados.'); return; }
     const rows = matrix.slice(headerRowIndex + 1).map((cells, i) => ({ line: headerRowIndex + i + 2, date: cells[ix.date] || '', a1: cells[ix.a1] || '', a2: cells[ix.a2] || '', ga: Number(String(cells[ix.ga] || '').replace(',', '.')), gb: Number(String(cells[ix.gb] || '').replace(',', '.')), b1: cells[ix.b1] || '', b2: cells[ix.b2] || '' }));
-    const pairMap = new Map(existingPairs.map(p => [[norm(p.p1.email || p.p1.pin || p.p1.nickname), norm(p.p2.email || p.p2.pin || p.p2.nickname)].sort().join('|'), p]));
+    const knownPairs = [...existingPairs, ...existingMatches.flatMap(m => [m.pair1, m.pair2].filter((p): p is TournamentPair => Boolean(p)))];
+    const pairMap = new Map(knownPairs.map(p => [[norm(p.p1.email || p.p1.pin || p.p1.nickname), norm(p.p2.email || p.p2.pin || p.p2.nickname)].sort().join('|'), p]));
     const newlyFormed = new Map<string, TournamentPair>(); let nextNo = Math.max(0, ...existingPairs.map(p => p.teamNumber || 0));
     const findEntry = (name: string) => { const found = entries.filter(e => norm(e.nickname || e.name) === norm(name)); return found.length === 1 ? { entry: found[0] } : { error: found.length ? 'Nome corresponde a mais de uma inscrição' : 'Inscrito não encontrado pelo nome de exibição' }; };
     setPrepared(rows.map(row => {
@@ -100,13 +102,17 @@ export const RankingMatchImportModal: React.FC<Props> = ({ event, category, onCl
   };
 
   const commit = async () => {
-    const validRows = results.filter(r => !r.error && !r.duplicate); if (!validRows.length) return;
+    const rowsToSave = results.filter(r => !r.error && r.p1 && r.p2);
+    const validRows = rowsToSave.filter(r => !r.duplicate); if (!rowsToSave.length) return;
     setBusy(true); try {
       const newPairs = new Map<string, TournamentPair>(); const matches: TournamentMatch[] = [];
-      for (const item of validRows) { const a = item.p1!; const b = item.p2!; newPairs.set(a.id, a); newPairs.set(b.id, b);
+      for (const item of rowsToSave) { const a = item.p1!; const b = item.p2!; newPairs.set(a.id, a); newPairs.set(b.id, b);
+        if (item.duplicate) continue;
         const pair1Wins = item.row.ga > item.row.gb; matches.push({ id: `rank_match_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`, matchNumber: existingMatches.length + matches.length + 1, categoryId: category.id, pair1Id: a.id, pair2Id: b.id, pair1: a, pair2: b, status: 'finished', result: `${item.row.ga}/${item.row.gb}`, scores: [{ p1: item.row.ga, p2: item.row.gb }], winnerPairId: pair1Wins ? a.id : b.id, loserPairId: pair1Wins ? b.id : a.id, matchDate: item.row.date, finishedAt: new Date(`${item.row.date}T12:00:00`).toISOString() });
       }
-      await onImport([...existingPairs, ...Array.from(newPairs.values()).filter(p => !existingPairs.some(x => x.id === p.id))], [...(event.matches || []), ...matches]); onClose();
+      const allEventPairs = event.pairs || [];
+      const mergedPairs = [...allEventPairs, ...Array.from(newPairs.values()).filter(p => !allEventPairs.some(x => x.id === p.id))];
+      await onImport(mergedPairs, [...(event.matches || []), ...matches]); onClose();
     } catch (err) { setFeedback(err instanceof Error ? err.message : 'Não foi possível gravar as partidas.'); } finally { setBusy(false); }
   };
   return <div className="fixed inset-0 z-[100] bg-slate-950/50 p-3 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Importar partidas do ranking"><div className="w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-3xl bg-white shadow-2xl flex flex-col">
@@ -115,6 +121,6 @@ export const RankingMatchImportModal: React.FC<Props> = ({ event, category, onCl
       {sheetNames.length > 1 && <label className="block text-xs font-bold text-slate-600">Aba da categoria<select value={selectedSheet} onChange={e => handleSheetChange(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-bold text-slate-800">{sheetNames.map(name => <option key={name} value={name}>{name}</option>)}</select></label>}
       {!!feedback && <p className="text-sm font-bold text-rose-600">{feedback}</p>}
       {!!results.length && <><p className="text-xs font-bold text-slate-600">{results.length} linhas · {importable} para importar · {duplicates} duplicadas serão ignoradas · {invalid} com erro</p>{existingMatches.length > 0 && <p className="text-xs rounded-xl bg-amber-50 text-amber-800 p-3">A categoria já possui {existingMatches.length} partidas. A importação acrescentará as partidas novas e pulará coincidências de data, duplas e placar.</p>}<div className="border rounded-2xl overflow-auto max-h-72"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-slate-100"><tr>{['Linha','Data','Time A','Placar','Time B','Validação'].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{results.map(r=><tr key={r.row.line} className="border-t"><td className="p-2">{r.row.line}</td><td className="p-2 whitespace-nowrap">{r.row.date}</td><td className="p-2">{r.row.a1} & {r.row.a2}</td><td className="p-2">{r.row.ga}–{r.row.gb}</td><td className="p-2">{r.row.b1} & {r.row.b2}</td><td className={`p-2 font-bold ${r.error?'text-rose-600':r.duplicate?'text-amber-600':'text-emerald-700'}`}>{r.error || (r.duplicate?'Duplicada · ignorar':'Pronta')}</td></tr>)}</tbody></table></div></>}
-    </div><div className="p-4 border-t flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 rounded-xl border text-sm font-bold">Cancelar</button><button disabled={!importable || busy} onClick={() => void commit()} className="px-4 py-2 rounded-xl bg-emerald-500 disabled:opacity-40 text-white text-sm font-black">{busy?'Importando…':`Importar ${importable} partidas`}</button></div>
+    </div><div className="p-4 border-t flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 rounded-xl border text-sm font-bold">Cancelar</button><button disabled={(!importable && !rowsWithTeams.length) || busy} onClick={() => void commit()} className="px-4 py-2 rounded-xl bg-emerald-500 disabled:opacity-40 text-white text-sm font-black">{busy?'Importando…':importable ? `Importar ${importable} partidas` : 'Salvar times das partidas'}</button></div>
   </div></div>;
 };

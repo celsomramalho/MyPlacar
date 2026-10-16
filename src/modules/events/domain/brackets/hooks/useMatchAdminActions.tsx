@@ -146,6 +146,19 @@ export function useMatchAdminActions({
       );
     }
 
+    if (newCategoryMatches.length === 0) {
+      const message = isSuper8
+        ? 'Não há atletas disponíveis suficientes nesta categoria para gerar partidas. Confira as inscrições ativas.'
+        : 'Nenhuma partida foi criada. Forme pelo menos dois times nesta categoria antes de gerar as partidas.';
+      setModalConfig({
+        title: 'Não foi possível gerar partidas',
+        message,
+        onConfirm: () => setModalConfig(null),
+        variant: 'info',
+      });
+      return;
+    }
+
     const otherMatches = matches.filter(
       (m) =>
         m.categoryId !== selectedCategory.id &&
