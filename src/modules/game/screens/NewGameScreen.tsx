@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
-import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, Menu } from 'lucide-react';
+import { Activity, ChevronDown, Play, Trophy, LayoutGrid, Settings, Mic, Sun, Volume2, Clock, Plus, Minus, ChevronUp, Watch, Target, Sparkles, Check, Ticket, X, WifiOff, Moon, Menu, Bookmark, Trash2 } from 'lucide-react';
 import { Toggle } from '@shared/components/Toggle';
 import { MatchSettings, SportType, GameState, TieBreakAt, TieBreakSideSwitchMode, SportDefinition, Tab } from '../../../types';
 import type { TournamentEvent } from '@modules/events/types';
@@ -15,6 +15,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { LazySportIcon } from '@shared/components/LazySportIcon';
 import { Button } from '@shared/components/Button';
 import { SettingsTabs } from '@modules/settings';
+import { getAllPresets, saveCustomPreset, deleteCustomPreset, type MatchRulesPreset } from '@modules/events/domain/rules/eventMatchRules';
 
 interface Props {
   baseSettings: MatchSettings; 
@@ -60,6 +61,45 @@ type DbSport = {
 
 export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, isSettingsRegrasSaved, isSettingsInicialSaved, canStartMatch, onNavigateToTab, gameState, cloudLiveExists, onOpenLiveControl, isController, onOpenMenu, isOfflineMode, onExitOffline, onHome, onRegisterReplayTour }) => {
   const { userProfile, matchSettings: settings, setMatchSettings: setSettings } = useGame();
+  const [rulePresets, setRulePresets] = useState<MatchRulesPreset[]>(() => getAllPresets());
+  const [isNamingPreset, setIsNamingPreset] = useState(false);
+  const [newRulePresetName, setNewRulePresetName] = useState('');
+  const sportPresets = useMemo(() => {
+    const system = rulePresets.filter(p => p.isSystem && p.sportId === settings.sportType);
+    const custom = rulePresets.filter(p => !p.isSystem && (!p.sportId || p.sportId === settings.sportType));
+    return [...system, ...custom];
+  }, [rulePresets, settings.sportType]);
+  const selectedRulePreset = sportPresets.find(p => {
+    const r = p.rules;
+    return r.setsCount === settings.sets && r.gamesPerSet === settings.gamesPerSet && r.noAd === settings.noAd &&
+      r.switchSidesOdd === settings.switchSidesOdd && r.tieBreak === settings.tieBreak && r.tieBreakAt === settings.tieBreakAt &&
+      r.tieBreakPoints === settings.tieBreakPoints && r.tieBreakWinByTwo === settings.tieBreakWinByTwo &&
+      (settings.sportType !== 'pickleball' || r.pickleballScoringMode === settings.pickleballScoringMode);
+  })?.id ?? 'custom';
+  const applyRulePreset = (presetId: string) => {
+    const preset = sportPresets.find(p => p.id === presetId);
+    if (!preset) return;
+    const r = preset.rules;
+    setSettings(prev => ({ ...prev, sets: r.setsCount, gamesPerSet: r.gamesPerSet, noAd: r.noAd,
+      switchSidesOdd: r.switchSidesOdd, tieBreak: r.tieBreak, tieBreakAt: r.tieBreakAt as TieBreakAt,
+      tieBreakPoints: r.tieBreakPoints, tieBreakWinByTwo: r.tieBreakWinByTwo,
+      ...(r.pickleballScoringMode ? { pickleballScoringMode: r.pickleballScoringMode } : {}) }));
+  };
+  const saveCurrentRulePreset = () => {
+    if (!newRulePresetName.trim()) return;
+    const preset: MatchRulesPreset = {
+      id: `custom_${Date.now()}`, name: newRulePresetName.trim(),
+      description: `${settings.sets} set(s) · ${settings.gamesPerSet} ${settings.sportType === 'pickleball' ? 'pts' : 'games'}`,
+      sportId: settings.sportType,
+      rules: { setsCount: settings.sets, gamesPerSet: settings.gamesPerSet, noAd: settings.noAd,
+        switchSidesOdd: settings.switchSidesOdd, tieBreak: settings.tieBreak, tieBreakAt: settings.tieBreakAt,
+        tieBreakPoints: settings.tieBreakPoints, tieBreakWinByTwo: settings.tieBreakWinByTwo,
+        superTieBreakFinalSet: false, pickleballScoringMode: settings.pickleballScoringMode },
+    };
+    setRulePresets(saveCustomPreset(preset));
+    setNewRulePresetName('');
+    setIsNamingPreset(false);
+  };
 
   // ─── Onboarding da tela Regras ───────────────────────────────────────────────
   const {
@@ -390,6 +430,21 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
         <div id="rules-match-rules" className="space-y-3">
           <div className="flex items-center gap-2 px-2"><Activity size={20} className="text-red-500" /><h2 className="text-sm font-black text-black">Regras da partida</h2></div>
           <div className={`bg-white/70 backdrop-blur-md rounded-[2.5rem] p-6 shadow-sm border border-white/50 space-y-6 ${isReadOnly ? 'opacity-70 pointer-events-none' : ''}`}>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1"><span className="text-xs font-black text-slate-600">Formato padrão da partida</span><span className="text-[10px] font-bold text-blue-600">✧ Preset do esporte</span></div>
+              <select disabled={isReadOnly} value={selectedRulePreset} onChange={e => applyRulePreset(e.target.value)} className="w-full h-12 bg-white rounded-xl px-4 text-xs font-black text-slate-800 border border-slate-200 outline-none">
+                {sportPresets.map(p => <option key={p.id} value={p.id}>{p.name} ({p.description})</option>)}
+                <option value="custom">Personalizado</option>
+              </select>
+              <div className="flex items-center gap-2">
+                {isNamingPreset ? <>
+                  <input autoFocus value={newRulePresetName} onChange={e => setNewRulePresetName(e.target.value)} placeholder="Nome do preset" className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-xs font-bold" />
+                  <button type="button" onClick={saveCurrentRulePreset} disabled={!newRulePresetName.trim()} className="h-9 rounded-lg bg-emerald-500 px-3 text-white disabled:opacity-40"><Check size={15}/></button>
+                  <button type="button" onClick={() => setIsNamingPreset(false)} className="h-9 rounded-lg bg-slate-100 px-3 text-slate-600"><X size={15}/></button>
+                </> : <button type="button" onClick={() => setIsNamingPreset(true)} className="inline-flex items-center gap-1.5 text-[10px] font-black text-blue-700"><Bookmark size={13}/> Salvar como preset</button>}
+                {sportPresets.some(p => p.id === selectedRulePreset && !p.isSystem) && <button type="button" onClick={() => setRulePresets(deleteCustomPreset(selectedRulePreset))} className="ml-auto inline-flex items-center gap-1 text-[10px] font-black text-red-600"><Trash2 size={13}/> Excluir</button>}
+              </div>
+            </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-black text-black">Set melhor de</span>
               <div className="flex bg-gray-100 rounded-xl p-1 gap-1">

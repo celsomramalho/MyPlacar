@@ -8,6 +8,7 @@ import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { getCourtColors } from '../../../constants.ts';
 import { guessPartnerGender } from '@modules/partners/services/guessPartnerGender';
+import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
 
 interface Props {
   event: TournamentEvent;
@@ -179,13 +180,28 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
     const p2Gender = getPlayerGender(pair2?.p1 || { name: player2, nickname: player2 }, defaultGenderP2);
     const p2PartnerGender = isDoubles ? getPlayerGender(pair2?.p2 || { name: player4, nickname: player4 }, defaultGenderP2Partner) : undefined;
 
+    const sportId = event.sportId || event.config?.sportType || 'beach-tennis';
+    const eventRules = resolveMatchRules(event.sportRules, match.phase,
+      (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+      Number(event.gamesPerSet || event.config?.gamesPerSet || 6), sportId);
+
     setMatchSettings((prev) => ({
       ...prev,
-      player1,
-      player2,
-      player3,
-      player4,
+      p1Name: player1,
+      p2Name: player2,
+      p1Partner: player3,
+      p2Partner: player4,
       isDoubles,
+      sportType: sportId as typeof prev.sportType,
+      sets: eventRules.setsCount,
+      gamesPerSet: eventRules.gamesPerSet,
+      noAd: eventRules.noAd,
+      switchSidesOdd: eventRules.switchSidesOdd,
+      tieBreak: eventRules.tieBreak,
+      tieBreakAt: eventRules.tieBreakAt as typeof prev.tieBreakAt,
+      tieBreakPoints: eventRules.tieBreakPoints,
+      tieBreakWinByTwo: eventRules.tieBreakWinByTwo,
+      ...(eventRules.pickleballScoringMode ? { pickleballScoringMode: eventRules.pickleballScoringMode } : {}),
       p1Color: courtColors.p1Color,
       p2Color: courtColors.p2Color,
       p1Gender,
@@ -199,6 +215,11 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
         categoryName: matchCat?.name || '',
         roundName: getPhaseLabel(match.phase),
       },
+      pendingTournamentMatchId: match.id,
+      pendingTournamentPin: event.pin,
+      pendingTournamentMatchCode: `${match.id}`,
+      pendingTournamentPhaseLabel: getPhaseLabel(match.phase),
+      pendingTournamentCourt: match.court || '',
     }));
 
     setCurrentScreen('new-game');

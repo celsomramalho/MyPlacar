@@ -332,4 +332,11 @@ export interface MatchSettings {
   pendingTournamentMatchCode?: string;
   pendingTournamentPhaseLabel?: string;
   pendingTournamentCourt?: string;
+  tournamentMatch?: {
+    matchId: string;
+    eventPin: string;
+    court: string;
+    categoryName: string;
+    roundName: string;
+  };
 }

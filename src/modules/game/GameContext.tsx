@@ -1323,6 +1323,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           switchSidesOdd: resolvedRules.switchSidesOdd,
           ...(resolvedRules.pickleballScoringMode ? { pickleballScoringMode: resolvedRules.pickleballScoringMode } : {}),
        };
+       // Mantém a tela Regras alinhada ao preset/fase efetivamente usado pelo evento.
+       setMatchSettings(configToUse);
        tournamentMeta = {
           tournamentMatchId: match.id,
           tournamentPin: event.pin,

@@ -223,8 +223,8 @@ export const SYSTEM_RULE_PRESETS: MatchRulesPreset[] = [
   },
   {
     id: 'pickleball_single_15',
-    name: 'Pickleball · 1 game até 15 pts',
-    description: '1 set a 15 pts · Troca de lado nos 8 pts · Dif. de 2 pts',
+    name: 'Pickleball · 1 game até 15 pts (rally)',
+    description: 'Rally scoring · Troca de lado nos 8 pts · Dif. de 2 pts',
     sportId: 'pickleball',
     isSystem: true,
     rules: {
