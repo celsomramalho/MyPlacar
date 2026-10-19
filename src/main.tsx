@@ -6,12 +6,6 @@ import './index.css';
 
 registerServiceWorker();
 
-// Alguns navegadores móveis exibem o menu nativo ao detectar um toque longo.
-// Evita que esse menu cubra o placar enquanto o MyPlacar está aberto.
-document.addEventListener('contextmenu', (event) => {
-  event.preventDefault();
-}, true);
-
 const container = document.getElementById('root');
 if (container) {
   const root = createRoot(container);

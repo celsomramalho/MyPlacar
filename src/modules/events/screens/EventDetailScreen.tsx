@@ -740,6 +740,17 @@ export const EventDetailScreen: React.FC<Props> = ({
     [activeCategory, event.matches, event.pairs]
   );
 
+  const pairReachedRankingMatchLimit = useCallback(
+    (pairId: string) => {
+      const limit = Number(event.rankingMatchesPerTeam || 0);
+      if (!isRanking || limit <= 0) return false;
+      return categoryMatches.filter(
+        (match) => match.pair1Id === pairId || match.pair2Id === pairId
+      ).length >= limit;
+    },
+    [categoryMatches, event.rankingMatchesPerTeam, isRanking]
+  );
+
   const pairHasFinishedMatches = useCallback(
     (pairId: string) => {
       const targetPair = (event.pairs || []).find((pair) => pair.id === pairId);
@@ -837,7 +848,7 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   const togglePairSelection = (pair: TournamentPair) => {
     const canSelectTeamsForRanking = canUserFormRankingTeam;
-    if ((!canManageEvent && !canSelectTeamsForRanking) || isReadOnly) return;
+    if ((!canManageEvent && !canSelectTeamsForRanking) || isReadOnly || pairReachedRankingMatchLimit(pair.id)) return;
     setSelectedPairs((previous) => {
       const next = new Set(previous);
       if (next.has(pair.id)) {
@@ -2081,7 +2092,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 index={idx}
                                 isRanking={isRanking}
                                 isSelected={selectedPairs.has(pair.id)}
-                canSelect={(canManageEvent || canUserFormRankingTeam) && !isReadOnly}
+                                canSelect={(canManageEvent || canUserFormRankingTeam) &&
+                                  !isReadOnly &&
+                                  !pairReachedRankingMatchLimit(pair.id)}
                                 onToggleSelect={togglePairSelection}
                                 canManage={canManageEvent}
                                 canChangeBracket={(canManageEvent || (event.allowUserTeamFormation === true && hasActiveRegistration)) &&
