@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowUpDown, Sparkles } from 'lucide-react';
+import { isSimplifiedEntry } from '@modules/events/types';
 import type { EventCategory, TournamentEntry, TournamentEvent, PlayerStanding, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { ParticipantRow } from '@modules/events/components/registration/ParticipantRow';
 import { EventRegistrationForm } from '@modules/events/domain/registration';
@@ -52,6 +53,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   onUpdateEvent,
 }) => {
   const isSuper8Like = isSuper8 || isSuper8Duplas;
+  const [expandedStatsEmail, setExpandedStatsEmail] = React.useState<string | null>(null);
 
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
@@ -102,6 +104,8 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
               const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
               const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
               const isExpanded = expandedRegistrationEmail === entry.email;
+              const isStatsExpanded = expandedStatsEmail === (entry.email || entry.pin);
+              const isSimplified = isSimplifiedEntry(entry, event);
               const pair = isRanking
                 ? null
                 : (event.pairs || []).find(
@@ -124,14 +128,17 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                     isIndividualRanking={isIndividualRanking}
                     isRanking={isRanking}
                     isSuper8={isSuper8Like}
+                    isSimplified={isSimplified}
                     canViewHistory={!isReadOnly}
                     isSelected={selectedEntries.has(entry.email)}
+                    isExpanded={isStatsExpanded}
                     canSelect={!isSuper8Like && !isReadOnly}
                     hasCategoryMatches={categoryMatches.length > 0}
                     matches={categoryMatches}
                     pairsById={pairsById}
                     allPairs={event.pairs}
                     onToggleSelect={onToggleEntrySelection}
+                    onToggleExpanded={() => setExpandedStatsEmail(isStatsExpanded ? null : (entry.email || entry.pin))}
                     onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
                   />
                   {isExpanded && (
@@ -161,6 +168,8 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
             const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
             const isExpanded = expandedRegistrationEmail === entry.email;
+            const isStatsExpanded = expandedStatsEmail === (entry.email || entry.pin);
+            const isSimplified = isSimplifiedEntry(entry, event);
             const pair = isRanking
               ? null
               : (event.pairs || []).find(
@@ -183,14 +192,17 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                   isIndividualRanking={isIndividualRanking}
                   isRanking={isRanking}
                   isSuper8={isSuper8Like}
+                  isSimplified={isSimplified}
                   canViewHistory={!isReadOnly}
                   isSelected={selectedEntries.has(entry.email)}
+                  isExpanded={isStatsExpanded}
                   canSelect={!isSuper8Like && !isReadOnly}
                   hasCategoryMatches={categoryMatches.length > 0}
                   matches={categoryMatches}
                   pairsById={pairsById}
                   allPairs={event.pairs}
                   onToggleSelect={onToggleEntrySelection}
+                  onToggleExpanded={() => setExpandedStatsEmail(isStatsExpanded ? null : (entry.email || entry.pin))}
                   onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
                 />
                 {isExpanded && (

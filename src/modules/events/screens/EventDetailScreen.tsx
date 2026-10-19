@@ -141,9 +141,15 @@ export const EventDetailScreen: React.FC<Props> = ({
   const isRanking = isRankingEvent(event);
   const isSuper8 = isSuper8Event(event);
   const isChaveEvent = !isRanking && !isSuper8;
+  const canUserFormRankingTeam =
+    isRanking &&
+    !isReadOnly &&
+    event.allowUserTeamFormation === true &&
+    isParticipant;
 
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [participantSearch, setParticipantSearch] = useState('');
+  const [expandedRankingEntryKey, setExpandedRankingEntryKey] = useState<string | null>(null);
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set());
   const [userSelectedCategoryId, setUserSelectedCategoryId] = useState<string | null>(null);
   const [userCategoryView, setUserCategoryView] = useState<'entries' | 'teams' | 'matches'>(
@@ -734,6 +740,28 @@ export const EventDetailScreen: React.FC<Props> = ({
     [activeCategory, event.matches, event.pairs]
   );
 
+  const pairHasFinishedMatches = useCallback(
+    (pairId: string) => {
+      const targetPair = (event.pairs || []).find((pair) => pair.id === pairId);
+      const sameParticipants = (left?: TournamentPair, right?: TournamentPair) => {
+        if (!left || !right) return false;
+        const key = (entry: TournamentEntry) => (entry.email || entry.pin || '').toLowerCase().trim();
+        const leftKeys = [key(left.p1), key(left.p2)].sort().join('|');
+        const rightKeys = [key(right.p1), key(right.p2)].sort().join('|');
+        return Boolean(leftKeys && leftKeys === rightKeys);
+      };
+      return (event.matches || []).some(
+        (match) =>
+          (match.pair1Id === pairId || match.pair2Id === pairId || match.pair1?.id === pairId || match.pair2?.id === pairId ||
+            sameParticipants(match.pair1, targetPair) || sameParticipants(match.pair2, targetPair)) &&
+          (String(match.status).toLowerCase().includes('finish') ||
+            String(match.status).toLowerCase().includes('complete') ||
+            Boolean(match.result || match.winnerPairId || match.finishedAt))
+      );
+    },
+    [event.matches, event.pairs]
+  );
+
   const pairsById = useMemo(() => buildPairsById(event.pairs || []), [event.pairs]);
 
   const pairsMap = useMemo(() => Object.fromEntries(pairsById), [pairsById]);
@@ -790,8 +818,9 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   // Formação de duplas pelo gestor dentro da categoria
   const toggleEntrySelection = (entry: TournamentEntry) => {
-    const canAthleteSelect = !canManageEvent && event.allowUserTeamFormation === true &&
-      hasActiveRegistration && !isSuper8 && (isRanking || !findEntryPair(entry));
+    const canAthleteSelect = !canManageEvent &&
+      (canUserFormRankingTeam || event.allowUserTeamFormation === true) &&
+      !isSuper8 && (isRanking || !findEntryPair(entry));
     if ((!canManageEvent && !canAthleteSelect) || isSuper8 || entry.disabled || entry.paymentStatus === 'Cancelado') return;
     const key = entry.email || entry.pin;
     setSelectedEntries((prev) => {
@@ -807,7 +836,8 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   const togglePairSelection = (pair: TournamentPair) => {
-    if (!canManageEvent || isReadOnly || pairHasMatches(pair.id)) return;
+    const canSelectTeamsForRanking = canUserFormRankingTeam;
+    if ((!canManageEvent && !canSelectTeamsForRanking) || isReadOnly) return;
     setSelectedPairs((previous) => {
       const next = new Set(previous);
       if (next.has(pair.id)) {
@@ -821,7 +851,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   const handleFormTeam = async () => {
-    const canAthleteForm = !canManageEvent && event.allowUserTeamFormation === true && hasActiveRegistration &&
+    const canAthleteForm = !canManageEvent && (canUserFormRankingTeam || event.allowUserTeamFormation === true) &&
       !isSuper8;
     if ((!canManageEvent && !canAthleteForm) || selectedEntries.size !== 2 || !activeCategory) return;
     const selectedList = categoryEntries.filter((e) => selectedEntries.has(e.email || e.pin));
@@ -894,9 +924,36 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   const handleFormMatch = async () => {
-    if (!canManageEvent || isReadOnly || selectedPairs.size !== 2 || !activeCategory) return;
+    const canFormMatch = canManageEvent || canUserFormRankingTeam;
+    if (!canFormMatch || isReadOnly || selectedPairs.size !== 2 || !activeCategory) return;
     const pairIds = Array.from(selectedPairs);
     const categoryMatchesForNumber = getCategoryMatches(event.matches || [], event.pairs || [], activeCategory, { includePairCategoryFallback: false });
+
+    // Em Ranking, cada time pode participar somente da quantidade configurada
+    // no evento. O histórico não impede novas partidas enquanto o limite não
+    // tiver sido atingido.
+    const rankingMatchesLimit = Number(event.rankingMatchesPerTeam || 0);
+    if (isRanking && rankingMatchesLimit > 0) {
+      const blockedPair = pairIds
+        .map((pairId) => categoryPairs.find((pair) => pair.id === pairId))
+        .find((pair) => {
+          if (!pair) return false;
+          const matchesCount = categoryMatchesForNumber.filter(
+            (match) => match.pair1Id === pair.id || match.pair2Id === pair.id
+          ).length;
+          return matchesCount >= rankingMatchesLimit;
+        });
+
+      if (blockedPair) {
+        setModalConfig({
+          title: 'Limite de partidas atingido',
+          message: `${blockedPair.teamCode || 'Este time'} já atingiu o limite de ${rankingMatchesLimit} ${rankingMatchesLimit === 1 ? 'partida permitida' : 'partidas permitidas'} neste evento.`,
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
+    }
+
     const matchNumber = Math.max(0, ...categoryMatchesForNumber.map((match) => match.matchNumber || 0)) + 1;
     const newMatch: TournamentMatch = {
       id: `match_${Date.now()}`,
@@ -961,6 +1018,14 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   const handleUndoPair = async (pairId: string) => {
     if (!canManageEvent) return;
+    if (pairHasFinishedMatches(pairId)) {
+      setModalConfig({
+        title: 'Time bloqueado',
+        message: 'Não é permitido desfazer um time que possui partida finalizada no histórico.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
     setModalConfig({
       title: 'Desfazer time',
       message: 'Tem certeza que deseja desfazer este time? Confrontos associados serão cancelados.',
@@ -1173,9 +1238,32 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   const openDeleteMatchRequest = (matchId: string) => {
     const match = (event.matches || []).find((m) => m.id === matchId);
-    if (!match || !isRanking || !isCurrentUserInMatch(match)) return;
-    setDeleteRequestMatch(match);
-    setDeleteRequestReason('');
+    if (!match || match.status !== 'waiting' || !isRanking || !isCurrentUserInMatch(match)) return;
+
+    setModalConfig({
+      title: 'Excluir partida',
+      message: 'Tem certeza que deseja excluir esta partida? Ela será removida para os dois times e poderá ser formada novamente depois.',
+      onCancel: () => setModalConfig(null),
+      onConfirm: async () => {
+        setModalConfig(null);
+        const nextMatches = (event.matches || []).filter((item) => item.id !== matchId);
+        setEvent((currentEvent) => ({ ...currentEvent, matches: nextMatches }));
+
+        const db = getDb();
+        if (!db) return;
+        try {
+          await updateEventMatches(db as Firestore, event.pin, nextMatches);
+        } catch (error) {
+          console.error('Erro ao excluir partida:', error);
+          setModalConfig({
+            title: 'Erro ao excluir partida',
+            message: 'Não foi possível excluir a partida. Tente novamente.',
+            variant: 'danger',
+            onConfirm: () => setModalConfig(null),
+          });
+        }
+      },
+    });
   };
 
   const closeDeleteMatchRequest = () => {
@@ -1359,8 +1447,7 @@ export const EventDetailScreen: React.FC<Props> = ({
     [sortedCategoryEntries, participantSearch]
   );
 
-  const canAthleteFormTeam = !canManageEvent && event.allowUserTeamFormation === true &&
-    hasActiveRegistration && !isSuper8;
+  const canAthleteFormTeam = !canManageEvent && (canUserFormRankingTeam || event.allowUserTeamFormation === true) && !isSuper8;
   const canSubmitSelectedTeam = selectedEntries.size === 2 &&
     (canManageEvent || canAthleteFormTeam);
 
@@ -1786,7 +1873,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                       </header>
                     )}
 
-                    {canManageEvent && userCategoryView === 'teams' && selectedPairs.size > 0 && (
+                    {(canManageEvent || canUserFormRankingTeam) && userCategoryView === 'teams' && selectedPairs.size > 0 && (
                       <header className="fixed inset-x-0 top-0 z-[60] flex min-h-[76px] items-center justify-between gap-3 bg-sky-600 px-5 py-3 text-white shadow-lg animate-in slide-in-from-top duration-200">
                         <div className="flex min-w-0 items-center gap-3">
                           <button
@@ -1954,9 +2041,13 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 isRanking={isRanking}
                                 isSuper8={isSuper8}
                                 isSelected={selectedEntries.has(entry.email || entry.pin)}
+                                isExpanded={expandedRankingEntryKey === standingKey}
                                 canSelect={(canManageEvent && !pair && !isSuper8) || canAthleteSelectEntry}
                                 hasCategoryMatches={categoryMatches.length > 0}
                                 onToggleSelect={toggleEntrySelection}
+                                onToggleExpanded={isRanking
+                                  ? () => setExpandedRankingEntryKey((current) => current === standingKey ? null : standingKey)
+                                  : undefined}
                                 onEdit={canUserEditSimplified ? (targetEntry) => setEditingSimplifiedEntry(targetEntry) : undefined}
                               />
                             );
@@ -1990,14 +2081,14 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 index={idx}
                                 isRanking={isRanking}
                                 isSelected={selectedPairs.has(pair.id)}
-                                canSelect={canManageEvent && !isReadOnly && !pairHasMatches(pair.id)}
+                canSelect={(canManageEvent || canUserFormRankingTeam) && !isReadOnly}
                                 onToggleSelect={togglePairSelection}
                                 canManage={canManageEvent}
                                 canChangeBracket={(canManageEvent || (event.allowUserTeamFormation === true && hasActiveRegistration)) &&
                                   !isReadOnly &&
                                   !pairHasMatches(pair.id)}
                                 onToggleBracket={handleToggleTeamBracket}
-                                onUndoPair={handleUndoPair}
+                                onUndoPair={pairHasFinishedMatches(pair.id) ? undefined : handleUndoPair}
                               />
                             );
                           })
@@ -2054,7 +2145,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                                     : handleReopenMatch
                                 }
                                 onDeleteMatch={
-                                  lockParticipantMatchControls || !canUseRankingMatchActions
+                                  lockParticipantMatchControls ||
+                                  !canUseRankingMatchActions ||
+                                  match.status !== 'waiting'
                                     ? undefined
                                     : openDeleteMatchRequest
                                 }

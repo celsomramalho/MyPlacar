@@ -8,12 +8,12 @@ import type { TournamentEvent } from '../types';
 export const isRankingEvent = (event?: Partial<TournamentEvent> | null): boolean => {
   if (!event) return false;
   const type = (event.eventType || '').trim().toLowerCase();
-  if (type) return type === 'ranking';
+  if (type && type.includes('ranking')) return true;
   const name = (event.name || '').trim().toLowerCase();
   if (name.includes('ranking')) return true;
   if (Boolean(event.rankingMatchesPerTeam && event.rankingMatchesPerTeam > 0)) return true;
-  if (event.config?.sportType?.toLowerCase() === 'ranking') return true;
-  if (event.bracketDrawType?.toLowerCase() === 'ranking' || event.matchDrawType?.toLowerCase() === 'ranking') return true;
+  if (event.config?.sportType?.toLowerCase().includes('ranking')) return true;
+  if (event.bracketDrawType?.toLowerCase().includes('ranking') || event.matchDrawType?.toLowerCase().includes('ranking')) return true;
   return false;
 };
 

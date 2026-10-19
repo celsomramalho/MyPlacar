@@ -470,6 +470,31 @@ export const EventCategoriesManager: React.FC<Props> = ({
         )}
       </div>
 
+      {/* Seletor de categorias — mesmo padrão usado na visão do participante */}
+      {categories.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {[...categories]
+            .sort((a, b) => a.priority - b.priority)
+            .map((cat) => {
+              const isSelected = selectedCategoryId === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => openCategoryPanel(cat.id, 'entries')}
+                  className={`min-h-[44px] rounded-xl border px-3 py-2 text-xs font-black transition-all active:scale-[0.98] ${
+                    isSelected
+                      ? 'border-slate-900 bg-slate-900 text-white shadow-md'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  {cat.name}{cat.abbreviation ? ` (${cat.abbreviation})` : ''}
+                </button>
+              );
+            })}
+        </div>
+      )}
+
       {/* Category Registration Form Modal (Adicionar) */}
       {isAdding && !editingId && (
         <CategoryFormModal
@@ -507,7 +532,9 @@ export const EventCategoriesManager: React.FC<Props> = ({
         </div>
       ) : (
         <div className="space-y-3">
-          {categories.map((cat) => {
+          {categories
+            .filter((cat) => !selectedCategoryId || cat.id === selectedCategoryId)
+            .map((cat) => {
             const inscritosCount = entries.filter((e) =>
               e.categoryIds?.includes(cat.id)
             ).length;
@@ -625,7 +652,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                 )}
               </React.Fragment>
             );
-          })}
+            })}
         </div>
       )}
 

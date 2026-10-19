@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Users, UsersRound, Check, Pencil, Clock } from 'lucide-react';
+import { User, Users, UsersRound, Check, Pencil, Clock, ChevronDown } from 'lucide-react';
 import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { maskPin } from '@shared/utils/formatters';
 import type { TournamentEntry, TournamentPair, EventCategory, TournamentMatch, PlayerStanding } from '../../types';
@@ -28,6 +28,8 @@ export interface ParticipantRowProps {
   pairsById?: Record<string, TournamentPair>;
   allPairs?: TournamentPair[];
   onToggleSelect?: (entry: TournamentEntry) => void;
+  isExpanded?: boolean;
+  onToggleExpanded?: () => void;
   onEdit?: (entry: TournamentEntry) => void;
 }
 
@@ -50,6 +52,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
   pairsById,
   allPairs,
   onToggleSelect,
+  isExpanded = false,
+  onToggleExpanded,
   onEdit,
 }) => {
   const partner = pair
@@ -137,38 +141,6 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
                 </span>
               )}
 
-              {/* Badge TEMPORÁRIO — inscrição simplificada ainda não vinculada */}
-              {isSimplified && !isCurrentUser && !isCancelled && (
-                <span
-                  className="bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider"
-                  title="Cadastro temporário — aguardando vinculação ao perfil do atleta"
-                >
-                  Temporário
-                </span>
-              )}
-
-              {isIndividualRanking && standing?.rank !== undefined && (
-                <span
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
-                    standing.rank === 1
-                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                      : standing.rank === 2
-                      ? 'bg-slate-200 text-slate-700 border border-slate-300'
-                      : standing.rank === 3
-                      ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
-                </span>
-              )}
-
-              {isRanking && standing && (
-                <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
-                  {standing.points || 0} pts
-                </span>
-              )}
-
               {pair ? (
                 <span className="font-mono text-sky-800 bg-sky-100 border border-sky-300 px-2 py-0.5 rounded-lg text-[10px] font-black inline-flex items-center gap-1">
                   <Users size={11} /> {pair.teamCode || 'Time formado'}
@@ -200,7 +172,57 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
         </div>
 
         {/* Lado Direito: Botão de Edição e/ou Número de Inscrição Super 8 */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          {(isIndividualRanking && standing?.rank !== undefined || isRanking && standing) && (
+            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+              {isIndividualRanking && standing?.rank !== undefined && (
+                <span
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
+                    standing.rank === 1
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                      : standing.rank === 2
+                      ? 'bg-slate-200 text-slate-700 border border-slate-300'
+                      : standing.rank === 3
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
+                </span>
+              )}
+              {isRanking && standing && (
+                <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-lg">
+                  {standing.points || 0} pts
+                </span>
+              )}
+
+              {isRanking && onToggleExpanded && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleExpanded();
+                  }}
+                  title={isExpanded ? 'Ocultar estatísticas' : 'Mostrar estatísticas'}
+                  aria-label={isExpanded ? 'Ocultar estatísticas' : 'Mostrar estatísticas'}
+                  className="w-7 h-7 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-all active:scale-95"
+                >
+                  <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            {isSimplified && !isCurrentUser && !isCancelled && (
+              <span
+                className="bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider"
+                title="Cadastro temporário — aguardando vinculação ao perfil do atleta"
+              >
+                Temporário
+              </span>
+            )}
+
           {onEdit && (
             <button
               type="button"
@@ -215,6 +237,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
               <Pencil size={15} />
             </button>
           )}
+          </div>
 
           {isSuper8 && (
             <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
@@ -225,7 +248,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
       </div>
 
       {/* Estatísticas de Ranking ou Super 8 Individual */}
-      {isIndividualRanking && standing && hasCategoryMatches && (
+      {isIndividualRanking && standing && hasCategoryMatches && (!isRanking || isExpanded) && (
         <div className="mt-2">
           {isRanking ? (
             <RankingStandingStatsBlock standing={standing} />
