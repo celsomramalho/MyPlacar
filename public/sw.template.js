@@ -1,4 +1,5 @@
 const CACHE_NAME = '%%CACHE_NAME%%';
+const OFFLINE_ASSETS = %%OFFLINE_ASSETS%%;
 
 const PRECACHE_URLS = [
   '/',
@@ -69,6 +70,8 @@ self.addEventListener('install', (event) => {
         while ((match = assetRegex.exec(html)) !== null) {
           assetUrls.add(match[1]);
         }
+
+        for (const url of OFFLINE_ASSETS) assetUrls.add(url);
 
         await Promise.all([...assetUrls].map(url =>
           fetch(url, { cache: 'no-store' })

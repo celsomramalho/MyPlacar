@@ -40,7 +40,32 @@ function swInjectPlugin(): Plugin {
       const distOutputPath = resolve(__dirname, 'dist/sw.js');
       try {
         const template = readFileSync(templatePath, 'utf-8');
-        const output   = template.replace(/%%CACHE_NAME%%/g, CACHE_NAME);
+        const manifestPath = resolve(__dirname, 'dist/.vite/manifest.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Record<string, {
+          file?: string;
+          css?: string[];
+          assets?: string[];
+          imports?: string[];
+        }>;
+        const offlineAssets = new Set<string>();
+        const visited = new Set<string>();
+        const addManifestEntry = (key: string) => {
+          if (visited.has(key)) return;
+          visited.add(key);
+          const entry = manifest[key];
+          if (!entry) return;
+          if (entry.file) offlineAssets.add(`/${entry.file}`);
+          for (const asset of [...(entry.css || []), ...(entry.assets || [])]) {
+            offlineAssets.add(`/${asset}`);
+          }
+          for (const importedKey of entry.imports || []) addManifestEntry(importedKey);
+        };
+        const rulesRouteKey = Object.keys(manifest).find(key => key.endsWith('src/app/NewGameRoute.tsx'));
+        if (rulesRouteKey) addManifestEntry(rulesRouteKey);
+
+        const output = template
+          .replace(/%%CACHE_NAME%%/g, CACHE_NAME)
+          .replace('%%OFFLINE_ASSETS%%', JSON.stringify([...offlineAssets]));
         writeFileSync(distOutputPath, output, 'utf-8');
         console.log(`✅ sw.js (dist) gerado com CACHE_NAME = "${CACHE_NAME}"`);
       } catch (e) {
@@ -130,6 +155,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    manifest: true,
     chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
