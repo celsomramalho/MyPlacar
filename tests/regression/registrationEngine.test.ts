@@ -134,21 +134,17 @@ describe('R-T01 a R-T04 – Cálculo de Preço e Saldo Devedor', () => {
 // ─── Grupo 2: Capacidade e Vagas por Categoria (Vacancy) ────────────────────
 
 describe('R-T05 a R-T07 – Controle de Vagas por Categoria', () => {
-  it('R-T05: utiliza o padrão de 8 atletas quando não há limite definido na categoria ou evento', () => {
+  it('R-T05: utiliza o padrão de 8 atletas quando não há limite definido na categoria', () => {
     const cat = makeCategory({ id: 'cat1', maxPlayers: undefined });
-    const event = { maxPlayersPerCategory: undefined };
-
-    const vacancy = calculateCategoryVacancy(cat, event, 3);
+    const vacancy = calculateCategoryVacancy(cat, 3);
     expect(vacancy.limit).toBe(8);
     expect(vacancy.remaining).toBe(5);
     expect(vacancy.isFull).toBe(false);
   });
 
-  it('R-T06: respeita o limite específico configurado na categoria sobre o global do evento', () => {
+  it('R-T06: respeita o limite específico configurado na categoria', () => {
     const cat = makeCategory({ id: 'cat1', maxPlayers: 16 });
-    const event = { maxPlayersPerCategory: 8 };
-
-    const vacancy = calculateCategoryVacancy(cat, event, 10);
+    const vacancy = calculateCategoryVacancy(cat, 10);
     expect(vacancy.limit).toBe(16);
     expect(vacancy.remaining).toBe(6);
     expect(vacancy.isFull).toBe(false);
@@ -156,15 +152,13 @@ describe('R-T05 a R-T07 – Controle de Vagas por Categoria', () => {
 
   it('R-T07: bloqueia novas inscrições quando a categoria atinge a capacidade máxima', () => {
     const cat = makeCategory({ id: 'cat1', maxPlayers: 8 });
-    const event = { maxPlayersPerCategory: 8 };
-
     // Novo inscrito tentando entrar com 8 já confirmados
-    const fullVacancy = calculateCategoryVacancy(cat, event, 8, false);
+    const fullVacancy = calculateCategoryVacancy(cat, 8, false);
     expect(fullVacancy.isFull).toBe(true);
     expect(fullVacancy.remaining).toBe(0);
 
     // Atleta que já estava inscrito editando seus dados não deve ser bloqueado
-    const existingVacancy = calculateCategoryVacancy(cat, event, 8, true);
+    const existingVacancy = calculateCategoryVacancy(cat, 8, true);
     expect(existingVacancy.isFull).toBe(false);
   });
 });
@@ -404,7 +398,7 @@ describe('R-T18 a R-T20 – Mapeamento de Inscritos e Vagas em Eventos Gratuitos
     expect(countMap['super8']).toBe(8);
 
     // Novo atleta tentando entrar
-    const vacancy = calculateCategoryVacancy(cat, event, countMap['super8'], false);
+    const vacancy = calculateCategoryVacancy(cat, countMap['super8'], false);
     expect(vacancy.limit).toBe(8);
     expect(vacancy.confirmedCount).toBe(8);
     expect(vacancy.remaining).toBe(0);
