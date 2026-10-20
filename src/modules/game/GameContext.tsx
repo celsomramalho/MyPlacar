@@ -196,7 +196,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   });
 
   const { currentScreen, setPlayerQueue, playerQueue, setModalConfig, setShowLiveControlOverlay, setCurrentScreen, isSettingsInicialSaved, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, overlayAcceptedRef, setIsSavingJudge, isProfileSaved, setIsProfileSaved, setVoiceLogs, setIsRecoveryFromMatchOver, setIsWaitingSync } = useUI();
-  const { isOriginalOwner, resolveTargetPin, activeLives, isClosingLiveRef, setCloudLiveExists, setActiveLives, livePapel, tookControlAtRef, setLiveLogs } = useLive();
+  const { isOriginalOwner, isActiveController, resolveTargetPin, activeLives, isClosingLiveRef, setCloudLiveExists, setActiveLives, livePapel, tookControlAtRef, setLiveLogs } = useLive();
   const deviceId = getDeviceId();
 
   const prevSettingsRef = useRef<MatchSettings | null>(null);
@@ -965,7 +965,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const targetPin = resolveTargetPin('liveControl');
     if (!targetPin) return;
 
-    const isController = gameState.commandOwnerId === deviceId;
+    // Use a mesma fonte confirmada pelo painel da live. O commandOwnerId local
+    // pode estar desatualizado no observador e faria o sync publicar o placar velho.
+    const isController = isActiveController;
 
     try {
       const { doc, getDoc, setDoc } = await import('firebase/firestore');
@@ -1026,7 +1028,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     } catch (_e) {
       setModalConfig({ title: "Erro ao sincronizar", message: "Não foi possível sincronizar o placar. Tente novamente.", onConfirm: () => setModalConfig(null) });
     }
-  }, [gameState, setModalConfig, resolveTargetPin, deviceId, setGameState, setLiveLogs, setShowLiveControlOverlay]);
+  }, [gameState, isActiveController, setModalConfig, resolveTargetPin, deviceId, setGameState, setLiveLogs, setShowLiveControlOverlay]);
 
   const handleAddJudge = useCallback(async (pin: string, nickname?: string) => {
     if (!pin || pin.length < 5 || !gameState || !userProfile.pin) return;
