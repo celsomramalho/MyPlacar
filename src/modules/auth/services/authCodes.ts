@@ -9,8 +9,7 @@ export const generateUserPin = (): string => {
 };
 
 export const generateWatchCode = (): string => {
-  return Array.from(
-    { length: 4 },
-    () => WATCH_CODE_CHARS[Math.floor(Math.random() * WATCH_CODE_CHARS.length)],
-  ).join('');
+  const random = new Uint32Array(6);
+  globalThis.crypto.getRandomValues(random);
+  return Array.from(random, (value) => WATCH_CODE_CHARS[value % WATCH_CODE_CHARS.length]).join('');
 };

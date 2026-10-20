@@ -75,9 +75,13 @@ const WatchLoginApproval: React.FC = () => {
 
   const handleApprove = async () => {
     const trimmed = code.trim().toUpperCase();
-    if (trimmed.length !== 4) { setErrorMsg('Digite o código de 4 letras'); return; }
+    if (trimmed.length !== 6) { setErrorMsg('Digite o código de 6 caracteres'); return; }
     const db = getDb();
     if (!db) { setErrorMsg('Sem conexão com o banco de dados'); return; }
+    if (!userProfile.email?.trim() || !userProfile.pin?.trim()) {
+      setErrorMsg('Não foi possível identificar a conta conectada neste celular. Entre novamente e tente aprovar o relógio.');
+      return;
+    }
     setStatus('loading');
     setErrorMsg('');
     try {
@@ -119,7 +123,8 @@ const WatchLoginApproval: React.FC = () => {
   return (
     <div className="mt-4 p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
       <p className="text-xs font-black text-blue-800">🕐 Login rápido para relógio</p>
-      <p className="text-[11px] font-bold text-blue-500">Digite o código exibido no relógio para aprovar o acesso</p>
+      <p className="text-[11px] font-bold text-blue-500">Digite o código de 6 caracteres exibido no relógio para autorizar esta conta:</p>
+      <p className="text-xs font-black text-blue-900">{userProfile.email}</p>
       {status === 'success' ? (
         <div className="flex items-center gap-2 py-2">
           <span className="text-green-600 font-black text-sm">✓ Relógio autorizado com sucesso!</span>
@@ -129,13 +134,13 @@ const WatchLoginApproval: React.FC = () => {
           <input
             value={code}
             onChange={e => { setCode(e.target.value.toUpperCase()); setStatus('idle'); setErrorMsg(''); }}
-            maxLength={4}
-            placeholder="Ex: K7X2"
+            maxLength={6}
+            placeholder="Ex: K7X2M9"
             className="flex-1 h-11 bg-white border border-blue-200 rounded-xl px-3 font-black text-lg text-center text-blue-800 uppercase tracking-widest outline-none"
           />
           <button
             onClick={handleApprove}
-            disabled={status === 'loading' || code.length !== 4}
+            disabled={status === 'loading' || code.length !== 6}
             className="h-11 px-5 bg-blue-600 text-white rounded-xl font-black text-sm active:scale-95 disabled:opacity-50"
           >
             {status === 'loading' ? '...' : 'OK'}

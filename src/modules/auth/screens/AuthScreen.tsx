@@ -68,6 +68,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   const [watchCode, setWatchCode] = useState<string>('');
   const [watchStatus, setWatchStatus] = useState<'idle' | 'waiting' | 'approved' | 'expired'>('idle');
   const watchUnsubRef = useRef<(() => void) | null>(null);
+  const watchCompletionRef = useRef(false);
 
   const [email, setEmail] = useState(() => getSavedEmail());
   const handleEmailChange = (val: string) => {
@@ -850,6 +851,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     const code = generateWatchCode();
     setWatchCode(code);
     setWatchStatus('waiting');
+    watchCompletionRef.current = false;
     setMode('watch_login');
 
     const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
@@ -864,24 +866,33 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     // Listener: aguarda celular aprovar
     const unsub = subscribeWatchLoginToken(db, code, async (data) => {
       if (!data) return;
-      if (data.status === 'approved' && data.email && data.pin) {
+      if (data.status === 'approved' && data.email && data.pin && !watchCompletionRef.current) {
+        watchCompletionRef.current = true;
         clearTimeout(expireTimer);
         watchUnsubRef.current?.();
-        setWatchStatus('approved');
-
-        // Salva para próximos logins sem precisar do celular
-        saveWatchLoginCache({
-          email: data.email,
-          pin: data.pin,
-          rememberMe: data.rememberMe,
-          profile: data.profile,
-        });
-
-        // Busca perfil completo e autentica
-        const profile = await fetchUserProfile(db, data.email);
-        if (profile) {
+        try {
+          const approvedEmail = data.email.trim().toLowerCase();
+          const approvedPin = data.pin.trim().toUpperCase();
+          // O perfil enviado pelo celular é a identidade aprovada. Confirme também
+          // o documento consultado antes de persistir qualquer sessão no relógio.
+          const profile = await fetchUserProfile(db, approvedEmail);
+          if (!profile || profile.email?.trim().toLowerCase() !== approvedEmail || profile.pin?.trim().toUpperCase() !== approvedPin) {
+            throw new Error('A conta aprovada no celular não corresponde ao perfil encontrado. Gere um novo código e tente novamente.');
+          }
           await deleteWatchLoginToken(db, code); // token de uso único
+          saveWatchLoginCache({
+            email: approvedEmail,
+            pin: approvedPin,
+            rememberMe: data.rememberMe,
+            profile,
+          });
+          setWatchStatus('approved');
           onAuthSuccess(profile as UserProfile, true);
+        } catch (error) {
+          watchCompletionRef.current = false;
+          setError(error instanceof Error ? error.message : 'Não foi possível validar a conta aprovada.');
+          setWatchStatus('idle');
+          setMode('login');
         }
       }
       if (data.status === 'expired' || (data.expiresAt && Date.now() > data.expiresAt)) {
