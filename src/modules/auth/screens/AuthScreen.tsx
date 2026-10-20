@@ -848,15 +848,29 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
   const handleStartWatchLogin = async () => {
     const db = getDb();
-    if (!db) return;
+    if (!db) {
+      setError('Não foi possível conectar ao Firebase para criar o código. Verifique a conexão e tente novamente.');
+      return;
+    }
     const code = generateWatchCode();
-    setWatchCode(code);
-    setWatchStatus('waiting');
+    setWatchCode('');
+    setWatchStatus('idle');
     watchCompletionRef.current = false;
     setMode('watch_login');
+    setError(null);
 
     const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
-    await createWatchLoginToken(db, code, expiresAt);
+    try {
+      // Só exibe o código depois que o Firestore confirmar a criação do token.
+      await createWatchLoginToken(db, code, expiresAt);
+    } catch (error) {
+      console.error('[WatchLogin] Não foi possível criar o token:', error);
+      setMode('login');
+      setError('Não foi possível criar o código de acesso. Verifique a conexão e tente novamente.');
+      return;
+    }
+    setWatchCode(code);
+    setWatchStatus('waiting');
 
     // Expira automaticamente no cliente após 15 min
     const expireTimer = setTimeout(() => {
@@ -1526,6 +1540,13 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 {watchStatus === 'expired' ? 'Código expirado' : 'Abra o app no celular e digite o código'}
               </p>
             </div>
+
+            {watchStatus === 'idle' && (
+              <div className="flex items-center justify-center gap-3 py-8">
+                <Loader2 size={18} className="animate-spin text-blue-500" />
+                <span className="text-sm font-bold text-slate-500">Criando código seguro...</span>
+              </div>
+            )}
 
             {watchStatus === 'waiting' && (
               <div className="flex flex-col items-center gap-6">

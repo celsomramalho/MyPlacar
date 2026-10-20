@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Loader2, Sparkles, Plus, Trash2, ChevronDown, Save, Edit2, Database, Wand2, LayoutGrid, Trophy, Type, HelpCircle, Volume2, Info, Crown, Download, RotateCw, Check, Wifi } from 'lucide-react';
+import { Upload, Loader2, Sparkles, Plus, Trash2, ChevronDown, Save, Edit2, Database, Wand2, LayoutGrid, Trophy, Type, HelpCircle, Volume2, Info, Crown, Download, RotateCw, Check, Wifi, Eye, EyeOff } from 'lucide-react';
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { deleteAdminEvent, fetchAdminEvents, saveAdminEvent } from '@infra/firebase/adminEvents';
@@ -96,6 +96,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isVoiceSaved, setIsVoiceSaved] = useState(true);
   const [showFirebaseReauth, setShowFirebaseReauth] = useState(false);
   const [firebaseReauthPassword, setFirebaseReauthPassword] = useState('');
+  const [showFirebaseReauthPassword, setShowFirebaseReauthPassword] = useState(false);
   
   const [appUrl, setAppUrl] = useState(() => {
     if (typeof window !== 'undefined' && window.location.origin) {
@@ -483,6 +484,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     setIsVoiceSaved(true);
     setShowFirebaseReauth(false);
     setFirebaseReauthPassword('');
+    setShowFirebaseReauthPassword(false);
   };
 
   const handleSaveVoiceConfigs = async () => {
@@ -720,16 +722,27 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             <p className="text-xs font-semibold text-amber-800">
               O login biométrico abriu o app, mas para gravar configurações administrativas o Firebase pede a senha de {userProfile?.email}.
             </p>
-            <input
-              type="password"
-              value={firebaseReauthPassword}
-              onChange={event => setFirebaseReauthPassword(event.target.value)}
-              autoComplete="current-password"
-              placeholder="Senha da conta administradora"
-              className="w-full h-12 rounded-xl border border-amber-200 bg-white px-4 text-base font-semibold text-black outline-none"
-            />
+            <div className="relative">
+              <input
+                type={showFirebaseReauthPassword ? 'text' : 'password'}
+                value={firebaseReauthPassword}
+                onChange={event => setFirebaseReauthPassword(event.target.value)}
+                autoComplete="current-password"
+                placeholder="Senha da conta administradora"
+                className="w-full h-12 rounded-xl border border-amber-200 bg-white px-4 pr-12 text-base font-semibold text-black outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowFirebaseReauthPassword(value => !value)}
+                aria-label={showFirebaseReauthPassword ? 'Ocultar senha' : 'Visualizar senha'}
+                title={showFirebaseReauthPassword ? 'Ocultar senha' : 'Visualizar senha'}
+                className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 hover:text-slate-800"
+              >
+                {showFirebaseReauthPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
             <div className="flex gap-2">
-              <Button onClick={() => { setShowFirebaseReauth(false); setFirebaseReauthPassword(''); }} className="flex-1 !bg-slate-200 !text-slate-800 rounded-xl font-bold">Cancelar</Button>
+              <Button onClick={() => { setShowFirebaseReauth(false); setFirebaseReauthPassword(''); setShowFirebaseReauthPassword(false); }} className="flex-1 !bg-slate-200 !text-slate-800 rounded-xl font-bold">Cancelar</Button>
               <Button onClick={handleFirebaseReauth} disabled={isSavingVoice || !firebaseReauthPassword} className="flex-1 !bg-amber-500 rounded-xl font-bold text-white disabled:opacity-50">
                 {isSavingVoice ? <Loader2 className="animate-spin" size={18} /> : 'Confirmar e salvar'}
               </Button>

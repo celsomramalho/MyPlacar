@@ -134,13 +134,26 @@ const WatchLoginApproval: React.FC = () => {
         </div>
       ) : (
         <div className="flex gap-2">
-          <input
-            value={code}
-            onChange={e => { setCode(e.target.value.toUpperCase()); setStatus('idle'); setErrorMsg(''); }}
-            maxLength={6}
-            placeholder="Ex: K7X2M9"
-            className="flex-1 h-11 bg-white border border-blue-200 rounded-xl px-3 font-black text-lg text-center text-blue-800 uppercase tracking-widest outline-none"
-          />
+          <div className="relative min-w-0 flex-1">
+            <input
+              value={code}
+              onChange={e => { setCode(e.target.value.toUpperCase()); setStatus('idle'); setErrorMsg(''); }}
+              maxLength={6}
+              placeholder="Ex: K7X2M9"
+              className="w-full h-11 bg-white border border-blue-200 rounded-xl px-3 pr-10 font-black text-lg text-center text-blue-800 uppercase tracking-widest outline-none"
+            />
+            {code && (
+              <button
+                type="button"
+                onClick={() => { setCode(''); setStatus('idle'); setErrorMsg(''); }}
+                aria-label="Limpar código digitado"
+                title="Limpar código"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md text-slate-400 text-xl font-bold leading-none hover:bg-slate-100 hover:text-slate-700"
+              >
+                ×
+              </button>
+            )}
+          </div>
           <button
             onClick={handleApprove}
             disabled={status === 'loading' || code.length !== 6}
