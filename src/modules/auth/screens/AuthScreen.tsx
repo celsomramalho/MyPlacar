@@ -1528,7 +1528,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
             {watchStatus === 'waiting' && (
               <div className="flex flex-col items-center gap-6">
                 <div className="w-full bg-blue-50 border-2 border-blue-200 rounded-3xl p-8 flex flex-col items-center gap-3">
-                  <span className="text-6xl font-black tracking-[0.3em] text-blue-700">{watchCode}</span>
+                  <span className="text-6xl font-black tracking-[0.15em] text-blue-700">{watchCode}</span>
                   <span className="text-xs font-bold text-blue-400">válido por 15 minutos</span>
                 </div>
                 <div className="flex items-center gap-3">
