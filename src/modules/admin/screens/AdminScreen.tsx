@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Upload, Loader2, Sparkles, Plus, Trash2, ChevronDown, Save, Edit2, Database, Wand2, LayoutGrid, Trophy, Type, HelpCircle, Volume2, Info, Crown, Download, RotateCw, Check, Wifi } from 'lucide-react';
 import { getAuthInstance, getDb } from '@infra/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { deleteAdminEvent, fetchAdminEvents, saveAdminEvent } from '@infra/firebase/adminEvents';
 import {
   fetchAdminIconCatalog,
@@ -92,6 +93,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [remoteAppVersion, setRemoteAppVersion] = useState(LOCAL_VERSION);
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isVoiceSaved, setIsVoiceSaved] = useState(true);
+  const [showFirebaseReauth, setShowFirebaseReauth] = useState(false);
+  const [firebaseReauthPassword, setFirebaseReauthPassword] = useState('');
   
   const [appUrl, setAppUrl] = useState(() => {
     if (typeof window !== 'undefined' && window.location.origin) {
@@ -466,41 +469,69 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     } catch (_e) { setStatus({ type: 'error', msg: "Falha ao salvar." }); }
   };
 
-  const handleSaveVoiceConfigs = async () => {
+  const persistVoiceConfigs = async () => {
     const db = getDb();
-    if (!db) return;
+    if (!db) throw new Error('Sem conexão com o Firebase. Verifique a internet e tente novamente.');
+    await saveSystemConfigPatch(db, {
+      voiceCommands: voiceCommands,
+      errorSoundType: errorSound,
+      appVersion: remoteAppVersion,
+      appUrl: appUrl
+    });
+    setStatus({ type: 'success', msg: "Configurações globais salvas!" });
+    setIsVoiceSaved(true);
+    setShowFirebaseReauth(false);
+    setFirebaseReauthPassword('');
+  };
+
+  const handleSaveVoiceConfigs = async () => {
+    const auth = getAuthInstance();
+    const authenticatedEmail = auth?.currentUser?.email?.trim().toLowerCase();
+    const adminEmail = userProfile?.email?.trim().toLowerCase();
+    if (!authenticatedEmail || (adminEmail && authenticatedEmail !== adminEmail)) {
+      setShowFirebaseReauth(true);
+      return;
+    }
     setIsSavingVoice(true);
     try {
-      const auth = getAuthInstance();
-      const authenticatedEmail = auth?.currentUser?.email?.trim().toLowerCase();
-      const adminEmail = userProfile?.email?.trim().toLowerCase();
-      if (!authenticatedEmail) {
-        throw new Error('Esta sessão não está autenticada no Firebase. Saia e entre novamente com a conta administradora usando e-mail e senha.');
-      }
-      if (adminEmail && authenticatedEmail !== adminEmail) {
-        throw new Error(`A conta autenticada no Firebase (${authenticatedEmail}) é diferente da conta aberta no app (${adminEmail}). Saia e entre novamente com a conta administradora.`);
-      }
-      await saveSystemConfigPatch(db, {
-        voiceCommands: voiceCommands,
-        errorSoundType: errorSound,
-        appVersion: remoteAppVersion,
-        appUrl: appUrl
-      });
-      setStatus({ type: 'success', msg: "Configurações globais salvas!" });
-      setIsVoiceSaved(true);
+      await persistVoiceConfigs();
     } catch (error) {
       console.error('[AdminScreen] Falha ao salvar configurações globais:', error);
       const message = error instanceof Error ? error.message : String(error);
-      const isPermissionError = message.toLowerCase().includes('permission-denied');
+      const isPermissionError = message.toLowerCase().includes('permission-denied') || message.toLowerCase().includes('insufficient permissions');
       setStatus({
         type: 'error',
         msg: isPermissionError
-          ? 'O Firebase recusou a gravação. Confirme que a conta autenticada é a mesma conta administradora e tente entrar novamente.'
+          ? 'O Firebase recusou a gravação. Confirme sua conta administradora e tente novamente.'
           : message || 'Erro ao salvar configurações.',
       });
     } finally {
       setIsSavingVoice(false);
-      setTimeout(() => setStatus(null), 2000);
+      setTimeout(() => setStatus(null), 4000);
+    }
+  };
+
+  const handleFirebaseReauth = async () => {
+    const email = userProfile?.email?.trim().toLowerCase();
+    const auth = getAuthInstance();
+    if (!email || !auth || !firebaseReauthPassword) {
+      setStatus({ type: 'error', msg: 'Informe a senha da conta administradora para confirmar o acesso.' });
+      return;
+    }
+    setIsSavingVoice(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, firebaseReauthPassword);
+      await persistVoiceConfigs();
+    } catch (error) {
+      console.error('[AdminScreen] Falha na confirmação da conta Firebase:', error);
+      const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+      const message = code.includes('invalid-credential') || code.includes('wrong-password')
+        ? 'Senha incorreta. Confira a senha da conta administradora e tente novamente.'
+        : error instanceof Error ? error.message : 'Não foi possível confirmar a conta no Firebase.';
+      setStatus({ type: 'error', msg: message });
+    } finally {
+      setIsSavingVoice(false);
+      setTimeout(() => setStatus(null), 4000);
     }
   };
 
@@ -679,6 +710,29 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
 
       <main className="flex-1 p-6 space-y-8 max-w-md mx-auto w-full pb-40">
         <AdminStatusAlert status={status} />
+
+        {showFirebaseReauth && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <p className="text-sm font-black text-amber-900">Confirme sua conta para salvar</p>
+            <p className="text-xs font-semibold text-amber-800">
+              O login biométrico abriu o app, mas para gravar configurações administrativas o Firebase pede a senha de {userProfile?.email}.
+            </p>
+            <input
+              type="password"
+              value={firebaseReauthPassword}
+              onChange={event => setFirebaseReauthPassword(event.target.value)}
+              autoComplete="current-password"
+              placeholder="Senha da conta administradora"
+              className="w-full h-12 rounded-xl border border-amber-200 bg-white px-4 text-base font-semibold text-black outline-none"
+            />
+            <div className="flex gap-2">
+              <Button onClick={() => { setShowFirebaseReauth(false); setFirebaseReauthPassword(''); }} className="flex-1 !bg-slate-200 !text-slate-800 rounded-xl font-bold">Cancelar</Button>
+              <Button onClick={handleFirebaseReauth} disabled={isSavingVoice || !firebaseReauthPassword} className="flex-1 !bg-amber-500 rounded-xl font-bold text-white disabled:opacity-50">
+                {isSavingVoice ? <Loader2 className="animate-spin" size={18} /> : 'Confirmar e salvar'}
+              </Button>
+            </div>
+          </section>
+        )}
 
         {adminTab === 'configs' && (
           <>
