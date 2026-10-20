@@ -92,22 +92,25 @@ const WatchLoginApproval: React.FC = () => {
       const data = snap.data();
       if (data.status !== 'pending') { setStatus('error'); setErrorMsg('Código já utilizado ou expirado'); return; }
       if (Date.now() > data.expiresAt) { setStatus('error'); setErrorMsg('Código expirado'); return; }
-      // setDoc com merge evita problemas de permissão do updateDoc em docs criados por não-autenticados
-      await setDoc(tokenRef, {
-        status: 'approved',
-        email: userProfile.email,
-        pin: userProfile.pin,
-        rememberMe: true,
-        profile: {
+      const approvedProfile = Object.fromEntries(
+        Object.entries({
           name: userProfile.name,
           nickname: userProfile.nickname,
-          email: userProfile.email,
-          pin: userProfile.pin,
+          email: userProfile.email.trim().toLowerCase(),
+          pin: userProfile.pin.trim().toUpperCase(),
           phone: userProfile.phone,
           isProfileComplete: userProfile.isProfileComplete,
           authMethod: userProfile.authMethod,
           planType: userProfile.planType,
-        },
+        }).filter(([, value]) => value !== undefined),
+      );
+      // setDoc com merge evita problemas de permissão do updateDoc em docs criados por não-autenticados
+      await setDoc(tokenRef, {
+        status: 'approved',
+        email: userProfile.email.trim().toLowerCase(),
+        pin: userProfile.pin.trim().toUpperCase(),
+        rememberMe: true,
+        profile: approvedProfile,
         approvedAt: Date.now(),
       }, { merge: true });
       setStatus('success');
