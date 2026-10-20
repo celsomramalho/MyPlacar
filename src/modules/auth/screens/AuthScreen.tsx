@@ -13,7 +13,7 @@ import { formatPortugueseName, applyGoldenRule } from '@shared/utils/formatters'
 import { APP_VERSION } from '../../../constants.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { generateEmailVerificationCode, generateUserPin, generateWatchCode } from '../services/authCodes';
-import { clearPasswordResetSession, clearPendingRegistration, forgetEmail, forgetPin, getOfflineProfile, getPendingName, getPendingPassword, getPendingVerifyCode, getSavedAuthMethod, getSavedEmail, getSavedPin, rememberEmail, rememberPin, savePendingRegistration, saveUrlVerificationCode, saveWatchLoginCache } from '../services/authSession';
+import { clearPasswordResetSession, clearPendingRegistration, forgetEmail, forgetPin, getOfflineProfile, getPendingName, getPendingPassword, getPendingVerifyCode, getSavedAuthMethod, getSavedEmail, getSavedPin, rememberEmail, rememberPin, savePendingRegistration, saveUrlVerificationCode, saveWatchLoginCache, setSessionLoginMethod } from '../services/authSession';
 import { buildPasswordResetActionCodeSettings, buildPasswordResetContinueUrl, clearAuthUrlParams, getPasswordResetParams, getPublicAuthOrigin } from '../services/authUrls';
 import { validatePassword } from '../services/passwordPolicy';
 import { useInstallPwa } from '@pwa/installPrompt';
@@ -557,6 +557,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           }
 
           const enriched = { ...userData, isAdmin: userData.isAdmin === true };
+          setSessionLoginMethod('password');
           if (rememberMe) {
             rememberEmail(cleanEmail);
           } else {
@@ -953,6 +954,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         }
         
         const enriched = { ...userData, isAdmin: userData.isAdmin === true };
+        setSessionLoginMethod('biometric');
         onAuthSuccess(enriched as UserProfile, rememberMe);
       }
     } catch (err: any) {

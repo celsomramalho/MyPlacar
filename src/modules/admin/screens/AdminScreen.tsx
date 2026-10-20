@@ -31,6 +31,7 @@ import type { UserProfile } from '@modules/auth/types';
 import { AdminCommunicationsPanel } from '@modules/communications';
 import { playErrorBeep, unlockAudio } from '@modules/game/presentation/hooks/useScoreAnnouncer';
 import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
+import { getSessionLoginMethod, setSessionLoginMethod } from '@modules/auth/services/authSession';
 
 interface Props {
   onBack: () => void;
@@ -488,7 +489,8 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const auth = getAuthInstance();
     const authenticatedEmail = auth?.currentUser?.email?.trim().toLowerCase();
     const adminEmail = userProfile?.email?.trim().toLowerCase();
-    if (!authenticatedEmail || (adminEmail && authenticatedEmail !== adminEmail)) {
+    const isBiometricSession = getSessionLoginMethod() === 'biometric';
+    if (isBiometricSession || !authenticatedEmail || (adminEmail && authenticatedEmail !== adminEmail)) {
       setShowFirebaseReauth(true);
       return;
     }
@@ -521,6 +523,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     setIsSavingVoice(true);
     try {
       await signInWithEmailAndPassword(auth, email, firebaseReauthPassword);
+      setSessionLoginMethod('password');
       await persistVoiceConfigs();
     } catch (error) {
       console.error('[AdminScreen] Falha na confirmação da conta Firebase:', error);

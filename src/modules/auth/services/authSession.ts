@@ -11,6 +11,20 @@ const PENDING_NAME_KEY = 'MyPlacarPendingName';
 const PENDING_PASSWORD_KEY = 'MyPlacarPendingPassword';
 const PENDING_REFERRAL_KEY = 'MyPlacarPendingReferral';
 const PENDING_REFERRAL_PIN_KEY = 'MyPlacarPendingReferralPin';
+const SESSION_LOGIN_METHOD_KEY = 'myPlacarSessionLoginMethod';
+
+export type SessionLoginMethod = 'password' | 'biometric' | 'pin' | 'google' | 'watch';
+
+export const setSessionLoginMethod = (method: SessionLoginMethod) => {
+  localStorage.setItem(SESSION_LOGIN_METHOD_KEY, method);
+};
+
+export const getSessionLoginMethod = (): SessionLoginMethod | null => {
+  const value = localStorage.getItem(SESSION_LOGIN_METHOD_KEY);
+  return value === 'password' || value === 'biometric' || value === 'pin' || value === 'google' || value === 'watch'
+    ? value
+    : null;
+};
 
 const parseProfile = (value: string | null): UserProfile | null => {
   if (!value) return null;
@@ -95,6 +109,7 @@ export const forgetPin = () => {
 };
 
 export const clearAllAuthSessions = () => {
+  localStorage.removeItem(SESSION_LOGIN_METHOD_KEY);
   localStorage.removeItem(SAVED_EMAIL_KEY);
   localStorage.removeItem('myPlacarSavedEmail');
   localStorage.removeItem(SAVED_PIN_KEY);
