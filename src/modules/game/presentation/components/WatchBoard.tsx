@@ -908,7 +908,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               })()}
 
               {/* Sair do modo offline */}
-              {isOfflineMode && onExitOffline && (
+              {isOfflineMode && !isLiveActive && onExitOffline && (
                 <button
                   type="button"
                   onClick={() => {
