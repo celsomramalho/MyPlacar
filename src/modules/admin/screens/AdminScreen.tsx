@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Upload, Loader2, Sparkles, Plus, Trash2, ChevronDown, Save, Edit2, Database, Wand2, LayoutGrid, Trophy, Type, HelpCircle, Volume2, Info, Crown, Download, RotateCw, Check, Wifi } from 'lucide-react';
-import { getDb } from '@infra/firebase';
+import { getAuthInstance, getDb } from '@infra/firebase';
 import { deleteAdminEvent, fetchAdminEvents, saveAdminEvent } from '@infra/firebase/adminEvents';
 import {
   fetchAdminIconCatalog,
@@ -471,6 +471,15 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     if (!db) return;
     setIsSavingVoice(true);
     try {
+      const auth = getAuthInstance();
+      const authenticatedEmail = auth?.currentUser?.email?.trim().toLowerCase();
+      const adminEmail = userProfile?.email?.trim().toLowerCase();
+      if (!authenticatedEmail) {
+        throw new Error('Esta sessão não está autenticada no Firebase. Saia e entre novamente com a conta administradora usando e-mail e senha.');
+      }
+      if (adminEmail && authenticatedEmail !== adminEmail) {
+        throw new Error(`A conta autenticada no Firebase (${authenticatedEmail}) é diferente da conta aberta no app (${adminEmail}). Saia e entre novamente com a conta administradora.`);
+      }
       await saveSystemConfigPatch(db, {
         voiceCommands: voiceCommands,
         errorSoundType: errorSound,
@@ -479,8 +488,16 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       });
       setStatus({ type: 'success', msg: "Configurações globais salvas!" });
       setIsVoiceSaved(true);
-    } catch (_e) {
-      setStatus({ type: 'error', msg: "Erro ao salvar configurações." });
+    } catch (error) {
+      console.error('[AdminScreen] Falha ao salvar configurações globais:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      const isPermissionError = message.toLowerCase().includes('permission-denied');
+      setStatus({
+        type: 'error',
+        msg: isPermissionError
+          ? 'O Firebase recusou a gravação. Confirme que a conta autenticada é a mesma conta administradora e tente entrar novamente.'
+          : message || 'Erro ao salvar configurações.',
+      });
     } finally {
       setIsSavingVoice(false);
       setTimeout(() => setStatus(null), 2000);
