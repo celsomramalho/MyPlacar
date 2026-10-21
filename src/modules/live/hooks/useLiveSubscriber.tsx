@@ -204,11 +204,19 @@ export function useLiveSubscriber(params: LiveSubscriberParams): void {
       return onSnapshot(doc(db, 'live_matches', listenPin), { includeMetadataChanges: true }, snap => {
         if (currentScreen === 'settings') return;
         if (snap.exists()) {
-          const cloudData = snap.data() as GameState;
+          const rawData = snap.data();
 
-          if (!isValidGameState(cloudData)) {
+          if (!isValidGameState(rawData)) {
+            const invalidData = rawData as Partial<GameState> | undefined;
+            console.error('[LiveSync] Snapshot rejeitado: documento live_matches inválido.', {
+              listenPin,
+              matchId: invalidData?.matchId,
+              hasPlayers: Boolean(invalidData?.p1 && invalidData?.p2),
+              hasPointHistory: Array.isArray(invalidData?.pointHistory),
+            });
             return;
           }
+          const cloudData = rawData;
           if (!snap.metadata.hasPendingWrites && !snap.metadata.fromCache) {
             setLastFirebaseAckAt(Date.now());
             offlineAlertShownRef.current = false;
@@ -404,6 +412,8 @@ export function useLiveSubscriber(params: LiveSubscriberParams): void {
             });
           }
         }
+      }, error => {
+        console.error(`[LiveSync] Falha ao escutar live_matches/${listenPin}:`, error);
       });
     };
 

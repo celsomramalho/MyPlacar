@@ -25,7 +25,14 @@ import {
   Check,
   Search,
 } from 'lucide-react';
-import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
+import {
+  useScreenOnboarding,
+  ScreenIntroCard,
+  SpotlightTour,
+  getOnboardingStatus,
+  EVENT_DETAIL_RANKING_STEPS,
+  RANKING_ILLUSTRATIVE_HELPS,
+} from '@shared/onboarding';
 import type {
   TournamentEvent,
   TournamentEntry,
@@ -109,6 +116,149 @@ interface Props {
   unreadCount?: number;
   onProfileSync?: (updates: { phone?: string; gender?: 'M' | 'F' }) => void;
 }
+
+const RankingHelpIllustrativeCard: React.FC<{
+  type: 'entries' | 'teams' | 'matches';
+  defaultExpanded?: boolean;
+}> = ({ type, defaultExpanded = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const helpData = RANKING_ILLUSTRATIVE_HELPS[type];
+
+  return (
+    <div className="bg-gradient-to-b from-sky-50/70 via-white to-slate-50 border-2 border-dashed border-sky-300 rounded-3xl p-4 shadow-xs space-y-3.5 transition-all">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200">
+            {helpData.badge}
+          </span>
+          <h4 className="text-xs font-black text-slate-800">
+            {helpData.title}
+          </h4>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsExpanded((prev) => !prev)}
+          className="text-[11px] font-extrabold text-sky-600 hover:text-sky-800 flex items-center gap-1 cursor-pointer transition-colors"
+        >
+          <span>{isExpanded ? helpData.toggleHideText : helpData.toggleViewText}</span>
+          <ChevronDown
+            size={14}
+            className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+          />
+        </button>
+      </div>
+
+      <p className="text-xs text-slate-600 leading-relaxed font-medium">
+        {helpData.description}
+      </p>
+
+      {isExpanded && (
+        <div className="space-y-3 pt-1 border-t border-sky-100 animate-in fade-in duration-200">
+          {/* Mock da barra superior azul com botão de ação */}
+          {helpData.topBarText && (
+            <div className="rounded-2xl bg-sky-600 px-4 py-2.5 text-white flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="p-0.5 text-white/80">
+                  <X size={16} />
+                </span>
+                <span className="text-xs font-black">{helpData.topBarText}</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-black text-white shadow-xs">
+                {type === 'entries' ? <Users size={14} /> : <Trophy size={14} />}
+                <span>{helpData.topBarButton}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Cards ilustrativos para Inscritos ou Times */}
+          {(type === 'entries' || type === 'teams') && (
+            <div className="space-y-2">
+              <div className="p-3 bg-white border-2 border-sky-400 rounded-2xl shadow-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-5 h-5 rounded-md bg-sky-500 text-white flex items-center justify-center shrink-0">
+                    <Check size={14} strokeWidth={3} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-800 truncate">{helpData.card1Title}</p>
+                    <p className="text-[10px] font-bold text-slate-400 truncate">{helpData.card1Subtitle}</p>
+                  </div>
+                </div>
+                {helpData.card1Tag && (
+                  <span className="shrink-0 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    {helpData.card1Tag}
+                  </span>
+                )}
+              </div>
+
+              <div className="p-3 bg-white border-2 border-sky-400 rounded-2xl shadow-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-5 h-5 rounded-md bg-sky-500 text-white flex items-center justify-center shrink-0">
+                    <Check size={14} strokeWidth={3} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-800 truncate">{helpData.card2Title}</p>
+                    <p className="text-[10px] font-bold text-slate-400 truncate">{helpData.card2Subtitle}</p>
+                  </div>
+                </div>
+                {helpData.card2Tag && (
+                  <span className="shrink-0 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    {helpData.card2Tag}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Card ilustrativo para Jogos / Placar */}
+          {type === 'matches' && (
+            <div className="p-3.5 bg-white border border-sky-200 rounded-2xl shadow-xs space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-500">
+                <span className="text-[10px] font-black text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
+                  Jogo 01
+                </span>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {helpData.matchDate}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-slate-800 truncate">{helpData.card1Title}</p>
+                  <p className="text-[10px] font-bold text-slate-400">{helpData.card1Subtitle}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-black text-slate-800">
+                    {helpData.matchScore1}
+                  </span>
+                  <span className="text-xs font-black text-slate-400">x</span>
+                  <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-black text-slate-800">
+                    {helpData.matchScore2}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0 text-right">
+                  <p className="font-black text-slate-800 truncate">{helpData.card2Title}</p>
+                  <p className="text-[10px] font-bold text-slate-400">{helpData.card2Subtitle}</p>
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <div className="w-full py-2 bg-emerald-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-xs">
+                  <CheckCircle2 size={14} />
+                  <span>{helpData.finishButtonText}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="p-2.5 bg-sky-50/80 border border-sky-200/80 rounded-xl flex items-start gap-2 text-[11px] font-bold text-sky-800">
+            <span className="shrink-0 text-sky-600 mt-0.5">💡</span>
+            <span>{helpData.footerNote}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const EventDetailScreen: React.FC<Props> = ({
   event: initialEvent,
@@ -409,36 +559,9 @@ export const EventDetailScreen: React.FC<Props> = ({
       (s) => s.targetId !== 'event-detail-subtabs-container'
     );
 
-    const rankingSteps = [
-      {
-        targetId: 'event-detail-subtabs-container',
-        title: 'Etapas do ranking',
-        description: 'O ranking funciona em 3 etapas simples: inscrição de atletas, formação de times e realização dos jogos.',
-        placement: 'bottom' as const,
-      },
-      {
-        targetId: 'event-detail-subtab-entries',
-        title: '1. Formar times',
-        description: 'Na aba Inscritos, selecione 2 parceiros para formar uma dupla oficial para a disputa.',
-        placement: 'bottom' as const,
-      },
-      {
-        targetId: 'event-detail-subtab-teams',
-        title: '2. Criar partidas',
-        description: 'Na aba Times, selecione 2 duplas formadas para gerar uma nova partida na rodada.',
-        placement: 'bottom' as const,
-      },
-      {
-        targetId: 'event-detail-subtab-matches',
-        title: '3. Lançar placar',
-        description: 'Na aba Jogos, preencha o placar e a data do confronto para atualizar a classificação do ranking.',
-        placement: 'bottom' as const,
-      },
-    ];
-
     return {
       ...onboardingConfig,
-      steps: [...baseSteps, ...rankingSteps],
+      steps: [...baseSteps, ...EVENT_DETAIL_RANKING_STEPS],
     };
   }, [onboardingConfig, isRanking]);
 
@@ -2009,6 +2132,13 @@ export const EventDetailScreen: React.FC<Props> = ({
                           </div>
                         )}
 
+                        {isRanking && (
+                          <RankingHelpIllustrativeCard
+                            type="entries"
+                            defaultExpanded={sortedCategoryEntries.length < 2}
+                          />
+                        )}
+
                         {visibleCategoryEntries.length === 0 ? (
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             {participantSearch.trim() ? 'Nenhum participante encontrado.' : 'Nenhum inscrito nesta categoria ainda.'}
@@ -2070,6 +2200,13 @@ export const EventDetailScreen: React.FC<Props> = ({
                     {/* ABA: TIMES */}
                     {userCategoryView === 'teams' && (
                       <div className="space-y-3">
+                        {isRanking && (
+                          <RankingHelpIllustrativeCard
+                            type="teams"
+                            defaultExpanded={categoryPairs.length < 2}
+                          />
+                        )}
+
                         {categoryPairs.length === 0 ? (
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             Nenhum time formado nesta categoria ainda.
@@ -2112,6 +2249,13 @@ export const EventDetailScreen: React.FC<Props> = ({
                     {/* ABA: PARTIDAS */}
                     {userCategoryView === 'matches' && (
                       <div className="space-y-3">
+                        {isRanking && (
+                          <RankingHelpIllustrativeCard
+                            type="matches"
+                            defaultExpanded={categoryMatches.length === 0}
+                          />
+                        )}
+
                         {categoryMatches.length === 0 ? (
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             Nenhuma partida programada para esta categoria.

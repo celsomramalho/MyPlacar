@@ -504,3 +504,122 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
     ],
   },
 };
+
+/**
+ * Passos específicos do tour de detalhes do evento para torneios no formato Ranking.
+ * Substitui o passo de sub-abas geral por 4 etapas focadas nas ações do ranking.
+ */
+export const EVENT_DETAIL_RANKING_STEPS: OnboardingStep[] = [
+  {
+    targetId: 'event-detail-subtabs-container',
+    title: 'Etapas do ranking',
+    description: 'O ranking funciona em 3 etapas simples: inscrição de atletas, formação de times e realização dos jogos.',
+    placement: 'bottom',
+  },
+  {
+    targetId: 'event-detail-subtab-entries',
+    title: '1. Formar times',
+    description: 'Na aba Inscritos, selecione 2 parceiros para formar uma dupla oficial para a disputa.',
+    placement: 'bottom',
+  },
+  {
+    targetId: 'event-detail-subtab-teams',
+    title: '2. Criar partidas',
+    description: 'Na aba Times, selecione 2 duplas formadas para gerar uma nova partida na rodada.',
+    placement: 'bottom',
+  },
+  {
+    targetId: 'event-detail-subtab-matches',
+    title: '3. Lançar placar',
+    description: 'Na aba Jogos, preencha o placar e a data do confronto para atualizar a classificação do ranking.',
+    placement: 'bottom',
+  },
+];
+
+export interface RankingIllustrativeHelpItem {
+  badge: string;
+  title: string;
+  description: string;
+  topBarText?: string;
+  topBarButton?: string;
+  card1Title: string;
+  card1Subtitle: string;
+  card1Tag?: string;
+  card1Details?: string;
+  card2Title: string;
+  card2Subtitle: string;
+  card2Tag?: string;
+  card2Details?: string;
+  matchDate?: string;
+  matchScore1?: string;
+  matchScore2?: string;
+  finishButtonText?: string;
+  footerNote: string;
+  emptyStateNotice: string;
+  toggleViewText: string;
+  toggleHideText: string;
+}
+
+export const RANKING_ILLUSTRATIVE_HELPS: {
+  entries: RankingIllustrativeHelpItem;
+  teams: RankingIllustrativeHelpItem;
+  matches: RankingIllustrativeHelpItem;
+} = {
+  entries: {
+    badge: 'Exemplo ilustrativo',
+    title: 'Como formar times (duplas)',
+    description: 'Toque em 2 atletas da lista para selecioná-los. Uma barra superior aparecerá para você confirmar e criar a dupla.',
+    topBarText: '2 selecionados',
+    topBarButton: 'Formar time',
+    card1Title: 'Carlos Silva (você)',
+    card1Subtitle: 'Atleta inscrito • Categoria A',
+    card1Tag: 'Inscrito',
+    card1Details: 'Toque para marcar o primeiro jogador',
+    card2Title: 'Marcos Oliveira',
+    card2Subtitle: 'Atleta inscrito • Categoria A',
+    card2Tag: 'Inscrito',
+    card2Details: 'Toque para marcar o segundo jogador da dupla',
+    footerNote: 'Após formar a dupla, ela estará disponível na aba Times para você criar partidas.',
+    emptyStateNotice: 'Ainda não há atletas inscritos nesta categoria para formar times.',
+    toggleViewText: 'Ver exemplo de como formar times',
+    toggleHideText: 'Ocultar exemplo de como formar times',
+  },
+  teams: {
+    badge: 'Exemplo ilustrativo',
+    title: 'Como criar partidas',
+    description: 'Na aba Times, marque 2 duplas formadas. A barra superior permitirá gerar um novo confronto oficial.',
+    topBarText: '2 times selecionados',
+    topBarButton: 'Formar partida',
+    card1Title: 'Carlos & Marcos',
+    card1Subtitle: 'Time T1 • Categoria A',
+    card1Tag: 'Chave 1',
+    card1Details: 'Histórico: 1V 0D (toque para selecionar)',
+    card2Title: 'Felipe & Gabriel',
+    card2Subtitle: 'Time T2 • Categoria A',
+    card2Tag: 'Chave 1',
+    card2Details: 'Histórico: 0V 1D (toque para selecionar)',
+    footerNote: 'A partida criada irá direto para a aba Jogos para realização e registro do placar.',
+    emptyStateNotice: 'Ainda não há times formados nesta categoria para criar partidas.',
+    toggleViewText: 'Ver exemplo de como criar partidas',
+    toggleHideText: 'Ocultar exemplo de como criar partidas',
+  },
+  matches: {
+    badge: 'Exemplo ilustrativo',
+    title: 'Como lançar placar e data',
+    description: 'Após a partida ser disputada, preencha a data do confronto e o placar dos games para atualizar a tabela do ranking.',
+    card1Title: 'Carlos & Marcos',
+    card1Subtitle: 'Time T1',
+    card2Title: 'Felipe & Gabriel',
+    card2Subtitle: 'Time T2',
+    matchDate: '21/10/2026',
+    matchScore1: '6',
+    matchScore2: '4',
+    finishButtonText: 'Finalizar partida',
+    footerNote: 'Ao finalizar, as vitórias e pontos de ranking de cada atleta são calculados automaticamente.',
+    emptyStateNotice: 'Nenhuma partida programada ou em andamento nesta categoria ainda.',
+    toggleViewText: 'Ver exemplo de como lançar placar',
+    toggleHideText: 'Ocultar exemplo de como lançar placar',
+  },
+};
+
+

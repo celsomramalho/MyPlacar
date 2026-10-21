@@ -42,6 +42,7 @@ export function useLivePublisher(params: LivePublisherParams): LivePublisherRetu
     lastFbScoreKeyRef,
     fbSyncTimerRef,
     isOriginalOwner,
+    isActiveController,
     resolveTargetPin,
     livePapel,
   } = useLive();
@@ -237,8 +238,7 @@ export function useLivePublisher(params: LivePublisherParams): LivePublisherRetu
       return;
     }
 
-    const isThisDeviceController = gameState.commandOwnerId === deviceId;
-    if (!isThisDeviceController) {
+    if (!isActiveController) {
       return;
     }
 
@@ -355,6 +355,7 @@ export function useLivePublisher(params: LivePublisherParams): LivePublisherRetu
     deviceId,
     activeLives,
     isOriginalOwner,
+    isActiveController,
     resolveTargetPin,
     lastFbScoreKeyRef,
     lastSentStateRef,

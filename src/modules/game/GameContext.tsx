@@ -196,7 +196,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   });
 
   const { currentScreen, setPlayerQueue, playerQueue, setModalConfig, setShowLiveControlOverlay, setCurrentScreen, isSettingsInicialSaved, setIsSettingsInicialSaved, setIsSettingsRegrasSaved, overlayAcceptedRef, setIsSavingJudge, isProfileSaved, setIsProfileSaved, setVoiceLogs, setIsRecoveryFromMatchOver, setIsWaitingSync } = useUI();
-  const { isOriginalOwner, isActiveController, resolveTargetPin, activeLives, isClosingLiveRef, setCloudLiveExists, setActiveLives, livePapel, tookControlAtRef, setLiveLogs } = useLive();
+  const { isOriginalOwner, isActiveController, cloudLiveExists, resolveTargetPin, activeLives, isClosingLiveRef, setCloudLiveExists, setActiveLives, livePapel, tookControlAtRef, setLiveLogs } = useLive();
   const deviceId = getDeviceId();
 
   const prevSettingsRef = useRef<MatchSettings | null>(null);
@@ -955,7 +955,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   }, [userProfile.pin, userProfile.name, userProfile.nickname, activeLives, deviceId, currentFullDeviceName, setMatchSettings, matchSettings, setGameState, overlayAcceptedRef, setShowLiveControlOverlay, setCurrentScreen, setCloudLiveExists, setModalConfig]);
 
   const handleSyncScoreboard = useCallback(async () => {
-    if (!gameState || !gameState.isMirroringActive || (gameState.isMirroringActive && gameState.isLiveClosed)) return;
+    const hasActiveLive = !!cloudLiveExists || !!(gameState?.isMirroringActive && !gameState.isLiveClosed);
+    if (!gameState || !hasActiveLive) return;
     if (!navigator.onLine) {
       setModalConfig({ title: "Sem conexão", message: "Verifique sua conexão com a internet e tente novamente.", onConfirm: () => setModalConfig(null) });
       return;
@@ -970,14 +971,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const isController = isActiveController;
 
     try {
-      const { doc, getDoc, setDoc } = await import('firebase/firestore');
+      const { doc, getDocFromServer } = await import('firebase/firestore');
       if (isController) {
         const stateToSync = sanitizeForFirestore({ ...gameState, controllers: undefined });
         if (stateToSync) {
           await updateDoc(doc(db, "live_matches", targetPin), { ...stateToSync, lastActivityAt: Date.now() });
         }
       } else {
-        const snap = await getDoc(doc(db, "live_matches", targetPin));
+        const snap = await getDocFromServer(doc(db, "live_matches", targetPin));
         if (snap.exists()) {
           const cloudData = snap.data() as GameState;
           setGameState(prev => {
@@ -1028,7 +1029,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     } catch (_e) {
       setModalConfig({ title: "Erro ao sincronizar", message: "Não foi possível sincronizar o placar. Tente novamente.", onConfirm: () => setModalConfig(null) });
     }
-  }, [gameState, isActiveController, setModalConfig, resolveTargetPin, deviceId, setGameState, setLiveLogs, setShowLiveControlOverlay]);
+  }, [gameState, cloudLiveExists, isActiveController, setModalConfig, resolveTargetPin, deviceId, setGameState, setLiveLogs, setShowLiveControlOverlay]);
 
   const handleAddJudge = useCallback(async (pin: string, nickname?: string) => {
     if (!pin || pin.length < 5 || !gameState || !userProfile.pin) return;

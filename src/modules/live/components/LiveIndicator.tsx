@@ -16,15 +16,9 @@ interface Props {
 export const LiveIndicator: React.FC<Props> = ({ 
   className = "", onClick, variant = 'header', role = 'spectator', status,
   progress = 0, onPointerDown, onPointerUp, onPointerLeave 
-}) => (
-  <button 
-    onClick={onClick}
-    onPointerDown={onPointerDown}
-    onPointerUp={onPointerUp}
-    onPointerLeave={onPointerLeave}
-    className={`flex flex-col items-center justify-center gap-0.5 group transition-all duration-300 relative overflow-hidden ${onClick ? 'active:scale-90 cursor-pointer' : 'cursor-default'} ${className}`}
-    disabled={!onClick}
-  >
+}) => {
+  const content = (
+    <>
     {progress > 0 && (
       <div 
         className="absolute inset-0 bg-white/10 origin-left transition-all duration-75 z-0" 
@@ -76,5 +70,25 @@ export const LiveIndicator: React.FC<Props> = ({
     <div className="bg-[#f59e0b] rounded-[4px] px-1.5 py-0.5 shadow-sm -mt-0.5">
       <span className="text-[8px] font-black text-white tracking-tighter leading-none block">Live</span>
     </div>
-  </button>
-);
+    </>
+  );
+  const baseClassName = `flex flex-col items-center justify-center gap-0.5 group transition-all duration-300 relative overflow-hidden ${onClick ? 'active:scale-90 cursor-pointer' : 'cursor-default'} ${className}`;
+  const isInteractive = !!(onClick || onPointerDown || onPointerUp || onPointerLeave);
+
+  if (!isInteractive) {
+    return <div className={baseClassName} aria-hidden="true">{content}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      className={baseClassName}
+    >
+      {content}
+    </button>
+  );
+};
