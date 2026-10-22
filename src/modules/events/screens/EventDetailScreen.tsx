@@ -2096,9 +2096,10 @@ export const EventDetailScreen: React.FC<Props> = ({
                       </label>
                     )}
 
-                    {/* Botão Nova inscrição: visível quando inscrição simplificada + allowUserPartnerRegistration + usuário inscrito (ou admin) */}
+                    {/* Botão Nova inscrição: visível apenas dentro do período de inscrição + inscrição simplificada + allowUserPartnerRegistration + usuário inscrito (ou admin) */}
                     {userCategoryView === 'entries' &&
                       isSimplifiedRegistrationEvent(event) &&
+                      getRegistrationPeriodStatus(event).isOpen &&
                       (event.allowUserPartnerRegistration === true || canManageEvent) &&
                       (hasActiveRegistration || canManageEvent) && (
                       <div className="flex justify-center">

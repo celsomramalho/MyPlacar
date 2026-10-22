@@ -55,7 +55,7 @@ export const InstallPwaModal: React.FC<Props> = ({ isOpen, onClose, deferredProm
           </div>
           
           <h2 className="text-xl font-black text-black tracking-tight px-8 text-center">
-            Instalar Myplacar pro
+            Instalar MyPlacar Pro
           </h2>
           <p className="text-sm font-bold text-gray-500 mt-2 px-10 text-center leading-tight">
             Para uma experiência mais rápida, estável e em tela cheia, adicione o app à sua tela inicial.
