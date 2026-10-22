@@ -32,7 +32,7 @@ interface Props {
 
 export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setIsUpdatingVersion, onOfflineMode, initialReferralPin = '', appUrl }) => {
   const isNativeApp = Capacitor.isNativePlatform();
-  const { isInstalled, isAndroid, isApple, isSafari, triggerInstall } = useInstallPwa();
+  const { isInstalled, isInstallStatusReady, isAndroid, isApple, isSafari, triggerInstall } = useInstallPwa();
   const [showSafariInstallModal, setShowSafariInstallModal] = useState(false);
   const [showAndroidInstallModal, setShowAndroidInstallModal] = useState(false);
 
@@ -1639,7 +1639,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
             {!isNativeApp && (
               <>
-                {isAndroid && !isInstalled && (
+                {isInstallStatusReady && isAndroid && !isInstalled && (
                   <Button
                     onClick={handleInstallAndroid}
                     variant="secondary"
@@ -1649,7 +1649,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                   </Button>
                 )}
 
-                {isApple && !isInstalled && (
+                {isInstallStatusReady && isApple && !isInstalled && (
                   <Button
                     onClick={handleInstallSafari}
                     variant="secondary"

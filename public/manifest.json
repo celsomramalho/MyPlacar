@@ -11,6 +11,12 @@
     }
   ],
   "start_url": "/",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "/manifest.json"
+    }
+  ],
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",

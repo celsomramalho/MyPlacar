@@ -6,8 +6,21 @@ export interface BeforeInstallPromptEvent extends Event {
 }
 
 let capturedPrompt: BeforeInstallPromptEvent | null = null;
+let installedStatus: boolean | null = null;
+let installedStatusRevision = 0;
 const promptListeners = new Set<(prompt: BeforeInstallPromptEvent | null) => void>();
 const installListeners = new Set<(installed: boolean) => void>();
+
+const setInstalledStatus = (installed: boolean) => {
+  installedStatus = installed;
+  installedStatusRevision += 1;
+  installListeners.forEach((listener) => listener(installed));
+};
+
+const clearInstallPrompt = () => {
+  capturedPrompt = null;
+  promptListeners.forEach((listener) => listener(null));
+};
 
 export const isAppInstalled = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -47,15 +60,40 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('appinstalled', () => {
-    capturedPrompt = null;
-    promptListeners.forEach((listener) => listener(null));
-    installListeners.forEach((listener) => listener(true));
+    clearInstallPrompt();
+    setInstalledStatus(true);
   });
 }
 
+interface InstalledRelatedApp {
+  platform: string;
+  url?: string;
+}
+
+interface NavigatorWithInstalledRelatedApps extends Navigator {
+  getInstalledRelatedApps?: () => Promise<InstalledRelatedApp[]>;
+}
+
+const checkInstalledRelatedPwa = async (): Promise<boolean | null> => {
+  if (typeof window === 'undefined' || !isAndroidDevice()) return null;
+
+  const getInstalledRelatedApps = (navigator as NavigatorWithInstalledRelatedApps).getInstalledRelatedApps;
+  if (!getInstalledRelatedApps) return null;
+
+  try {
+    const installedApps = await getInstalledRelatedApps.call(navigator);
+    const manifestUrl = new URL('/manifest.json', window.location.origin).href;
+    return installedApps.some((app) => app.platform === 'webapp' && app.url === manifestUrl);
+  } catch (err) {
+    console.warn('Falha ao verificar se a PWA está instalada:', err);
+    return null;
+  }
+};
+
 export function useInstallPwa() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(capturedPrompt);
-  const [isInstalled, setIsInstalled] = useState<boolean>(() => isAppInstalled());
+  const [isInstalled, setIsInstalled] = useState<boolean>(() => installedStatus ?? isAppInstalled());
+  const [isInstallStatusReady, setIsInstallStatusReady] = useState<boolean>(() => !isAndroidDevice());
 
   useEffect(() => {
     const handlePromptChange = (prompt: BeforeInstallPromptEvent | null) => {
@@ -69,15 +107,26 @@ export function useInstallPwa() {
     promptListeners.add(handlePromptChange);
     installListeners.add(handleInstallChange);
 
+    let isActive = true;
+    const checkRevision = installedStatusRevision;
+    void checkInstalledRelatedPwa().then((installed) => {
+      if (!isActive) return;
+      if (installed !== null && installedStatusRevision === checkRevision) {
+        setInstalledStatus(isAppInstalled() || installed);
+      }
+      setIsInstallStatusReady(true);
+    });
+
     const mql = window.matchMedia('(display-mode: standalone)');
     const handleMqlChange = (e: MediaQueryListEvent) => {
       if (e.matches) {
-        setIsInstalled(true);
+        setInstalledStatus(true);
       }
     };
     mql.addEventListener?.('change', handleMqlChange);
 
     return () => {
+      isActive = false;
       promptListeners.delete(handlePromptChange);
       installListeners.delete(handleInstallChange);
       mql.removeEventListener?.('change', handleMqlChange);
@@ -90,7 +139,8 @@ export function useInstallPwa() {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
-        setIsInstalled(true);
+        clearInstallPrompt();
+        setInstalledStatus(true);
       }
       return outcome;
     } catch (err) {
@@ -102,6 +152,7 @@ export function useInstallPwa() {
   return { 
     deferredPrompt, 
     isInstalled, 
+    isInstallStatusReady,
     triggerInstall,
     isAndroid: isAndroidDevice(),
     isApple: isAppleDevice(),

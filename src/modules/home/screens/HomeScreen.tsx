@@ -37,7 +37,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
-  const { isInstalled, isAndroid, isApple, isSafari, triggerInstall } = useInstallPwa();
+  const { isInstalled, isInstallStatusReady, isAndroid, isApple, isSafari, triggerInstall } = useInstallPwa();
   const [showSafariInstallModal, setShowSafariInstallModal] = useState(false);
   const [showAndroidInstallModal, setShowAndroidInstallModal] = useState(false);
   const isNativeApp = Capacitor.isNativePlatform();
@@ -233,7 +233,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <span className="text-[21px]">{updateFeedback || `Versão ${APP_VERSION}`}</span>
         </button>
 
-        {!isNativeApp && isAndroid && !isInstalled && (
+        {!isNativeApp && isInstallStatusReady && isAndroid && !isInstalled && (
           <button
             onClick={handleInstallAndroid}
             className="w-full bg-white border border-emerald-100 text-emerald-600 py-4 px-6 rounded-3xl font-black text-sm flex items-center justify-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50"
@@ -243,7 +243,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </button>
         )}
 
-        {!isNativeApp && isApple && !isInstalled && (
+        {!isNativeApp && isInstallStatusReady && isApple && !isInstalled && (
           <button
             onClick={handleInstallSafari}
             className="w-full bg-white border border-sky-100 text-sky-600 py-4 px-6 rounded-3xl font-black text-sm flex items-center justify-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50"
