@@ -29,7 +29,7 @@ export const InstallAndroidModal: React.FC<Props> = ({ isOpen, onClose }) => {
             Instalar MyPlacar no Android
           </h3>
           <p className="text-xs font-bold text-slate-500 mt-1 max-w-xs">
-            Para criar o atalho e instalar no seu celular, siga os passos abaixo no navegador:
+            Para criar o atalho e instalar no seu celular, siga os passos abaixo no navegador Chrome:
           </p>
         </div>
 
