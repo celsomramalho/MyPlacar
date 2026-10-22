@@ -61,6 +61,7 @@ function swInjectPlugin(): Plugin {
           for (const importedKey of entry.imports || []) addManifestEntry(importedKey);
         };
         const offlineRouteSuffixes = [
+          'src/app/AuthRoute.tsx',
           'src/app/ScoreboardRoute.tsx',
           'src/app/NewGameRoute.tsx',
           'src/app/SettingsRoute.tsx',
