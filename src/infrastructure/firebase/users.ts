@@ -1,4 +1,4 @@
-import { collection, doc, getCountFromServer, getDoc, getDocs, getDocsFromServer, query, setDoc, updateDoc, where, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { Timestamp, collection, doc, getCountFromServer, getDoc, getDocs, getDocsFromServer, orderBy, query, setDoc, updateDoc, where, writeBatch, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
 import type { PlanType, UserProfile } from '@modules/auth/types';
 
 export interface FirebaseUserByPin {
@@ -213,5 +213,141 @@ export const updateUserPlanType = (
   email: string,
   planType: PlanType,
 ) => setDoc(doc(db, 'users', email), { planType }, { merge: true });
+
+export interface FirebaseUserWithCreatedAt extends FirebaseUserByPin {
+  createdAt: number; // milliseconds since epoch
+}
+
+export const fetchUsersByDateRange = async (
+  db: Firestore,
+  from: Date,
+  to: Date,
+): Promise<FirebaseUserWithCreatedAt[]> => {
+  const fromMs = from.getTime();
+  const toMs = to.getTime();
+
+  const snapshot = await getDocsFromServer(collection(db, 'users'));
+  const results: FirebaseUserWithCreatedAt[] = [];
+
+  snapshot.docs.forEach(docSnapshot => {
+    const data = docSnapshot.data();
+    let userDateMs = 0;
+
+    if (data.createdAt?.toMillis) {
+      userDateMs = data.createdAt.toMillis();
+    } else if (typeof data.createdAt === 'number') {
+      userDateMs = data.createdAt;
+    } else if (typeof data.createdAt === 'string') {
+      const parsed = Date.parse(data.createdAt);
+      if (!isNaN(parsed)) userDateMs = parsed;
+    } else if (data.updatedAt?.toMillis) {
+      userDateMs = data.updatedAt.toMillis();
+    } else if (typeof data.updatedAt === 'number') {
+      userDateMs = data.updatedAt;
+    } else if (typeof data.updatedAt === 'string') {
+      const parsed = Date.parse(data.updatedAt);
+      if (!isNaN(parsed)) userDateMs = parsed;
+    } else {
+      userDateMs = getUserAddedAt(data);
+    }
+
+    if (userDateMs >= fromMs && userDateMs <= toMs) {
+      const user = mapUserDocByPin(docSnapshot);
+      results.push({
+        ...user,
+        createdAt: userDateMs,
+      });
+    }
+  });
+
+  return results.sort((a, b) => b.createdAt - a.createdAt);
+};
+
+export interface MigrationResult {
+  total: number;
+  migrated: number;
+  alreadyTimestamp: number;
+  errors: number;
+}
+
+export const migrateUsersCreatedAtToTimestamp = async (
+  db: Firestore,
+): Promise<MigrationResult> => {
+  console.log('[migrateUsers] Iniciando varredura da coleção users no Firestore...');
+  const snapshot = await getDocsFromServer(collection(db, 'users'));
+  console.log(`[migrateUsers] ${snapshot.size} documentos de usuários obtidos.`);
+  let migrated = 0;
+  let alreadyTimestamp = 0;
+  let skipped = 0;
+
+  const updates: { ref: any; timestamp: Timestamp; id: string; oldVal: unknown }[] = [];
+
+  snapshot.docs.forEach((docSnapshot) => {
+    const data = docSnapshot.data();
+    const rawCreatedAt = data.createdAt;
+
+    // Se já é Timestamp do Firestore
+    if (rawCreatedAt instanceof Timestamp || (rawCreatedAt && typeof rawCreatedAt.toMillis === 'function')) {
+      alreadyTimestamp++;
+      return;
+    }
+
+    let parsedMs: number | null = null;
+
+    if (typeof rawCreatedAt === 'number' && !isNaN(rawCreatedAt) && rawCreatedAt > 0) {
+      parsedMs = rawCreatedAt;
+    } else if (typeof rawCreatedAt === 'string') {
+      const parsed = Date.parse(rawCreatedAt);
+      if (!isNaN(parsed) && parsed > 0) parsedMs = parsed;
+    } else if (data.joinedAt) {
+      const parsed = typeof data.joinedAt === 'number' ? data.joinedAt : Date.parse(data.joinedAt);
+      if (!isNaN(parsed) && parsed > 0) parsedMs = parsed;
+    } else if (data.addedAt) {
+      const parsed = typeof data.addedAt === 'number' ? data.addedAt : Date.parse(data.addedAt);
+      if (!isNaN(parsed) && parsed > 0) parsedMs = parsed;
+    } else if (data.updatedAt?.toMillis) {
+      parsedMs = data.updatedAt.toMillis();
+    } else if (typeof data.updatedAt === 'number' && !isNaN(data.updatedAt) && data.updatedAt > 0) {
+      parsedMs = data.updatedAt;
+    } else if (typeof data.updatedAt === 'string') {
+      const parsed = Date.parse(data.updatedAt);
+      if (!isNaN(parsed) && parsed > 0) parsedMs = parsed;
+    }
+
+    if (parsedMs && !isNaN(parsedMs) && parsedMs > 0) {
+      updates.push({
+        ref: docSnapshot.ref,
+        timestamp: Timestamp.fromMillis(parsedMs),
+        id: docSnapshot.id,
+        oldVal: rawCreatedAt ?? data.joinedAt ?? data.addedAt,
+      });
+    } else {
+      console.warn(`[migrateUsers] Usuário ${docSnapshot.id} sem data identificável:`, data);
+      skipped++;
+    }
+  });
+
+  console.log(`[migrateUsers] Análise: ${alreadyTimestamp} já são Timestamp, ${updates.length} para atualizar, ${skipped} sem data.`);
+
+  const BATCH_SIZE = 400;
+  for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const chunk = updates.slice(i, i + BATCH_SIZE);
+    chunk.forEach((u) => {
+      console.log(`[migrateUsers] Atualizando ${u.id}:`, u.oldVal, '->', u.timestamp.toDate().toISOString());
+      batch.update(u.ref, { createdAt: u.timestamp });
+    });
+    await batch.commit();
+    migrated += chunk.length;
+  }
+
+  console.log(`[migrateUsers] Finalizado: ${migrated} migrados com sucesso.`);
+  return {
+    total: snapshot.size,
+    migrated,
+    alreadyTimestamp,
+    errors: skipped,
+  };
+};
 
 export { getResolvedNickname, getUserAddedAt, normalizeUserPin };

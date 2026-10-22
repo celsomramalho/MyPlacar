@@ -11,7 +11,7 @@ import {
 import { deleteLiveMatchesByIds, fetchLiveMatchesStats as fetchFirebaseLiveMatchesStats } from '@infra/firebase/liveMatches';
 import { linkLegacyMatchesToOwnerEmail } from '@infra/firebase/matches';
 import { fetchSystemConfig, saveSystemConfigPatch } from '@infra/firebase/systemConfig';
-import { countUserProfiles, searchUserProfilesByEmailPrefix } from '@infra/firebase/users';
+import { countUserProfiles, fetchUsersByDateRange, migrateUsersCreatedAtToTimestamp, searchUserProfilesByEmailPrefix, type FirebaseUserWithCreatedAt } from '@infra/firebase/users';
 import { AdminConfirmModals, type AdminDeleteConfirm } from '@modules/admin/components/AdminConfirmModals';
 import { AdminEventsPanel } from '@modules/admin/components/AdminEventsPanel';
 import { AdminHeader } from '@modules/admin/components/AdminHeader';
@@ -112,6 +112,116 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [userCount, setUserCount] = useState<number | null>(null);
   const [isLoadingUserCount, setIsLoadingUserCount] = useState(false);
+
+  const formatDateInputValue = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [selectedMonthDate, setSelectedMonthDate] = useState(() => new Date());
+  const [periodFrom, setPeriodFrom] = useState(() => {
+    const d = new Date();
+    return formatDateInputValue(new Date(d.getFullYear(), d.getMonth(), 1));
+  });
+  const [periodTo, setPeriodTo] = useState(() => {
+    const d = new Date();
+    return formatDateInputValue(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  });
+  const [periodUsers, setPeriodUsers] = useState<FirebaseUserWithCreatedAt[]>([]);
+  const [isLoadingPeriod, setIsLoadingPeriod] = useState(false);
+  const [hasQueriedPeriod, setHasQueriedPeriod] = useState(false);
+
+  const periodLabel = useMemo(() => {
+    const monthName = selectedMonthDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    return monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  }, [selectedMonthDate]);
+
+  const handleSetCurrentMonth = () => {
+    const now = new Date();
+    setSelectedMonthDate(now);
+    setPeriodFrom(formatDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)));
+    setPeriodTo(formatDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+  };
+
+  const handlePrevMonth = () => {
+    const newDate = new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() - 1, 1);
+    setSelectedMonthDate(newDate);
+    setPeriodFrom(formatDateInputValue(new Date(newDate.getFullYear(), newDate.getMonth(), 1)));
+    setPeriodTo(formatDateInputValue(new Date(newDate.getFullYear(), newDate.getMonth() + 1, 0)));
+  };
+
+  const handleNextMonth = () => {
+    const newDate = new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() + 1, 1);
+    setSelectedMonthDate(newDate);
+    setPeriodFrom(formatDateInputValue(new Date(newDate.getFullYear(), newDate.getMonth(), 1)));
+    setPeriodTo(formatDateInputValue(new Date(newDate.getFullYear(), newDate.getMonth() + 1, 0)));
+  };
+
+  const handleFetchPeriodUsers = async () => {
+    if (!periodFrom || !periodTo) return;
+    const db = getDb();
+    if (!db) return;
+    setIsLoadingPeriod(true);
+    setHasQueriedPeriod(true);
+    try {
+      const [fromY, fromM, fromD] = periodFrom.split('-').map(Number);
+      const [toY, toM, toD] = periodTo.split('-').map(Number);
+      const start = new Date(fromY, fromM - 1, fromD, 0, 0, 0, 0);
+      const end = new Date(toY, toM - 1, toD, 23, 59, 59, 999);
+      const users = await fetchUsersByDateRange(db, start, end);
+      setPeriodUsers(users);
+    } catch (error) {
+      console.error('Falha ao consultar usuários por período:', error);
+      setStatus({ type: 'error', msg: 'Erro ao buscar usuários do período selecionado.' });
+      setTimeout(() => setStatus(null), 3000);
+    } finally {
+      setIsLoadingPeriod(false);
+    }
+  };
+
+  const [isMigratingDates, setIsMigratingDates] = useState(false);
+  const [migrationFeedback, setMigrationFeedback] = useState<string | null>(null);
+
+  const handleMigrateUsersCreatedAt = async () => {
+    console.log('[handleMigrateUsersCreatedAt] Iniciando procedimento de migração...');
+    const db = getDb();
+    if (!db) {
+      console.error('[handleMigrateUsersCreatedAt] Firestore db é nulo/indisponível');
+      setMigrationFeedback('Erro: Conexão com o banco Firestore não está disponível.');
+      return;
+    }
+    setIsMigratingDates(true);
+    setMigrationFeedback('Processando migração para Timestamp...');
+    try {
+      const res = await migrateUsersCreatedAtToTimestamp(db);
+      console.log('[handleMigrateUsersCreatedAt] Resultado obtido:', res);
+      const feedbackMsg = `Concluído: ${res.migrated} atualizado(s), ${res.alreadyTimestamp} já eram Timestamp.`;
+      setMigrationFeedback(feedbackMsg);
+      setStatus({
+        type: 'success',
+        msg: `Migração concluída! ${res.migrated} usuário(s) atualizado(s) para Timestamp (${res.alreadyTimestamp} já eram Timestamp).`,
+      });
+      handleFetchPeriodUsers();
+    } catch (e: unknown) {
+      console.error('[handleMigrateUsersCreatedAt] Erro na migração de datas:', e);
+      const errMsg = `Erro ao migrar: ${e instanceof Error ? e.message : String(e)}`;
+      setMigrationFeedback(errMsg);
+      setStatus({
+        type: 'error',
+        msg: errMsg,
+      });
+    } finally {
+      setIsMigratingDates(false);
+      setTimeout(() => setStatus(null), 6000);
+    }
+  };
+
+  useEffect(() => {
+    if (adminTab !== 'users') return;
+    handleFetchPeriodUsers();
+  }, [adminTab, periodFrom, periodTo]);
 
   useEffect(() => {
     if (adminTab !== 'users') return;
@@ -804,12 +914,20 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
                   </div>
                   <Toggle id="toggle-golden-rule" checked={goldenRule} onChange={toggleGoldenRule} />
                 </div>
-                <div className="pt-2 border-t border-gray-100">
+                <div className="pt-2 border-t border-gray-100 space-y-2">
                   <button
                     onClick={() => setShowConfirmClearCache(true)}
                     className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] flex items-center justify-center gap-2"
                   >
                     <RotateCw size={14} /> Limpar cache do banco de dados
+                  </button>
+                  <button
+                    onClick={handleMigrateUsersCreatedAt}
+                    disabled={isMigratingDates}
+                    className="w-full py-3 bg-blue-50 text-blue-600 rounded-xl font-black text-[10px] flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isMigratingDates ? <Loader2 className="animate-spin" size={14} /> : <Database size={14} />}
+                    Padronizar datas de usuários para Timestamp
                   </button>
                 </div>
               </section>
@@ -887,6 +1005,21 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             onUserSearchChange={setUserSearch}
             onSearchUsers={handleSearchUsers}
             onToggleUserPremium={toggleUserPremium}
+            periodFrom={periodFrom}
+            periodTo={periodTo}
+            periodUsers={periodUsers}
+            isLoadingPeriod={isLoadingPeriod}
+            hasQueriedPeriod={hasQueriedPeriod}
+            onPeriodFromChange={setPeriodFrom}
+            onPeriodToChange={setPeriodTo}
+            onFetchPeriod={handleFetchPeriodUsers}
+            onSetCurrentMonth={handleSetCurrentMonth}
+            onPrevMonth={handlePrevMonth}
+            onNextMonth={handleNextMonth}
+            periodLabel={periodLabel}
+            onMigrateDates={handleMigrateUsersCreatedAt}
+            isMigratingDates={isMigratingDates}
+            migrationFeedback={migrationFeedback}
           />
         )}
 
