@@ -216,7 +216,7 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
   }, [pinInput, userProfile.pin, meAsPartner.nickname, meAsPartner.name]);
 
   const handleShareWhatsApp = () => {
-    const text = `Participe comigo no my placar. Clique no link para se cadastrar e me adicionar como parceiro: ${shareLink}`;
+    const text = `Participe comigo no MyPlacar. Clique no link para se cadastrar e me adicionar como parceiro: ${shareLink}`;
     globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
   const handleCopyShareLink = async () => {
