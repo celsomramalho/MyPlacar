@@ -45,7 +45,7 @@ export function useAppConfig(authReady: boolean) {
     return () => unsubscribe?.();
   }, [authReady]);
 
-  const handleCheckUpdate = useCallback(async () => {
+  const handleCheckUpdate = useCallback(async (isManual = false) => {
     if (!navigator.onLine) return false;
     const db = getDb();
     if (!db) return false;
@@ -91,8 +91,10 @@ export function useAppConfig(authReady: boolean) {
 
         if (!remoteVersion || remoteVersion === localVersion) return false;
 
-        const alreadyTriggered = sessionStorage.getItem('myPlacarUpdateTriggered');
-        if (alreadyTriggered === remoteVersion) return false;
+        if (!isManual) {
+          const alreadyTriggered = sessionStorage.getItem('myPlacarUpdateTriggered');
+          if (alreadyTriggered === remoteVersion) return false;
+        }
 
         if (isNewer(remoteVersion, localVersion)) {
           setModalConfig({

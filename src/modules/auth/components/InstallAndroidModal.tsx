@@ -1,5 +1,5 @@
 import React from 'react';
-import { MoreVertical, Smartphone, PlusSquare, X } from 'lucide-react';
+import { MoreVertical, Smartphone, PlusSquare, X, ExternalLink } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -64,6 +64,30 @@ export const InstallAndroidModal: React.FC<Props> = ({ isOpen, onClose }) => {
               </div>
               <p className="text-slate-500 font-medium mt-0.5 leading-relaxed">
                 No menu, selecione <span className="font-bold text-slate-700">"Instalar aplicativo"</span> ou <span className="font-bold text-slate-700">"Adicionar à tela inicial"</span>.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3.5 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 font-black text-xs shadow-sm">
+              3
+            </div>
+            <div className="flex-1 text-xs">
+              <div className="flex items-center gap-1.5 font-black text-slate-800">
+                <span>Abra o MyPlacar no navegador</span>
+                <ExternalLink size={14} className="text-emerald-600" />
+              </div>
+              <p className="text-slate-500 font-medium mt-0.5 leading-relaxed">
+                Se estiver usando o app, abra este navegador pelo link:{' '}
+                <a
+                  href="https://www.myplacar.app.br/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-black text-emerald-700 underline underline-offset-2"
+                >
+                  MyPlacar
+                </a>
+                .
               </p>
             </div>
           </div>

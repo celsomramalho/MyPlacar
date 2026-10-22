@@ -37,7 +37,7 @@ export interface AppScreenRouterProps {
   appUrl: string;
   newAppUrl: string;
   isServiceInterrupted: boolean;
-  handleCheckUpdate: () => Promise<string | null>;
+  handleCheckUpdate: (isManual?: boolean) => Promise<string | null>;
   isSyncing: boolean;
   isDownloading: boolean;
   cloudMatchesCount: number;
@@ -276,7 +276,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
               if (tab) setActiveTab(tab);
             }}
             onLogout={handleLogout}
-            onCheckUpdate={handleCheckUpdate}
+            onCheckUpdate={() => handleCheckUpdate(true)}
             onOpenMenu={() => setIsMenuOpen(true)}
             onRegisterReplayTour={(fn) => { replayTourHomeRef.current = fn; }}
           />

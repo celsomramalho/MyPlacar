@@ -33,13 +33,19 @@ export function registerServiceWorker() {
 
     console.log('MyPlacar: ServiceWorker registrado:', registration.scope);
 
+    if (registration.waiting) {
+      console.log('MyPlacar: SW em espera detectado, ativando imediatamente...');
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
       if (!newWorker) return;
 
       newWorker.addEventListener('statechange', () => {
         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          console.log('MyPlacar: Nova versão do SW disponível e aguardando.');
+          console.log('MyPlacar: Nova versão do SW instalada, ativando...');
+          newWorker.postMessage({ type: 'SKIP_WAITING' });
         }
       });
     });

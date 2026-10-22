@@ -20,7 +20,7 @@ interface SettingsRouteProps {
   syncHistoryToFirebase: (forcedHistory?: MatchHistoryItem[], forceAll?: boolean) => Promise<void>;
   downloadHistoryFromFirebase: () => void;
   handleLogout: () => void;
-  handleCheckUpdate: () => Promise<string | null>;
+  handleCheckUpdate: (isManual?: boolean) => Promise<string | null>;
   unreadCommsCount: number;
   activeEvent: TournamentEvent | null;
   userEntryDate: number | null;
@@ -195,7 +195,7 @@ export function SettingsRoute({
         })
       }
       cloudLiveExists={cloudLiveExists}
-      onCheckUpdate={() => handleCheckUpdate().then(v => v ?? false)}
+      onCheckUpdate={() => handleCheckUpdate(true).then(v => v ?? false)}
       setIsUpdatingVersion={setIsUpdatingVersion}
       onOpenLiveControl={() => setShowLiveControlOverlay(true)}
       role={livePapel}

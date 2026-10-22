@@ -5,7 +5,7 @@ import { useUI } from '@modules/ui';
 
 interface AuthRouteProps {
   appUrl: string;
-  handleCheckUpdate: () => Promise<string | null>;
+  handleCheckUpdate: (isManual?: boolean) => Promise<string | null>;
   setIsUpdatingVersion: React.Dispatch<React.SetStateAction<boolean>>;
   setIsOfflineMode: React.Dispatch<React.SetStateAction<boolean>>;
   onOfflineMode: () => void;
@@ -40,7 +40,7 @@ export function AuthRoute({
         setUserProfile(p);
         setCurrentScreen('home');
       }}
-      onCheckUpdate={() => handleCheckUpdate().then(v => v ?? false)}
+      onCheckUpdate={() => handleCheckUpdate(true).then(v => v ?? false)}
       setIsUpdatingVersion={setIsUpdatingVersion}
       initialReferralPin={initialReferralPin}
       onOfflineMode={onOfflineMode}
