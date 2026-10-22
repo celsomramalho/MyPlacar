@@ -84,7 +84,7 @@ import {
   validateCategoryGenders,
 } from '../domain/brackets';
 import { calculateQueueState } from '../domain/queue';
-import { createMercadoPagoPreference, getMercadoPagoPaymentStatus, type PixPaymentResult } from '../services/mercadoPagoCheckout';
+import { createMercadoPagoPreference, getMercadoPagoPaymentStatus, loadMercadoPagoSecurityScript, type PixPaymentResult } from '../services/mercadoPagoCheckout';
 import {
   getRegistrationPeriodStatus,
   isTournamentPeriodActive,
@@ -657,6 +657,10 @@ export const EventDetailScreen: React.FC<Props> = ({
     if (!currentUserEntry || isStartingPayment) return;
     setIsStartingPayment(true);
     try {
+      if (getRegistrationPeriodStatus(event).isOpen) {
+        await loadMercadoPagoSecurityScript().catch(() => undefined);
+      }
+
       const checkout = await createMercadoPagoPreference({
         eventPin: event.pin,
         entryEmail: currentUserEntry.email,

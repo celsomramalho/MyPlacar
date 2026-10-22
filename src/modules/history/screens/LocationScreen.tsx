@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Clock, MapPin, Loader2, Target, AlertTriangle } from 'lucide-react';
-import L from 'leaflet';
+import type { CircleMarker, Layer, Map as LeafletMap } from 'leaflet';
 import { getDb } from '@infra/firebase/client';
 import { fetchAllCloudMatches } from '@infra/firebase/matches';
 import type { MatchHistoryItem } from '../types';
@@ -14,8 +14,8 @@ interface Props {
 export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
   const { matchHistory: history } = useGame();
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<L.Map | null>(null);
-  const markersRef = useRef<Record<string, L.CircleMarker>>({});
+  const mapInstance = useRef<LeafletMap | null>(null);
+  const markersRef = useRef<Record<string, CircleMarker>>({});
   const [adminClicks, setAdminClicks] = useState(0);
   const [isAdminView, setIsAdminView] = useState(false);
   const [cloudMatches, setCloudMatches] = useState<MatchHistoryItem[]>([]);
@@ -65,6 +65,9 @@ export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+
     if (!document.getElementById('leaflet-css')) {
       const link = document.createElement('link');
       link.id = 'leaflet-css';
@@ -73,8 +76,9 @@ export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
       document.head.appendChild(link);
     }
 
-    const initMap = () => {
-      if (!mapRef.current) return;
+    const initMap = async () => {
+      const { default: L } = await import('leaflet');
+      if (cancelled || !mapRef.current) return;
 
       if (mapInstance.current) {
         mapInstance.current.remove();
@@ -118,7 +122,7 @@ export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
           markersRef.current[match.id] = marker;
         });
 
-      setTimeout(() => {
+      resizeTimer = setTimeout(() => {
         if (!mapInstance.current) return;
         mapInstance.current.invalidateSize();
 
@@ -127,7 +131,7 @@ export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
           return;
         }
 
-        const markerList = Object.values(markersRef.current) as L.Layer[];
+        const markerList = Object.values(markersRef.current) as Layer[];
         if (markerList.length > 0) {
           const group = L.featureGroup(markerList);
           mapInstance.current.fitBounds(group.getBounds().pad(0.2));
@@ -135,9 +139,11 @@ export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
       }, 600);
     };
 
-    initMap();
+    void initMap();
 
     return () => {
+      cancelled = true;
+      if (resizeTimer) clearTimeout(resizeTimer);
       if (mapInstance.current) {
         mapInstance.current.remove();
         mapInstance.current = null;

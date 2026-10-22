@@ -14,6 +14,36 @@ export interface PixPaymentStatusResult {
   paymentStatus: string;
 }
 
+let mercadoPagoSecurityScriptPromise: Promise<void> | null = null;
+
+/** Carrega o identificador antifraude apenas quando um fluxo elegível de pagamento é aberto. */
+export const loadMercadoPagoSecurityScript = (): Promise<void> => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve();
+  }
+
+  if ((window as Window & { MP_DEVICE_SESSION_ID?: string }).MP_DEVICE_SESSION_ID) {
+    return Promise.resolve();
+  }
+
+  if (mercadoPagoSecurityScriptPromise) return mercadoPagoSecurityScriptPromise;
+
+  mercadoPagoSecurityScriptPromise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://www.mercadopago.com/v2/security.js';
+    script.async = true;
+    script.setAttribute('view', 'checkout');
+    script.onload = () => resolve();
+    script.onerror = () => {
+      mercadoPagoSecurityScriptPromise = null;
+      reject(new Error('Não foi possível carregar a proteção antifraude do Mercado Pago.'));
+    };
+    document.head.appendChild(script);
+  });
+
+  return mercadoPagoSecurityScriptPromise;
+};
+
 export const createMercadoPagoPixPayment = async ({
   eventPin,
   entryEmail,

@@ -25,6 +25,8 @@ import type { FirebaseUserByPin } from '@infra/firebase/users';
 import type { Firestore } from 'firebase/firestore';
 import { useRegistrationForm } from '../hooks/useRegistrationForm';
 import { useRegistrationPayment } from '../hooks/useRegistrationPayment';
+import { loadMercadoPagoSecurityScript } from '@modules/events/services/mercadoPagoCheckout';
+import { getRegistrationPeriodStatus } from '@modules/events/services/eventRegistrationPeriod';
 import type { RegistrationStep } from '../types';
 import {
   AthleteIdentityStep,
@@ -72,6 +74,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   onProfileSync,
 }) => {
   const isAdmin = mode === 'admin';
+  const shouldLoadMercadoPagoSecurity =
+    event.paymentType === 'mercadopago' && getRegistrationPeriodStatus(event).isOpen;
   const hasExistingRealUser = Boolean(
     entry.email &&
     !entry.email.toLowerCase().includes('@simplificada.local') &&
@@ -87,6 +91,13 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     (!isAdmin && isConfirmedUserBound);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!shouldLoadMercadoPagoSecurity) return;
+    void loadMercadoPagoSecurityScript().catch(() => {
+      // Device ID is optional; payment can still proceed without the fingerprint.
+    });
+  }, [shouldLoadMercadoPagoSecurity]);
 
   // ── registrationId e vagas: busca as entries REAIS da subcoleção para o formulário ──
   // event.entries pode estar vazio (não é carregado no contexto do form de usuário),
@@ -124,6 +135,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     payerEmail: form.formData.email,
     payerName: form.formData.name,
     dueAmount: form.pricing.dueAmount,
+    loadDeviceFingerprint: shouldLoadMercadoPagoSecurity,
     onPaymentApproved: async () => {
       const submission = form.getSubmissionEntry();
       submission.paymentStatus = 'Confirmado';

@@ -170,13 +170,13 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('firebase'))      return 'vendor-firebase';
-            if (id.includes('leaflet'))       return 'vendor-leaflet';
             if (id.includes('@google/genai')) return 'vendor-gemini';
             if (id.includes('lucide-react'))  return 'vendor-icons';
             // React e ReactDOM raramente mudam — chunk dedicado maximiza cache de longo prazo
             if (id.includes('react-dom') || id.includes('/react/'))
                                               return 'vendor-react';
-            return 'vendor';
+            // Deixa as demais dependências serem divididas pelo Rollup conforme o
+            // grafo de imports, evitando um único vendor carregado em qualquer tela.
           }
         },
       },

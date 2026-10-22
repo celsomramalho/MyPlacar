@@ -38,7 +38,7 @@ const getDb = (): Firestore | null => {
         localCache: persistentLocalCache({
           tabManager: persistentMultipleTabManager()
         }),
-        experimentalForceLongPolling: true
+        experimentalAutoDetectLongPolling: true
       });
       console.log("Myplacar: Firestore inicializado com cache persistente.");
     } catch (cacheError) {
@@ -47,7 +47,7 @@ const getDb = (): Firestore | null => {
         // Tentativa 2: cache persistente sem múltiplas abas (funciona em Safari/privado)
         dbInstance = initializeFirestore(app, {
           localCache: persistentLocalCache(),
-          experimentalForceLongPolling: true
+          experimentalAutoDetectLongPolling: true
         });
         console.log("Myplacar: Firestore inicializado com cache simples.");
       } catch (simpleCacheError) {
@@ -55,7 +55,7 @@ const getDb = (): Firestore | null => {
         // Tentativa 3: memória pura — garante que o app funciona offline sem IndexedDB
         dbInstance = initializeFirestore(app, {
           localCache: memoryLocalCache(),
-          experimentalForceLongPolling: true
+          experimentalAutoDetectLongPolling: true
         });
         console.log("Myplacar: Firestore inicializado em memória.");
       }

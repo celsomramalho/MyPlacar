@@ -14,6 +14,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   createMercadoPagoPixPayment,
   getMercadoPagoPaymentStatus,
+  loadMercadoPagoSecurityScript,
   type PixPaymentResult,
 } from '@modules/events/services/mercadoPagoCheckout';
 import { playPaymentSuccessSound } from '@shared/utils/soundEffects';
@@ -33,6 +34,7 @@ export interface UseRegistrationPaymentOptions {
   payerEmail: string;
   payerName: string;
   dueAmount: number;
+  loadDeviceFingerprint?: boolean;
   onPaymentApproved?: () => void;
   pollingIntervalMs?: number;
 }
@@ -53,6 +55,7 @@ export function useRegistrationPayment({
   payerEmail,
   payerName,
   dueAmount,
+  loadDeviceFingerprint = false,
   onPaymentApproved,
   pollingIntervalMs = 5000,
 }: UseRegistrationPaymentOptions): UseRegistrationPaymentResult {
@@ -84,6 +87,10 @@ export function useRegistrationPayment({
     setPixError(null);
 
     try {
+      if (loadDeviceFingerprint) {
+        await loadMercadoPagoSecurityScript().catch(() => undefined);
+      }
+
       const result: PixPaymentResult = await createMercadoPagoPixPayment({
         eventPin,
         entryEmail: payerEmail,
@@ -134,7 +141,7 @@ export function useRegistrationPayment({
     } finally {
       setIsCreatingPix(false);
     }
-  }, [dueAmount, eventPin, payerEmail, onPaymentApproved, pollingIntervalMs, stopPolling]);
+  }, [dueAmount, eventPin, loadDeviceFingerprint, payerEmail, onPaymentApproved, pollingIntervalMs, stopPolling]);
 
   const cancelPix = useCallback(() => {
     stopPolling();
