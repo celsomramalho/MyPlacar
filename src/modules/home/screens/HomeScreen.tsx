@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight, Menu, BookOpen } from 'lucide-react';
+import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight, Menu, BookOpen, Download, Smartphone } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import type { UserProfile } from '@modules/auth/types';
 import { APP_VERSION } from '../../../constants';
 import { SettingsTabs } from '@modules/settings';
@@ -10,6 +11,10 @@ import { useUI } from '@modules/ui';
 import { isWatchDevice } from '@shared/utils/device';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { useScreenOnboarding, ScreenIntroCard, SpotlightTour } from '@shared/onboarding';
+import { useInstallPwa } from '@pwa/installPrompt';
+import { copyToClipboard } from '@shared/utils/clipboard';
+import { InstallSafariModal } from '@modules/auth/components/InstallSafariModal';
+import { InstallAndroidModal } from '@modules/auth/components/InstallAndroidModal';
 
 interface HomeScreenProps {
   userProfile: UserProfile;
@@ -32,6 +37,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
+  const { isInstalled, isAndroid, isApple, isSafari, triggerInstall } = useInstallPwa();
+  const [showSafariInstallModal, setShowSafariInstallModal] = useState(false);
+  const [showAndroidInstallModal, setShowAndroidInstallModal] = useState(false);
+  const isNativeApp = Capacitor.isNativePlatform();
+
+  const handleInstallAndroid = async () => {
+    const outcome = await triggerInstall();
+    if (outcome === 'unavailable') setShowAndroidInstallModal(true);
+  };
+
+  const handleInstallSafari = async () => {
+    await copyToClipboard('https://www.myplacar.app.br/');
+    setShowSafariInstallModal(true);
+  };
 
   const {
     config: onboardingConfig,
@@ -213,6 +232,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
           <span className="text-[21px]">{updateFeedback || `Versão ${APP_VERSION}`}</span>
         </button>
+
+        {!isNativeApp && isAndroid && !isInstalled && (
+          <button
+            onClick={handleInstallAndroid}
+            className="w-full bg-white border border-emerald-100 text-emerald-600 py-4 px-6 rounded-3xl font-black text-sm flex items-center justify-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50"
+          >
+            <Download size={18} />
+            <span className="text-[21px]">Instalar MyPlacar</span>
+          </button>
+        )}
+
+        {!isNativeApp && isApple && !isInstalled && (
+          <button
+            onClick={handleInstallSafari}
+            className="w-full bg-white border border-sky-100 text-sky-600 py-4 px-6 rounded-3xl font-black text-sm flex items-center justify-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50"
+          >
+            <Smartphone size={18} />
+            <span className="text-[21px]">Instalar MyPlacar no Safari</span>
+          </button>
+        )}
       </main>
 
       {/* Camada 1: Cartão de Boas-Vindas */}
@@ -223,6 +262,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onDismiss={handleDismissIntro}
         />
       )}
+
+      <InstallSafariModal
+        isOpen={showSafariInstallModal}
+        onClose={() => setShowSafariInstallModal(false)}
+        isSafari={isSafari}
+        targetUrl="https://www.myplacar.app.br/"
+      />
+      <InstallAndroidModal
+        isOpen={showAndroidInstallModal}
+        onClose={() => setShowAndroidInstallModal(false)}
+      />
 
       {/* Camada 2: Spotlight Tour dos elementos */}
       {onboardingConfig && (
