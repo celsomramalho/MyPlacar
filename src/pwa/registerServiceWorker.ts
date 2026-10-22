@@ -20,28 +20,37 @@ export function registerServiceWorker() {
   globalThis.addEventListener('load', async () => {
     sessionStorage.removeItem('sw-reload-done');
 
+    let registration: ServiceWorkerRegistration;
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js', {
+      registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/',
         updateViaCache: 'none',
       });
-
-      console.log('MyPlacar: ServiceWorker registrado:', registration.scope);
-
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (!newWorker) return;
-
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('MyPlacar: Nova versão do SW disponível e aguardando.');
-          }
-        });
-      });
-
-      await registration.update();
     } catch (error) {
       console.error('MyPlacar: Falha ao registrar ServiceWorker:', error);
+      return;
+    }
+
+    console.log('MyPlacar: ServiceWorker registrado:', registration.scope);
+
+    registration.addEventListener('updatefound', () => {
+      const newWorker = registration.installing;
+      if (!newWorker) return;
+
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          console.log('MyPlacar: Nova versão do SW disponível e aguardando.');
+        }
+      });
+    });
+
+    // A verificação explícita falha sem rede mesmo quando há um SW ativo e válido.
+    if (navigator.onLine) {
+      try {
+        await registration.update();
+      } catch (error) {
+        console.warn('MyPlacar: Não foi possível verificar atualizações do ServiceWorker:', error);
+      }
     }
   });
 }

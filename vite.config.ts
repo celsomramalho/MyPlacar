@@ -60,8 +60,15 @@ function swInjectPlugin(): Plugin {
           }
           for (const importedKey of entry.imports || []) addManifestEntry(importedKey);
         };
-        const rulesRouteKey = Object.keys(manifest).find(key => key.endsWith('src/app/NewGameRoute.tsx'));
-        if (rulesRouteKey) addManifestEntry(rulesRouteKey);
+        const offlineRouteSuffixes = [
+          'src/app/ScoreboardRoute.tsx',
+          'src/app/NewGameRoute.tsx',
+          'src/app/SettingsRoute.tsx',
+        ];
+        for (const routeSuffix of offlineRouteSuffixes) {
+          const routeKey = Object.keys(manifest).find(key => key.endsWith(routeSuffix));
+          if (routeKey) addManifestEntry(routeKey);
+        }
 
         const output = template
           .replace(/%%CACHE_NAME%%/g, CACHE_NAME)
