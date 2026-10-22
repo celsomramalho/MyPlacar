@@ -24,8 +24,8 @@
     <link rel="manifest" href="manifest.json" />
 
     <!-- Mercado Pago SDK v2 e Identificador de Dispositivo Antifraude (Device ID) -->
-    <script src="https://sdk.mercadopago.com/js/v2"></script>
-    <script src="https://www.mercadopago.com/v2/security.js" view="checkout"></script>
+    <script async src="https://sdk.mercadopago.com/js/v2"></script>
+    <script async src="https://www.mercadopago.com/v2/security.js" view="checkout"></script>
 
     
     <style>
@@ -68,13 +68,9 @@
         if (lastVersion !== CURRENT_VERSION) {
           localStorage.removeItem('myPlacarActiveGameState');
           localStorage.setItem('myPlacar_AppVersion', CURRENT_VERSION);
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
-          }
-          // Limpa caches do browser para garantir que os assets novos sejam buscados da rede
-          if ('caches' in window) {
-            caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))));
-          }
+          // A ativação do novo service worker troca o cache da PWA.
+          // Apagar os registros/caches neste ponto pode disputar com o registro
+          // do novo worker e deixar a instalação sem assets se a rede oscilar.
         }
 
         window.addEventListener('app-ready', () => {
