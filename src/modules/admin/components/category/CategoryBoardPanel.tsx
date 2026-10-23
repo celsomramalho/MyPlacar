@@ -36,7 +36,7 @@ export interface CategoryBoardPanelProps {
   onSortChange: (sort: any) => void;
   onToggleEntrySelection: (entry: TournamentEntry) => void;
   onToggleExpandedRegistration: (email: string | null) => void;
-  onSaveExpandedEntry: (entryData: TournamentEntry, originalPin: string) => Promise<void>;
+  onSaveExpandedEntry: (entryData: TournamentEntry, originalEntryOrPin: TournamentEntry | string, isDraft?: boolean) => Promise<void> | void;
   onDeleteEntry: (targetPin: string) => void;
   onDeleteAllCategoryEntries?: () => void;
   onGenerateTemporaryEntries?: () => void;

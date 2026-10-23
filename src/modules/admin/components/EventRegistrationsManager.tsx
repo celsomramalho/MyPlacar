@@ -530,40 +530,131 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     if (resetAfterSave) resetForm();
   };
 
-  const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
+  const handleSaveExpandedEntry = async (
+    entryData: TournamentEntry,
+    originalEntryOrPin: TournamentEntry | string,
+    isDraft = false
+  ) => {
+    const originalEntry =
+      typeof originalEntryOrPin === 'object' && originalEntryOrPin !== null
+        ? originalEntryOrPin
+        : entries.find((item) =>
+            (originalEntryOrPin && item.pin?.toUpperCase().trim() === String(originalEntryOrPin).toUpperCase().trim()) ||
+            (entryData.email && item.email?.toLowerCase().trim() === entryData.email.toLowerCase().trim())
+          );
+
+    const oldEmail = (originalEntry?.email || '').toLowerCase().trim();
+    const oldPin = (
+      originalEntry?.pin ||
+      (typeof originalEntryOrPin === 'string' ? originalEntryOrPin : '') ||
+      ''
+    ).toUpperCase().trim();
+    const oldRegId = originalEntry?.registrationId;
+
     const db = getDb();
     const finalEntry: TournamentEntry = {
       ...entryData,
-      registrationId: entryData.registrationId || entries.find(e => e.pin === originalPin)?.registrationId || getNextRegistrationId(entries),
+      registrationId:
+        entryData.registrationId ||
+        oldRegId ||
+        getNextRegistrationId(entries),
     };
+
     if (db && event.pin) {
       const { saveAdminEventEntry, saveUserEventRegistration, deleteAdminEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
-      const originalEntry = entries.find((item) => item.pin === originalPin);
-      const oldEmail = originalEntry?.email?.toLowerCase().trim();
       const newEmail = finalEntry.email?.toLowerCase().trim();
+
       if (oldEmail && newEmail && oldEmail !== newEmail) {
-        await deleteAdminEventEntry(db, event.pin, oldEmail, originalPin, adminEmail || getAuthInstance()?.currentUser?.email || undefined).catch(() => {});
+        await deleteAdminEventEntry(
+          db,
+          event.pin,
+          oldEmail,
+          oldPin || undefined,
+          adminEmail || getAuthInstance()?.currentUser?.email || undefined
+        ).catch(() => {});
         await deleteUserEventRegistration(db, oldEmail, event.pin).catch(() => {});
       }
-      await saveAdminEventEntry(db, event.pin, finalEntry, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+
+      await saveAdminEventEntry(
+        db,
+        event.pin,
+        finalEntry,
+        adminEmail || getAuthInstance()?.currentUser?.email || undefined
+      );
+
       try {
-        await saveUserEventRegistration(db, finalEntry.email, event.pin, { pin: event.pin, name: event.name, joinedAt: finalEntry.joinedAt, bannerUrl: event.bannerUrl || null });
+        await saveUserEventRegistration(db, finalEntry.email, event.pin, {
+          pin: event.pin,
+          name: event.name,
+          joinedAt: finalEntry.joinedAt,
+          bannerUrl: event.bannerUrl || null,
+        });
       } catch (error) {
         console.warn('Inscrição salva, mas não foi possível criar o índice auxiliar do usuário:', error);
       }
     }
-    // Atualiza o estado local: substitui a entrada pelo PIN original ou email original
-    const cleanOriginalPin = originalPin?.toUpperCase().trim();
-    const cleanOriginalEmail = (entries.find(e => e.pin?.toUpperCase().trim() === cleanOriginalPin))?.email?.toLowerCase().trim();
-    const updatedList = entries.map((item) => {
-      const matchPin = cleanOriginalPin && item.pin?.toUpperCase().trim() === cleanOriginalPin;
-      const matchEmail = cleanOriginalEmail && item.email?.toLowerCase().trim() === cleanOriginalEmail;
-      return (matchPin || matchEmail) ? finalEntry : item;
+
+    // Sincronizar duplas se o atleta já participava de alguma
+    let pairsChanged = false;
+    const updatedPairs = (event.pairs || []).map((pair) => {
+      let pChanged = false;
+      const p1 = { ...pair.p1 };
+      const p2 = { ...pair.p2 };
+      if (
+        (oldEmail && p1.email?.toLowerCase().trim() === oldEmail) ||
+        (oldPin && p1.pin?.toUpperCase().trim() === oldPin)
+      ) {
+        p1.email = finalEntry.email;
+        p1.pin = finalEntry.pin || p1.pin;
+        p1.name = finalEntry.name || p1.name;
+        p1.nickname = finalEntry.nickname || p1.nickname;
+        if (finalEntry.gender) p1.gender = finalEntry.gender as 'M' | 'F';
+        pChanged = true;
+      }
+      if (
+        (oldEmail && p2.email?.toLowerCase().trim() === oldEmail) ||
+        (oldPin && p2.pin?.toUpperCase().trim() === oldPin)
+      ) {
+        p2.email = finalEntry.email;
+        p2.pin = finalEntry.pin || p2.pin;
+        p2.name = finalEntry.name || p2.name;
+        p2.nickname = finalEntry.nickname || p2.nickname;
+        if (finalEntry.gender) p2.gender = finalEntry.gender as 'M' | 'F';
+        pChanged = true;
+      }
+      if (pChanged) pairsChanged = true;
+      return pChanged ? { ...pair, p1, p2 } : pair;
     });
+
+    // Atualiza o estado local: substitui a entrada específica sem duplicar
+    const isTargetEntry = (item: TournamentEntry) => {
+      if (oldRegId && item.registrationId && item.registrationId === oldRegId) return true;
+      if (oldPin && item.pin && item.pin.toUpperCase().trim() === oldPin) return true;
+      if (oldEmail && item.email && item.email.toLowerCase().trim() === oldEmail) return true;
+      return false;
+    };
+
+    const hasMatch = entries.some(isTargetEntry);
+    const updatedList = hasMatch
+      ? entries.map((item) => (isTargetEntry(item) ? finalEntry : item))
+      : [...entries, finalEntry];
+
     onUpdateEntries(updatedList);
-    onUpdateEvent({ ...event, entries: updatedList });
-    // Fecha o formulário expandido após salvar
-    setExpandedRegistrationEmail(null);
+    onUpdateEvent({
+      ...event,
+      entries: updatedList,
+      ...(pairsChanged ? { pairs: updatedPairs } : {}),
+    });
+
+    if (!isDraft) {
+      setExpandedRegistrationEmail(null);
+      setModalConfig({
+        title: 'Sucesso',
+        message: 'Inscrição atualizada com sucesso!',
+        variant: 'success',
+        onConfirm: () => setModalConfig(null),
+      });
+    }
   };
 
   const handleDelete = (targetPinOrEmail: string, specificEntry?: TournamentEntry) => {
@@ -1270,12 +1361,13 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                     <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
                       <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
                         <EventRegistrationForm
-                          key={`expanded-${entry.email || entry.pin}`}
+                          key={`expanded-${entry.registrationId || entry.email || entry.pin}`}
                           event={event}
                           mode="admin"
                           entry={entry}
                           onUpdateEvent={onUpdateEvent}
-                          onSave={(updated) => handleSaveExpandedEntry(updated, entry.pin)}
+                          onSave={(updated) => handleSaveExpandedEntry(updated, entry, false)}
+                          onSaveDraft={(updated) => handleSaveExpandedEntry(updated, entry, true)}
                           onDelete={!isReadOnly ? () => {
                             handleDelete(entry.email || entry.pin, entry);
                           } : undefined}

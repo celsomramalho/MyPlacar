@@ -541,6 +541,7 @@ export const EventDashboardView: React.FC<Props> = ({
           activeSports={activeSports}
           onUpdateCategories={handleUpdateCategories}
           onUpdateEvent={safeUpdateEvent}
+          adminEmail={adminEmail}
           isReadOnly={isReadOnly}
         />
       )}

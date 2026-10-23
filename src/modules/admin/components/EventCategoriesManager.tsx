@@ -18,7 +18,7 @@ import {
 import { updateSuper8DuplasProgression } from '@modules/events/services/matchProgression';
 import { isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
-import { getDb } from '@infra/firebase';
+import { getDb, getAuthInstance } from '@infra/firebase';
 import { updateEvent, saveEventEntry, deleteEventEntry } from '@infra/firebase/events';
 import type { Firestore } from 'firebase/firestore';
 import { useUI } from '@modules/ui';
@@ -37,6 +37,7 @@ interface Props {
   onUpdateCategories: (categories: EventCategory[]) => void;
   onUpdateEvent: (event: TournamentEvent) => void;
   isReadOnly?: boolean;
+  adminEmail?: string;
 }
 
 export const EventCategoriesManager: React.FC<Props> = ({
@@ -45,6 +46,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   onUpdateCategories,
   onUpdateEvent,
   isReadOnly = false,
+  adminEmail,
 }) => {
   const { setModalConfig } = useUI();
   type CategoryPanelView = 'entries' | 'teams' | 'matches';
@@ -386,37 +388,66 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setModalConfig,
   });
 
-  const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
-    const db = getDb();
-    const originalEntry = entries.find((e) =>
-      (originalPin && e.pin?.toUpperCase().trim() === originalPin.toUpperCase().trim()) ||
-      (entryData.email && e.email?.toLowerCase().trim() === entryData.email.toLowerCase().trim())
-    );
+  const handleSaveExpandedEntry = async (
+    entryData: TournamentEntry,
+    originalEntryOrPin: TournamentEntry | string,
+    isDraft = false
+  ) => {
+    const originalEntry =
+      typeof originalEntryOrPin === 'object' && originalEntryOrPin !== null
+        ? originalEntryOrPin
+        : entries.find((e) =>
+            (originalEntryOrPin && e.pin?.toUpperCase().trim() === String(originalEntryOrPin).toUpperCase().trim()) ||
+            (entryData.email && e.email?.toLowerCase().trim() === entryData.email.toLowerCase().trim())
+          );
 
     const oldEmail = (originalEntry?.email || '').toLowerCase().trim();
-    const oldPin = (originalPin || originalEntry?.pin || '').toUpperCase().trim();
+    const oldPin = (
+      originalEntry?.pin ||
+      (typeof originalEntryOrPin === 'string' ? originalEntryOrPin : '') ||
+      ''
+    ).toUpperCase().trim();
+    const oldRegId = originalEntry?.registrationId;
+
     const newEmail = (entryData.email || '').toLowerCase().trim();
     const newPin = (entryData.pin || '').toUpperCase().trim();
 
+    const finalEntry: TournamentEntry = {
+      ...entryData,
+      registrationId: entryData.registrationId || oldRegId || getNextRegistrationId(entries),
+    };
+
+    const db = getDb();
     if (db && event.pin) {
       try {
-        const { deleteEventEntry, deleteUserEventRegistration, saveUserEventRegistration } = await import('@infra/firebase/events');
+        const { deleteAdminEventEntry, saveAdminEventEntry, saveUserEventRegistration, deleteUserEventRegistration } = await import('@infra/firebase/events');
 
         // Se o email mudou (ex: de temporário para o email real do atleta vinculado)
         if (oldEmail && newEmail && oldEmail !== newEmail) {
-          await deleteEventEntry(db as Firestore, event.pin, oldEmail).catch(() => {});
+          await deleteAdminEventEntry(
+            db as Firestore,
+            event.pin,
+            oldEmail,
+            oldPin || undefined,
+            adminEmail || getAuthInstance()?.currentUser?.email || undefined
+          ).catch((err) => console.error('Erro ao excluir inscrição temporária anterior:', err));
           await deleteUserEventRegistration(db as Firestore, oldEmail, event.pin).catch(() => {});
         }
 
-        await saveEventEntry(db as Firestore, event.pin, entryData as any);
+        await saveAdminEventEntry(
+          db as Firestore,
+          event.pin,
+          finalEntry,
+          adminEmail || getAuthInstance()?.currentUser?.email || undefined
+        );
 
         if (newEmail && !newEmail.includes('@simplificada.local')) {
           await saveUserEventRegistration(db as Firestore, newEmail, event.pin, {
             pin: event.pin,
             name: event.name || event.pin,
-            joinedAt: entryData.joinedAt || Date.now(),
+            joinedAt: finalEntry.joinedAt || Date.now(),
             bannerUrl: event.bannerUrl || null,
-            paymentStatus: entryData.paymentStatus,
+            paymentStatus: finalEntry.paymentStatus,
           }).catch(() => {});
         }
       } catch (err) {
@@ -434,43 +465,55 @@ export const EventCategoriesManager: React.FC<Props> = ({
         (oldEmail && p1.email?.toLowerCase().trim() === oldEmail) ||
         (oldPin && p1.pin?.toUpperCase().trim() === oldPin)
       ) {
-        p1.email = entryData.email;
-        p1.pin = entryData.pin || p1.pin;
-        p1.name = entryData.name || p1.name;
-        p1.nickname = entryData.nickname || p1.nickname;
-        if (entryData.gender) p1.gender = entryData.gender as 'M' | 'F';
+        p1.email = finalEntry.email;
+        p1.pin = finalEntry.pin || p1.pin;
+        p1.name = finalEntry.name || p1.name;
+        p1.nickname = finalEntry.nickname || p1.nickname;
+        if (finalEntry.gender) p1.gender = finalEntry.gender as 'M' | 'F';
         pChanged = true;
       }
       if (
         (oldEmail && p2.email?.toLowerCase().trim() === oldEmail) ||
         (oldPin && p2.pin?.toUpperCase().trim() === oldPin)
       ) {
-        p2.email = entryData.email;
-        p2.pin = entryData.pin || p2.pin;
-        p2.name = entryData.name || p2.name;
-        p2.nickname = entryData.nickname || p2.nickname;
-        if (entryData.gender) p2.gender = entryData.gender as 'M' | 'F';
+        p2.email = finalEntry.email;
+        p2.pin = finalEntry.pin || p2.pin;
+        p2.name = finalEntry.name || p2.name;
+        p2.nickname = finalEntry.nickname || p2.nickname;
+        if (finalEntry.gender) p2.gender = finalEntry.gender as 'M' | 'F';
         pChanged = true;
       }
       if (pChanged) pairsChanged = true;
       return pChanged ? { ...pair, p1, p2 } : pair;
     });
 
-    const withoutOld = entries.filter((e) =>
-      !(oldPin && e.pin?.toUpperCase().trim() === oldPin) &&
-      !(oldEmail && e.email?.toLowerCase().trim() === oldEmail)
-    );
-    const alreadyHasNew = withoutOld.some((e) => newEmail && e.email?.toLowerCase().trim() === newEmail);
-    const updatedEntries = alreadyHasNew
-      ? withoutOld.map((e) => (newEmail && e.email?.toLowerCase().trim() === newEmail ? { ...e, ...entryData } : e))
-      : [...withoutOld, entryData];
+    const isTargetEntry = (item: TournamentEntry) => {
+      if (oldRegId && item.registrationId && item.registrationId === oldRegId) return true;
+      if (oldPin && item.pin && item.pin.toUpperCase().trim() === oldPin) return true;
+      if (oldEmail && item.email && item.email.toLowerCase().trim() === oldEmail) return true;
+      return false;
+    };
+
+    const hasMatch = entries.some(isTargetEntry);
+    const updatedEntries = hasMatch
+      ? entries.map((item) => (isTargetEntry(item) ? finalEntry : item))
+      : [...entries, finalEntry];
 
     onUpdateEvent({
       ...event,
       entries: updatedEntries,
       ...(pairsChanged ? { pairs: updatedPairs } : {}),
     });
-    setExpandedRegistrationEmail(null);
+
+    if (!isDraft) {
+      setExpandedRegistrationEmail(null);
+      setModalConfig({
+        title: 'Sucesso',
+        message: 'Inscrição atualizada com sucesso!',
+        variant: 'success',
+        onConfirm: () => setModalConfig(null),
+      });
+    }
   };
 
   const handleDeleteEntry = (targetPin: string) => {
@@ -487,9 +530,16 @@ export const EventCategoriesManager: React.FC<Props> = ({
         const updatedEntries = entries.filter((e) => e.pin !== targetPin);
         onUpdateEvent({ ...event, entries: updatedEntries });
         const db = getDb();
-        if (db && event.pin && targetEntry?.email) {
+        if (db && event.pin && (targetEntry?.email || targetEntry?.pin)) {
           try {
-            await deleteEventEntry(db as Firestore, event.pin, targetEntry.email);
+            const { deleteAdminEventEntry } = await import('@infra/firebase/events');
+            await deleteAdminEventEntry(
+              db as Firestore,
+              event.pin,
+              targetEntry.email || '',
+              targetEntry.pin,
+              adminEmail || getAuthInstance()?.currentUser?.email || undefined
+            );
           } catch (err) {
             console.error('Erro ao excluir inscrição no Firestore:', err);
           }
@@ -550,12 +600,18 @@ export const EventCategoriesManager: React.FC<Props> = ({
         const db = getDb();
         if (db && event.pin) {
           try {
-            const { deleteEventEntry, deleteUserEventRegistration, updateEvent: persistUpdateEvent, saveEventEntry } = await import('@infra/firebase/events');
+            const { deleteAdminEventEntry, deleteUserEventRegistration, updateEvent: persistUpdateEvent, saveAdminEventEntry } = await import('@infra/firebase/events');
 
             await Promise.all(
               entriesToDeleteFromDb.map(async (entry) => {
+                await deleteAdminEventEntry(
+                  db as Firestore,
+                  event.pin,
+                  entry.email || '',
+                  entry.pin,
+                  adminEmail || getAuthInstance()?.currentUser?.email || undefined
+                ).catch(() => {});
                 if (entry.email) {
-                  await deleteEventEntry(db as Firestore, event.pin, entry.email).catch(() => {});
                   await deleteUserEventRegistration(db as Firestore, entry.email, event.pin).catch(() => {});
                 }
               })
@@ -564,7 +620,14 @@ export const EventCategoriesManager: React.FC<Props> = ({
             await Promise.all(
               nextEntries
                 .filter((e) => entries.find((orig) => orig.pin === e.pin && orig.categoryIds?.includes(catId)))
-                .map((e) => saveEventEntry(db as Firestore, event.pin, e as any).catch(() => {}))
+                .map((e) =>
+                  saveAdminEventEntry(
+                    db as Firestore,
+                    event.pin,
+                    e as any,
+                    adminEmail || getAuthInstance()?.currentUser?.email || undefined
+                  ).catch(() => {})
+                )
             );
 
             await persistUpdateEvent(db as Firestore, event.pin, {

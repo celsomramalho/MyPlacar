@@ -24,7 +24,7 @@ export interface CategoryEntriesTabProps {
   onSortChange: (mode: 'team' | 'name') => void;
   onToggleEntrySelection: (entry: TournamentEntry) => void;
   onToggleExpandedRegistration: (email: string | null) => void;
-  onSaveExpandedEntry: (entryData: TournamentEntry, originalPin: string) => Promise<void> | void;
+  onSaveExpandedEntry: (entryData: TournamentEntry, originalEntryOrPin: TournamentEntry | string, isDraft?: boolean) => Promise<void> | void;
   onDeleteEntry: (targetPin: string) => void;
   onDeleteAllCategoryEntries?: () => void;
   onGenerateTemporaryEntries?: () => void;
@@ -183,7 +183,8 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                           mode="admin"
                           entry={entry}
                           onUpdateEvent={onUpdateEvent}
-                          onSave={async (updated) => { await onSaveExpandedEntry(updated, entry.pin); }}
+                          onSave={async (updated) => { await onSaveExpandedEntry(updated, entry, false); }}
+                          onSaveDraft={async (updated) => { await onSaveExpandedEntry(updated, entry, true); }}
                           onDelete={isReadOnly ? undefined : () => onDeleteEntry(entry.pin)}
                           onCancel={() => onToggleExpandedRegistration(null)}
                           readOnly={isReadOnly}
@@ -247,7 +248,8 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                         mode="admin"
                         entry={entry}
                         onUpdateEvent={onUpdateEvent}
-                        onSave={async (updated) => { await onSaveExpandedEntry(updated, entry.pin); }}
+                        onSave={async (updated) => { await onSaveExpandedEntry(updated, entry, false); }}
+                        onSaveDraft={async (updated) => { await onSaveExpandedEntry(updated, entry, true); }}
                         onDelete={isReadOnly ? undefined : () => onDeleteEntry(entry.pin)}
                         onCancel={() => onToggleExpandedRegistration(null)}
                         readOnly={isReadOnly}
