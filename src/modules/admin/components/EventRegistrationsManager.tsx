@@ -67,7 +67,10 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     return entries.filter((e) =>
       (e.name || '').toLowerCase().includes(term) ||
       (e.nickname || '').toLowerCase().includes(term) ||
-      (e.pin || '').toLowerCase().includes(term)
+      (e.pin || '').toLowerCase().includes(term) ||
+      (e.email || '').toLowerCase().includes(term) ||
+      (e.phone || '').toLowerCase().includes(term) ||
+      (e.partnerName || '').toLowerCase().includes(term)
     );
   }, [entries, searchName]);
 
@@ -129,9 +132,17 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       }
     }
 
-    const updatedEntries = entries.map((item) =>
-      (item.email === entry.email || item.pin === entry.pin) ? updatedEntry : item
-    );
+    const cleanTargetEmail = entry.email?.toLowerCase().trim();
+    const cleanTargetPin = entry.pin?.toUpperCase().trim();
+    const targetRegId = entry.registrationId;
+
+    const updatedEntries = entries.map((item) => {
+      const match =
+        (targetRegId && item.registrationId === targetRegId) ||
+        (cleanTargetPin && item.pin?.toUpperCase().trim() === cleanTargetPin) ||
+        (cleanTargetEmail && item.email?.toLowerCase().trim() === cleanTargetEmail);
+      return match ? updatedEntry : item;
+    });
     onUpdateEntries(updatedEntries);
     onUpdateEvent({ ...event, entries: updatedEntries });
   };
@@ -515,6 +526,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     }
     const updated = editingPin ? entries.map((item) => item.pin === editingPin ? finalEntry : item) : [...entries, finalEntry];
     onUpdateEntries(updated);
+    onUpdateEvent({ ...event, entries: updated });
     if (resetAfterSave) resetForm();
   };
 
@@ -540,7 +552,18 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         console.warn('Inscrição salva, mas não foi possível criar o índice auxiliar do usuário:', error);
       }
     }
-    onUpdateEntries(entries.map((item) => item.pin === originalPin ? finalEntry : item));
+    // Atualiza o estado local: substitui a entrada pelo PIN original ou email original
+    const cleanOriginalPin = originalPin?.toUpperCase().trim();
+    const cleanOriginalEmail = (entries.find(e => e.pin?.toUpperCase().trim() === cleanOriginalPin))?.email?.toLowerCase().trim();
+    const updatedList = entries.map((item) => {
+      const matchPin = cleanOriginalPin && item.pin?.toUpperCase().trim() === cleanOriginalPin;
+      const matchEmail = cleanOriginalEmail && item.email?.toLowerCase().trim() === cleanOriginalEmail;
+      return (matchPin || matchEmail) ? finalEntry : item;
+    });
+    onUpdateEntries(updatedList);
+    onUpdateEvent({ ...event, entries: updatedList });
+    // Fecha o formulário expandido após salvar
+    setExpandedRegistrationEmail(null);
   };
 
   const handleDelete = (targetPinOrEmail: string, specificEntry?: TournamentEntry) => {
@@ -1102,11 +1125,15 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                             }
                           }
                           onUpdateEntries(
-                            entries.map((item) =>
-                              (item.email === entry.email || item.pin === entry.pin)
-                                ? { ...item, gender: nextGender }
-                                : item
-                            )
+                            entries.map((item) => {
+                              const cleanItemEmail = item.email?.toLowerCase().trim();
+                              const cleanEntryEmail = entry.email?.toLowerCase().trim();
+                              const cleanItemPin = item.pin?.toUpperCase().trim();
+                              const cleanEntryPin = entry.pin?.toUpperCase().trim();
+                              const matchEmail = cleanEntryEmail && cleanItemEmail === cleanEntryEmail;
+                              const matchPin = cleanEntryPin && cleanItemPin === cleanEntryPin;
+                              return (matchEmail || matchPin) ? { ...item, gender: nextGender } : item;
+                            })
                           );
                         }}
                         className={`mt-0.5 p-2 rounded-2xl border flex items-center justify-center shrink-0 transition-all ${

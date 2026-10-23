@@ -812,6 +812,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
       if (userAuthMethod === 'password') {
         setStatusText('Gerando link de redefinição...');
+        let apiError: string | null = null;
         try {
           const response = await fetch('/api/gerar-link-reset', {
             method: 'POST',
@@ -830,12 +831,23 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 userEmail: cleanEmail,
                 userUid
               });
+            } else {
+              apiError = 'O servidor gerou o link mas não retornou o endereço de redefinição.';
             }
           } else {
-             console.warn("Falha na API de reset link. Certifique-se de ter configurado FIREBASE_SERVICE_ACCOUNT na Vercel.");
+            const errData = await response.json().catch(() => ({}));
+            apiError = errData?.error || 'Falha ao gerar o link de redefinição de senha.';
+            console.error("Falha na API de reset link:", apiError);
           }
         } catch (err) {
+          apiError = 'Não foi possível conectar ao servidor para gerar o link de redefinição.';
           console.error("Erro ao chamar API de reset:", err);
+        }
+
+        // Se a geração do link falhou, bloqueia o envio para não enviar um e-mail
+        // com link inútil apontando apenas para a página inicial do app.
+        if (apiError) {
+          throw new Error(`Erro ao preparar o e-mail de redefinição: ${apiError}`);
         }
       }
 

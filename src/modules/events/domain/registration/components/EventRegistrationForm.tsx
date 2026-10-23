@@ -239,6 +239,11 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
           onProfileSync(updates);
         }
       }
+      // No modo admin, o formulário expandido é fechado pelo pai (via onCancel).
+      // No modo user, mantém o fluxo habitual (o pai fecha o modal após onSave).
+      if (mode === 'admin' && onCancel) {
+        onCancel();
+      }
     } catch (err: any) {
       console.error('[EventRegistrationForm] Erro ao salvar inscrição:', err);
       setFeedback(err.message || 'Erro ao processar a inscrição.');

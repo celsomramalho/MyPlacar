@@ -34,7 +34,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
         </div>
         <div className="p-8 text-center bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-800 font-bold text-xs flex flex-col items-center gap-2">
           <CheckCircle2 size={28} className="text-emerald-500" />
-          <span>Inscrição gratuita — Nenhuma taxa é cobrada para este torneio. Avance para confirmar.</span>
+          <span>Inscrição gratuita — Nenhuma taxa é cobrada para este torneio. Clique em "Finalizar inscrição" abaixo para concluir.</span>
         </div>
       </div>
     );

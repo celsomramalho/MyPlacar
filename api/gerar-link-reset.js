@@ -41,28 +41,47 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Definimos a Action Code Settings (opcional, mas recomendado para direcionar a volta)
-    const actionCodeSettings = continueUrl ? {
-      url: continueUrl,
-      handleCodeInApp: true,
-    } : undefined;
+    // Gera o link de reset sem actionCodeSettings para garantir que o rawLink
+    // contenha o oobCode diretamente nos query params, sem passar por Firebase
+    // Dynamic Links ou Firebase Hosting redirect que podem remover o oobCode.
+    const rawLink = await admin.auth().generatePasswordResetLink(email);
 
-    // O Firebase pode gerar o link com o domínio errado dependendo da configuração no Console (Action URL).
-    // Para evitar isso, extraímos apenas o token (oobCode) e montamos nosso próprio link limpo.
-    const rawLink = await admin.auth().generatePasswordResetLink(email, actionCodeSettings);
-    
-    const urlObj = new URL(rawLink);
-    const oobCode = urlObj.searchParams.get('oobCode');
+    // Extrai o oobCode do link gerado pelo Firebase Admin
+    let oobCode = null;
+    try {
+      const urlObj = new URL(rawLink);
+      oobCode = urlObj.searchParams.get('oobCode');
 
-    let finalLink = rawLink;
-    if (oobCode && continueUrl) {
-      const separator = continueUrl.includes('?') ? '&' : '?';
-      finalLink = `${continueUrl}${separator}oobCode=${oobCode}`;
-    } else if (oobCode) {
-      finalLink = `https://www.myplacar.app.br/?mode=resetPassword&oobCode=${oobCode}&email=${encodeURIComponent(email)}`;
+      // Caso o rawLink seja um link do Firebase Hosting (__/auth/action),
+      // o oobCode já estará em searchParams diretamente.
+      if (!oobCode) {
+        // Tenta extrair de continueUrl aninhado, se existir
+        const nested = urlObj.searchParams.get('continueUrl');
+        if (nested) {
+          oobCode = new URL(nested).searchParams.get('oobCode');
+        }
+      }
+    } catch (parseErr) {
+      console.error(`Erro ao parsear rawLink: ${parseErr.message}`);
     }
 
-    res.status(200).json({ success: true, link: finalLink });
+    if (!oobCode) {
+      console.error(`oobCode não encontrado no rawLink: ${rawLink}`);
+      return res.status(500).json({ error: 'Não foi possível extrair o código de redefinição.' });
+    }
+
+    // Monta o link final apontando diretamente para o app com os parâmetros necessários.
+    // Isso evita qualquer redirect intermediário do Firebase que poderia remover o oobCode.
+    const baseUrl = continueUrl
+      ? continueUrl.split('?')[0]                  // usa apenas a origem do continueUrl
+      : 'https://www.myplacar.app.br/';
+
+    const finalUrl = new URL(baseUrl);
+    finalUrl.searchParams.set('mode', 'resetPassword');
+    finalUrl.searchParams.set('oobCode', oobCode);
+    finalUrl.searchParams.set('email', email.toLowerCase().trim());
+
+    res.status(200).json({ success: true, link: finalUrl.toString() });
   } catch (err) {
     console.error(`Erro ao gerar link de reset: ${err.message}`);
     res.status(500).json({ error: 'Falha interna ao gerar link de reset' });
