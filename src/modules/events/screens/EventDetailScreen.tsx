@@ -1599,8 +1599,13 @@ export const EventDetailScreen: React.FC<Props> = ({
   const playerStandingsMap = useMemo(() => {
     const map = new Map<string, (typeof standingsData.playerStandings)[0]>();
     standingsData.playerStandings.forEach((s) => {
-      const key = (s.entry.email || s.entry.pin || '').toLowerCase().trim();
-      map.set(key, s);
+      const emailKey = (s.entry.email || '').toLowerCase().trim();
+      const pinKey = (s.entry.pin || '').toLowerCase().trim();
+      if (emailKey) map.set(emailKey, s);
+      if (pinKey) map.set(pinKey, s);
+      if (s.entry.registrationId) {
+        map.set(`reg_${s.entry.registrationId}`, s);
+      }
     });
     return map;
   }, [standingsData.playerStandings]);
@@ -1610,8 +1615,8 @@ export const EventDetailScreen: React.FC<Props> = ({
       ? [...categoryEntries].sort((a, b) => {
           const aKey = (a.email || a.pin || '').toLowerCase().trim();
           const bKey = (b.email || b.pin || '').toLowerCase().trim();
-          const aStanding = playerStandingsMap.get(aKey);
-          const bStanding = playerStandingsMap.get(bKey);
+          const aStanding = playerStandingsMap.get(aKey) || (a.registrationId ? playerStandingsMap.get(`reg_${a.registrationId}`) : undefined);
+          const bStanding = playerStandingsMap.get(bKey) || (b.registrationId ? playerStandingsMap.get(`reg_${b.registrationId}`) : undefined);
           if (aStanding?.rank !== undefined && bStanding?.rank !== undefined && aStanding.rank !== bStanding.rank) {
             return aStanding.rank - bStanding.rank;
           }
@@ -2205,7 +2210,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                           visibleCategoryEntries.map((entry, entryIndex) => {
                             const isCurrentUser = isCurrentUserEntry(entry);
                             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
-                            const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
+                            const standing = isIndividualRanking
+                              ? playerStandingsMap.get(standingKey) || (entry.registrationId ? playerStandingsMap.get(`reg_${entry.registrationId}`) : null)
+                              : null;
                             const pair = isRanking ? null : categoryPairs.find(
                               (p) =>
                                 (p.p1.email && entry.email && p.p1.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||

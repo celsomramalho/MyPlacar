@@ -551,6 +551,10 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     ).toUpperCase().trim();
     const oldRegId = originalEntry?.registrationId;
 
+    const newEmail = (entryData.email || '').toLowerCase().trim();
+    const newPin = (entryData.pin || '').toUpperCase().trim();
+
+    const isRealAthlete = Boolean(newEmail && !newEmail.includes('@simplificada.local') && !newPin.startsWith('TEMP'));
     const db = getDb();
     const finalEntry: TournamentEntry = {
       ...entryData,
@@ -558,11 +562,11 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         entryData.registrationId ||
         oldRegId ||
         getNextRegistrationId(entries),
+      ...(isRealAthlete ? { isSimplified: false } : {}),
     };
 
     if (db && event.pin) {
       const { saveAdminEventEntry, saveUserEventRegistration, deleteAdminEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
-      const newEmail = finalEntry.email?.toLowerCase().trim();
 
       if (oldEmail && newEmail && oldEmail !== newEmail) {
         await deleteAdminEventEntry(
@@ -600,30 +604,102 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       let pChanged = false;
       const p1 = { ...pair.p1 };
       const p2 = { ...pair.p2 };
-      if (
+      const matchP1 =
+        (oldRegId && p1.registrationId && p1.registrationId === oldRegId) ||
         (oldEmail && p1.email?.toLowerCase().trim() === oldEmail) ||
-        (oldPin && p1.pin?.toUpperCase().trim() === oldPin)
-      ) {
+        (oldPin && p1.pin?.toUpperCase().trim() === oldPin);
+      if (matchP1) {
         p1.email = finalEntry.email;
         p1.pin = finalEntry.pin || p1.pin;
         p1.name = finalEntry.name || p1.name;
         p1.nickname = finalEntry.nickname || p1.nickname;
+        p1.registrationId = finalEntry.registrationId || p1.registrationId;
+        p1.isSimplified = false;
         if (finalEntry.gender) p1.gender = finalEntry.gender as 'M' | 'F';
         pChanged = true;
       }
-      if (
+      const matchP2 =
+        (oldRegId && p2.registrationId && p2.registrationId === oldRegId) ||
         (oldEmail && p2.email?.toLowerCase().trim() === oldEmail) ||
-        (oldPin && p2.pin?.toUpperCase().trim() === oldPin)
-      ) {
+        (oldPin && p2.pin?.toUpperCase().trim() === oldPin);
+      if (matchP2) {
         p2.email = finalEntry.email;
         p2.pin = finalEntry.pin || p2.pin;
         p2.name = finalEntry.name || p2.name;
         p2.nickname = finalEntry.nickname || p2.nickname;
+        p2.registrationId = finalEntry.registrationId || p2.registrationId;
+        p2.isSimplified = false;
         if (finalEntry.gender) p2.gender = finalEntry.gender as 'M' | 'F';
         pChanged = true;
       }
       if (pChanged) pairsChanged = true;
       return pChanged ? { ...pair, p1, p2 } : pair;
+    });
+
+    // Sincronizar partidas já disputadas ou agendadas com os dados do atleta atualizado
+    let matchesChanged = false;
+    const isMatchAthlete = (a?: Partial<TournamentEntry>) => {
+      if (!a) return false;
+      if (oldRegId && a.registrationId && a.registrationId === oldRegId) return true;
+      if (oldPin && a.pin && a.pin.toUpperCase().trim() === oldPin) return true;
+      if (oldEmail && a.email && a.email.toLowerCase().trim() === oldEmail) return true;
+      return false;
+    };
+
+    const updateAthleteObj = (a: TournamentEntry): TournamentEntry => ({
+      ...a,
+      name: finalEntry.name || a.name,
+      nickname: finalEntry.nickname || a.nickname,
+      email: finalEntry.email,
+      pin: finalEntry.pin || a.pin,
+      gender: (finalEntry.gender as any) || a.gender,
+      registrationId: finalEntry.registrationId || a.registrationId,
+      isSimplified: false,
+    });
+
+    const updatedMatches = (event.matches || []).map((match) => {
+      let mChanged = false;
+      let p1 = match.pair1 ? { ...match.pair1 } : undefined;
+      let p2 = match.pair2 ? { ...match.pair2 } : undefined;
+
+      if (p1) {
+        let p1Changed = false;
+        let p1p1 = p1.p1;
+        let p1p2 = p1.p2;
+        if (isMatchAthlete(p1p1)) {
+          p1p1 = updateAthleteObj(p1p1);
+          p1Changed = true;
+        }
+        if (p1p2 && isMatchAthlete(p1p2)) {
+          p1p2 = updateAthleteObj(p1p2);
+          p1Changed = true;
+        }
+        if (p1Changed) {
+          p1 = { ...p1, p1: p1p1, ...(p1p2 ? { p2: p1p2 } : {}) };
+          mChanged = true;
+        }
+      }
+
+      if (p2) {
+        let p2Changed = false;
+        let p2p1 = p2.p1;
+        let p2p2 = p2.p2;
+        if (isMatchAthlete(p2p1)) {
+          p2p1 = updateAthleteObj(p2p1);
+          p2Changed = true;
+        }
+        if (p2p2 && isMatchAthlete(p2p2)) {
+          p2p2 = updateAthleteObj(p2p2);
+          p2Changed = true;
+        }
+        if (p2Changed) {
+          p2 = { ...p2, p1: p2p1, ...(p2p2 ? { p2: p2p2 } : {}) };
+          mChanged = true;
+        }
+      }
+
+      if (mChanged) matchesChanged = true;
+      return mChanged ? { ...match, pair1: p1, pair2: p2 } : match;
     });
 
     // Atualiza o estado local: substitui a entrada específica sem duplicar
@@ -644,7 +720,17 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       ...event,
       entries: updatedList,
       ...(pairsChanged ? { pairs: updatedPairs } : {}),
+      ...(matchesChanged ? { matches: updatedMatches } : {}),
     });
+
+    if (db && event.pin && (pairsChanged || matchesChanged)) {
+      import('@infra/firebase/events').then(({ updateEvent: persistUpdateEvent }) => {
+        persistUpdateEvent(db, event.pin, {
+          ...(pairsChanged ? { pairs: updatedPairs } : {}),
+          ...(matchesChanged ? { matches: updatedMatches } : {}),
+        }).catch((err) => console.error('Erro ao sincronizar duplas/partidas no Firestore:', err));
+      });
+    }
 
     if (!isDraft) {
       setExpandedRegistrationEmail(null);

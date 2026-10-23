@@ -37,25 +37,46 @@ export const calculateSuper8PlayerStandings = (
   scoringMode: 'wins' | 'rankingPoints' = 'wins'
 ): PlayerStanding[] => {
   const playerMap = new Map<string, PlayerStanding>();
+  const uniqueStandings: PlayerStanding[] = [];
 
   entries.forEach((entry) => {
+    const standing: PlayerStanding = {
+      entry,
+      played: 0,
+      wins: 0,
+      losses: 0,
+      points: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+      gamesDiff: 0,
+      rank: 1,
+      isTiedWithOthers: false,
+      tieBreakNote: undefined,
+    };
+    uniqueStandings.push(standing);
+
     const key = getEntryKey(entry);
-    if (key) {
-      playerMap.set(key, {
-        entry,
-        played: 0,
-        wins: 0,
-        losses: 0,
-        points: 0,
-        gamesWon: 0,
-        gamesLost: 0,
-        gamesDiff: 0,
-        rank: 1,
-        isTiedWithOthers: false,
-        tieBreakNote: undefined,
-      });
-    }
+    if (key) playerMap.set(key, standing);
+    if (entry.email) playerMap.set(entry.email.toLowerCase().trim(), standing);
+    if (entry.pin) playerMap.set(entry.pin.toLowerCase().trim(), standing);
+    if (entry.registrationId) playerMap.set(`reg_${entry.registrationId}`, standing);
   });
+
+  const findStanding = (athlete?: Partial<TournamentEntry>): PlayerStanding | undefined => {
+    if (!athlete) return undefined;
+    const key = getEntryKey(athlete);
+    if (key && playerMap.has(key)) return playerMap.get(key);
+    if (athlete.registrationId && playerMap.has(`reg_${athlete.registrationId}`)) {
+      return playerMap.get(`reg_${athlete.registrationId}`);
+    }
+    if (athlete.email && playerMap.has(athlete.email.toLowerCase().trim())) {
+      return playerMap.get(athlete.email.toLowerCase().trim());
+    }
+    if (athlete.pin && playerMap.has(athlete.pin.toLowerCase().trim())) {
+      return playerMap.get(athlete.pin.toLowerCase().trim());
+    }
+    return undefined;
+  };
 
   categoryMatches.forEach((match) => {
     if (match.status !== 'finished') return;
@@ -70,8 +91,7 @@ export const calculateSuper8PlayerStandings = (
     const pair2Athletes = [match.pair2?.p1, match.pair2?.p2].filter(Boolean) as TournamentEntry[];
 
     pair1Athletes.forEach((athlete) => {
-      const key = getEntryKey(athlete);
-      const st = playerMap.get(key);
+      const st = findStanding(athlete);
       if (st) {
         st.played += 1;
         st.gamesWon += g1;
@@ -87,8 +107,7 @@ export const calculateSuper8PlayerStandings = (
     });
 
     pair2Athletes.forEach((athlete) => {
-      const key = getEntryKey(athlete);
-      const st = playerMap.get(key);
+      const st = findStanding(athlete);
       if (st) {
         st.played += 1;
         st.gamesWon += g2;
@@ -105,7 +124,7 @@ export const calculateSuper8PlayerStandings = (
   });
 
   // Atualiza saldo de games para cada atleta
-  const standingsList = Array.from(playerMap.values()).map((st) => ({
+  const standingsList = uniqueStandings.map((st) => ({
     ...st,
     gamesDiff: st.gamesWon - st.gamesLost,
   }));

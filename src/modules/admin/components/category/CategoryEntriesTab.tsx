@@ -136,7 +136,9 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
           <div className="divide-y divide-emerald-100/40">
             {entries.map((entry) => {
               const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
-              const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
+              const standing = isIndividualRanking
+                ? playerStandingsMap.get(standingKey) || (entry.registrationId ? playerStandingsMap.get(`reg_${entry.registrationId}`) : null)
+                : null;
               const isExpanded = expandedRegistrationEmail === entry.email;
               const isStatsExpanded = expandedStatsEmail === (entry.email || entry.pin);
               const isSimplified = isSimplifiedEntry(entry, event);
@@ -201,7 +203,9 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
         <div className="divide-y divide-slate-100">
           {entries.map((entry) => {
             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
-            const standing = isIndividualRanking ? playerStandingsMap.get(standingKey) : null;
+            const standing = isIndividualRanking
+              ? playerStandingsMap.get(standingKey) || (entry.registrationId ? playerStandingsMap.get(`reg_${entry.registrationId}`) : null)
+              : null;
             const isExpanded = expandedRegistrationEmail === entry.email;
             const isStatsExpanded = expandedStatsEmail === (entry.email || entry.pin);
             const isSimplified = isSimplifiedEntry(entry, event);

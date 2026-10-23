@@ -142,6 +142,9 @@ export function useCategoryBoard({
       const pinKey = (standing.entry.pin || '').toLowerCase().trim();
       if (emailKey) map.set(emailKey, standing);
       if (pinKey) map.set(pinKey, standing);
+      if (standing.entry.registrationId) {
+        map.set(`reg_${standing.entry.registrationId}`, standing);
+      }
     });
     return map;
   }, [playerStandings]);
@@ -151,8 +154,10 @@ export function useCategoryBoard({
       return [...categoryEntries].sort((a, b) => {
         const keyA = (a.email || a.pin || '').toLowerCase().trim();
         const keyB = (b.email || b.pin || '').toLowerCase().trim();
-        const rankA = playerStandingsMap.get(keyA)?.rank ?? 9999;
-        const rankB = playerStandingsMap.get(keyB)?.rank ?? 9999;
+        const stA = playerStandingsMap.get(keyA) || (a.registrationId ? playerStandingsMap.get(`reg_${a.registrationId}`) : undefined);
+        const stB = playerStandingsMap.get(keyB) || (b.registrationId ? playerStandingsMap.get(`reg_${b.registrationId}`) : undefined);
+        const rankA = stA?.rank ?? 9999;
+        const rankB = stB?.rank ?? 9999;
         if (rankA !== rankB) return rankA - rankB;
         return (a.name || '').localeCompare(b.name || '');
       });

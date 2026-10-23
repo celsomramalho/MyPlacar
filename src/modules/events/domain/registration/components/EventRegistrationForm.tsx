@@ -292,6 +292,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       pin: resolvedPin,
       gender: user.gender || current.gender,
       shirtSize: user.shirtSize || current.shirtSize,
+      isSimplified: false,
     };
 
     if (onSaveDraft) {
