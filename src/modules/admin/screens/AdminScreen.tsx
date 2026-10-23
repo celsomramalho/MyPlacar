@@ -25,6 +25,7 @@ import type { AdminIconUploadTarget, AdminTab } from '@modules/admin/types';
 import { SPORT_LIST as INITIAL_SPORT_LIST, SPORT_GROUPS as INITIAL_SPORT_GROUPS, DEFAULT_VOICE_COMMANDS, APP_VERSION as LOCAL_VERSION } from '../../../constants';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
+import { useUI } from '@modules/ui';
 import type { TournamentEvent } from '@modules/events/types';
 import { VoiceCommands, ErrorSoundType, Tab } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
@@ -49,6 +50,7 @@ type CategoryItem = FirebaseAdminCategoryIcon;
 type SportItem = FirebaseAdminSportIcon;
 
 export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRules, onExportData, onImportData, onClearAllHistory, initialTab, onOpenMenu, userProfile }) => {
+  const { setModalConfig } = useUI();
   const isPrimary = isPrimaryAdminEmail(userProfile?.email);
   const [adminTab, setAdminTab] = useState<AdminTab>(() => (!isPrimary ? 'events' : initialTab || 'configs'));
   const [loading, setLoading] = useState<string | null>(null);
@@ -727,10 +729,19 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       initialEditingEventSnapshotRef.current = null;
     } catch (e) {
       console.error('Erro ao salvar evento:', e);
-      setStatus({ type: 'error', msg: `Erro ao salvar evento: ${e instanceof Error ? e.message : String(e)}` });
+      const errMsg = e instanceof Error ? e.message : String(e);
+      setStatus({ type: 'error', msg: `Erro ao salvar evento: ${errMsg}` });
+      setModalConfig({
+        title: 'Erro ao salvar evento',
+        message: errMsg.includes('longer than 1048487 bytes')
+          ? 'A imagem selecionada para a capa do evento é muito grande para o banco de dados (limite de 1MB). Por favor, selecione a imagem novamente para que ela seja comprimida automaticamente.'
+          : `Não foi possível salvar o evento: ${errMsg}`,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setModalConfig(null),
+      });
     } finally {
       setIsSavingEvent(false);
-      setTimeout(() => setStatus(null), 3000);
+      setTimeout(() => setStatus(null), 4000);
     }
   };
 
@@ -745,8 +756,17 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       setEventList((prev) => prev.map((ev) => (ev.pin === updatedEvent.pin ? { ...eventWithoutEntries } : ev)));
     } catch (e) {
       console.error('Erro ao atualizar dados do evento:', e);
-      setStatus({ type: 'error', msg: `Erro ao salvar: ${e instanceof Error ? e.message : String(e)}` });
-      setTimeout(() => setStatus(null), 3000);
+      const errMsg = e instanceof Error ? e.message : String(e);
+      setStatus({ type: 'error', msg: `Erro ao salvar: ${errMsg}` });
+      setModalConfig({
+        title: 'Erro ao salvar evento',
+        message: errMsg.includes('longer than 1048487 bytes')
+          ? 'A imagem selecionada para a capa do evento é muito grande para o banco de dados (limite de 1MB). Por favor, selecione a imagem novamente para que ela seja comprimida automaticamente.'
+          : `Não foi possível salvar o evento: ${errMsg}`,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setModalConfig(null),
+      });
+      setTimeout(() => setStatus(null), 4000);
     }
   };
 

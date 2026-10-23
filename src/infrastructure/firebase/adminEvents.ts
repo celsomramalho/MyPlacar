@@ -1,5 +1,6 @@
 import { collection, deleteDoc, deleteField, doc, getDocs, setDoc, updateDoc, type Firestore } from 'firebase/firestore';
 import { minifyPairForStorage, type TournamentEvent, type TournamentPair } from '@modules/events/types';
+import { compressImageToDataUrl } from '@shared/utils/imageResize';
 
 export type FirebaseAdminTournamentEvent = TournamentEvent;
 
@@ -58,6 +59,24 @@ export const saveAdminEvent = async (
 ) => {
   // Strip entries array from main event document (entries are saved in events/{pin}/entries subcollection)
   const { entries: _entries, ...eventWithoutEntries } = event;
+
+  // Garante que o bannerUrl não exceda o limite de 1 MiB do Firestore
+  if (
+    typeof eventWithoutEntries.bannerUrl === 'string' &&
+    eventWithoutEntries.bannerUrl.startsWith('data:image/') &&
+    eventWithoutEntries.bannerUrl.length > 400000
+  ) {
+    try {
+      eventWithoutEntries.bannerUrl = await compressImageToDataUrl(eventWithoutEntries.bannerUrl, {
+        maxWidth: 1200,
+        maxHeight: 675,
+        quality: 0.75,
+        format: 'image/jpeg',
+      });
+    } catch {
+      /* best-effort */
+    }
+  }
   if (Array.isArray(eventWithoutEntries.pairs)) {
     eventWithoutEntries.pairs = (eventWithoutEntries.pairs as TournamentPair[]).map(minifyPairForStorage);
   }

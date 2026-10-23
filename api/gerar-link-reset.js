@@ -41,6 +41,25 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Verifica se o usuário existe no Firebase Auth.
+    // Usuários antigos que só usavam PIN existem apenas no Firestore e precisam
+    // ter a conta criada no Firebase Auth antes de receber o link de reset.
+    try {
+      await admin.auth().getUserByEmail(email);
+    } catch (notFoundErr) {
+      if (notFoundErr.code === 'auth/user-not-found') {
+        // Cria a conta no Firebase Auth sem senha — o usuário vai definir
+        // a primeira senha clicando no link de redefinição.
+        await admin.auth().createUser({
+          email: email,
+          emailVerified: true,
+        });
+        console.log(`Conta Firebase Auth criada para usuário antigo de PIN: ${email}`);
+      } else {
+        throw notFoundErr;
+      }
+    }
+
     // Gera o link de reset sem actionCodeSettings para garantir que o rawLink
     // contenha o oobCode diretamente nos query params, sem passar por Firebase
     // Dynamic Links ou Firebase Hosting redirect que podem remover o oobCode.

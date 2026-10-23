@@ -1,5 +1,6 @@
 import type { ChangeEvent, RefObject } from 'react';
 import type { AdminIconUploadTarget } from '@modules/admin/types';
+import { compressImageToDataUrl } from '@shared/utils/imageResize';
 
 interface AdminHiddenFileInputsProps {
   iconInputRef: RefObject<HTMLInputElement>;
@@ -20,16 +21,23 @@ export const AdminHiddenFileInputs = ({
   onImportJson,
   onEventBannerLoaded,
 }: AdminHiddenFileInputsProps) => {
-  const handleIconFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleIconFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !uploadTarget) return;
 
     const target = uploadTarget;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onIconLoaded(target, reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const dataUrl = await compressImageToDataUrl(file, { maxWidth: 256, maxHeight: 256, quality: 0.85 });
+      onIconLoaded(target, dataUrl);
+    } catch {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onIconLoaded(target, reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const handleImportFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -42,17 +50,25 @@ export const AdminHiddenFileInputs = ({
       onImportJson(result);
     };
     reader.readAsText(file);
+    event.target.value = '';
   };
 
-  const handleEventBannerFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleEventBannerFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onEventBannerLoaded(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const dataUrl = await compressImageToDataUrl(file, { maxWidth: 1200, maxHeight: 675, quality: 0.8 });
+      onEventBannerLoaded(dataUrl);
+    } catch {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onEventBannerLoaded(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      event.target.value = '';
+    }
   };
 
   return (

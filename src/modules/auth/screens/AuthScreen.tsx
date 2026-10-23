@@ -31,6 +31,8 @@ const fetchUserProfileFromServer = (...args: Parameters<FirebaseServices['fetchU
   import('@infra/firebase/userProfiles').then(({ fetchUserProfileFromServer }) => fetchUserProfileFromServer(...args));
 const saveNewUserProfile = (...args: Parameters<FirebaseServices['saveNewUserProfile']>) =>
   import('@infra/firebase/userProfiles').then(({ saveNewUserProfile }) => saveNewUserProfile(...args));
+const saveUserProfile = (...args: Parameters<FirebaseServices['saveUserProfile']>) =>
+  import('@infra/firebase/userProfiles').then(({ saveUserProfile }) => saveUserProfile(...args));
 const findUserProfileByPasskeyCredentialId = (...args: Parameters<FirebaseServices['findUserProfileByPasskeyCredentialId']>) =>
   import('@infra/firebase/userProfiles').then(({ findUserProfileByPasskeyCredentialId }) => findUserProfileByPasskeyCredentialId(...args));
 const findUserByPin = (...args: Parameters<FirebaseServices['findUserByPin']>) =>
@@ -810,45 +812,47 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
       let generatedResetLink: string | undefined = undefined;
 
-      if (userAuthMethod === 'password') {
-        setStatusText('Gerando link de redefinição...');
-        let apiError: string | null = null;
-        try {
-          const response = await fetch('/api/gerar-link-reset', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: cleanEmail, continueUrl })
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.link) {
-              generatedResetLink = data.link;
-              setRecoveryInfo({
-                type: 'link',
-                value: generatedResetLink as string,
-                userName,
-                userEmail: cleanEmail,
-                userUid
-              });
-            } else {
-              apiError = 'O servidor gerou o link mas não retornou o endereço de redefinição.';
-            }
-          } else {
-            const errData = await response.json().catch(() => ({}));
-            apiError = errData?.error || 'Falha ao gerar o link de redefinição de senha.';
-            console.error("Falha na API de reset link:", apiError);
-          }
-        } catch (err) {
-          apiError = 'Não foi possível conectar ao servidor para gerar o link de redefinição.';
-          console.error("Erro ao chamar API de reset:", err);
-        }
+      // Tenta gerar link de redefinição de senha para TODOS os usuários,
+      // incluindo os antigos que usavam PIN. Isso permite que migrem para senha.
+      // Se o Firebase Auth não tiver conta para o e-mail (usuários muito antigos),
+      // a API retornará erro e cairemos no fallback de exibir o PIN.
+      setStatusText('Gerando link de redefinição...');
+      let resetLinkApiError: string | null = null;
+      try {
+        const response = await fetch('/api/gerar-link-reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, continueUrl })
+        });
 
-        // Se a geração do link falhou, bloqueia o envio para não enviar um e-mail
-        // com link inútil apontando apenas para a página inicial do app.
-        if (apiError) {
-          throw new Error(`Erro ao preparar o e-mail de redefinição: ${apiError}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.link) {
+            generatedResetLink = data.link;
+            setRecoveryInfo({
+              type: 'link',
+              value: generatedResetLink as string,
+              userName,
+              userEmail: cleanEmail,
+              userUid
+            });
+          } else {
+            resetLinkApiError = 'O servidor gerou o link mas não retornou o endereço de redefinição.';
+          }
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          resetLinkApiError = errData?.error || 'Falha ao gerar o link de redefinição de senha.';
+          console.warn("Falha na API de reset link:", resetLinkApiError);
         }
+      } catch (err) {
+        resetLinkApiError = 'Não foi possível conectar ao servidor para gerar o link de redefinição.';
+        console.warn("Erro ao chamar API de reset:", err);
+      }
+
+      // Usuários com senha DEVEM receber o link — sem ele, o e-mail seria inútil.
+      // Usuários antigos de PIN têm o PIN como fallback seguro.
+      if (resetLinkApiError && userAuthMethod === 'password') {
+        throw new Error(`Erro ao preparar o e-mail de redefinição: ${resetLinkApiError}`);
       }
 
       setStatusText('Enviando dados de acesso...');
@@ -1041,7 +1045,25 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (!oobCode) {
         throw new Error('Link de recuperacao incompleto.');
       }
+      // Confirma a nova senha no Firebase Authentication
+      const confirmedEmail = await verifyPasswordResetCode(auth, oobCode);
       await confirmPasswordReset(auth, oobCode, password);
+
+      // Atualiza o authMethod no Firestore para garantir que o usuário
+      // (inclusive antigos usuários de PIN) passe a logar com senha.
+      try {
+        const db = await getDb();
+        if (db && confirmedEmail) {
+          const profile = await fetchUserProfile(db, confirmedEmail);
+          if (profile) {
+            await saveUserProfile(db, confirmedEmail, { ...profile, authMethod: 'password' }, { merge: true });
+          }
+        }
+      } catch (firestoreErr) {
+        // Não bloqueia o fluxo — a senha já foi redefinida com sucesso no Firebase Auth.
+        console.warn('Não foi possível atualizar authMethod no Firestore:', firestoreErr);
+      }
+
       setMode('login');
       setAuthMethod('password');
       setError(null);
