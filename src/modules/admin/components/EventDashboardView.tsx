@@ -7,7 +7,6 @@ import {
   Trophy,
   DollarSign,
   CheckCircle2,
-  Settings,
   Award,
   ShieldAlert,
   Menu,
@@ -30,8 +29,7 @@ export type EventDashboardTab =
   | 'formed-teams'
   | 'pending-payments'
   | 'checkins'
-  | 'sponsors'
-  | 'config';
+  | 'sponsors';
 
 interface Props {
   event: TournamentEvent;
@@ -240,6 +238,9 @@ export const EventDashboardView: React.FC<Props> = ({
               </span>
               <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md capitalize">
                 {event.eventStatus || 'Em configuração'}
+              </span>
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md">
+                {event.sportName || activeSports.find((s) => s.id === (event.sportId || event.config?.sportType))?.name || 'Beach Tennis'}
               </span>
             </div>
 
@@ -495,42 +496,6 @@ export const EventDashboardView: React.FC<Props> = ({
               </p>
             </div>
           </button>
-
-          {/* Card 6: Configurações do Torneio */}
-          <button
-            onClick={() => setActiveTab('config')}
-            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
-              activeTab === 'config'
-                ? 'bg-purple-600 text-white border-purple-600 shadow-md scale-[1.02]'
-                : 'bg-slate-50/80 hover:bg-white text-slate-700 border-slate-200 hover:border-purple-300'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div
-                className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                  activeTab === 'config'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-purple-100 text-purple-600'
-                }`}
-              >
-                <Settings size={18} />
-              </div>
-              <span className="text-xs font-black truncate max-w-[110px] text-right">
-                {activeSports.find((s) => s.id === event.config?.sportType)?.name ||
-                  event.config?.sportType ||
-                  'Beach Tennis'}
-              </span>
-            </div>
-            <div>
-              <p
-                className={`text-[10px] font-black ${
-                  activeTab === 'config' ? 'text-purple-100' : 'text-slate-400'
-                }`}
-              >
-                Configurações
-              </p>
-            </div>
-          </button>
         </div>
       </div>
 
@@ -591,114 +556,6 @@ export const EventDashboardView: React.FC<Props> = ({
           <p className="text-xs text-slate-400 font-bold max-w-md mx-auto">
             Módulo de recepção e check-in presencial no evento. {checkedInCount} de {entries.length} participantes já efetuaram o check-in.
           </p>
-        </div>
-      )}
-
-      {activeTab === 'config' && (
-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
-          <div className="flex items-center gap-2 border-b pb-3">
-            <Settings size={20} className="text-purple-600" />
-            <h3 className="font-black text-slate-800 text-sm">Configurações do torneio</h3>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-slate-700">Travar regras para as partidas</span>
-              <input
-                type="checkbox"
-                disabled={isReadOnly}
-                checked={event.config?.isLocked || false}
-                onChange={(e) =>
-                  safeUpdateEvent({
-                    ...event,
-                    config: { ...event.config, sets: event.config?.sets || 1, gamesPerSet: event.config?.gamesPerSet || 6, noAd: event.config?.noAd ?? true, sportType: event.config?.sportType || 'beach-tennis', isLocked: e.target.checked },
-                  })
-                }
-                className="w-5 h-5 accent-purple-600 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className={`space-y-4 transition-all ${event.config?.isLocked || isReadOnly ? 'opacity-50 pointer-events-none' : ''}`}>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
-                <select
-                  disabled={isReadOnly}
-                  value={event.config?.sportType || 'beach-tennis'}
-                  onChange={(e) =>
-                    safeUpdateEvent({
-                      ...event,
-                      config: { ...event.config, sets: event.config?.sets || 1, gamesPerSet: event.config?.gamesPerSet || 6, noAd: event.config?.noAd ?? true, isLocked: event.config?.isLocked || false, sportType: e.target.value },
-                    })
-                  }
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-purple-500 cursor-pointer"
-                >
-                  {activeSports.length === 0 ? (
-                    <option value="beach-tennis">Beach Tennis</option>
-                  ) : (
-                    activeSports.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 ml-1">Sets</label>
-                  <select
-                    disabled={isReadOnly}
-                    value={event.config?.sets || 1}
-                    onChange={(e) =>
-                      safeUpdateEvent({
-                        ...event,
-                        config: { ...event.config, gamesPerSet: event.config?.gamesPerSet || 6, noAd: event.config?.noAd ?? true, isLocked: event.config?.isLocked || false, sportType: event.config?.sportType || 'beach-tennis', sets: Number(e.target.value) as 1 | 3 | 5 },
-                      })
-                    }
-                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-purple-500 cursor-pointer"
-                  >
-                    <option value={1}>Set único</option>
-                    <option value={3}>Melhor de 3</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 ml-1">Games por set</label>
-                  <select
-                    disabled={isReadOnly}
-                    value={event.config?.gamesPerSet || 6}
-                    onChange={(e) =>
-                      safeUpdateEvent({
-                        ...event,
-                        config: { ...event.config, sets: event.config?.sets || 1, noAd: event.config?.noAd ?? true, isLocked: event.config?.isLocked || false, sportType: event.config?.sportType || 'beach-tennis', gamesPerSet: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-purple-500 cursor-pointer"
-                  >
-                    <option value={4}>4 games</option>
-                    <option value={6}>6 games</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs font-black text-slate-700">Sistema sem vantagem (No-ad)</span>
-                <input
-                  type="checkbox"
-                  disabled={isReadOnly}
-                  checked={event.config?.noAd ?? true}
-                  onChange={(e) =>
-                    safeUpdateEvent({
-                      ...event,
-                      config: { ...event.config, sets: event.config?.sets || 1, gamesPerSet: event.config?.gamesPerSet || 6, isLocked: event.config?.isLocked || false, sportType: event.config?.sportType || 'beach-tennis', noAd: e.target.checked },
-                    })
-                  }
-                  className="w-5 h-5 accent-purple-600 rounded cursor-pointer"
-                />
-              </div>
-            </div>
-          </div>
         </div>
       )}
     </div>
