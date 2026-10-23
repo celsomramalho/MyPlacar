@@ -1,6 +1,4 @@
 import { useCallback, useMemo } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { getDb } from '@infra/firebase';
 import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
 import { getDeviceId } from '@shared/utils/device';
@@ -69,11 +67,9 @@ export function useGameRules() {
         navigator.onLine &&
         gameState.commandOwnerId === deviceId
       ) {
-        const db = getDb();
-        if (db) {
-          const targetPin = resolveTargetPin('write');
-          if (!targetPin) return;
-          const stateToSync = sanitizeForFirestore({
+        const targetPin = resolveTargetPin('write');
+        if (!targetPin) return;
+        const stateToSync = sanitizeForFirestore({
             ...gameState,
             controllers: undefined,
             p1: {
@@ -94,10 +90,15 @@ export function useGameRules() {
               isWatchMode: !!matchSettings.isWatchMode,
               isScoreboardMode: !!matchSettings.isScoreboardMode,
             },
-          });
-          if (stateToSync && targetPin) {
-            updateDoc(doc(db, 'live_matches', targetPin), stateToSync).catch(() => {});
-          }
+        });
+        if (stateToSync && targetPin) {
+          void Promise.all([
+            import('@infra/firebase/client'),
+            import('firebase/firestore'),
+          ]).then(([{ getDb }, { doc, updateDoc }]) => {
+            const db = getDb();
+            if (db) return updateDoc(doc(db, 'live_matches', targetPin), stateToSync);
+          }).catch(() => {});
         }
       }
     } catch {

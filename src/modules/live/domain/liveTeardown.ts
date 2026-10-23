@@ -1,5 +1,4 @@
 import type { FieldValue } from 'firebase/firestore';
-import { getDb } from '@infra/firebase';
 import type { ControllerRecord, GameState } from '../../../types.ts';
 import type { UserProfile } from '@modules/auth/types';
 import { isWatchDevice } from '@shared/utils/device';
@@ -30,6 +29,7 @@ export async function performSafeLiveExit(params: SafeLiveExitParams): Promise<v
   } catch {}
 
   if (!currentGs?.isMirroringActive || !userProfile.email || !navigator.onLine) return;
+  const { getDb } = await import('@infra/firebase/client');
   const db = getDb();
   if (!db) return;
 

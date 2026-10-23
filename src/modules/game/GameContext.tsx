@@ -18,7 +18,6 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import type { GameContextValue } from './types.ts';
 import type { UserProfile } from '@modules/auth/types';
 import { hasPartnerWithPin, addPartnerToState } from '@modules/partners/services/addPartnerToState';
-import { autoRegisterPartnerByPin } from '@modules/partners/services/autoRegisterPartnerByPin';
 import type { Partner } from '@modules/partners/types';
 import type { MatchHistoryItem } from '@modules/history/types';
 import { persistLocalHistory } from '@modules/history/services/persistLocalHistory';
@@ -31,11 +30,7 @@ import { getEngineForSport } from '@modules/game/domain/sportEngine';
 import { incrementScore, undoPoint } from '@modules/game/domain/tennisEngine';
 import { useUI } from '@modules/ui/UIContext';
 import { useLive } from '@modules/live/useLive';
-import { getDb } from '@infra/firebase/client';
-import { findUserByPin } from '@infra/firebase/users';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import type { Firestore, FieldValue } from 'firebase/firestore';
-import { markTournamentMatchFinished, markTournamentMatchLive, markTournamentMatchScore } from '@modules/events/services/updateTournamentMatchProgress';
 import type { MatchSetScore, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
 import { createHistoryItem } from '@modules/history/services/createHistoryItem';
@@ -43,6 +38,8 @@ import { clearLiveOwnerPin, persistLiveOwnerPin } from '../live/liveHelpers.ts';
 import { getDeviceId, getDeviceType, resolveWatchMode } from '@shared/utils/device';
 import { sanitizeForFirestore } from '@shared/utils/sanitize';
 import { isValidGameState, isValidMatchSettings } from '@modules/game/domain/validation';
+
+const getDbAsync = async () => (await import('@infra/firebase/client')).getDb();
 
 
 // ─── Contexto ─────────────────────────────────────────────────────────────────
@@ -208,7 +205,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       prevProfileRef.current = { ...userProfile };
       setIsProfileSaved(true);
       if (navigator.onLine && userProfile.email) {
-        const db = getDb();
+        const db = await getDbAsync();
         if (db) {
           const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
           await setDoc(doc(db as Firestore, "users", userProfile.email.toLowerCase().trim()), {
@@ -499,10 +496,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     };
 
     if (state.tournamentPin && state.tournamentMatchId && navigator.onLine) {
-       const db = getDb();
+       const db = await getDbAsync();
        if (db) {
           const res = `${state.p1.sets.join('/')}-${state.p2.sets.join('/')}`;
-          markTournamentMatchFinished(db as Firestore, state.tournamentPin, state.tournamentMatchId, res, winnerTeam).catch(() => {});
+          void import('@modules/events/services/updateTournamentMatchProgress').then(({ markTournamentMatchFinished }) =>
+            markTournamentMatchFinished(db as Firestore, state.tournamentPin!, state.tournamentMatchId!, res, winnerTeam),
+          ).catch(() => {});
        }
     }
 
@@ -532,7 +531,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
     if (!state.matchConfig.isHistoryEnabled) {
       try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
-      const db = getDb();
+      const db = navigator.onLine ? await getDbAsync().catch(() => null) : null;
       if (!db) {
         clearTournamentMatchLocally();
         return;
@@ -578,7 +577,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const historyItem = createHistoryItem(state, userProfile, partners, location);
     persistHistory([historyItem, ...matchHistoryRef.current.filter(m => m.id !== historyItem.id)]);
     try { localStorage.removeItem('myPlacarActiveGameState'); clearLiveOwnerPin(); } catch {}
-    const db = getDb();
+    const db = navigator.onLine && userProfile.pin ? await getDbAsync().catch(() => null) : null;
     if (db && userProfile.pin && navigator.onLine) {
       const { doc, updateDoc } = await import('firebase/firestore');
       updateDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()), {
@@ -606,7 +605,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
     if (!userProfile.email || !navigator.onLine) return;
     
-    const db = getDb();
+    const db = await getDbAsync();
     if (!db) return;
     const targetPin = resolveTargetPin('handleLeaveLive');
     if (!targetPin) return;
@@ -657,7 +656,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       return; 
     }
 
-    const db = getDb();
+    const db = await getDbAsync();
     if (!db) { 
       isClosingLiveRef.current = false;
       return; 
@@ -700,9 +699,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   const handleDeleteJudge = useCallback(async () => {
     if (!userProfile.pin) return;
-    const db = getDb();
-    if (!db) return;
     try {
+      const db = await getDbAsync();
+      if (!db) throw new Error('Firestore indisponível');
       const { doc, updateDoc } = await import('firebase/firestore');
       await updateDoc(doc(db as Firestore, "live_matches", userProfile.pin.toUpperCase()), { 
         judgePin: null,
@@ -724,7 +723,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   const handleControlLive = useCallback(async () => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para assumir o controle.", onConfirm: () => setModalConfig(null) }); return; }
-    const db = getDb();
+    const db = await getDbAsync();
     if (db && userProfile.pin) {
       const targetPin = resolveTargetPin('write');
       if (!targetPin) return;
@@ -849,7 +848,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   const handleObserveLive = useCallback(async (targetPin?: string) => {
     if (!navigator.onLine) { setModalConfig({ title: "Erro", message: "Verifique sua conexão para observar.", onConfirm: () => setModalConfig(null) }); return; }
-    const db = getDb();
+    const db = await getDbAsync();
     let pinToObserve = targetPin || userProfile.pin?.toUpperCase();
     const myPin = userProfile.pin?.toUpperCase();
     const isJudgeForLive = (live: GameState) =>
@@ -961,7 +960,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       setModalConfig({ title: "Sem conexão", message: "Verifique sua conexão com a internet e tente novamente.", onConfirm: () => setModalConfig(null) });
       return;
     }
-    const db = getDb();
+    const db = await getDbAsync();
     if (!db) return;
     const targetPin = resolveTargetPin('liveControl');
     if (!targetPin) return;
@@ -971,7 +970,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const isController = isActiveController;
 
     try {
-      const { doc, getDocFromServer } = await import('firebase/firestore');
+      const { doc, getDocFromServer, updateDoc } = await import('firebase/firestore');
       if (isController) {
         const stateToSync = sanitizeForFirestore({ ...gameState, controllers: undefined });
         if (stateToSync) {
@@ -1034,10 +1033,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   const handleAddJudge = useCallback(async (pin: string, nickname?: string) => {
     if (!pin || pin.length < 5 || !gameState || !userProfile.pin) return;
     setIsSavingJudge(true);
-    const db = getDb();
-    if (!db) return;
     try {
+      const db = await getDbAsync();
+      if (!db) throw new Error('Firestore indisponível');
       const pinUpper = pin.toUpperCase().trim();
+      const { autoRegisterPartnerByPin } = await import('@modules/partners/services/autoRegisterPartnerByPin');
       const judgeResult = await autoRegisterPartnerByPin(db as Firestore, pinUpper, { origin: 'manual', fallbackNickname: 'Juiz' });
       const finalNickname = nickname || judgeResult?.nickname || 'Juiz';
 
@@ -1095,15 +1095,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
       const lastPoint = next.pointHistory[next.pointHistory.length - 1];
       if (lastPoint?.resultingScore && next.tournamentPin && next.tournamentMatchId && navigator.onLine) {
-        const db = getDb();
-        if (db) {
-          markTournamentMatchScore(
-            db as Firestore,
-            next.tournamentPin,
-            next.tournamentMatchId,
-            getTournamentScoresFromState(next)
-          ).catch(() => {});
-        }
+        void import('@infra/firebase/client').then(({ getDb }) => {
+          const db = getDb();
+          if (!db) return;
+          return import('@modules/events/services/updateTournamentMatchProgress').then(({ markTournamentMatchScore }) =>
+            markTournamentMatchScore(db as Firestore, next.tournamentPin!, next.tournamentMatchId!, getTournamentScoresFromState(next)),
+          );
+        }).catch(() => {});
       }
       
       setHistoryStack(stack => {
@@ -1337,9 +1335,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({
        };
        forceNew = true;
         if (navigator.onLine) {
-           const db = getDb();
+           const db = await getDbAsync();
            if (db) {
-              markTournamentMatchLive(db as Firestore, event.pin, event.matches || [], match.id, userProfile.pin).catch(() => {});
+              void import('@modules/events/services/updateTournamentMatchProgress').then(({ markTournamentMatchLive }) =>
+                markTournamentMatchLive(db as Firestore, event.pin, event.matches || [], match.id, userProfile.pin),
+              ).catch(() => {});
            }
         }
     } else if (savedSettings.pendingTournamentMatchId && savedSettings.pendingTournamentPin) {
@@ -1363,14 +1363,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({
        };
        forceNew = true;
        if (navigator.onLine) {
-          const db = getDb();
+          const db = await getDbAsync();
           if (db) {
-             markTournamentMatchLive(
-               db as Firestore,
-               savedSettings.pendingTournamentPin,
-               [],
-               savedSettings.pendingTournamentMatchId,
-               userProfile.pin
+             void import('@modules/events/services/updateTournamentMatchProgress').then(({ markTournamentMatchLive }) =>
+               markTournamentMatchLive(
+                 db as Firestore,
+                 savedSettings.pendingTournamentPin!,
+                 [],
+                 savedSettings.pendingTournamentMatchId!,
+                 userProfile.pin,
+               ),
              ).catch(() => {});
           }
        }
@@ -1383,7 +1385,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     }
 
     if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
-       const db = getDb();
+       const { doc, updateDoc } = await import('firebase/firestore');
+       const db = await getDbAsync();
        if (db) {
           const updatedMatchConfig = { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode };
           const stateToSync = sanitizeForFirestore({
@@ -1400,10 +1403,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     }
 
     if (forceNew && navigator.onLine) {
-        const db = getDb();
+        const db = await getDbAsync();
         if (db && userProfile.pin) {
            const pinUpper = userProfile.pin.toUpperCase();
            try {
+             const { doc, getDoc, deleteDoc } = await import('firebase/firestore');
              const snap = await getDoc(doc(db, "live_matches", pinUpper));
              if (snap.exists()) {
                await deleteDoc(doc(db, "live_matches", pinUpper)).catch(() => {});
@@ -1415,9 +1419,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     
     setIsSettingsInicialSaved(true); setIsSettingsRegrasSaved(true); setIsRecoveryFromMatchOver(false);
     if (!forceNew && navigator.onLine) {
-        const db = getDb();
+        const db = await getDbAsync();
         if (db && userProfile.pin) {
            try {
+             const { doc, getDoc } = await import('firebase/firestore');
              const snap = await getDoc(doc(db, "live_matches", userProfile.pin.toUpperCase()));
              if (snap.exists() && snap.data().isLiveClosed !== true) { 
                 if (gameState && gameState.ownerPin?.toUpperCase() === userProfile.pin.toUpperCase()) {
@@ -1450,9 +1455,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (!tournamentOverride && !canStartMatch) return;
     const globalLiveCount = parseInt(localStorage.getItem('myPlacarLiveGlobalCount') || '0') + 1;
     try { localStorage.setItem('myPlacarLiveGlobalCount', globalLiveCount.toString()); } catch {}
-    const db = getDb();
-    if (db && userProfile.pin && navigator.onLine) { 
+    const db = navigator.onLine && userProfile.pin ? await getDbAsync().catch(() => null) : null;
+    if (db) {
       try { 
+        const { doc, deleteDoc } = await import('firebase/firestore');
         await deleteDoc(doc(db, "live_matches", userProfile.pin.toUpperCase())).catch(() => {}); 
       } catch {} 
     }

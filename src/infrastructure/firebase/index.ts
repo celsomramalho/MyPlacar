@@ -1,5 +1,7 @@
 // Barrel export — Firebase infrastructure
-export { getDb, getAuthInstance, getStorageInstance, clearFirestoreCache } from './client';
+export { getDb, clearFirestoreCache } from './client';
+export { getAuthInstance } from './authClient';
+export { getStorageInstance } from './storageClient';
 export { getDbLite } from './clientLite';
 export { subscribeTournamentLiveScores } from './liveMatches';
 export type { FirebaseTournamentLiveScore } from './liveMatches';

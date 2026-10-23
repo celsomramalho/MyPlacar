@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useUI } from '@modules/ui';
+import { useUI } from '@modules/ui/UIContext';
 import { getUrlParams } from '../appNavigation.ts';
 
 /** Deep links: espectador, placar público, referral e reset de senha na URL. */

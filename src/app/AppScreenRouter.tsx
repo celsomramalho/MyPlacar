@@ -14,9 +14,9 @@ const TournamentsScreen = lazy(() => import('@modules/events').then(m => ({ defa
 const CommunicationsScreen = lazy(() => import('@modules/communications').then(m => ({ default: m.CommunicationsScreen })));
 const HomeScreen = lazy(() => import('@modules/home').then(m => ({ default: m.HomeScreen })));
 
-import { useLive } from '@modules/live';
-import { useGame } from '@modules/game';
-import { useUI } from '@modules/ui';
+import { useLive } from '@modules/live/useLive';
+import { useGame } from '@modules/game/useGame';
+import { useUI } from '@modules/ui/UIContext';
 import { LiveControlOverlay } from '@modules/live/components/LiveControlOverlay.tsx';
 import { InstallPwaModal } from '@app/shell/InstallPwaModal';
 import { NavigationDrawer } from '@app/shell/NavigationDrawer';

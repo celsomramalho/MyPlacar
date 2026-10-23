@@ -1,6 +1,6 @@
 import React from 'react';
-import { useGame } from '@modules/game';
-import { UIProvider, useUI } from '@modules/ui';
+import { useGame } from '@modules/game/useGame';
+import { UIProvider, useUI } from '@modules/ui/UIContext';
 import { GameLiveProviderStack } from './app/GameLiveProviderStack.tsx';
 import { AppScreenRouter } from './app/AppScreenRouter.tsx';
 import { ErrorBoundary } from '@app/shell/ErrorBoundary';
@@ -11,13 +11,13 @@ import { useWakeLock } from '@shared/hooks/useWakeLock';
 import { useAppAuth } from '@app/hooks/useAppAuth';
 import { useAppConfig } from '@app/hooks/useAppConfig';
 import { useAppLogout } from '@app/hooks/useAppLogout';
-import { useCommunicationsBadge } from '@modules/communications';
-import { useHistoryCloud } from '@modules/history';
-import { useTournamentSession } from '@modules/events';
+import { useCommunicationsBadge } from '@modules/communications/hooks/useCommunicationsBadge';
+import { useHistoryCloud } from '@modules/history/hooks/useHistoryCloud';
+import { useTournamentSession } from '@modules/events/hooks/useTournamentSession';
 
 import { useDeepLinkScreen } from '@app/hooks/useDeepLinkScreen';
 const LiveSyncManager = React.lazy(() => import('./app/LiveSyncManager.tsx'));
-import { useRemoteCloudMatch } from '@modules/live';
+import { useRemoteCloudMatch } from '@modules/live/hooks/useRemoteCloudMatch';
 import { useAppOfflineMode } from '@app/hooks/useAppOfflineMode';
 import { useAppStartup } from '@app/hooks/useAppStartup';
 import { useAppDeviceName } from '@app/hooks/useAppDeviceName';
@@ -34,7 +34,7 @@ const AppContent: React.FC = () => {
 
   // ── Hooks com estado (cada um instanciado UMA única vez aqui) ─────────────
   const { authReady } = useAppAuth();
-  const { appUrl, newAppUrl, isServiceInterrupted, handleCheckUpdate } = useAppConfig(authReady);
+  const { appUrl, newAppUrl, isServiceInterrupted, handleCheckUpdate } = useAppConfig(authReady, Boolean(userProfile.email));
   const { unreadCommsCount } = useCommunicationsBadge({ pin: userProfile.pin, email: userProfile.email, isAdmin: userProfile.isAdmin });
   const {
     activeEvent,

@@ -5,8 +5,7 @@ import { Input } from '@shared/components/Input';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { UserProfile } from '../types';
-import { createWatchLoginToken, deleteWatchLoginToken, fetchEventByPin, fetchUserProfile, fetchUserProfileFromServer, findUserByPin, findUserProfileByPasskeyCredentialId, getAuthInstance, getDb, saveNewUserProfile, subscribeWatchLoginToken } from '@infra/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 import { emailService } from '@infra/email';
 import { formatPortugueseName, applyGoldenRule } from '@shared/utils/formatters';
@@ -20,6 +19,46 @@ import { useInstallPwa } from '@pwa/installPrompt';
 import { copyToClipboard } from '@shared/utils/clipboard';
 import { InstallSafariModal } from '../components/InstallSafariModal';
 import { InstallAndroidModal } from '../components/InstallAndroidModal';
+
+type FirebaseServices = typeof import('@infra/firebase');
+type FirebaseAuth = typeof import('firebase/auth');
+
+const getDb = async () => (await import('@infra/firebase/client')).getDb();
+const getAuthInstance = async () => (await import('@infra/firebase/authClient')).getAuthInstance();
+const fetchUserProfile = (...args: Parameters<FirebaseServices['fetchUserProfile']>) =>
+  import('@infra/firebase/userProfiles').then(({ fetchUserProfile }) => fetchUserProfile(...args));
+const fetchUserProfileFromServer = (...args: Parameters<FirebaseServices['fetchUserProfileFromServer']>) =>
+  import('@infra/firebase/userProfiles').then(({ fetchUserProfileFromServer }) => fetchUserProfileFromServer(...args));
+const saveNewUserProfile = (...args: Parameters<FirebaseServices['saveNewUserProfile']>) =>
+  import('@infra/firebase/userProfiles').then(({ saveNewUserProfile }) => saveNewUserProfile(...args));
+const findUserProfileByPasskeyCredentialId = (...args: Parameters<FirebaseServices['findUserProfileByPasskeyCredentialId']>) =>
+  import('@infra/firebase/userProfiles').then(({ findUserProfileByPasskeyCredentialId }) => findUserProfileByPasskeyCredentialId(...args));
+const findUserByPin = (...args: Parameters<FirebaseServices['findUserByPin']>) =>
+  import('@infra/firebase/users').then(({ findUserByPin }) => findUserByPin(...args));
+const fetchEventByPin = (...args: Parameters<FirebaseServices['fetchEventByPin']>) =>
+  import('@infra/firebase/events').then(({ fetchEventByPin }) => fetchEventByPin(...args));
+const createWatchLoginToken = (...args: Parameters<FirebaseServices['createWatchLoginToken']>) =>
+  import('@infra/firebase/watchTokens').then(({ createWatchLoginToken }) => createWatchLoginToken(...args));
+const deleteWatchLoginToken = (...args: Parameters<FirebaseServices['deleteWatchLoginToken']>) =>
+  import('@infra/firebase/watchTokens').then(({ deleteWatchLoginToken }) => deleteWatchLoginToken(...args));
+const subscribeWatchLoginToken = (...args: Parameters<FirebaseServices['subscribeWatchLoginToken']>) =>
+  import('@infra/firebase/watchTokens').then(({ subscribeWatchLoginToken }) => subscribeWatchLoginToken(...args));
+const signInWithEmailAndPassword = (...args: Parameters<FirebaseAuth['signInWithEmailAndPassword']>) =>
+  import('firebase/auth').then(({ signInWithEmailAndPassword }) => signInWithEmailAndPassword(...args));
+const createUserWithEmailAndPassword = (...args: Parameters<FirebaseAuth['createUserWithEmailAndPassword']>) =>
+  import('firebase/auth').then(({ createUserWithEmailAndPassword }) => createUserWithEmailAndPassword(...args));
+const sendPasswordResetEmail = (...args: Parameters<FirebaseAuth['sendPasswordResetEmail']>) =>
+  import('firebase/auth').then(({ sendPasswordResetEmail }) => sendPasswordResetEmail(...args));
+const signInWithPopup = (...args: Parameters<FirebaseAuth['signInWithPopup']>) =>
+  import('firebase/auth').then(({ signInWithPopup }) => signInWithPopup(...args));
+const signInWithRedirect = (...args: Parameters<FirebaseAuth['signInWithRedirect']>) =>
+  import('firebase/auth').then(({ signInWithRedirect }) => signInWithRedirect(...args));
+const getRedirectResult = (...args: Parameters<FirebaseAuth['getRedirectResult']>) =>
+  import('firebase/auth').then(({ getRedirectResult }) => getRedirectResult(...args));
+const confirmPasswordReset = (...args: Parameters<FirebaseAuth['confirmPasswordReset']>) =>
+  import('firebase/auth').then(({ confirmPasswordReset }) => confirmPasswordReset(...args));
+const verifyPasswordResetCode = (...args: Parameters<FirebaseAuth['verifyPasswordResetCode']>) =>
+  import('firebase/auth').then(({ verifyPasswordResetCode }) => verifyPasswordResetCode(...args));
 
 interface Props {
   onAuthSuccess: (profile: UserProfile, stayConnected: boolean) => void;
@@ -154,21 +193,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
 
 
 
-  useEffect(() => {
-    const initialCheck = async () => {
-      if (!isOnline) return;
-      try {
-        const result = await onCheckUpdate();
-        if (typeof result === 'string') {
-          setRemoteVersionFound(result);
-        }
-      } catch (e) {
-        console.error("Erro na verificação inicial:", e);
-      }
-    };
-    initialCheck();
-  }, [onCheckUpdate, isOnline]);
-
   // O qr code da tela de login começa apontando para o aplicativo. Se o
   // e-mail preenchido já estiver cadastrado, ele é substituído pelo convite
   // do usuário, mesmo antes da autenticação.
@@ -187,7 +211,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setIsCheckingLoginQr(true);
     const timer = setTimeout(async () => {
       try {
-        const db = getDb();
+        const db = await getDb();
         if (!db) return;
 
         const profile = await fetchUserProfileFromServer(db, cleanEmail)
@@ -203,7 +227,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       } finally {
         setIsCheckingLoginQr(false);
       }
-    }, 500);
+    }, 4000);
 
     return () => clearTimeout(timer);
   }, [appUrl, email, isOnline]);
@@ -214,9 +238,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     let cancelled = false;
 
     const completeGoogleRedirect = async () => {
-      const auth = getAuthInstance();
-      if (!auth) return;
-
       const wasPendingRedirect = (() => {
         try {
           const val = sessionStorage.getItem('myPlacar_pending_google_redirect');
@@ -226,10 +247,16 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           return false;
         }
       })();
+      // getRedirectResult initializes Auth and performs network work. Only resolve it
+      // after the watch flow explicitly started a redirect; normal login already
+      // restores its session through useAppAuth.
+      if (!wasPendingRedirect) return;
+      const auth = await getAuthInstance();
+      if (!auth) return;
 
       const processUser = async (user: any) => {
         if (!user?.email || cancelled) return;
-        const db = getDb();
+        const db = await getDb();
         if (!db) throw new Error('Erro de conexão.');
 
         const cleanEmail = user.email.toLowerCase().trim();
@@ -271,7 +298,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
           return;
         }
 
-        if (wasPendingRedirect && isWatchDevice()) {
+        if (isWatchDevice()) {
           setError(
             'O navegador do relógio não permitiu o login direto com o Google. Use a opção "Entrar via celular" para conectar facilmente com seu smartphone.'
           );
@@ -295,7 +322,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   }, [onAuthSuccess, referralPin, rememberMe]);
 
   useEffect(() => {
-    const { email: resetEmail, isResetPassword, oobCode: codeParam } = getPasswordResetParams();
+    const initializePasswordReset = async () => {
+      const { email: resetEmail, isResetPassword, oobCode: codeParam } = getPasswordResetParams();
 
     if (isResetPassword && !codeParam) {
       if (resetEmail) setEmail(resetEmail);
@@ -305,7 +333,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     }
 
     if (isResetPassword && codeParam) {
-      const auth = getAuthInstance();
+      const auth = await getAuthInstance();
       if (!auth) {
         setMode('login');
         setError('Nao foi possivel conectar ao servico de autenticacao. Recarregue a pagina e tente novamente.');
@@ -331,21 +359,23 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
         });
       });
     }
+    };
+    void initializePasswordReset();
   }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(globalThis.location.search);
     const eventPin = params.get('joinEvent');
-    if (eventPin && isOnline) {
-        const db = getDb();
+    const loadEventDetails = async () => {
+      if (eventPin && isOnline) {
+        const db = await getDb();
         if (db) {
-            fetchEventByPin(db, eventPin).then(event => {
-                if (event?.active) {
-                  setEventDetails({ name: event.name, bannerUrl: event.bannerUrl });
-                }
-            });
+          const event = await fetchEventByPin(db, eventPin);
+          if (event?.active) setEventDetails({ name: event.name, bannerUrl: event.bannerUrl });
         }
-    }
+      }
+    };
+    void loadEventDetails();
   }, [isOnline]);
 
   const handleConfirmEmailInternalRef = React.useRef<((email: string, code: string) => Promise<void>) | null>(null);
@@ -396,7 +426,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (clean.length === 5) {
         setIsSearchingReferral(true);
         try {
-          const db = getDb();
+          const db = await getDb();
           if (!db) return;
           const user = await findUserByPin(db, clean);
           if (user) {
@@ -475,7 +505,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (!isOnline) return;
       const cleanEmail = email.toLowerCase().trim();
       if (cleanEmail.includes('@') && cleanEmail.includes('.')) {
-        const db = getDb();
+        const db = await getDb();
         if (db) {
           setIsCheckingAuthMethod(true);
           try {
@@ -540,8 +570,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setError(null);
     setStatusText('Autenticando...');
     try {
-      const db = getDb();
-      const auth = getAuthInstance();
+      const db = await getDb();
+      const auth = await getAuthInstance();
       if (!db || !auth) throw new Error("Erro de conexão.");
       const cleanEmail = email.toLowerCase().trim();
 
@@ -626,7 +656,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setError(null);
     setStatusText('Validando seu cadastro...');
     try {
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new Error("Erro de conexão.");
       const cleanEmail = email.toLowerCase().trim();
       const existingUser = await fetchUserProfile(db, cleanEmail);
@@ -679,7 +709,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setStatusText('Finalizando seu cadastro...');
     
     try {
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new Error("Erro de conexão.");
       
       const cleanEmail = targetEmail.toLowerCase().trim();
@@ -687,7 +717,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       const storedPassword = getPendingPassword() || password;
       const finalPin = generateUserPin();
       
-      const auth = getAuthInstance();
+      const auth = await getAuthInstance();
       if (auth && storedPassword) {
         try {
           await createUserWithEmailAndPassword(auth, cleanEmail, storedPassword);
@@ -756,8 +786,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setError(null);
     setStatusText('Processando sua recuperação...');
     try {
-      const db = getDb();
-      const auth = getAuthInstance();
+      const db = await getDb();
+      const auth = await getAuthInstance();
       if (!db || !auth) throw new Error("Erro de conexão.");
       const cleanEmail = email.toLowerCase().trim();
       const userData = await fetchUserProfile(db, cleanEmail);
@@ -847,7 +877,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
   };
 
   const handleStartWatchLogin = async () => {
-    const db = getDb();
+    const db = await getDb();
     if (!db) {
       setError('Não foi possível conectar ao Firebase para criar o código. Verifique a conexão e tente novamente.');
       return;
@@ -879,7 +909,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     }, 15 * 60 * 1000);
 
     // Listener: aguarda celular aprovar
-    const unsub = subscribeWatchLoginToken(db, code, async (data) => {
+    const unsub = await subscribeWatchLoginToken(db, code, async (data) => {
       if (!data) return;
       if (data.status === 'approved' && data.email && data.pin && !watchCompletionRef.current) {
         watchCompletionRef.current = true;
@@ -920,13 +950,13 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     watchUnsubRef.current = () => { unsub(); clearTimeout(expireTimer); };
   };
 
-  const handleCancelWatchLogin = () => {
+  const handleCancelWatchLogin = async () => {
     watchUnsubRef.current?.();
     setWatchStatus('idle');
     setWatchCode('');
     setMode('login');
     // Limpa token pendente
-    const db = getDb();
+    const db = await getDb();
     if (db && watchCode) deleteWatchLoginToken(db, watchCode).catch(() => {});
   };
 
@@ -958,7 +988,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (assertion) {
         const rawId = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
         
-        const db = getDb();
+        const db = await getDb();
         if (!db) throw new Error("Erro de conexão.");
         
         const userData = await findUserProfileByPasskeyCredentialId(db, rawId);
@@ -998,7 +1028,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
     setError(null);
     setStatusText('Redefinindo sua senha...');
     try {
-      const auth = getAuthInstance();
+      const auth = await getAuthInstance();
       if (!auth) throw new Error("Erro de conexão.");
       if (!oobCode) {
         throw new Error('Link de recuperacao incompleto.');
@@ -1032,10 +1062,11 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (email.trim()) {
         rememberEmail(email.trim());
       }
-      const auth = getAuthInstance();
-      const db = getDb();
+      const auth = await getAuthInstance();
+      const db = await getDb();
       if (!auth || !db) throw new Error("Erro de conexão.");
       
+      const { GoogleAuthProvider } = await import('firebase/auth');
       const provider = new GoogleAuthProvider();
       if (isWatchDevice()) {
         try {

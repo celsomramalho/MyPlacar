@@ -3,9 +3,9 @@ import {
   X, Home, Trophy, Users, Bell, History, User, Settings, ShieldAlert, LogOut, Play, Menu, HelpCircle, User as UserIcon, Clock, Settings as SettingsIcon, MapPin, Ticket, Send, LayoutGrid
 } from 'lucide-react';
 import { Screen } from '@game/types';
-import { useGame } from '@modules/game';
+import { useGame } from '@modules/game/useGame';
 import { useGameRules } from '@modules/game/hooks/useGameRules';
-import { useUI } from '@modules/ui';
+import { useUI } from '@modules/ui/UIContext';
 import { getOnboardingStatus, OnboardingStatus } from '@shared/onboarding';
 
 interface Props {

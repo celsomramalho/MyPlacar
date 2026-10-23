@@ -1,10 +1,9 @@
 import { useCallback } from 'react';
 
 import { CheckCircle } from 'lucide-react';
-import { getDb } from '@infra/firebase';
-import { useGame } from '@modules/game';
-import { useLive } from '@modules/live';
-import { useUI } from '@modules/ui';
+import { useGame } from '@modules/game/useGame';
+import { useLive } from '@modules/live/useLive';
+import { useUI } from '@modules/ui/UIContext';
 import { DEFAULT_TENNIS_SETTINGS } from '../../constants.ts';
 import { getDeviceId } from '@shared/utils/device';
 import { clearAllAuthSessions } from '@modules/auth/services/authSession';
@@ -38,6 +37,7 @@ export function useAppLogout(
     // 1. Fecha live no Firestore (best-effort — não bloqueia o logout)
     if (gameState?.isMirroringActive && userProfile.email && navigator.onLine) {
       try {
+        const { getDb } = await import('@infra/firebase/client');
         const db = getDb();
         if (db) {
           const targetPin = resolveTargetPin('write');
@@ -66,7 +66,7 @@ export function useAppLogout(
 
     // 2. Sign-out do Firebase Auth para invalidar a sessão de autenticação
     try {
-      const { getAuthInstance } = await import('@infra/firebase');
+      const { getAuthInstance } = await import('@infra/firebase/authClient');
       const auth = getAuthInstance();
       if (auth) {
         const { signOut } = await import('firebase/auth');

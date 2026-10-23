@@ -1,6 +1,4 @@
 import { useState, useCallback } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { getDb } from '@infra/firebase';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
 import type { GameState } from '../../../types.ts';
@@ -15,9 +13,13 @@ export function useRemoteCloudMatch() {
 
   const handleConnectRemote = useCallback(async () => {
     if (!activeCloudMatch || !navigator.onLine) return;
-    const db = getDb();
-    if (!db) return;
     try {
+      const [{ getDb }, { doc, getDoc }] = await Promise.all([
+        import('@infra/firebase/client'),
+        import('firebase/firestore'),
+      ]);
+      const db = getDb();
+      if (!db) return;
       const snap = await getDoc(doc(db, 'live_matches', activeCloudMatch.id));
       if (snap.exists() && snap.data().isLiveClosed !== true) {
         const cloudData = snap.data() as GameState;

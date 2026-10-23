@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 
-import { getDb } from '@infra/firebase';
-import { useUI } from '@modules/ui';
+import { useUI } from '@modules/ui/UIContext';
 import { APP_VERSION as LOCAL_CODE_VERSION } from '../../constants.ts';
 
 /** `appUrl` remoto + verificação de nova versão PWA. */
-export function useAppConfig(authReady: boolean) {
+export function useAppConfig(authReady: boolean, hasUserProfile: boolean) {
   const { setModalConfig } = useUI();
 
   const [appUrl, setAppUrl] = useState(() => {
@@ -23,11 +22,16 @@ export function useAppConfig(authReady: boolean) {
   const [isServiceInterrupted, setIsServiceInterrupted] = useState(false);
 
   useEffect(() => {
-    if (!authReady) return;
-    const db = getDb();
-    if (!db) return;
+    if (!authReady || !hasUserProfile) return;
     let unsubscribe: (() => void) | undefined;
-    import('firebase/firestore').then(({ doc, onSnapshot }) => {
+    let cancelled = false;
+    Promise.all([
+      import('@infra/firebase/client'),
+      import('firebase/firestore'),
+    ]).then(([{ getDb }, { doc, onSnapshot }]) => {
+      if (cancelled) return;
+      const db = getDb();
+      if (!db) return;
       unsubscribe = onSnapshot(doc(db, 'system', 'config'), (snap) => {
         if (snap.exists()) {
           const data = snap.data();
@@ -41,16 +45,24 @@ export function useAppConfig(authReady: boolean) {
           }
         }
       });
+    }).catch((error: unknown) => {
+      console.warn('MyPlacar: Configuração remota indisponível; usando padrões locais.', error);
     });
-    return () => unsubscribe?.();
-  }, [authReady]);
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [authReady, hasUserProfile]);
 
   const handleCheckUpdate = useCallback(async (isManual = false) => {
     if (!navigator.onLine) return false;
-    const db = getDb();
-    if (!db) return false;
     try {
-      const { doc, getDoc } = await import('firebase/firestore');
+      const [{ getDb }, { doc, getDoc }] = await Promise.all([
+        import('@infra/firebase/client'),
+        import('firebase/firestore'),
+      ]);
+      const db = getDb();
+      if (!db) return false;
       const snap = await getDoc(doc(db, 'system', 'config'));
       if (snap.exists()) {
         const remoteVersion = (snap.data().appVersion || '').toString().trim().replace(/^v/, '');
@@ -149,9 +161,9 @@ export function useAppConfig(authReady: boolean) {
   useEffect(() => {
     const timer = setTimeout(() => {
       handleCheckUpdate();
-    }, 3000);
+    }, hasUserProfile ? 3000 : 8000);
     return () => clearTimeout(timer);
-  }, [handleCheckUpdate]);
+  }, [handleCheckUpdate, hasUserProfile]);
 
   return {
     appUrl,

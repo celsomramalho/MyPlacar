@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { getDb, clearFirestoreCache } from '@infra/firebase';
 
 import { APP_VERSION as LOCAL_CODE_VERSION } from '../../constants.ts';
 import type { Partner, MatchSettings } from '../../types.ts';
@@ -106,7 +105,10 @@ export function useAppStartup({
               'O limite de espaço do navegador foi atingido. Deseja limpar o cache técnico e reiniciar?',
             confirmLabel: 'Limpar e reiniciar',
             variant: 'danger',
-            onConfirm: async () => { await clearFirestoreCache(); },
+            onConfirm: async () => {
+              const { clearFirestoreCache } = await import('@infra/firebase/client');
+              await clearFirestoreCache();
+            },
             onCancel: () => setModalConfig(null),
           });
         }
@@ -141,19 +143,22 @@ export function useAppStartup({
     try {
       const data = JSON.stringify(playerQueue);
       if (data !== 'undefined') localStorage.setItem('myPlacarPlayerQueue', data);
-      if (userProfile.email && navigator.onLine) {
-        const db = getDb();
-        if (db) {
-          import('firebase/firestore').then(({ doc, setDoc }) => {
+    } catch {}
+    if (userProfile.email && navigator.onLine) {
+      void import('@infra/firebase/client')
+        .then(({ getDb }) => {
+          const db = getDb();
+          if (!db) return;
+          return import('firebase/firestore').then(({ doc, setDoc }) =>
             setDoc(
               doc(db, 'user_queue_metadata', userProfile.email.toLowerCase().trim()),
               { queue_list: playerQueue, updatedAt: Date.now() },
               { merge: true },
-            ).catch(() => {});
-          });
-        }
-      }
-    } catch {}
+            ),
+          );
+        })
+        .catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile.email]);
 

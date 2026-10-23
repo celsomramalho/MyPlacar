@@ -1,16 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 
-import {
-  clearCloudHistory,
-  downloadHistoryBatch,
-  fetchCloudHistoryCount,
-  syncHistoryBatch,
-} from '@modules/history/services/historySync';
 import { getUnsyncedHistory } from '@modules/history/services/getUnsyncedHistory';
 import type { MatchHistoryItem } from '@modules/history/types';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
-import { getDb } from '@infra/firebase';
 import { sanitizeForFirestore } from '@shared/utils/sanitize';
 import { useOnlineSync } from '@shared/hooks/useOnlineSync';
 
@@ -26,10 +19,15 @@ export function useHistoryCloud(authReady: boolean) {
   const fetchCloudMatchesCount = useCallback(
     async (_isSilent = false, excludeIds: Set<string> = new Set()) => {
       if (!navigator.onLine) return;
-      const db = getDb();
       const cleanEmail = userProfile.email?.toLowerCase().trim();
-      if (!db || !cleanEmail) return;
+      if (!cleanEmail) return;
       try {
+        const [{ getDb }, { fetchCloudHistoryCount }] = await Promise.all([
+          import('@infra/firebase/client'),
+          import('@modules/history/services/historySync'),
+        ]);
+        const db = getDb();
+        if (!db) return;
         setCloudMatchesCount(
           await fetchCloudHistoryCount({
             db,
@@ -60,9 +58,8 @@ export function useHistoryCloud(authReady: boolean) {
   const syncHistoryToFirebase = useCallback(
     async (forcedHistory?: MatchHistoryItem[], forceAll = false) => {
       if (!navigator.onLine) return;
-      const db = getDb();
       const cleanEmail = userProfile.email?.toLowerCase().trim();
-      if (!db || !cleanEmail) return;
+      if (!cleanEmail) return;
       const baseList = forcedHistory || [...matchHistoryRef.current];
       const currentList = forceAll
         ? baseList.map((item) => ({ ...item, isSynced: false }))
@@ -74,7 +71,13 @@ export function useHistoryCloud(authReady: boolean) {
       setIsSyncing(true);
       const safetyTimeout = setTimeout(() => setIsSyncing(false), 15000);
       try {
-        const { serverTimestamp } = await import('firebase/firestore');
+        const [{ getDb }, { syncHistoryBatch }, { serverTimestamp }] = await Promise.all([
+          import('@infra/firebase/client'),
+          import('@modules/history/services/historySync'),
+          import('firebase/firestore'),
+        ]);
+        const db = getDb();
+        if (!db) return;
         const { updatedHistory, syncedCount } = await syncHistoryBatch({
           db,
           history: currentList,
@@ -118,11 +121,16 @@ export function useHistoryCloud(authReady: boolean) {
 
   const downloadHistoryFromFirebase = useCallback(async () => {
     if (!navigator.onLine) return;
-    const db = getDb();
     const cleanEmail = userProfile.email?.toLowerCase().trim();
-    if (!db || !cleanEmail) return;
+    if (!cleanEmail) return;
     setIsDownloading(true);
     try {
+      const [{ getDb }, { downloadHistoryBatch }] = await Promise.all([
+        import('@infra/firebase/client'),
+        import('@modules/history/services/historySync'),
+      ]);
+      const db = getDb();
+      if (!db) return;
       const { updatedHistory, downloadedCount } = await downloadHistoryBatch({
         db,
         ownerEmail: cleanEmail,
@@ -143,8 +151,13 @@ export function useHistoryCloud(authReady: boolean) {
     const cleanEmail = userProfile.email?.toLowerCase().trim();
     if (navigator.onLine && cleanEmail) {
       setIsSyncing(true);
-      const db = getDb();
       try {
+        const [{ getDb }, { clearCloudHistory }] = await Promise.all([
+          import('@infra/firebase/client'),
+          import('@modules/history/services/historySync'),
+        ]);
+        const db = getDb();
+        if (!db) throw new Error('Firestore indisponível');
         await clearCloudHistory({ db, ownerEmail: cleanEmail });
         persistHistory([]);
         setCloudMatchesCount(0);

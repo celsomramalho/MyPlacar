@@ -14,7 +14,7 @@ export function useAppAuth() {
 
         // Importação dinâmica para tirar o SDK do Firebase Auth do caminho crítico de renderização inicial
         const { onAuthStateChanged } = await import('firebase/auth');
-        const { getAuthInstance } = await import('@infra/firebase');
+        const { getAuthInstance } = await import('@infra/firebase/authClient');
 
         if (isCancelled) return;
 

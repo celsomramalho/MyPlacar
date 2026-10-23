@@ -1,11 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { type Firestore } from 'firebase/firestore';
 import { CheckCircle } from 'lucide-react';
-import { getDb } from '@infra/firebase';
 import type { UserProfile } from '@modules/auth/types';
-import { fetchRegisteredEvents } from '@modules/events/services/fetchRegisteredEvents';
-import { getActiveEventEntryDate } from '@modules/events/services/getActiveEventEntryDate';
-import { joinTournamentEvent } from '@modules/events/services/joinTournamentEvent';
 import type { EventRegistration, PaymentItem, TournamentEntry, TournamentEvent } from '@modules/events/types';
 import { useUI } from '@modules/ui/UIContext';
 import { useGame } from '@modules/game/useGame';
@@ -34,12 +30,20 @@ export function useTournamentSession() {
   useEffect(() => {
     if (activeEvent) {
       localStorage.setItem('myPlacarActiveEvent', JSON.stringify(activeEvent));
-      const db = getDb();
-      if (db && userProfile.email && navigator.onLine) {
-        getActiveEventEntryDate(db as Firestore, activeEvent.pin, userProfile.email)
-          .then(setUserEntryDate)
-          .catch(() => setUserEntryDate(null));
-      }
+      if (!userProfile.email || !navigator.onLine) return;
+      let cancelled = false;
+      void Promise.all([
+        import('@infra/firebase/client'),
+        import('@modules/events/services/getActiveEventEntryDate'),
+      ]).then(([{ getDb }, { getActiveEventEntryDate }]) => {
+        if (cancelled) return;
+        const db = getDb();
+        if (!db) return;
+        return getActiveEventEntryDate(db as Firestore, activeEvent.pin, userProfile.email)
+          .then((date) => { if (!cancelled) setUserEntryDate(date); })
+          .catch(() => { if (!cancelled) setUserEntryDate(null); });
+      }).catch(() => { if (!cancelled) setUserEntryDate(null); });
+      return () => { cancelled = true; };
     } else {
       localStorage.removeItem('myPlacarActiveEvent');
       setUserEntryDate(null);
@@ -51,9 +55,14 @@ export function useTournamentSession() {
   }, [registeredEvents]);
 
   const fetchUserRegistrations = useCallback(async (email: string) => {
-    const db = getDb();
-    if (!db) return;
+    if (!email || !navigator.onLine) return;
     try {
+      const [{ getDb }, { fetchRegisteredEvents }] = await Promise.all([
+        import('@infra/firebase/client'),
+        import('@modules/events/services/fetchRegisteredEvents'),
+      ]);
+      const db = getDb();
+      if (!db) return;
       const list = await fetchRegisteredEvents(db as Firestore, email);
       setRegisteredEvents(list);
     } catch (e) {
@@ -63,9 +72,8 @@ export function useTournamentSession() {
 
   const handleJoinTournament = useCallback(
     async (pin: string, silent = false, profileOverride?: UserProfile & { phone?: string; shirtSize?: 'P' | 'M' | 'G'; partnerName?: string; partnerEmail?: string; partnerPhone?: string; categoryPartners?: Record<string, import('@modules/events/types').CategoryPartnerInfo>; payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' | 'Confirmado' | 'Recusado' | 'Cancelado' }, paymentData?: { payments?: PaymentItem[]; dueAmount?: number; paidAmount?: number; paymentStatus?: 'Pendente' | 'Pago' | 'Isento' | 'Confirmado' | 'Recusado' | 'Cancelado' }, entryOverride?: Partial<TournamentEntry>) => {
-      const db = getDb();
       const activeProfile = profileOverride || userProfile;
-      if (!db || !navigator.onLine) {
+      if (!activeProfile.email || !navigator.onLine) {
         if (!silent) {
           setModalConfig({
             title: 'Erro',
@@ -75,8 +83,23 @@ export function useTournamentSession() {
         }
         return;
       }
-      if (!activeProfile.email) return;
       try {
+        const [{ getDb }, { joinTournamentEvent }] = await Promise.all([
+          import('@infra/firebase/client'),
+          import('@modules/events/services/joinTournamentEvent'),
+        ]);
+        const db = getDb();
+        if (!db || !navigator.onLine) {
+          if (!silent) {
+            setModalConfig({
+              title: 'Erro',
+              message: 'Verifique sua conexão com a internet.',
+              onConfirm: () => setModalConfig(null),
+            });
+          }
+          return;
+        }
+        if (!activeProfile.email) return;
         const joined = await joinTournamentEvent(db as Firestore, pin, activeProfile, paymentData, entryOverride || (profileOverride as unknown as Partial<TournamentEntry>));
         if (joined) {
           setUserEntryDate(joined.joinedAt);
@@ -134,19 +157,24 @@ export function useTournamentSession() {
 
   useEffect(() => {
     if (userProfile.email && navigator.onLine) {
-      const db = getDb();
-      if (db) {
-        import('firebase/firestore').then(({ doc, getDoc }) => {
-          getDoc(doc(db, 'user_queue_metadata', userProfile.email.toLowerCase().trim())).then(
-            (snap) => {
-              if (snap.exists() && snap.data().queue_list) {
-                setPlayerQueue(snap.data().queue_list);
-              }
-            },
-          );
-        });
-        fetchUserRegistrations(userProfile.email);
-      }
+      let cancelled = false;
+      void Promise.all([
+        import('@infra/firebase/client'),
+        import('firebase/firestore'),
+      ]).then(([{ getDb }, { doc, getDoc }]) => {
+        if (cancelled) return;
+        const db = getDb();
+        if (!db) return;
+        void getDoc(doc(db, 'user_queue_metadata', userProfile.email.toLowerCase().trim()))
+          .then((snap) => {
+            if (!cancelled && snap.exists() && snap.data().queue_list) {
+              setPlayerQueue(snap.data().queue_list);
+            }
+          })
+          .catch(() => {});
+        void fetchUserRegistrations(userProfile.email);
+      }).catch(() => {});
+      return () => { cancelled = true; };
     }
   }, [userProfile.pin, userProfile.email, fetchUserRegistrations, setPlayerQueue]);
 

@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { getDb } from '@infra/firebase';
-import { subscribeUnreadCommunicationsCount } from '@infra/firebase/communications';
 
 /** Contagem de comunicações não lidas para o badge no menu. */
 export function useCommunicationsBadge(userIdentifier: { pin?: string; email?: string; isAdmin?: boolean } | string) {
@@ -11,10 +9,25 @@ export function useCommunicationsBadge(userIdentifier: { pin?: string; email?: s
   const isAdmin = typeof userIdentifier === 'string' ? false : (userIdentifier?.isAdmin ?? false);
 
   useEffect(() => {
-    const db = getDb();
-    if (!db || (!pin && !email) || !navigator.onLine) return;
-
-    return subscribeUnreadCommunicationsCount(db, { pin, email, isAdmin }, setUnreadCommsCount);
+    if ((!pin && !email) || !navigator.onLine) return;
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    void Promise.all([
+      import('@infra/firebase/client'),
+      import('@infra/firebase/communications'),
+    ]).then(([{ getDb }, { subscribeUnreadCommunicationsCount }]) => {
+      if (cancelled) return;
+      const db = getDb();
+      if (db) {
+        unsubscribe = subscribeUnreadCommunicationsCount(db, { pin, email, isAdmin }, setUnreadCommsCount);
+      }
+    }).catch((error: unknown) => {
+      console.warn('[communications] Não foi possível iniciar a contagem de avisos:', error);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [pin, email, isAdmin]);
 
   return { unreadCommsCount };

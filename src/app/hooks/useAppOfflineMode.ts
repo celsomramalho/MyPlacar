@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useGame } from '@modules/game';
-import { useUI } from '@modules/ui';
+import { useGame } from '@modules/game/useGame';
+import { useUI } from '@modules/ui/UIContext';
 import type { GameState, MatchSettings } from '../../types.ts';
 import { initPickleballState } from '@modules/game/domain/pickleballEngine';
 import { getEngineForSport } from '@modules/game/domain/sportEngine';
