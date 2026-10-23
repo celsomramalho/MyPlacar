@@ -38,6 +38,8 @@ export interface CategoryBoardPanelProps {
   onToggleExpandedRegistration: (email: string | null) => void;
   onSaveExpandedEntry: (entryData: TournamentEntry, originalPin: string) => Promise<void>;
   onDeleteEntry: (targetPin: string) => void;
+  onDeleteAllCategoryEntries?: () => void;
+  onGenerateTemporaryEntries?: () => void;
   onUpdateEvent: (event: TournamentEvent) => void;
 
   // Teams tab props
@@ -55,6 +57,7 @@ export interface CategoryBoardPanelProps {
   isSystemDraw: boolean;
   onRandomizeCategoryDraw: () => Promise<void>;
   onUndoPair: (pairId: string) => void;
+  onDeleteAllCategoryPairs?: () => void;
   onToggleTeamBracket: (pair: TournamentPair) => Promise<void>;
   onMoveTeamPosition: (pair: TournamentPair, direction: 'up' | 'down') => Promise<void>;
   selectedTeamIds: Set<string>;
@@ -97,6 +100,8 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   onToggleExpandedRegistration,
   onSaveExpandedEntry,
   onDeleteEntry,
+  onDeleteAllCategoryEntries,
+  onGenerateTemporaryEntries,
   onUpdateEvent,
   categoryPairs,
   bracketOnePairs,
@@ -112,6 +117,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   isSystemDraw,
   onRandomizeCategoryDraw,
   onUndoPair,
+  onDeleteAllCategoryPairs,
   onToggleTeamBracket,
   onMoveTeamPosition,
   selectedTeamIds,
@@ -157,6 +163,8 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
           onToggleExpandedRegistration={onToggleExpandedRegistration}
           onSaveExpandedEntry={onSaveExpandedEntry}
           onDeleteEntry={onDeleteEntry}
+          onDeleteAllCategoryEntries={onDeleteAllCategoryEntries}
+          onGenerateTemporaryEntries={onGenerateTemporaryEntries}
           onUpdateEvent={onUpdateEvent}
         />
       )}
@@ -184,6 +192,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
           isSystemDraw={isSystemDraw}
           onRandomizeCategoryDraw={onRandomizeCategoryDraw}
           onUndoPair={onUndoPair}
+          onDeleteAllCategoryPairs={onDeleteAllCategoryPairs}
           onToggleTeamBracket={onToggleTeamBracket}
           onMoveTeamPosition={onMoveTeamPosition}
           selectedTeamIds={selectedTeamIds}

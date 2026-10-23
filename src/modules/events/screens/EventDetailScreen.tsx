@@ -50,6 +50,7 @@ import {
   deleteUserEventRegistration,
   deleteEventEntry,
   saveEventEntry,
+  fetchEventEntry,
 } from '@infra/firebase';
 import { addCommunication } from '@infra/firebase/communications';
 
@@ -308,6 +309,12 @@ export const EventDetailScreen: React.FC<Props> = ({
   const [showMyRegistrationModal, setShowMyRegistrationModal] = useState(false);
   const [showPartnerRegistrationModal, setShowPartnerRegistrationModal] = useState(false);
   const [editingSimplifiedEntry, setEditingSimplifiedEntry] = useState<TournamentEntry | null>(null);
+  /**
+   * Guarda o email e PIN ORIGINAIS da entry simplificada no momento em que o lápis de edição foi clicado.
+   * É usada como chave para deletar o doc antigo no Firestore mesmo após drafts intermediários
+   * que já trocaram editingSimplifiedEntry para o email/PIN real.
+   */
+  const simplifiedEntryOriginRef = useRef<{ email: string; pin: string } | null>(null);
   const [isStartingPayment, setIsStartingPayment] = useState(false);
   const [pixPaymentData, setPixPaymentData] = useState<PixPaymentResult | null>(null);
   const pixPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -323,13 +330,56 @@ export const EventDetailScreen: React.FC<Props> = ({
       if (!db || !editingSimplifiedEntry) return;
 
       try {
-        const oldEmail = (editingSimplifiedEntry.email || '').toLowerCase().trim();
-        const oldPin = (editingSimplifiedEntry.pin || '').toUpperCase().trim();
+        // Usa SEMPRE o email/PIN originais (do momento em que o lápis foi clicado),
+        // não o estado atual de editingSimplifiedEntry — que pode já ter sido atualizado
+        // por um draft intermediário (ex: handleConfirmUser).
+        const origin = simplifiedEntryOriginRef.current;
+        const oldEmail = (origin?.email ?? (editingSimplifiedEntry.email || '')).toLowerCase().trim();
+        const oldPin = (origin?.pin ?? (editingSimplifiedEntry.pin || '')).toUpperCase().trim();
         const newEmail = (updated.email || '').toLowerCase().trim();
         const newPin = (updated.pin || '').toUpperCase().trim();
 
         // Se o email mudou (ex: de simplificada.local para o email real do usuário)
         if (oldEmail && newEmail && oldEmail !== newEmail) {
+          // Verifica se já existe uma inscrição para o novo email (usuário já inscrito normalmente)
+          const existingRealEntry = await fetchEventEntry(db as Firestore, event.pin, newEmail).catch(() => null);
+
+          if (existingRealEntry) {
+            // Usuário já estava inscrito com o email real → apenas deleta o doc temporário.
+            // Não sobrescreve o doc real para não perder dados (categorias, pagamento, etc.).
+            // Atualiza o estado local substituindo a entry temporária pela real já existente.
+            await deleteEventEntry(db as Firestore, event.pin, oldEmail).catch(() => {});
+            await deleteUserEventRegistration(db as Firestore, oldEmail, event.pin).catch(() => {});
+            // Usa os dados do doc real no estado local (não o updated da temp)
+            const realEntry: TournamentEntry = existingRealEntry as unknown as TournamentEntry;
+            setEntries((prev) =>
+              prev
+                .filter((e) => !(oldEmail && e.email?.toLowerCase().trim() === oldEmail) &&
+                               !(oldPin && e.pin?.toUpperCase().trim() === oldPin))
+                .map((e) => (newEmail && e.email?.toLowerCase().trim() === newEmail ? realEntry : e))
+            );
+            setEvent((prev) =>
+              !prev
+                ? prev
+                : {
+                    ...prev,
+                    entries: (prev.entries || [])
+                      .filter((e) => !(oldEmail && e.email?.toLowerCase().trim() === oldEmail))
+                      .map((e) => (newEmail && e.email?.toLowerCase().trim() === newEmail ? realEntry : e)),
+                  }
+            );
+            setEditingSimplifiedEntry(null);
+            simplifiedEntryOriginRef.current = null;
+            await refreshEntries();
+            setModalConfig({
+              title: 'Vinculado',
+              message: 'A inscrição temporária foi vinculada ao cadastro existente do atleta.',
+              onConfirm: () => setModalConfig(null),
+            });
+            return;
+          }
+
+          // Não existe entry real → deleta o doc temporário e salva com o novo email
           await deleteEventEntry(db as Firestore, event.pin, oldEmail).catch(() => {});
           await deleteUserEventRegistration(db as Firestore, oldEmail, event.pin).catch(() => {});
         }
@@ -472,24 +522,25 @@ export const EventDetailScreen: React.FC<Props> = ({
           });
         }
 
-        // Atualiza o estado local das inscrições imediatamente
+        // Atualiza o estado local das inscrições imediatamente.
+        // Remove a entry antiga (por oldEmail ou oldPin) e substitui/insere a atualizada.
+        // Garante que não haja duplicata mesmo que newEmail já existisse em cache.
         setEntries((prev) => {
-          const exists = prev.some(
+          const withoutOld = prev.filter(
             (e) =>
-              (oldEmail && e.email?.toLowerCase().trim() === oldEmail) ||
-              (oldPin && e.pin?.toUpperCase().trim() === oldPin) ||
-              (newEmail && e.email?.toLowerCase().trim() === newEmail)
+              !(oldEmail && e.email?.toLowerCase().trim() === oldEmail) &&
+              !(oldPin && e.pin?.toUpperCase().trim() === oldPin)
           );
-          if (exists) {
-            return prev.map((e) =>
-              (oldEmail && e.email?.toLowerCase().trim() === oldEmail) ||
-              (oldPin && e.pin?.toUpperCase().trim() === oldPin) ||
-              (newEmail && e.email?.toLowerCase().trim() === newEmail)
-                ? updated
-                : e
+          const alreadyHasNew = withoutOld.some(
+            (e) => newEmail && e.email?.toLowerCase().trim() === newEmail
+          );
+          if (alreadyHasNew) {
+            // Substitui a entry real existente pela versão atualizada
+            return withoutOld.map((e) =>
+              newEmail && e.email?.toLowerCase().trim() === newEmail ? updated : e
             );
           }
-          return [...prev, updated];
+          return [...withoutOld, updated];
         });
 
         setEvent((prev) =>
@@ -514,6 +565,7 @@ export const EventDetailScreen: React.FC<Props> = ({
 
         if (!isDraft) {
           setEditingSimplifiedEntry(null);
+          simplifiedEntryOriginRef.current = null;
           setModalConfig({
             title: 'Sucesso',
             message: 'Inscrição atualizada com sucesso!',
@@ -537,6 +589,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   const handleCloseSimplifiedModal = useCallback(async () => {
     await refreshEntries();
     setEditingSimplifiedEntry(null);
+    simplifiedEntryOriginRef.current = null;
   }, [refreshEntries]);
 
   const {
@@ -2194,7 +2247,14 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 onToggleExpanded={isRanking
                                   ? () => setExpandedRankingEntryKey((current) => current === standingKey ? null : standingKey)
                                   : undefined}
-                                onEdit={canUserEditSimplified ? (targetEntry) => setEditingSimplifiedEntry(targetEntry) : undefined}
+                                onEdit={canUserEditSimplified ? (targetEntry) => {
+                                  // Armazena email e PIN originais antes de qualquer draft save
+                                  simplifiedEntryOriginRef.current = {
+                                    email: (targetEntry.email || '').toLowerCase().trim(),
+                                    pin: (targetEntry.pin || '').toUpperCase().trim(),
+                                  };
+                                  setEditingSimplifiedEntry(targetEntry);
+                                } : undefined}
                               />
                             );
                           })

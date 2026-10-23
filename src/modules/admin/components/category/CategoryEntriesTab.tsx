@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpDown, Sparkles } from 'lucide-react';
+import { ArrowUpDown, Sparkles, Trash2, UserPlus } from 'lucide-react';
 import { isSimplifiedEntry } from '@modules/events/types';
 import type { EventCategory, TournamentEntry, TournamentEvent, PlayerStanding, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { ParticipantRow } from '@modules/events/components/registration/ParticipantRow';
@@ -26,6 +26,8 @@ export interface CategoryEntriesTabProps {
   onToggleExpandedRegistration: (email: string | null) => void;
   onSaveExpandedEntry: (entryData: TournamentEntry, originalPin: string) => Promise<void> | void;
   onDeleteEntry: (targetPin: string) => void;
+  onDeleteAllCategoryEntries?: () => void;
+  onGenerateTemporaryEntries?: () => void;
   onUpdateEvent: (event: TournamentEvent) => void;
 }
 
@@ -50,14 +52,18 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   onToggleExpandedRegistration,
   onSaveExpandedEntry,
   onDeleteEntry,
+  onDeleteAllCategoryEntries,
+  onGenerateTemporaryEntries,
   onUpdateEvent,
 }) => {
   const isSuper8Like = isSuper8 || isSuper8Duplas;
   const [expandedStatsEmail, setExpandedStatsEmail] = React.useState<string | null>(null);
+  const maxPlayers = category.maxPlayers && category.maxPlayers > 0 ? category.maxPlayers : 8;
+  const canGenerateMore = entries.length < maxPlayers;
 
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
-      <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-3">
+      <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
         <div>
           <h3 className="text-base font-black text-slate-800">Inscritos ({category.name})</h3>
           <p className="text-xs text-slate-400 font-bold mt-0.5">
@@ -66,6 +72,34 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
               : 'Clique nos participantes para formar ou desfazer times.'}
           </p>
         </div>
+
+        {!isReadOnly && ((canGenerateMore && onGenerateTemporaryEntries) || (entries.length > 0 && onDeleteAllCategoryEntries)) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {canGenerateMore && onGenerateTemporaryEntries && (
+              <button
+                type="button"
+                onClick={onGenerateTemporaryEntries}
+                className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
+                title={`Gerar inscrições temporárias até atingir o limite de ${maxPlayers} vagas`}
+              >
+                <UserPlus size={16} className="text-emerald-500" />
+                <span>Gerar temporários</span>
+              </button>
+            )}
+
+            {entries.length > 0 && onDeleteAllCategoryEntries && (
+              <button
+                type="button"
+                onClick={onDeleteAllCategoryEntries}
+                className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
+                title="Deletar todos os inscritos desta categoria"
+              >
+                <Trash2 size={16} className="text-red-500" />
+                <span>Deletar</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">

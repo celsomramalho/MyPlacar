@@ -813,11 +813,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
       if (userAuthMethod === 'password') {
         setStatusText('Gerando link de redefinição...');
         try {
-          const apiBase = (import.meta.env.DEV) 
-            ? 'https://myplacar.app.br' 
-            : '';
-
-          const response = await fetch(`${apiBase}/api/gerar-link-reset`, {
+          const response = await fetch('/api/gerar-link-reset', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: cleanEmail, continueUrl })
@@ -1754,8 +1750,8 @@ export const AuthScreen: React.FC<Props> = ({ onAuthSuccess, onCheckUpdate, setI
                 </div>
                 {recoveryInfo.type === 'pin' && (
                   <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(recoveryInfo.value);
+                    onClick={async () => {
+                      await copyToClipboard(recoveryInfo.value);
                       alert("Copiado para a área de transferência!");
                     }}
                     className="flex items-center gap-2 text-[11px] font-black text-blue-600 hover:text-blue-700 transition-colors"

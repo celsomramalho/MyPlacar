@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shuffle } from 'lucide-react';
+import { Shuffle, Trash2 } from 'lucide-react';
 import type { EventCategory, TournamentPair, TournamentMatch } from '@modules/events/types';
 import type { TeamStanding } from '@modules/events/domain/brackets';
 import { TeamCard } from '@modules/events/components/teams/TeamCard';
@@ -26,6 +26,7 @@ export interface CategoryTeamsTabProps {
   isSystemDraw: boolean;
   onRandomizeCategoryDraw: () => void;
   onUndoPair: (pairId: string) => void;
+  onDeleteAllCategoryPairs?: () => void;
   onToggleTeamBracket?: (pair: TournamentPair) => void;
   onMoveTeamPosition?: (pair: TournamentPair, direction: 'up' | 'down') => void;
   selectedTeamIds?: Set<string>;
@@ -55,6 +56,7 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
   isSystemDraw,
   onRandomizeCategoryDraw,
   onUndoPair,
+  onDeleteAllCategoryPairs,
   onToggleTeamBracket,
   onMoveTeamPosition,
   selectedTeamIds,
@@ -77,17 +79,31 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
           </p>
         </div>
 
-        {!isReadOnly && !isRanking && !isSuper8 && !hasCategoryMatches && isSystemDraw && categoryPairs.length >= 2 && (
+        {!isReadOnly && !isSuper8 && categoryPairs.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onRandomizeCategoryDraw}
-              className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
-              title="Sortear aleatoriamente os times entre a Chave 1 e a Chave 2 e suas posições"
-            >
-              <Shuffle size={16} className="text-emerald-500" />
-              <span>Sortear chaves</span>
-            </button>
+            {!isRanking && !hasCategoryMatches && isSystemDraw && categoryPairs.length >= 2 && (
+              <button
+                type="button"
+                onClick={onRandomizeCategoryDraw}
+                className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
+                title="Sortear aleatoriamente os times entre a Chave 1 e a Chave 2 e suas posições"
+              >
+                <Shuffle size={16} className="text-emerald-500" />
+                <span>Sortear chaves</span>
+              </button>
+            )}
+
+            {onDeleteAllCategoryPairs && (
+              <button
+                type="button"
+                onClick={onDeleteAllCategoryPairs}
+                className="flex items-center justify-center gap-2 border-2 border-red-500 text-red-600 bg-white hover:bg-red-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
+                title="Deletar todos os times formados desta categoria"
+              >
+                <Trash2 size={16} className="text-red-500" />
+                <span>Deletar</span>
+              </button>
+            )}
           </div>
         )}
       </div>

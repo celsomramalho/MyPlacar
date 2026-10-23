@@ -123,7 +123,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://myplacar.app.br',
+        target: 'https://www.myplacar.app.br',
         changeOrigin: true,
         secure: true,
         followRedirects: true,

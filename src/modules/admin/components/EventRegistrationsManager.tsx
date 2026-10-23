@@ -495,7 +495,16 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       registrationId: entryData.registrationId || getNextRegistrationId(entries),
     };
     if (db && event.pin) {
-      const { saveAdminEventEntry, saveUserEventRegistration } = await import('@infra/firebase/events');
+      const { saveAdminEventEntry, saveUserEventRegistration, deleteAdminEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
+      if (editingPin) {
+        const originalEntry = entries.find((item) => item.pin === editingPin);
+        const oldEmail = originalEntry?.email?.toLowerCase().trim();
+        const newEmail = finalEntry.email?.toLowerCase().trim();
+        if (oldEmail && newEmail && oldEmail !== newEmail) {
+          await deleteAdminEventEntry(db, event.pin, oldEmail, editingPin, adminEmail || getAuthInstance()?.currentUser?.email || undefined).catch(() => {});
+          await deleteUserEventRegistration(db, oldEmail, event.pin).catch(() => {});
+        }
+      }
       await saveAdminEventEntry(db, event.pin, finalEntry, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
       // O registro auxiliar não pode impedir a persistência principal da inscrição.
       try {
@@ -516,7 +525,14 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       registrationId: entryData.registrationId || entries.find(e => e.pin === originalPin)?.registrationId || getNextRegistrationId(entries),
     };
     if (db && event.pin) {
-      const { saveAdminEventEntry, saveUserEventRegistration } = await import('@infra/firebase/events');
+      const { saveAdminEventEntry, saveUserEventRegistration, deleteAdminEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
+      const originalEntry = entries.find((item) => item.pin === originalPin);
+      const oldEmail = originalEntry?.email?.toLowerCase().trim();
+      const newEmail = finalEntry.email?.toLowerCase().trim();
+      if (oldEmail && newEmail && oldEmail !== newEmail) {
+        await deleteAdminEventEntry(db, event.pin, oldEmail, originalPin, adminEmail || getAuthInstance()?.currentUser?.email || undefined).catch(() => {});
+        await deleteUserEventRegistration(db, oldEmail, event.pin).catch(() => {});
+      }
       await saveAdminEventEntry(db, event.pin, finalEntry, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
       try {
         await saveUserEventRegistration(db, finalEntry.email, event.pin, { pin: event.pin, name: event.name, joinedAt: finalEntry.joinedAt, bannerUrl: event.bannerUrl || null });

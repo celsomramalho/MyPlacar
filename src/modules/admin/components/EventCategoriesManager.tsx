@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Tag } from 'lucide-react';
 import {
   minifyPairForStorage,
+  getNextRegistrationId,
   type EventCategory,
   type TournamentEntry,
   type TournamentEvent,
@@ -386,19 +387,90 @@ export const EventCategoriesManager: React.FC<Props> = ({
   });
 
   const handleSaveExpandedEntry = async (entryData: TournamentEntry, originalPin: string) => {
-    const updatedEntries = entries.map((e) =>
-      e.pin === originalPin || e.email === entryData.email ? { ...e, ...entryData } : e
-    );
-    onUpdateEvent({ ...event, entries: updatedEntries });
-    setExpandedRegistrationEmail(null);
     const db = getDb();
-    if (db && event.pin && entryData.email) {
+    const originalEntry = entries.find((e) =>
+      (originalPin && e.pin?.toUpperCase().trim() === originalPin.toUpperCase().trim()) ||
+      (entryData.email && e.email?.toLowerCase().trim() === entryData.email.toLowerCase().trim())
+    );
+
+    const oldEmail = (originalEntry?.email || '').toLowerCase().trim();
+    const oldPin = (originalPin || originalEntry?.pin || '').toUpperCase().trim();
+    const newEmail = (entryData.email || '').toLowerCase().trim();
+    const newPin = (entryData.pin || '').toUpperCase().trim();
+
+    if (db && event.pin) {
       try {
+        const { deleteEventEntry, deleteUserEventRegistration, saveUserEventRegistration } = await import('@infra/firebase/events');
+
+        // Se o email mudou (ex: de temporário para o email real do atleta vinculado)
+        if (oldEmail && newEmail && oldEmail !== newEmail) {
+          await deleteEventEntry(db as Firestore, event.pin, oldEmail).catch(() => {});
+          await deleteUserEventRegistration(db as Firestore, oldEmail, event.pin).catch(() => {});
+        }
+
         await saveEventEntry(db as Firestore, event.pin, entryData as any);
+
+        if (newEmail && !newEmail.includes('@simplificada.local')) {
+          await saveUserEventRegistration(db as Firestore, newEmail, event.pin, {
+            pin: event.pin,
+            name: event.name || event.pin,
+            joinedAt: entryData.joinedAt || Date.now(),
+            bannerUrl: event.bannerUrl || null,
+            paymentStatus: entryData.paymentStatus,
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error('Erro ao salvar inscrição expandida no Firestore:', err);
       }
     }
+
+    // Sincronizar duplas se o atleta já participava de alguma
+    let pairsChanged = false;
+    const updatedPairs = (event.pairs || []).map((pair) => {
+      let pChanged = false;
+      const p1 = { ...pair.p1 };
+      const p2 = { ...pair.p2 };
+      if (
+        (oldEmail && p1.email?.toLowerCase().trim() === oldEmail) ||
+        (oldPin && p1.pin?.toUpperCase().trim() === oldPin)
+      ) {
+        p1.email = entryData.email;
+        p1.pin = entryData.pin || p1.pin;
+        p1.name = entryData.name || p1.name;
+        p1.nickname = entryData.nickname || p1.nickname;
+        if (entryData.gender) p1.gender = entryData.gender as 'M' | 'F';
+        pChanged = true;
+      }
+      if (
+        (oldEmail && p2.email?.toLowerCase().trim() === oldEmail) ||
+        (oldPin && p2.pin?.toUpperCase().trim() === oldPin)
+      ) {
+        p2.email = entryData.email;
+        p2.pin = entryData.pin || p2.pin;
+        p2.name = entryData.name || p2.name;
+        p2.nickname = entryData.nickname || p2.nickname;
+        if (entryData.gender) p2.gender = entryData.gender as 'M' | 'F';
+        pChanged = true;
+      }
+      if (pChanged) pairsChanged = true;
+      return pChanged ? { ...pair, p1, p2 } : pair;
+    });
+
+    const withoutOld = entries.filter((e) =>
+      !(oldPin && e.pin?.toUpperCase().trim() === oldPin) &&
+      !(oldEmail && e.email?.toLowerCase().trim() === oldEmail)
+    );
+    const alreadyHasNew = withoutOld.some((e) => newEmail && e.email?.toLowerCase().trim() === newEmail);
+    const updatedEntries = alreadyHasNew
+      ? withoutOld.map((e) => (newEmail && e.email?.toLowerCase().trim() === newEmail ? { ...e, ...entryData } : e))
+      : [...withoutOld, entryData];
+
+    onUpdateEvent({
+      ...event,
+      entries: updatedEntries,
+      ...(pairsChanged ? { pairs: updatedPairs } : {}),
+    });
+    setExpandedRegistrationEmail(null);
   };
 
   const handleDeleteEntry = (targetPin: string) => {
@@ -420,6 +492,271 @@ export const EventCategoriesManager: React.FC<Props> = ({
             await deleteEventEntry(db as Firestore, event.pin, targetEntry.email);
           } catch (err) {
             console.error('Erro ao excluir inscrição no Firestore:', err);
+          }
+        }
+      },
+      onCancel: () => setModalConfig(null),
+    });
+  };
+
+  const handleDeleteAllCategoryEntries = () => {
+    if (!selectedCategory) return;
+    if (categoryEntries.length === 0) return;
+
+    setModalConfig({
+      title: 'Limpar todos os inscritos?',
+      message: `Deseja excluir todos os ${categoryEntries.length} inscritos da categoria "${selectedCategory.name}"? Os times e partidas vinculados a eles nesta categoria também serão removidos.`,
+      confirmLabel: 'Limpar tudo',
+      variant: 'danger',
+      onConfirm: async () => {
+        setModalConfig(null);
+        setSelectedEntries(new Set());
+
+        const catId = selectedCategory.id;
+        const entriesToDeleteFromDb: TournamentEntry[] = [];
+        const nextEntries: TournamentEntry[] = [];
+
+        for (const entry of entries) {
+          const inThisCategory = entry.categoryIds?.includes(catId);
+          if (!inThisCategory) {
+            nextEntries.push(entry);
+            continue;
+          }
+
+          const remainingCatIds = (entry.categoryIds || []).filter((id) => id !== catId);
+          if (remainingCatIds.length > 0) {
+            nextEntries.push({ ...entry, categoryIds: remainingCatIds });
+          } else {
+            entriesToDeleteFromDb.push(entry);
+          }
+        }
+
+        const catPairIds = new Set(categoryPairs.map((p) => p.id));
+        const remainingPairs = pairs.filter((p) => !catPairIds.has(p.id) && p.categoryId !== catId);
+        const remainingMatches = matches.filter(
+          (m) =>
+            m.categoryId !== catId &&
+            (!m.pair1Id || !catPairIds.has(m.pair1Id)) &&
+            (!m.pair2Id || !catPairIds.has(m.pair2Id))
+        );
+
+        onUpdateEvent({
+          ...event,
+          entries: nextEntries,
+          pairs: remainingPairs,
+          matches: remainingMatches,
+        });
+
+        const db = getDb();
+        if (db && event.pin) {
+          try {
+            const { deleteEventEntry, deleteUserEventRegistration, updateEvent: persistUpdateEvent, saveEventEntry } = await import('@infra/firebase/events');
+
+            await Promise.all(
+              entriesToDeleteFromDb.map(async (entry) => {
+                if (entry.email) {
+                  await deleteEventEntry(db as Firestore, event.pin, entry.email).catch(() => {});
+                  await deleteUserEventRegistration(db as Firestore, entry.email, event.pin).catch(() => {});
+                }
+              })
+            );
+
+            await Promise.all(
+              nextEntries
+                .filter((e) => entries.find((orig) => orig.pin === e.pin && orig.categoryIds?.includes(catId)))
+                .map((e) => saveEventEntry(db as Firestore, event.pin, e as any).catch(() => {}))
+            );
+
+            await persistUpdateEvent(db as Firestore, event.pin, {
+              pairs: remainingPairs.map(minifyPairForStorage),
+              matches: remainingMatches,
+            });
+          } catch (err) {
+            console.error('Erro ao excluir inscritos da categoria no Firestore:', err);
+          }
+        }
+      },
+      onCancel: () => setModalConfig(null),
+    });
+  };
+
+  const handleDeleteAllCategoryPairs = () => {
+    if (!selectedCategory) return;
+    if (categoryPairs.length === 0) return;
+
+    setModalConfig({
+      title: 'Limpar todos os times?',
+      message: `Deseja apagar todos os times formados da categoria "${selectedCategory.name}"? As partidas vinculadas a estes times também serão removidas.`,
+      confirmLabel: 'Limpar tudo',
+      variant: 'danger',
+      onConfirm: async () => {
+        setModalConfig(null);
+        const catPairIds = new Set(categoryPairs.map((p) => p.id));
+        const remainingPairs = pairs.filter((p) => !catPairIds.has(p.id) && p.categoryId !== selectedCategory.id);
+        const remainingMatches = matches.filter(
+          (m) =>
+            m.categoryId !== selectedCategory.id &&
+            (!m.pair1Id || !catPairIds.has(m.pair1Id)) &&
+            (!m.pair2Id || !catPairIds.has(m.pair2Id))
+        );
+
+        onUpdateEvent({ ...event, pairs: remainingPairs, matches: remainingMatches });
+        const db = getDb();
+        if (db && event.pin) {
+          try {
+            const { updateEvent: persistUpdateEvent } = await import('@infra/firebase/events');
+            await persistUpdateEvent(db as Firestore, event.pin, {
+              pairs: remainingPairs.map(minifyPairForStorage),
+              matches: remainingMatches,
+            });
+          } catch (err) {
+            console.error('Erro ao excluir times da categoria no Firestore:', err);
+          }
+        }
+      },
+      onCancel: () => setModalConfig(null),
+    });
+  };
+
+  const handleGenerateTemporaryCategoryEntries = () => {
+    if (!selectedCategory) return;
+    const limit = selectedCategory.maxPlayers && selectedCategory.maxPlayers > 0 ? selectedCategory.maxPlayers : 8;
+    const currentCount = categoryEntries.length;
+    const countToGenerate = limit - currentCount;
+
+    if (countToGenerate <= 0) {
+      setModalConfig({
+        title: 'Limite atingido',
+        message: `A categoria "${selectedCategory.name}" já atingiu o limite de ${limit} jogadores inscritos.`,
+        variant: 'info',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
+
+    const rawPrefix = (selectedCategory.abbreviation || selectedCategory.name || 'Atleta').trim();
+    const prefix = rawPrefix.replace(/[^a-zA-Z0-9_-]/g, '') || 'Atleta';
+    const cleanPrefixForEmail = prefix.toLowerCase().replace(/[^a-z0-9]/g, '') || 'atleta';
+
+    // Determinar quais números já foram usados por atletas no padrão prefix_XXX
+    const usedNumbers = new Set<number>();
+    const prefixRegex = new RegExp(`^${prefix}_(\\d+)$`, 'i');
+    for (const entry of entries) {
+      const match = (entry.nickname || entry.name || '').match(prefixRegex);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num)) usedNumbers.add(num);
+      }
+    }
+
+    // Achar os próximos números livres
+    const numbersToUse: number[] = [];
+    let candidate = 1;
+    while (numbersToUse.length < countToGenerate) {
+      if (!usedNumbers.has(candidate)) {
+        numbersToUse.push(candidate);
+      }
+      candidate++;
+    }
+
+    const startNumStr = String(numbersToUse[0]).padStart(3, '0');
+    const endNumStr = String(numbersToUse[numbersToUse.length - 1]).padStart(3, '0');
+
+    setModalConfig({
+      title: 'Gerar inscrições temporárias?',
+      message: `Deseja gerar ${countToGenerate} inscrição(ões) temporária(s) (${prefix}_${startNumStr}${countToGenerate > 1 ? ` a ${prefix}_${endNumStr}` : ''}) para preencher as ${limit} vagas da categoria "${selectedCategory.name}"?`,
+      confirmLabel: 'Gerar inscritos',
+      variant: 'success',
+      onConfirm: async () => {
+        setModalConfig(null);
+
+        const isMixed =
+          (selectedCategory.gender1 === 'M' && selectedCategory.gender2 === 'F') ||
+          (selectedCategory.gender1 === 'F' && selectedCategory.gender2 === 'M') ||
+          (selectedCategory.format === 'Duplas' &&
+            Boolean(selectedCategory.gender1) &&
+            Boolean(selectedCategory.gender2) &&
+            selectedCategory.gender1 !== selectedCategory.gender2);
+
+        let targetMales = 0;
+        let targetFemales = 0;
+        if (isMixed) {
+          const halfLimit = Math.floor(limit / 2);
+          const currentMales = categoryEntries.filter((e) => e.gender === 'M').length;
+          const currentFemales = categoryEntries.filter((e) => e.gender === 'F').length;
+          targetMales = Math.max(0, halfLimit - currentMales);
+          targetFemales = Math.max(0, limit - halfLimit - currentFemales);
+        }
+
+        const isOnlyFemale =
+          selectedCategory.gender1 === 'F' && (!selectedCategory.gender2 || selectedCategory.gender2 === 'F');
+        const isOnlyMale =
+          selectedCategory.gender1 === 'M' && (!selectedCategory.gender2 || selectedCategory.gender2 === 'M');
+
+        let nextRegistrationIdSeq = getNextRegistrationId(entries);
+        const newEntries: TournamentEntry[] = [];
+        let maleAssigned = 0;
+
+        for (let i = 0; i < countToGenerate; i++) {
+          const num = numbersToUse[i];
+          const paddedNum = String(num).padStart(3, '0');
+          const athleteName = `${prefix}_${paddedNum}`;
+          const uniqueToken = Math.random().toString(36).slice(2, 7).toUpperCase();
+
+          let gender: 'M' | 'F' = 'M';
+          if (isMixed) {
+            if (maleAssigned < targetMales) {
+              gender = 'M';
+              maleAssigned++;
+            } else {
+              gender = 'F';
+            }
+          } else if (isOnlyFemale) {
+            gender = 'F';
+          } else if (isOnlyMale) {
+            gender = 'M';
+          } else {
+            gender = i % 2 === 0 ? 'M' : 'F';
+          }
+
+          const entry: TournamentEntry = {
+            name: athleteName,
+            nickname: athleteName,
+            pin: `TEMP${uniqueToken}`,
+            email: `${cleanPrefixForEmail}_${paddedNum}_${Date.now().toString(36)}_${uniqueToken.toLowerCase()}@simplificada.local`,
+            phone: '',
+            shirtSize: 'M',
+            gender,
+            categoryIds: [selectedCategory.id],
+            joinedAt: Date.now() + i,
+            regulationAccepted: true,
+            dueAmount: 0,
+            paidAmount: 0,
+            paymentStatus: 'Confirmado',
+            payments: [],
+            isSimplified: true,
+            registrationId: nextRegistrationIdSeq++,
+          };
+
+          newEntries.push(entry);
+        }
+
+        const updatedEntries = [...entries, ...newEntries];
+        onUpdateEvent({ ...event, entries: updatedEntries });
+
+        const db = getDb();
+        if (db && event.pin) {
+          try {
+            const { saveEventEntry: persistSaveEntry } = await import('@infra/firebase/events');
+            await Promise.all(
+              newEntries.map((e) =>
+                persistSaveEntry(db as Firestore, event.pin, e as any).catch((err) => {
+                  console.error('Erro ao salvar inscrição temporária no Firestore:', err);
+                })
+              )
+            );
+          } catch (err) {
+            console.error('Erro ao salvar lote de inscrições temporárias no Firestore:', err);
           }
         }
       },
@@ -613,6 +950,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onToggleExpandedRegistration={setExpandedRegistrationEmail}
                     onSaveExpandedEntry={handleSaveExpandedEntry}
                     onDeleteEntry={handleDeleteEntry}
+                    onDeleteAllCategoryEntries={handleDeleteAllCategoryEntries}
+                    onGenerateTemporaryEntries={handleGenerateTemporaryCategoryEntries}
                     onUpdateEvent={onUpdateEvent}
                     categoryPairs={categoryPairs}
                     bracketOnePairs={bracketOnePairs}
@@ -632,6 +971,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                       const updatedMatches = matches.filter((m) => m.pair1Id !== pairId && m.pair2Id !== pairId);
                       onUpdateEvent({ ...event, pairs: updatedPairs, matches: updatedMatches });
                     }}
+                    onDeleteAllCategoryPairs={handleDeleteAllCategoryPairs}
                     onToggleTeamBracket={handleToggleTeamBracket}
                     onMoveTeamPosition={handleMoveTeamPosition}
                     selectedTeamIds={selectedTeamIds}

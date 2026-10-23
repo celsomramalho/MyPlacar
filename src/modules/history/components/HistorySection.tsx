@@ -1,3 +1,4 @@
+import { copyToClipboard } from '@shared/utils/clipboard';
 import React, { useMemo, useState } from 'react';
 import { Search, Loader2, Clock, Trophy, ChevronDown, ChevronUp, MapPin, Cloud, Trash2, CloudUpload, CloudDownload, Calendar, Smartphone, Share2 } from 'lucide-react';
 import { Input } from '@shared/components/Input';
@@ -292,7 +293,7 @@ export const HistorySection: React.FC<Props> = ({
                         <button
                           onClick={() => {
                             const appBaseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
-                            navigator.clipboard.writeText(`${appBaseUrl}/?viewMatch=${item.id}`);
+                            copyToClipboard(`${appBaseUrl}/?viewMatch=${item.id}`);
                             alert('Link copiado!');
                           }}
                           className="flex-1 py-5 bg-black text-white rounded-3xl font-black text-sm tracking-tight shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
