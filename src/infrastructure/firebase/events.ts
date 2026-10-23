@@ -321,14 +321,19 @@ export const saveAdminEventEntry = async (
     if (!isPermissionError || !adminEmail) throw err;
 
     const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
-    const response = await fetch(`${baseUrl}/api/admin-entry`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'save', eventPin, entry: sanitized, adminEmail }),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error || 'Não foi possível salvar a inscrição no servidor.');
+    try {
+      const response = await fetch(`${baseUrl}/api/admin-entry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', eventPin, entry: sanitized, adminEmail }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Não foi possível salvar a inscrição no servidor.');
+      }
+    } catch (fetchErr) {
+      console.error('Falha no fallback server-side de salvamento:', fetchErr);
+      throw new Error(fetchErr instanceof Error ? fetchErr.message : 'Falha na conexão com o servidor ao salvar inscrição.');
     }
   }
 };
@@ -378,28 +383,53 @@ export const deleteAdminEventEntry = async (
     console.warn('deleteEventEntry cliente falhou (permissão ou conexão), acionando fallback server-side:', err);
   }
 
-  // Se adminEmail fornecido, chama a API server-side para garantir exclusão definitiva no Firestore
-  if (adminEmail) {
-    const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
-    const response = await fetch(`${baseUrl}/api/admin-entry`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'delete',
-        eventPin,
-        entryEmail,
-        entryPin,
-        adminEmail,
-      }),
-    });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      if (!clientDeleted) {
-        throw new Error(body.error || 'Não foi possível excluir a inscrição no servidor.');
-      }
+  // Se o cliente já excluiu diretamente no Firestore com sucesso, disparamos a limpeza server-side
+  // em segundo plano (fire-and-forget) sem travar a UI caso a API demore ou caia por timeout.
+  if (clientDeleted) {
+    if (adminEmail) {
+      const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
+      fetch(`${baseUrl}/api/admin-entry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          eventPin,
+          entryEmail,
+          entryPin,
+          adminEmail,
+        }),
+      }).catch((apiErr) => {
+        console.warn('Limpeza auxiliar em /api/admin-entry falhou/expirou (não afeta exclusão direta):', apiErr);
+      });
     }
     return;
+  }
+
+  // Fallback: somente se o cliente NÃO conseguiu deletar no Firestore (ex: regras de permissão)
+  if (adminEmail) {
+    try {
+      const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
+      const response = await fetch(`${baseUrl}/api/admin-entry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          eventPin,
+          entryEmail,
+          entryPin,
+          adminEmail,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Não foi possível excluir a inscrição no servidor.');
+      }
+      return;
+    } catch (err: unknown) {
+      console.error('Falha no fallback server-side de exclusão:', err);
+      throw new Error(err instanceof Error ? err.message : 'Falha na conexão com o servidor ao excluir inscrição.');
+    }
   }
 
   if (!clientDeleted) {
