@@ -1,5 +1,7 @@
 import React from 'react';
 import { ArrowUpDown, Sparkles, Trash2, UserPlus } from 'lucide-react';
+import { ParticipantSearchInput } from '@modules/events/components/ParticipantSearchInput';
+import { filterEntriesByParticipantSearch } from '@modules/events/domain/brackets';
 import { isSimplifiedEntry } from '@modules/events/types';
 import type { EventCategory, TournamentEntry, TournamentEvent, PlayerStanding, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { ParticipantRow } from '@modules/events/components/registration/ParticipantRow';
@@ -58,8 +60,11 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
 }) => {
   const isSuper8Like = isSuper8 || isSuper8Duplas;
   const [expandedStatsEmail, setExpandedStatsEmail] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState('');
   const maxPlayers = category.maxPlayers && category.maxPlayers > 0 ? category.maxPlayers : 8;
   const canGenerateMore = entries.length < maxPlayers;
+
+  const visibleEntries = filterEntriesByParticipantSearch(entries, searchQuery);
 
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
@@ -100,6 +105,15 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
             )}
           </div>
         )}
+
+        {/* Campo de pesquisa */}
+        {entries.length > 0 && (
+          <ParticipantSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Pesquisar inscrito por nome..."
+          />
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
@@ -130,11 +144,14 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
           <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
             <Sparkles size={13} className="text-emerald-600" />
             <span className="text-[11px] font-black text-emerald-700">
-              Disponíveis para formar novos times ({entries.length})
+              Disponíveis para formar novos times ({visibleEntries.length})
             </span>
           </div>
+          {visibleEntries.length === 0 ? (
+            <div className="p-8 text-center text-xs font-bold text-slate-400">Nenhum inscrito encontrado.</div>
+          ) : (
           <div className="divide-y divide-emerald-100/40">
-            {entries.map((entry) => {
+            {visibleEntries.map((entry) => {
               const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
               const standing = isIndividualRanking
                 ? playerStandingsMap.get(standingKey) || (entry.registrationId ? playerStandingsMap.get(`reg_${entry.registrationId}`) : null)
@@ -198,10 +215,13 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
               );
             })}
           </div>
+          )}
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
-          {entries.map((entry) => {
+          {visibleEntries.length === 0 ? (
+            <div className="p-8 text-center text-xs font-bold text-slate-400">Nenhum inscrito encontrado.</div>
+          ) : visibleEntries.map((entry) => {
             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
             const standing = isIndividualRanking
               ? playerStandingsMap.get(standingKey) || (entry.registrationId ? playerStandingsMap.get(`reg_${entry.registrationId}`) : null)

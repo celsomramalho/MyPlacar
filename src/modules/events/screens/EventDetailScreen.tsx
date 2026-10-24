@@ -77,6 +77,8 @@ import {
   calculateBracketStandings,
   createTournamentPair,
   filterEntriesByParticipantSearch,
+  filterMatchesBySearch,
+  filterPairsBySearch,
   findPairForEntry,
   getCategoryEntries,
   getCategoryMatches,
@@ -300,6 +302,8 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [participantSearch, setParticipantSearch] = useState('');
+  const [teamSearch, setTeamSearch] = useState('');
+  const [matchSearch, setMatchSearch] = useState('');
   const [expandedRankingEntryKey, setExpandedRankingEntryKey] = useState<string | null>(null);
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set());
   const [userSelectedCategoryId, setUserSelectedCategoryId] = useState<string | null>(null);
@@ -1643,6 +1647,16 @@ export const EventDetailScreen: React.FC<Props> = ({
     [sortedCategoryEntries, participantSearch]
   );
 
+  const visibleCategoryPairs = useMemo(
+    () => filterPairsBySearch(categoryPairs, teamSearch),
+    [categoryPairs, teamSearch]
+  );
+
+  const visibleCategoryMatches = useMemo(
+    () => filterMatchesBySearch(categoryMatches, matchSearch, pairsById),
+    [categoryMatches, matchSearch, pairsById]
+  );
+
   const canAthleteFormTeam = !canManageEvent && (canUserFormRankingTeam || event.allowUserTeamFormation === true) && !isSuper8;
   const canSubmitSelectedTeam = selectedEntries.size === 2 &&
     (canManageEvent || canAthleteFormTeam);
@@ -2158,6 +2172,32 @@ export const EventDetailScreen: React.FC<Props> = ({
                       </label>
                     )}
 
+                    {userCategoryView === 'teams' && (
+                      <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-slate-400 focus-within:border-blue-400 focus-within:bg-white">
+                        <Search size={16} className="shrink-0" />
+                        <input
+                          type="search"
+                          value={teamSearch}
+                          onChange={(e) => setTeamSearch(e.target.value)}
+                          placeholder="Pesquisar time por nome..."
+                          className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                        />
+                      </label>
+                    )}
+
+                    {userCategoryView === 'matches' && (
+                      <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-slate-400 focus-within:border-blue-400 focus-within:bg-white">
+                        <Search size={16} className="shrink-0" />
+                        <input
+                          type="search"
+                          value={matchSearch}
+                          onChange={(e) => setMatchSearch(e.target.value)}
+                          placeholder="Pesquisar partida por nome..."
+                          className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                        />
+                      </label>
+                    )}
+
                     {/* Botão Nova inscrição: visível apenas dentro do período de inscrição + inscrição simplificada + allowUserPartnerRegistration + usuário inscrito (ou admin) */}
                     {userCategoryView === 'entries' &&
                       isSimplifiedRegistrationEvent(event) &&
@@ -2283,8 +2323,12 @@ export const EventDetailScreen: React.FC<Props> = ({
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             Nenhum time formado nesta categoria ainda.
                           </div>
+                        ) : visibleCategoryPairs.length === 0 ? (
+                          <div className="py-8 text-center text-slate-400 font-bold text-xs">
+                            Nenhum time encontrado.
+                          </div>
                         ) : (
-                          categoryPairs.map((pair, idx) => {
+                          visibleCategoryPairs.map((pair, idx) => {
                             const standing = teamStandingsMap.get(pair.id);
                             return (
                               <TeamCard
@@ -2332,8 +2376,12 @@ export const EventDetailScreen: React.FC<Props> = ({
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             Nenhuma partida programada para esta categoria.
                           </div>
+                        ) : visibleCategoryMatches.length === 0 ? (
+                          <div className="py-8 text-center text-slate-400 font-bold text-xs">
+                            Nenhuma partida encontrada.
+                          </div>
                         ) : (
-                          categoryMatches.map((match) => {
+                          visibleCategoryMatches.map((match) => {
                             const queuePos =
                               match.status === 'waiting'
                                 ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1

@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Shuffle, Trash2 } from 'lucide-react';
 import type { EventCategory, TournamentPair, TournamentMatch } from '@modules/events/types';
 import type { TeamStanding } from '@modules/events/domain/brackets';
+import { filterPairsBySearch } from '@modules/events/domain/brackets';
 import { TeamCard } from '@modules/events/components/teams/TeamCard';
+import { ParticipantSearchInput } from '@modules/events/components/ParticipantSearchInput';
 
 export interface CategoryTeamsTabProps {
   category: EventCategory;
@@ -63,6 +65,10 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
   canSelectTeams,
   onToggleTeamSelection,
 }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const visiblePairs = filterPairsBySearch(categoryPairs, searchQuery);
+  const visibleBracketOne = filterPairsBySearch(bracketOneList, searchQuery);
+  const visibleBracketTwo = filterPairsBySearch(bracketTwoList, searchQuery);
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
       <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
@@ -107,6 +113,17 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
           </div>
         )}
       </div>
+
+      {/* Campo de pesquisa */}
+      {categoryPairs.length > 0 && (
+        <div className="px-5 pb-4">
+          <ParticipantSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Pesquisar time por nome..."
+          />
+        </div>
+      )}
 
       {isSuper8 ? (
         categoryMatches.length === 0 ? (
@@ -158,7 +175,9 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
             <p className="text-[11px] font-bold text-slate-400">
               Selecione 2 times para formar partida ou desfazer confronto existente.
             </p>
-            {categoryPairs.map((pair, index) => (
+            {visiblePairs.length === 0 ? (
+              <div className="py-6 text-center text-xs font-bold text-slate-400">Nenhum time encontrado.</div>
+            ) : visiblePairs.map((pair, index) => (
               <TeamCard
                 key={pair.id}
                 pair={pair}
@@ -184,7 +203,7 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
           {[
             {
               label: 'Chave 1',
-              list: bracketOneList,
+              list: visibleBracketOne,
               standingsMap: b1StandingsMap,
               isFinished: b1Finished,
               matchesCount: b1MatchesCount,
@@ -192,7 +211,7 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
             },
             {
               label: 'Chave 2',
-              list: bracketTwoList,
+              list: visibleBracketTwo,
               standingsMap: b2StandingsMap,
               isFinished: b2Finished,
               matchesCount: b2MatchesCount,

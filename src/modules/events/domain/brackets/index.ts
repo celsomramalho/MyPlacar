@@ -31,6 +31,8 @@ export {
 export {
   buildPairsById,
   filterEntriesByParticipantSearch,
+  filterPairsBySearch,
+  filterMatchesBySearch,
   findPairForEntry,
   getCategoryEntries,
   getCategoryMatches,

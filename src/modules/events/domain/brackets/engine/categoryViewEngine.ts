@@ -82,6 +82,40 @@ export const filterEntriesByParticipantSearch = (
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (!normalizedQuery) return entries;
   return entries.filter((entry) =>
-    `${entry.name || ''} ${entry.nickname || ''}`.toLocaleLowerCase().includes(normalizedQuery)
+    `${entry.name || ''} ${entry.nickname || ''} ${entry.pin || ''}`.toLocaleLowerCase().includes(normalizedQuery)
   );
+};
+
+export const filterPairsBySearch = (
+  pairs: TournamentPair[],
+  query: string
+): TournamentPair[] => {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return pairs;
+  return pairs.filter((pair) => {
+    const p1Text = `${pair.p1?.name || ''} ${pair.p1?.nickname || ''} ${pair.p1?.pin || ''}`.toLocaleLowerCase();
+    const p2Text = `${pair.p2?.name || ''} ${pair.p2?.nickname || ''} ${pair.p2?.pin || ''}`.toLocaleLowerCase();
+    return p1Text.includes(normalizedQuery) || p2Text.includes(normalizedQuery);
+  });
+};
+
+export const filterMatchesBySearch = (
+  matches: TournamentMatch[],
+  query: string,
+  pairsById?: Record<string, TournamentPair> | Map<string, TournamentPair>
+): TournamentMatch[] => {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return matches;
+  const getPair = (id?: string): TournamentPair | undefined => {
+    if (!id || !pairsById) return undefined;
+    if (pairsById instanceof Map) return pairsById.get(id);
+    return (pairsById as Record<string, TournamentPair>)[id];
+  };
+  return matches.filter((match) => {
+    const p1 = match.pair1 || getPair(match.pair1Id);
+    const p2 = match.pair2 || getPair(match.pair2Id);
+    const p1Text = `${p1?.p1?.name || ''} ${p1?.p1?.nickname || ''} ${p1?.p2?.name || ''} ${p1?.p2?.nickname || ''} ${p1?.p1?.pin || ''} ${p1?.p2?.pin || ''}`.toLocaleLowerCase();
+    const p2Text = `${p2?.p1?.name || ''} ${p2?.p1?.nickname || ''} ${p2?.p2?.name || ''} ${p2?.p2?.nickname || ''} ${p2?.p1?.pin || ''} ${p2?.p2?.pin || ''}`.toLocaleLowerCase();
+    return p1Text.includes(normalizedQuery) || p2Text.includes(normalizedQuery);
+  });
 };

@@ -3,6 +3,8 @@ import { Sparkles, FileText, Trash2, Upload } from 'lucide-react';
 import type { EventCategory, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { MatchCard } from '@modules/events/components/matches/MatchCard';
 import { RankingMatchImportModal } from './RankingMatchImportModal';
+import { ParticipantSearchInput } from '@modules/events/components/ParticipantSearchInput';
+import { filterMatchesBySearch } from '@modules/events/domain/brackets';
 
 export interface CategoryMatchesTabProps {
   event: TournamentEvent;
@@ -50,6 +52,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   onImportMatches,
 }) => {
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
   const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
   const semiMatches = categoryMatches.filter((m) => m.phase === 'semifinal');
@@ -64,6 +67,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       !m.phase?.startsWith('rodada') &&
       !m.phase?.startsWith('super8d_')
   );
+
+  const filteredMatches = filterMatchesBySearch(categoryMatches, searchQuery, pairsById);
 
   const renderItem = (match: TournamentMatch) => (
     <MatchCard
@@ -138,6 +143,15 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             </button>
           )}
         </div>
+
+        {/* Campo de pesquisa */}
+        {categoryMatches.length > 0 && (
+          <ParticipantSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Pesquisar partida por nome..."
+          />
+        )}
       </div>
 
       {categoryMatches.length === 0 ? (
@@ -154,13 +168,22 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             </button>
           )}
         </div>
+      ) : filteredMatches.length === 0 ? (
+        <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhuma partida encontrada.</div>
       ) : isRanking ? (
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-1 gap-2.5">
-            {categoryMatches.map(renderItem)}
+            {filteredMatches.map(renderItem)}
           </div>
         </div>
       ) : isSuper8Duplas ? (
+        searchQuery ? (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-1 gap-2.5">
+              {filteredMatches.map(renderItem)}
+            </div>
+          </div>
+        ) : (
         <div className="p-4 space-y-5">
           {/* Fase 1: agrupado por grupo (A1, A2, B1, B2, ...) */}
           {(() => {
@@ -250,7 +273,15 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             );
           })()}
         </div>
+        )
       ) : isSuper8 ? (
+        searchQuery ? (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-1 gap-2.5">
+              {filteredMatches.map(renderItem)}
+            </div>
+          </div>
+        ) : (
         <div className="p-4 space-y-6">
           {(() => {
             const roundMap = new Map<string, { label: string; matches: TournamentMatch[] }>();
@@ -284,7 +315,15 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             ));
           })()}
         </div>
+        )
       ) : (
+        searchQuery ? (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-1 gap-2.5">
+              {filteredMatches.map(renderItem)}
+            </div>
+          </div>
+        ) : (
         <div className="p-4 space-y-6">
           {b1Matches.length > 0 && (
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
@@ -342,6 +381,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             </div>
           )}
         </div>
+        )
       )}
       {isImportOpen && <RankingMatchImportModal event={event} category={category} onClose={() => setIsImportOpen(false)} onImport={onImportMatches}/>}
     </section>
