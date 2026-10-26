@@ -930,11 +930,25 @@ export const EventDetailScreen: React.FC<Props> = ({
     (pairId: string) => {
       const limit = Number(event.rankingMatchesPerTeam || 0);
       if (!isRanking || limit <= 0) return false;
+      const targetPair = (event.pairs || []).find((pair) => pair.id === pairId);
+      const sameParticipants = (left?: TournamentPair, right?: TournamentPair) => {
+        if (!left || !right) return false;
+        const key = (entry: TournamentEntry) => (entry.email || entry.pin || '').toLowerCase().trim();
+        const leftKeys = [key(left.p1), key(left.p2)].sort().join('|');
+        const rightKeys = [key(right.p1), key(right.p2)].sort().join('|');
+        return Boolean(leftKeys && leftKeys === rightKeys);
+      };
       return categoryMatches.filter(
-        (match) => match.pair1Id === pairId || match.pair2Id === pairId
+        (match) =>
+          match.pair1Id === pairId ||
+          match.pair2Id === pairId ||
+          match.pair1?.id === pairId ||
+          match.pair2?.id === pairId ||
+          sameParticipants(match.pair1, targetPair) ||
+          sameParticipants(match.pair2, targetPair)
       ).length >= limit;
     },
-    [categoryMatches, event.rankingMatchesPerTeam, isRanking]
+    [categoryMatches, event.rankingMatchesPerTeam, event.pairs, isRanking]
   );
 
   const pairHasFinishedMatches = useCallback(
@@ -1034,15 +1048,26 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   const togglePairSelection = (pair: TournamentPair) => {
     const canSelectTeamsForRanking = canUserFormRankingTeam;
-    if ((!canManageEvent && !canSelectTeamsForRanking) || isReadOnly || pairReachedRankingMatchLimit(pair.id)) return;
+    if ((!canManageEvent && !canSelectTeamsForRanking) || isReadOnly) return;
     setSelectedPairs((previous) => {
       const next = new Set(previous);
       if (next.has(pair.id)) {
         next.delete(pair.id);
-      } else {
-        if (next.size >= 2) next.clear();
-        next.add(pair.id);
+        return next;
       }
+      // Não pode selecionar time que atingiu o limite de partidas
+      if (pairReachedRankingMatchLimit(pair.id)) {
+        return previous;
+      }
+      if (next.size === 1) {
+        const firstId = Array.from(next)[0];
+        const firstPair = categoryPairs.find((p) => p.id === firstId);
+        if (firstPair && pairsSharePlayer(firstPair, pair)) {
+          return previous;
+        }
+      }
+      if (next.size >= 2) next.clear();
+      next.add(pair.id);
       return next;
     });
   };
@@ -1661,9 +1686,51 @@ export const EventDetailScreen: React.FC<Props> = ({
     [sortedCategoryEntries, participantSearch]
   );
 
+  const selectedPairObj = useMemo(() => {
+    if (selectedPairs.size !== 1) return null;
+    const selectedId = Array.from(selectedPairs)[0];
+    return categoryPairs.find((p) => p.id === selectedId) || null;
+  }, [selectedPairs, categoryPairs]);
+
+  const hiddenPairsDetails = useMemo(() => {
+    if (!selectedPairObj) return { total: 0, sharedPlayers: 0, limitReached: 0 };
+    let sharedPlayers = 0;
+    let limitReached = 0;
+    for (const p of categoryPairs) {
+      if (p.id === selectedPairObj.id) continue;
+      const shares = pairsSharePlayer(selectedPairObj, p);
+      const reachedLimit = pairReachedRankingMatchLimit(p.id);
+      if (shares) sharedPlayers++;
+      else if (reachedLimit) limitReached++;
+    }
+    return {
+      total: sharedPlayers + limitReached,
+      sharedPlayers,
+      limitReached,
+    };
+  }, [selectedPairObj, categoryPairs, pairReachedRankingMatchLimit]);
+
+  const filteredCategoryPairs = useMemo(() => {
+    if (selectedPairs.size === 0) return categoryPairs;
+    if (selectedPairs.size === 1 && selectedPairObj) {
+      const eligibleOpponents = categoryPairs.filter(
+        (p) =>
+          p.id !== selectedPairObj.id &&
+          !pairsSharePlayer(selectedPairObj, p) &&
+          !pairReachedRankingMatchLimit(p.id)
+      );
+      return [selectedPairObj, ...eligibleOpponents];
+    }
+    const selectedList = categoryPairs.filter((p) => selectedPairs.has(p.id));
+    const others = categoryPairs.filter(
+      (p) => !selectedPairs.has(p.id) && !pairReachedRankingMatchLimit(p.id)
+    );
+    return [...selectedList, ...others];
+  }, [selectedPairs, selectedPairObj, categoryPairs, pairReachedRankingMatchLimit]);
+
   const visibleCategoryPairs = useMemo(
-    () => filterPairsBySearch(categoryPairs, teamSearch),
-    [categoryPairs, teamSearch]
+    () => filterPairsBySearch(filteredCategoryPairs, teamSearch),
+    [filteredCategoryPairs, teamSearch]
   );
 
   const visibleCategoryMatches = useMemo(
@@ -2352,6 +2419,28 @@ export const EventDetailScreen: React.FC<Props> = ({
                           />
                         )}
 
+                        {hiddenPairsDetails.total > 0 && selectedPairObj && (
+                          <div className="flex items-center justify-between gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-amber-800 text-xs font-bold animate-in fade-in">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Users size={16} className="text-amber-600 shrink-0" />
+                              <span className="truncate">
+                                Mostrando apenas adversários disponíveis para{' '}
+                                <span className="font-black text-amber-950">
+                                  {selectedPairObj.teamCode || selectedPairObj.p1.nickname || selectedPairObj.p1.name || 'Time selecionado'}
+                                </span>{' '}
+                                ({hiddenPairsDetails.total} {hiddenPairsDetails.total === 1 ? 'time indisponível ocultado' : 'times indisponíveis ocultados'})
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPairs(new Set())}
+                              className="shrink-0 text-amber-700 hover:text-amber-950 underline text-[11px] font-black cursor-pointer"
+                            >
+                              Limpar seleção
+                            </button>
+                          </div>
+                        )}
+
                         {categoryPairs.length === 0 ? (
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             Nenhum time formado nesta categoria ainda.
@@ -2378,9 +2467,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 index={idx}
                                 isRanking={isRanking}
                                 isSelected={selectedPairs.has(pair.id)}
-                                canSelect={(canManageEvent || canUserFormRankingTeam) &&
-                                  !isReadOnly &&
-                                  !pairReachedRankingMatchLimit(pair.id)}
+                                canSelect={(selectedPairs.has(pair.id) || !pairReachedRankingMatchLimit(pair.id)) &&
+                                  (canManageEvent || canUserFormRankingTeam) &&
+                                  !isReadOnly}
                                 onToggleSelect={togglePairSelection}
                                 canManage={canManageEvent}
                                 canChangeBracket={(canManageEvent || (event.allowUserTeamFormation === true && hasActiveRegistration)) &&

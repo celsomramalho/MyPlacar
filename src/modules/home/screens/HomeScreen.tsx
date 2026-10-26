@@ -95,6 +95,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [onRegisterReplayTour, replayTour]);
 
+  // Se o usuário concluiu anteriormente o tour com 9 passos mas o botão instalar está visível e ele ainda não leu o passo 10, deixa como não concluído (partial)
+  React.useEffect(() => {
+    if (!isInstallStatusReady) return;
+    if (canShowInstall) {
+      const currentStatus = localStorage.getItem('myplacar_onboarding_status_home');
+      const step10Completed = localStorage.getItem('myplacar_onboarding_home_step10_completed') === 'true';
+      const legacySeen = localStorage.getItem('myplacar_onboarding_seen_home') === 'true';
+      if ((currentStatus === 'completed' || legacySeen) && !step10Completed) {
+        localStorage.setItem('myplacar_onboarding_status_home', 'partial');
+      }
+    }
+  }, [canShowInstall, isInstallStatusReady]);
+
   const { initGameState, matchSettings } = useGame();
   const { cloudLiveExists } = useLive();
   const { canStartMatch, persistMatchSettings } = useGameRules();

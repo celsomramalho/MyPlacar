@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, UserRound, Check, X } from 'lucide-react';
+import { Trophy, UserRound, Check, X, Clock } from 'lucide-react';
 import type { TournamentPair, TournamentMatch, EventCategory } from '../../types';
 import type { TeamStanding } from '../../domain/brackets';
 import { BracketTeamStatsBlock } from '../BracketTeamStatsBlock';
@@ -267,49 +267,110 @@ export const TeamCard: React.FC<TeamCardProps> = ({
       {/* Histórico de partidas — apenas para Ranking */}
       {isRanking && (() => {
         const teamMatches = categoryMatches.filter(
-          (m) => m.status === 'finished' && (m.pair1Id === pair.id || m.pair2Id === pair.id)
+          (m) => m.pair1Id === pair.id || m.pair2Id === pair.id
         );
         if (teamMatches.length === 0) return null;
-        const wins = teamMatches.filter((m) => m.winnerPairId === pair.id).length;
-        const losses = teamMatches.length - wins;
+        const finishedMatches = teamMatches.filter((m) => m.status === 'finished');
+        const wins = finishedMatches.filter((m) => m.winnerPairId === pair.id).length;
+        const losses = finishedMatches.length - wins;
+        const hasLive = teamMatches.some((m) => m.status === 'live');
         return (
           <div className="mt-2.5 pt-2 border-t border-slate-100">
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Histórico de partidas</p>
-              <span className="text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">
-                {wins}V {losses}D
-              </span>
+              <p className="text-[10px] font-black text-slate-400 tracking-wide">Histórico de partidas</p>
+              <div className="flex items-center gap-1.5">
+                {hasLive && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-lg animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                    Ao vivo
+                  </span>
+                )}
+                {finishedMatches.length > 0 && (
+                  <span className="text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">
+                    {wins}V {losses}D
+                  </span>
+                )}
+              </div>
             </div>
             <div className="rounded-xl border border-slate-200/80 overflow-hidden divide-y divide-slate-200/60">
               {teamMatches.map((m) => {
-                const isWinner = m.winnerPairId === pair.id;
+                const isFinished = m.status === 'finished';
+                const isLive = m.status === 'live';
+                const isWaiting = !isFinished && !isLive;
+                const isWinner = isFinished && m.winnerPairId === pair.id;
+
+                const isP1 = m.pair1Id === pair.id;
                 const resultParts = (m.result || '').split('/');
-                const myScore = m.pair1Id === pair.id ? resultParts[0] : resultParts[1];
-                const oppScore = m.pair1Id === pair.id ? resultParts[1] : resultParts[0];
+                const myResultScore = isP1 ? resultParts[0] : resultParts[1];
+                const oppResultScore = isP1 ? resultParts[1] : resultParts[0];
+
+                const s1 = m.scores?.[0]?.p1;
+                const s2 = m.scores?.[0]?.p2;
+                const myLiveScore = isP1 ? s1 : s2;
+                const oppLiveScore = isP1 ? s2 : s1;
+
+                let rowBg = 'bg-slate-50/60 hover:bg-slate-50';
+                if (isLive) {
+                  rowBg = 'bg-red-50/60 hover:bg-red-50';
+                } else if (isFinished) {
+                  rowBg = isWinner ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'bg-red-50/50 hover:bg-red-50';
+                }
+
                 return (
                   <div
                     key={m.id}
                     onClick={(e) => e.stopPropagation()}
-                    className={`flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] transition-colors ${
-                      isWinner ? 'bg-emerald-50/60 hover:bg-emerald-50' : 'bg-red-50/50 hover:bg-red-50'
-                    }`}
+                    className={`flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] transition-colors ${rowBg}`}
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
-                      {isWinner
-                        ? <Trophy size={11} className="text-emerald-600 shrink-0" />
-                        : <X size={11} className="text-red-400 shrink-0" />
-                      }
-                      <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
-                        {isWinner ? 'Vitória' : 'Derrota'}
-                      </span>
+                      {isLive ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                          <span className="font-black shrink-0 text-red-600">
+                            Ao vivo
+                          </span>
+                        </>
+                      ) : isWaiting ? (
+                        <>
+                          <Clock size={11} className="text-slate-400 shrink-0" />
+                          <span className="font-black shrink-0 text-slate-500">
+                            Aguardando
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          {isWinner ? (
+                            <Trophy size={11} className="text-emerald-600 shrink-0" />
+                          ) : (
+                            <X size={11} className="text-red-400 shrink-0" />
+                          )}
+                          <span className={`font-black shrink-0 ${isWinner ? 'text-emerald-700' : 'text-red-500'}`}>
+                            {isWinner ? 'Vitória' : 'Derrota'}
+                          </span>
+                        </>
+                      )}
                       <span className="text-slate-500 font-bold truncate">
                         vs {getOppName(m)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-black text-slate-700">{myScore || '?'} x {oppScore || '?'}</span>
+                      {isFinished ? (
+                        <span className="font-black text-slate-700">
+                          {myResultScore || '?'} x {oppResultScore || '?'}
+                        </span>
+                      ) : isLive ? (
+                        <span className="font-black text-red-600">
+                          {myLiveScore !== undefined && oppLiveScore !== undefined && myLiveScore !== null && oppLiveScore !== null
+                            ? `${myLiveScore} x ${oppLiveScore}`
+                            : m.result || '0 x 0'}
+                        </span>
+                      ) : (
+                        <span className="font-bold text-slate-400 text-[10px]">
+                          {m.court ? `Quadra ${m.court}` : 'Aguardando'}
+                        </span>
+                      )}
                       {m.matchDate && (
-                        <span className="text-slate-400 font-bold">
+                        <span className="text-slate-400 font-bold text-[10px]">
                           {new Date(m.matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                         </span>
                       )}

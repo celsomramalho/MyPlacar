@@ -213,6 +213,9 @@ export const HelpScreen: React.FC<Props> = ({
         localStorage.removeItem(`myplacar_onboarding_seen_${item.id}`);
       } catch {}
     });
+    try {
+      localStorage.removeItem('myplacar_onboarding_home_step10_completed');
+    } catch {}
     setRefreshKey(prev => prev + 1);
     setResetSuccess(true);
     setTimeout(() => setResetSuccess(false), 3500);

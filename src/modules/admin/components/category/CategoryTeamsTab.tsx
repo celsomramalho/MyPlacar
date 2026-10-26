@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { Shuffle, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Shuffle, Trash2, Users } from 'lucide-react';
 import type { EventCategory, TournamentPair, TournamentMatch } from '@modules/events/types';
 import type { TeamStanding } from '@modules/events/domain/brackets';
-import { filterPairsBySearch } from '@modules/events/domain/brackets';
+import { filterPairsBySearch, pairsSharePlayer } from '@modules/events/domain/brackets';
 import { TeamCard } from '@modules/events/components/teams/TeamCard';
 import { ParticipantSearchInput } from '@modules/events/components/ParticipantSearchInput';
 
@@ -66,9 +66,45 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
   onToggleTeamSelection,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const visiblePairs = filterPairsBySearch(categoryPairs, searchQuery);
-  const visibleBracketOne = filterPairsBySearch(bracketOneList, searchQuery);
-  const visibleBracketTwo = filterPairsBySearch(bracketTwoList, searchQuery);
+
+  const selectedTeam = useMemo(() => {
+    if (!selectedTeamIds || selectedTeamIds.size !== 1) return null;
+    const selectedId = Array.from(selectedTeamIds)[0];
+    return categoryPairs.find((p) => p.id === selectedId) || null;
+  }, [selectedTeamIds, categoryPairs]);
+
+  const hiddenConflictingCount = useMemo(() => {
+    if (!selectedTeam) return 0;
+    return categoryPairs.filter(
+      (p) => p.id !== selectedTeam.id && pairsSharePlayer(selectedTeam, p)
+    ).length;
+  }, [selectedTeam, categoryPairs]);
+
+  const filteredCategoryPairs = useMemo(() => {
+    if (!selectedTeam) return categoryPairs;
+    const others = categoryPairs.filter(
+      (p) => p.id !== selectedTeam.id && !pairsSharePlayer(selectedTeam, p)
+    );
+    return [selectedTeam, ...others];
+  }, [selectedTeam, categoryPairs]);
+
+  const filteredBracketOne = useMemo(() => {
+    if (!selectedTeam) return bracketOneList;
+    return bracketOneList.filter(
+      (p) => p.id === selectedTeam.id || !pairsSharePlayer(selectedTeam, p)
+    );
+  }, [selectedTeam, bracketOneList]);
+
+  const filteredBracketTwo = useMemo(() => {
+    if (!selectedTeam) return bracketTwoList;
+    return bracketTwoList.filter(
+      (p) => p.id === selectedTeam.id || !pairsSharePlayer(selectedTeam, p)
+    );
+  }, [selectedTeam, bracketTwoList]);
+
+  const visiblePairs = filterPairsBySearch(filteredCategoryPairs, searchQuery);
+  const visibleBracketOne = filterPairsBySearch(filteredBracketOne, searchQuery);
+  const visibleBracketTwo = filterPairsBySearch(filteredBracketTwo, searchQuery);
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
       <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
@@ -122,6 +158,22 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
             onChange={setSearchQuery}
             placeholder="Pesquisar time por nome..."
           />
+        </div>
+      )}
+
+      {/* Aviso de filtro de adversários disponíveis */}
+      {hiddenConflictingCount > 0 && selectedTeam && (
+        <div className="mx-5 mb-4 flex items-center justify-between gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-amber-800 text-xs font-bold animate-in fade-in">
+          <div className="flex items-center gap-2 min-w-0">
+            <Users size={16} className="text-amber-600 shrink-0" />
+            <span className="truncate">
+              Mostrando apenas adversários disponíveis para{' '}
+              <span className="font-black text-amber-950">
+                {selectedTeam.teamCode || selectedTeam.p1.nickname || selectedTeam.p1.name || 'Time selecionado'}
+              </span>{' '}
+              ({hiddenConflictingCount} {hiddenConflictingCount === 1 ? 'time com atleta em comum ocultado' : 'times com atletas em comum ocultados'})
+            </span>
+          </div>
         </div>
       )}
 

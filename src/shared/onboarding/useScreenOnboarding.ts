@@ -1,16 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ONBOARDING_CONFIG } from './onboardingConfig';
+import { isAppInstalled, isAndroidDevice, isAppleDevice } from '@pwa/installPrompt';
 
 export type OnboardingStatus = 'unseen' | 'partial' | 'completed';
 
 export function getOnboardingStatus(screenKey: string): OnboardingStatus {
   try {
     const val = localStorage.getItem(`myplacar_onboarding_status_${screenKey}`);
-    if (val === 'completed' || val === 'partial') return val;
-    // Retrocompatibilidade se já houver 'seen' antigo
     const legacy = localStorage.getItem(`myplacar_onboarding_seen_${screenKey}`);
-    if (legacy === 'true') return 'completed';
-    return 'unseen';
+    const rawStatus = (val === 'completed' || val === 'partial') ? val : (legacy === 'true' ? 'completed' : 'unseen');
+
+    // Se o usuário tinha a tela home concluída (quando havia 9 passos), mas o aparelho exibe o botão instalar (passo 10) e ele ainda não leu
+    if (screenKey === 'home' && rawStatus === 'completed') {
+      const canShowInstall = !isAppInstalled() && (isAndroidDevice() || isAppleDevice());
+      const step10Completed = localStorage.getItem('myplacar_onboarding_home_step10_completed') === 'true';
+      if (canShowInstall && !step10Completed) {
+        return 'partial';
+      }
+    }
+
+    return rawStatus;
   } catch {
     return 'unseen';
   }
@@ -60,8 +69,11 @@ export function useScreenOnboarding(screenKey: string) {
     setShowTour(false);
     try {
       localStorage.setItem(statusKey, 'completed');
+      if (screenKey === 'home') {
+        localStorage.setItem('myplacar_onboarding_home_step10_completed', 'true');
+      }
     } catch {}
-  }, [statusKey]);
+  }, [screenKey, statusKey]);
 
   const handleSkipTour = useCallback((fromStepIndex?: number) => {
     setShowTour(false);

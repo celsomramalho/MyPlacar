@@ -10,6 +10,7 @@ import {
   type TournamentMatch,
 } from '@modules/events/types';
 import {
+  pairsSharePlayer,
   updatePlayoffProgression,
   useCategoryBoard,
   useMatchAdminActions,
@@ -335,6 +336,13 @@ export const EventCategoriesManager: React.FC<Props> = ({
     if (next.has(pair.id)) {
       next.delete(pair.id);
     } else {
+      if (next.size === 1) {
+        const firstId = Array.from(next)[0];
+        const firstPair = pairs.find((p) => p.id === firstId);
+        if (firstPair && pairsSharePlayer(firstPair, pair)) {
+          return;
+        }
+      }
       if (next.size >= 2) {
         next.clear();
       }
