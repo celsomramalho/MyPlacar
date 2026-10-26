@@ -2420,21 +2420,23 @@ export const EventDetailScreen: React.FC<Props> = ({
                         )}
 
                         {hiddenPairsDetails.total > 0 && selectedPairObj && (
-                          <div className="flex items-center justify-between gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-amber-800 text-xs font-bold animate-in fade-in">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Users size={16} className="text-amber-600 shrink-0" />
-                              <span className="truncate">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-amber-800 text-xs font-bold animate-in fade-in">
+                            <div className="flex items-start gap-2 min-w-0 flex-1">
+                              <Users size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                              <p className="leading-snug text-xs font-bold text-amber-900">
                                 Mostrando apenas adversários disponíveis para{' '}
                                 <span className="font-black text-amber-950">
                                   {selectedPairObj.teamCode || selectedPairObj.p1.nickname || selectedPairObj.p1.name || 'Time selecionado'}
                                 </span>{' '}
-                                ({hiddenPairsDetails.total} {hiddenPairsDetails.total === 1 ? 'time indisponível ocultado' : 'times indisponíveis ocultados'})
-                              </span>
+                                <span className="text-amber-700 font-semibold block sm:inline">
+                                  ({hiddenPairsDetails.total} {hiddenPairsDetails.total === 1 ? 'time indisponível ocultado' : 'times indisponíveis ocultados'})
+                                </span>
+                              </p>
                             </div>
                             <button
                               type="button"
                               onClick={() => setSelectedPairs(new Set())}
-                              className="shrink-0 text-amber-700 hover:text-amber-950 underline text-[11px] font-black cursor-pointer"
+                              className="self-end sm:self-auto shrink-0 text-amber-700 hover:text-amber-950 underline text-[11px] font-black cursor-pointer ml-6 sm:ml-0"
                             >
                               Limpar seleção
                             </button>

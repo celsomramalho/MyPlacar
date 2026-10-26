@@ -163,17 +163,17 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
 
       {/* Aviso de filtro de adversários disponíveis */}
       {hiddenConflictingCount > 0 && selectedTeam && (
-        <div className="mx-5 mb-4 flex items-center justify-between gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-amber-800 text-xs font-bold animate-in fade-in">
-          <div className="flex items-center gap-2 min-w-0">
-            <Users size={16} className="text-amber-600 shrink-0" />
-            <span className="truncate">
-              Mostrando apenas adversários disponíveis para{' '}
-              <span className="font-black text-amber-950">
-                {selectedTeam.teamCode || selectedTeam.p1.nickname || selectedTeam.p1.name || 'Time selecionado'}
-              </span>{' '}
+        <div className="mx-5 mb-4 flex items-start gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-amber-800 text-xs font-bold animate-in fade-in">
+          <Users size={16} className="text-amber-600 shrink-0 mt-0.5" />
+          <p className="leading-snug text-xs font-bold text-amber-900">
+            Mostrando apenas adversários disponíveis para{' '}
+            <span className="font-black text-amber-950">
+              {selectedTeam.teamCode || selectedTeam.p1.nickname || selectedTeam.p1.name || 'Time selecionado'}
+            </span>{' '}
+            <span className="text-amber-700 font-semibold block sm:inline">
               ({hiddenConflictingCount} {hiddenConflictingCount === 1 ? 'time com atleta em comum ocultado' : 'times com atletas em comum ocultados'})
             </span>
-          </div>
+          </p>
         </div>
       )}
 
