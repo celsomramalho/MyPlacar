@@ -15,6 +15,7 @@ import { updateEvent } from '@infra/firebase/events';
 import {
   createManualMatch,
   generateSystemMatchesForCategory,
+  pairsSharePlayer,
 } from '../engine/bracketGenerator';
 import { parseMatchSets } from '../engine/matchScoreEngine';
 import { updatePlayoffProgression } from '../engine/bracketProgressionEngine';
@@ -90,6 +91,16 @@ export function useMatchAdminActions({
     const p1 = pairs.find((p) => p.id === t1Id);
     const p2 = pairs.find((p) => p.id === t2Id);
     if (!p1 || !p2) return;
+
+    // Impedir partida se algum jogador estiver nos dois times
+    if (pairsSharePlayer(p1, p2)) {
+      setModalConfig({
+        title: 'Jogador duplicado',
+        message: 'Não é possível formar uma partida com o mesmo jogador nos dois times.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
 
     const rankingMatchesLimit = Number(event.rankingMatchesPerTeam || 0);
     if (isRanking && rankingMatchesLimit > 0) {

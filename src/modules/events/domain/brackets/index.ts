@@ -12,6 +12,7 @@ export {
   getPairDisplayName,
   getPairFormattedWithCode,
   getPhaseLabel,
+  pairsSharePlayer,
 } from './engine/bracketGenerator';
 export {
   buildTeamCode,

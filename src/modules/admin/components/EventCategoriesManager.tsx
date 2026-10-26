@@ -295,27 +295,36 @@ export const EventCategoriesManager: React.FC<Props> = ({
 
     const existingPair = pairForEntry(entry);
     if (!isRanking && existingPair) {
+      const p1Key = existingPair.p1.email || existingPair.p1.pin || '';
+      const p2Key = existingPair.p2.email || existingPair.p2.pin || '';
       const isAlreadySelected =
-        selectedEntries.has(existingPair.p1.email) &&
-        selectedEntries.has(existingPair.p2.email);
+        ((existingPair.p1.email && selectedEntries.has(existingPair.p1.email)) || (existingPair.p1.pin && selectedEntries.has(existingPair.p1.pin))) &&
+        ((existingPair.p2.email && selectedEntries.has(existingPair.p2.email)) || (existingPair.p2.pin && selectedEntries.has(existingPair.p2.pin)));
       if (isAlreadySelected) {
         setSelectedEntries(new Set());
       } else {
-        setSelectedEntries(new Set([existingPair.p1.email, existingPair.p2.email]));
+        setSelectedEntries(new Set([p1Key, p2Key].filter(Boolean)));
       }
       return;
     }
 
+    const entryKey = entry.email || entry.pin;
+    if (!entryKey) return;
     const next = new Set(selectedEntries);
-    if (next.has(entry.email)) {
-      next.delete(entry.email);
+    const hasKey = Boolean(
+      (entry.email && next.has(entry.email)) ||
+      (entry.pin && next.has(entry.pin))
+    );
+    if (hasKey) {
+      if (entry.email) next.delete(entry.email);
+      if (entry.pin) next.delete(entry.pin);
     } else {
       if (next.size >= 2) {
         const first = Array.from(next)[0];
         next.clear();
         next.add(first);
       }
-      next.add(entry.email);
+      next.add(entryKey);
     }
     setSelectedEntries(next);
   };
@@ -929,6 +938,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
         selectedTeamIds={selectedTeamIds}
         onClearSelectedTeams={() => setSelectedTeamIds(new Set())}
         categoryMatches={categoryMatches}
+        categoryPairs={categoryPairs}
         onDeleteMatch={(matchId) => {
           handleDeleteMatch(matchId);
           setSelectedTeamIds(new Set());

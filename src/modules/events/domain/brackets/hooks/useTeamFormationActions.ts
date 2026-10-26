@@ -56,7 +56,7 @@ export function useTeamFormationActions({
 }: UseTeamFormationActionsOptions) {
   const selectedEntriesList = useMemo(() => {
     return Array.from(selectedEntries)
-      .map((email) => categoryEntries.find((entry) => entry.email === email))
+      .map((key) => categoryEntries.find((entry) => entry.email === key || (entry.pin && entry.pin === key)))
       .filter(Boolean) as TournamentEntry[];
   }, [selectedEntries, categoryEntries]);
 
@@ -99,7 +99,7 @@ export function useTeamFormationActions({
     if (!selectedCategory || selectedEntries.size !== 2) return;
 
     const selected = Array.from(selectedEntries)
-      .map((email) => categoryEntries.find((entry) => entry.email === email))
+      .map((key) => categoryEntries.find((entry) => entry.email === key || (entry.pin && entry.pin === key)))
       .filter(Boolean) as TournamentEntry[];
     if (selected.length !== 2) return;
 

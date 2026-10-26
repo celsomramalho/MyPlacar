@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Trash2, UsersRound, AlertTriangle } from 'lucide-react';
 import type { TournamentMatch, TournamentPair } from '@modules/events/types';
+import { pairsSharePlayer } from '@modules/events/domain/brackets';
 
 interface CategorySelectionActionBarProps {
   isSuper8: boolean;
@@ -16,6 +17,7 @@ interface CategorySelectionActionBarProps {
   selectedTeamIds: Set<string>;
   onClearSelectedTeams: () => void;
   categoryMatches: TournamentMatch[];
+  categoryPairs?: TournamentPair[];
   onDeleteMatch: (matchId: string) => void;
   onCreateManualMatch: () => void;
 }
@@ -34,6 +36,7 @@ export const CategorySelectionActionBar: React.FC<CategorySelectionActionBarProp
   selectedTeamIds,
   onClearSelectedTeams,
   categoryMatches,
+  categoryPairs = [],
   onDeleteMatch,
   onCreateManualMatch,
 }) => {
@@ -102,6 +105,13 @@ export const CategorySelectionActionBar: React.FC<CategorySelectionActionBarProp
             )
           : null;
 
+        // Validar jogador duplicado entre os dois times selecionados
+        const hasDuplicatePlayer = selectedTeamIdsArray.length === 2 && (() => {
+          const p1 = categoryPairs.find((p) => p.id === selectedTeamIdsArray[0]);
+          const p2 = categoryPairs.find((p) => p.id === selectedTeamIdsArray[1]);
+          return Boolean(p1 && p2 && pairsSharePlayer(p1, p2));
+        })();
+
         return (
           <header className="px-6 py-5 flex items-center justify-between bg-sky-600 text-white fixed top-0 left-0 right-0 z-[60] shadow-lg animate-in slide-in-from-top duration-200">
             <div className="flex items-center gap-4">
@@ -133,6 +143,14 @@ export const CategorySelectionActionBar: React.FC<CategorySelectionActionBarProp
                       <Trash2 size={16} />
                       <span>Desfazer partida</span>
                     </button>
+                  ) : hasDuplicatePlayer ? (
+                    <span
+                      className="flex items-center gap-2 bg-amber-500 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-md opacity-90"
+                      title="Mesmo jogador nos dois times"
+                    >
+                      <AlertTriangle size={16} />
+                      <span>Jogador repetido</span>
+                    </span>
                   ) : (
                     <button
                       type="button"

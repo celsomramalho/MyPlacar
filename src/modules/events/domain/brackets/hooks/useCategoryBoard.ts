@@ -196,10 +196,18 @@ export function useCategoryBoard({
     });
   }, [isIndividualRanking, categoryEntries, sortBy, playerStandingsMap, pairs, selectedCategory?.id]);
 
-  const selectedEntryGender =
+  const selectedEntry =
     selectedEntries.size === 1
-      ? categoryEntries.find((entry) => entry.email === selectedEntries.values().next().value)?.gender
+      ? categoryEntries.find((entry) => {
+          const val = selectedEntries.values().next().value;
+          return (
+            (entry.email && (entry.email === val || selectedEntries.has(entry.email))) ||
+            (entry.pin && (entry.pin === val || selectedEntries.has(entry.pin)))
+          );
+        })
       : undefined;
+
+  const selectedEntryGender = selectedEntry?.gender;
 
   const selectionFilterGender =
     selectedCategory && isCategoryMixed(selectedCategory)
@@ -210,23 +218,40 @@ export function useCategoryBoard({
           : undefined
       : undefined;
 
-  const visibleCategoryEntries = selectionFilterGender
-    ? sortedCategoryEntries.filter((entry) => entry.gender === selectionFilterGender)
-    : sortedCategoryEntries;
+  const isEntrySelected = (entry: TournamentEntry) => {
+    return Boolean(
+      (entry.email && selectedEntries.has(entry.email)) ||
+      (entry.pin && selectedEntries.has(entry.pin))
+    );
+  };
+
+  const visibleCategoryEntries = useMemo(() => {
+    if (!selectionFilterGender) {
+      return sortedCategoryEntries;
+    }
+
+    const selectedList = sortedCategoryEntries.filter(isEntrySelected);
+    const oppositeGenderList = sortedCategoryEntries.filter(
+      (entry) => !isEntrySelected(entry) && entry.gender === selectionFilterGender
+    );
+
+    return [...selectedList, ...oppositeGenderList];
+  }, [selectionFilterGender, sortedCategoryEntries, selectedEntries]);
 
   const pairForEntry = (entry: TournamentEntry) => findPairForEntry(entry, categoryPairs);
 
   const selectedPair = useMemo(() => {
     if (isRanking || selectedEntries.size !== 2) return null;
-    const [firstEmail, secondEmail] = Array.from(selectedEntries);
+    const [first, second] = Array.from(selectedEntries);
     const found = categoryPairs.find(
       (pair) =>
-        (pair.p1.email === firstEmail && pair.p2.email === secondEmail) ||
-        (pair.p1.email === secondEmail && pair.p2.email === firstEmail)
+        ((pair.p1.email === first || pair.p1.pin === first) && (pair.p2.email === second || pair.p2.pin === second)) ||
+        ((pair.p1.email === second || pair.p1.pin === second) && (pair.p2.email === first || pair.p2.pin === first))
     );
     if (!found) return null;
     const isPairSelected =
-      selectedEntries.has(found.p1.email) && selectedEntries.has(found.p2.email);
+      (selectedEntries.has(found.p1.email) || (found.p1.pin && selectedEntries.has(found.p1.pin))) &&
+      (selectedEntries.has(found.p2.email) || (found.p2.pin && selectedEntries.has(found.p2.pin)));
     return isPairSelected ? found : null;
   }, [isRanking, categoryPairs, selectedEntries]);
 

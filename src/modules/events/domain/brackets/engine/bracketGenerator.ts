@@ -78,12 +78,71 @@ export const getNextMatchNumber = (existingMatches: TournamentMatch[]): number =
   return maxNum + 1;
 };
 
+const normalizeAthleteName = (val?: string): string => {
+  return String(val || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+};
+
+const isGenericPlaceholderName = (name: string): boolean => {
+  const generic = ['atleta', 'atleta 1', 'atleta 2', 'jogador', 'player', 'a definir', 'convidado', ''];
+  return generic.includes(name);
+};
+
+export const pairsSharePlayer = (pair1: TournamentPair, pair2: TournamentPair): boolean => {
+  const getPlayerIdentifiers = (player?: TournamentPair['p1'] | TournamentPair['p2']): Set<string> => {
+    const ids = new Set<string>();
+    if (!player) return ids;
+
+    if (player.pin && player.pin.trim()) {
+      ids.add(`pin:${player.pin.toUpperCase().trim()}`);
+    }
+    if (player.email && player.email.trim()) {
+      ids.add(`email:${player.email.toLowerCase().trim()}`);
+    }
+    if (player.registrationId) {
+      ids.add(`reg:${player.registrationId}`);
+    }
+
+    const normNick = normalizeAthleteName(player.nickname);
+    if (normNick && !isGenericPlaceholderName(normNick)) {
+      ids.add(`name:${normNick}`);
+    }
+    const normName = normalizeAthleteName(player.name);
+    if (normName && !isGenericPlaceholderName(normName)) {
+      ids.add(`name:${normName}`);
+    }
+
+    return ids;
+  };
+
+  const p1Players = [getPlayerIdentifiers(pair1.p1), getPlayerIdentifiers(pair1.p2)];
+  const p2Players = [getPlayerIdentifiers(pair2.p1), getPlayerIdentifiers(pair2.p2)];
+
+  for (const set1 of p1Players) {
+    for (const set2 of p2Players) {
+      for (const id of set1) {
+        if (set2.has(id)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+};
+
 export const generateRoundRobinPairs = (pairsList: TournamentPair[]): Array<[TournamentPair, TournamentPair]> => {
   const matchups: Array<[TournamentPair, TournamentPair]> = [];
   const n = pairsList.length;
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      matchups.push([pairsList[i], pairsList[j]]);
+      if (!pairsSharePlayer(pairsList[i], pairsList[j])) {
+        matchups.push([pairsList[i], pairsList[j]]);
+      }
     }
   }
   return matchups;

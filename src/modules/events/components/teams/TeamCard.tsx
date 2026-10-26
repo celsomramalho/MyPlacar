@@ -177,7 +177,9 @@ export const TeamCard: React.FC<TeamCardProps> = ({
               Chave {pair.bracket ?? 1}
             </span>
           )}
-          {canManage && onUndoPair && (
+          {canManage && onUndoPair && !categoryMatches.some(
+            (m) => m.status === 'finished' && (m.pair1Id === pair.id || m.pair2Id === pair.id)
+          ) && (
             <button
               type="button"
               onClick={(e) => {

@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Calendar,
   AlertCircle,
+  AlertTriangle,
   Play,
   UserCheck,
   RotateCw,
@@ -84,6 +85,7 @@ import {
   getCategoryMatches,
   getCategoryPairs,
   pairHasSameParticipants,
+  pairsSharePlayer,
   validateCategoryGenders,
 } from '../domain/brackets';
 import { calculateQueueState } from '../domain/queue';
@@ -1122,6 +1124,18 @@ export const EventDetailScreen: React.FC<Props> = ({
     const canFormMatch = canManageEvent || canUserFormRankingTeam;
     if (!canFormMatch || isReadOnly || selectedPairs.size !== 2 || !activeCategory) return;
     const pairIds = Array.from(selectedPairs);
+
+    const p1 = (event.pairs || []).find((p) => p.id === pairIds[0]);
+    const p2 = (event.pairs || []).find((p) => p.id === pairIds[1]);
+    if (p1 && p2 && pairsSharePlayer(p1, p2)) {
+      setModalConfig({
+        title: 'Jogador duplicado',
+        message: 'Não é possível formar uma partida com o mesmo jogador nos dois times.',
+        onConfirm: () => setModalConfig(null),
+      });
+      return;
+    }
+
     const categoryMatchesForNumber = getCategoryMatches(event.matches || [], event.pairs || [], activeCategory, { includePairCategoryFallback: false });
 
     // Em Ranking, cada time pode participar somente da quantidade configurada
@@ -2098,16 +2112,35 @@ export const EventDetailScreen: React.FC<Props> = ({
                             {selectedPairs.size} {selectedPairs.size === 1 ? 'time selecionado' : 'times selecionados'}
                           </span>
                         </div>
-                        {selectedPairs.size === 2 ? (
-                          <button
-                            type="button"
-                            onClick={handleFormMatch}
-                            className="flex shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-3.5 py-2.5 text-xs font-black text-white shadow-sm transition-colors hover:bg-emerald-600"
-                          >
-                            <Trophy size={15} />
-                            <span>Formar partida</span>
-                          </button>
-                        ) : (
+                        {selectedPairs.size === 2 ? (() => {
+                          const pairIds = Array.from(selectedPairs);
+                          const p1 = (event.pairs || []).find((p) => p.id === pairIds[0]);
+                          const p2 = (event.pairs || []).find((p) => p.id === pairIds[1]);
+                          const hasDuplicate = Boolean(p1 && p2 && pairsSharePlayer(p1, p2));
+
+                          if (hasDuplicate) {
+                            return (
+                              <span
+                                className="flex shrink-0 items-center gap-2 rounded-xl bg-amber-500 px-3.5 py-2.5 text-xs font-black text-white shadow-sm"
+                                title="Não é possível formar uma partida com o mesmo jogador nos dois times"
+                              >
+                                <AlertTriangle size={15} />
+                                <span>Jogador repetido</span>
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <button
+                              type="button"
+                              onClick={handleFormMatch}
+                              className="flex shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-3.5 py-2.5 text-xs font-black text-white shadow-sm transition-colors hover:bg-emerald-600"
+                            >
+                              <Trophy size={15} />
+                              <span>Formar partida</span>
+                            </button>
+                          );
+                        })() : (
                           <span className="shrink-0 rounded-xl bg-sky-700/60 px-3 py-2 text-xs font-bold text-sky-100">
                             Selecione +1
                           </span>
