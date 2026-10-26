@@ -2049,7 +2049,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                     <div className="pb-3 border-b border-slate-100 flex flex-col items-start gap-3">
                       <div>
                         <h3 className="text-base font-black text-slate-800">
-                          {userCategoryView === 'entries' ? 'Inscritos' : userCategoryView === 'teams' ? 'Times' : 'Jogos'} ({activeCategory.name})
+                          {userCategoryView === 'entries' ? 'Inscritos' : userCategoryView === 'teams' ? 'Times' : 'Partidas'} ({activeCategory.name})
                         </h3>
                         <p className="text-xs text-slate-400 font-bold mt-0.5">
                           {userCategoryView === 'entries' && isIndividualRanking
@@ -2186,7 +2186,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                               : 'text-slate-500 hover:text-slate-900'
                           }`}
                         >
-                          Jogos ({categoryMatches.length})
+                          Partidas ({categoryMatches.length})
                         </button>
                       </div>
 

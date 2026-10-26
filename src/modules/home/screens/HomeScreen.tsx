@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight, Menu, BookOpen, Download, Smartphone } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import type { UserProfile } from '@modules/auth/types';
@@ -10,7 +10,13 @@ import { useLive } from '@modules/live';
 import { useUI } from '@modules/ui';
 import { isWatchDevice } from '@shared/utils/device';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
-import { useScreenOnboarding, ScreenIntroCard, SpotlightTour } from '@shared/onboarding';
+import {
+  useScreenOnboarding,
+  ScreenIntroCard,
+  SpotlightTour,
+  HOME_INSTALL_ANDROID_STEP,
+  HOME_INSTALL_APPLE_STEP,
+} from '@shared/onboarding';
 import { useInstallPwa } from '@pwa/installPrompt';
 import { copyToClipboard } from '@shared/utils/clipboard';
 import { InstallSafariModal } from '@modules/auth/components/InstallSafariModal';
@@ -62,6 +68,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     handleSkipTour,
     replayTour,
   } = useScreenOnboarding('home');
+
+  const canShowInstall = !isNativeApp && isInstallStatusReady && !isInstalled && (isAndroid || isApple);
+
+  const effectiveOnboardingConfig = useMemo(() => {
+    if (!onboardingConfig) return null;
+    const baseSteps = onboardingConfig.steps.filter((s) => s.targetId !== 'home-item-instalar');
+
+    if (!canShowInstall) {
+      return {
+        ...onboardingConfig,
+        steps: baseSteps,
+      };
+    }
+
+    const installStep = isApple ? HOME_INSTALL_APPLE_STEP : HOME_INSTALL_ANDROID_STEP;
+    return {
+      ...onboardingConfig,
+      steps: [...baseSteps, installStep],
+    };
+  }, [onboardingConfig, canShowInstall, isApple]);
 
   React.useEffect(() => {
     if (onRegisterReplayTour) {
@@ -235,6 +261,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {!isNativeApp && isInstallStatusReady && isAndroid && !isInstalled && (
           <button
+            id="home-item-instalar"
             onClick={handleInstallAndroid}
             className="w-full bg-white border border-emerald-100 text-emerald-600 py-4 px-6 rounded-3xl font-black text-sm flex items-center justify-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50"
           >
@@ -245,6 +272,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {!isNativeApp && isInstallStatusReady && isApple && !isInstalled && (
           <button
+            id="home-item-instalar"
             onClick={handleInstallSafari}
             className="w-full bg-white border border-sky-100 text-sky-600 py-4 px-6 rounded-3xl font-black text-sm flex items-center justify-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-all hover:bg-slate-50"
           >
@@ -255,9 +283,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </main>
 
       {/* Camada 1: Cartão de Boas-Vindas */}
-      {onboardingConfig && (
+      {effectiveOnboardingConfig && (
         <ScreenIntroCard
-          config={onboardingConfig}
+          config={effectiveOnboardingConfig}
           isOpen={showIntro}
           onDismiss={handleDismissIntro}
         />
@@ -275,9 +303,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       />
 
       {/* Camada 2: Spotlight Tour dos elementos */}
-      {onboardingConfig && (
+      {effectiveOnboardingConfig && (
         <SpotlightTour
-          steps={onboardingConfig.steps}
+          steps={effectiveOnboardingConfig.steps}
           isActive={showTour}
           onComplete={handleCompleteTour}
           onSkip={handleSkipTour}

@@ -16,6 +16,20 @@ export interface ScreenOnboardingConfig {
   steps: OnboardingStep[];
 }
 
+export const HOME_INSTALL_ANDROID_STEP: OnboardingStep = {
+  targetId: 'home-item-instalar',
+  title: 'Instalar MyPlacar',
+  description: 'Instale o app diretamente no seu dispositivo Android para abrir em tela cheia, ter acesso rápido pela tela inicial e usar offline.',
+  placement: 'top',
+};
+
+export const HOME_INSTALL_APPLE_STEP: OnboardingStep = {
+  targetId: 'home-item-instalar',
+  title: 'Instalar MyPlacar no Safari',
+  description: 'Adicione o app à tela de início do seu iPhone pelo Safari para abrir em tela cheia e usar como app nativo.',
+  placement: 'top',
+};
+
 export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
   home: {
     screenName: 'Home',
@@ -73,6 +87,7 @@ export const ONBOARDING_CONFIG: Record<string, ScreenOnboardingConfig> = {
         description: 'Verifique se há novas atualizações disponíveis para o seu MyPlacar com apenas um toque.',
         placement: 'top',
       },
+      HOME_INSTALL_ANDROID_STEP,
     ],
   },
   tournaments: {
@@ -531,7 +546,7 @@ export const EVENT_DETAIL_RANKING_STEPS: OnboardingStep[] = [
   {
     targetId: 'event-detail-subtab-matches',
     title: '3. Lançar placar',
-    description: 'Na aba Jogos, preencha o placar e a data do confronto para atualizar a classificação do ranking.',
+    description: 'Na aba Partidas, preencha o placar e a data do confronto para atualizar a classificação do ranking.',
     placement: 'bottom',
   },
 ];
@@ -598,7 +613,7 @@ export const RANKING_ILLUSTRATIVE_HELPS: {
     card2Subtitle: 'Time T2 • Categoria A',
     card2Tag: 'Chave 1',
     card2Details: 'Histórico: 0V 1D (toque para selecionar)',
-    footerNote: 'A partida criada irá direto para a aba Jogos para realização e registro do placar.',
+    footerNote: 'A partida criada irá direto para a aba Partidas para realização e registro do placar.',
     emptyStateNotice: 'Ainda não há times formados nesta categoria para criar partidas.',
     toggleViewText: 'Ver exemplo de como criar partidas',
     toggleHideText: 'Ocultar exemplo de como criar partidas',
