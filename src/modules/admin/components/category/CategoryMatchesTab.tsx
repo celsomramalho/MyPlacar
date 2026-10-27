@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Sparkles, FileText, Trash2, Upload } from 'lucide-react';
 import type { EventCategory, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { MatchCard } from '@modules/events/components/matches/MatchCard';
 import { RankingMatchImportModal } from './RankingMatchImportModal';
 import { ParticipantSearchInput } from '@modules/events/components/ParticipantSearchInput';
-import { filterMatchesBySearch } from '@modules/events/domain/brackets';
+import { filterMatchesBySearch, sortMatchesByDateDesc } from '@modules/events/domain/brackets';
 
 export interface CategoryMatchesTabProps {
   event: TournamentEvent;
@@ -53,27 +53,53 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
 }) => {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
-  const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
-  const semiMatches = categoryMatches.filter((m) => m.phase === 'semifinal');
-  const finalMatches = categoryMatches.filter((m) => m.phase === 'final' || m.phase === '3lugar');
-  const otherMatches = categoryMatches.filter(
-    (m) =>
-      m.phase !== 'chave1' &&
-      m.phase !== 'chave2' &&
-      m.phase !== 'semifinal' &&
-      m.phase !== 'final' &&
-      m.phase !== '3lugar' &&
-      !m.phase?.startsWith('rodada') &&
-      !m.phase?.startsWith('super8d_')
+
+  const sortedCategoryMatches = useMemo(
+    () => sortMatchesByDateDesc(categoryMatches),
+    [categoryMatches]
   );
 
-  const filteredMatches = filterMatchesBySearch(categoryMatches, searchQuery, pairsById);
+  const b1Matches = useMemo(
+    () => sortedCategoryMatches.filter((m) => m.phase === 'chave1'),
+    [sortedCategoryMatches]
+  );
+  const b2Matches = useMemo(
+    () => sortedCategoryMatches.filter((m) => m.phase === 'chave2'),
+    [sortedCategoryMatches]
+  );
+  const semiMatches = useMemo(
+    () => sortedCategoryMatches.filter((m) => m.phase === 'semifinal'),
+    [sortedCategoryMatches]
+  );
+  const finalMatches = useMemo(
+    () => sortedCategoryMatches.filter((m) => m.phase === 'final' || m.phase === '3lugar'),
+    [sortedCategoryMatches]
+  );
+  const otherMatches = useMemo(
+    () =>
+      sortedCategoryMatches.filter(
+        (m) =>
+          m.phase !== 'chave1' &&
+          m.phase !== 'chave2' &&
+          m.phase !== 'semifinal' &&
+          m.phase !== 'final' &&
+          m.phase !== '3lugar' &&
+          !m.phase?.startsWith('rodada') &&
+          !m.phase?.startsWith('super8d_')
+      ),
+    [sortedCategoryMatches]
+  );
 
-  const renderItem = (match: TournamentMatch) => (
+  const filteredMatches = useMemo(
+    () => sortMatchesByDateDesc(filterMatchesBySearch(categoryMatches, searchQuery, pairsById)),
+    [categoryMatches, searchQuery, pairsById]
+  );
+
+  const renderItem = (match: TournamentMatch, idx?: number) => (
     <MatchCard
       key={match.id}
       match={match}
+      colorIndex={idx}
       pairsById={pairsById}
       variant="detailed"
       isRanking={isRanking}
@@ -104,7 +130,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
       <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
         <div>
-          <h3 className="text-base font-black text-slate-800">Jogos ({category.name})</h3>
+          <h3 className="text-base font-black text-slate-800">Partidas ({category.name})</h3>
           <p className="text-xs text-slate-400 font-bold mt-0.5">{descriptionText}</p>
         </div>
 
@@ -173,14 +199,14 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       ) : isRanking ? (
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-1 gap-2.5">
-            {filteredMatches.map(renderItem)}
+            {filteredMatches.map((m, idx) => renderItem(m, idx))}
           </div>
         </div>
       ) : isSuper8Duplas ? (
         searchQuery ? (
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-1 gap-2.5">
-              {filteredMatches.map(renderItem)}
+              {filteredMatches.map((m, idx) => renderItem(m, idx))}
             </div>
           </div>
         ) : (
@@ -208,7 +234,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                         <span className="text-[10px] font-black text-slate-400">{gMatches.length} jogos</span>
                       </div>
                       <div className="grid grid-cols-1 gap-2">
-                        {gMatches.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                        {sortMatchesByDateDesc(gMatches).map((m, idx) => renderItem(m, idx))}
                       </div>
                     </div>
                   ))}
@@ -229,7 +255,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                   <div className="rounded-2xl border border-yellow-100 bg-yellow-50/50 p-4 space-y-2.5">
                     <h5 className="text-[11px] font-black text-yellow-700">🥇 Chave Ouro</h5>
                     <div className="grid grid-cols-1 gap-2">
-                      {semiOuro.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                      {sortMatchesByDateDesc(semiOuro).map((m, idx) => renderItem(m, idx))}
                     </div>
                   </div>
                 )}
@@ -237,7 +263,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2.5">
                     <h5 className="text-[11px] font-black text-slate-600">🥈 Chave Prata</h5>
                     <div className="grid grid-cols-1 gap-2">
-                      {semiPrata.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                      {sortMatchesByDateDesc(semiPrata).map((m, idx) => renderItem(m, idx))}
                     </div>
                   </div>
                 )}
@@ -257,7 +283,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                   <div className="rounded-2xl border border-yellow-100 bg-yellow-50/50 p-4 space-y-2.5">
                     <h5 className="text-[11px] font-black text-yellow-700">🥇 Final Ouro</h5>
                     <div className="grid grid-cols-1 gap-2">
-                      {finalOuro.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                      {sortMatchesByDateDesc(finalOuro).map((m, idx) => renderItem(m, idx))}
                     </div>
                   </div>
                 )}
@@ -265,7 +291,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2.5">
                     <h5 className="text-[11px] font-black text-slate-600">🥈 Final Prata</h5>
                     <div className="grid grid-cols-1 gap-2">
-                      {finalPrata.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).map(renderItem)}
+                      {sortMatchesByDateDesc(finalPrata).map((m, idx) => renderItem(m, idx))}
                     </div>
                   </div>
                 )}
@@ -278,7 +304,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
         searchQuery ? (
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-1 gap-2.5">
-              {filteredMatches.map(renderItem)}
+              {filteredMatches.map((m, idx) => renderItem(m, idx))}
             </div>
           </div>
         ) : (
@@ -309,7 +335,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                   <span className="text-[10px] font-black text-slate-400">{round.matches.length} {round.matches.length === 1 ? 'jogo' : 'jogos'}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2.5">
-                  {round.matches.map(renderItem)}
+                  {sortMatchesByDateDesc(round.matches).map((m, idx) => renderItem(m, idx))}
                 </div>
               </div>
             ));
@@ -320,7 +346,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
         searchQuery ? (
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-1 gap-2.5">
-              {filteredMatches.map(renderItem)}
+              {filteredMatches.map((m, idx) => renderItem(m, idx))}
             </div>
           </div>
         ) : (
@@ -332,7 +358,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                 <span className="text-[10px] font-black text-slate-400">{b1Matches.length} jogos</span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
-                {b1Matches.map(renderItem)}
+                {b1Matches.map((m, idx) => renderItem(m, idx))}
               </div>
             </div>
           )}
@@ -343,7 +369,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                 <span className="text-[10px] font-black text-slate-400">{b2Matches.length} jogos</span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
-                {b2Matches.map(renderItem)}
+                {b2Matches.map((m, idx) => renderItem(m, idx))}
               </div>
             </div>
           )}
@@ -354,7 +380,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                 <span className="text-[10px] font-black text-amber-600">{semiMatches.length} jogos</span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
-                {semiMatches.map(renderItem)}
+                {semiMatches.map((m, idx) => renderItem(m, idx))}
               </div>
             </div>
           )}
@@ -365,7 +391,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                 <span className="text-[10px] font-black text-emerald-600">{finalMatches.length} jogos</span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
-                {finalMatches.map(renderItem)}
+                {finalMatches.map((m, idx) => renderItem(m, idx))}
               </div>
             </div>
           )}
@@ -376,7 +402,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                 <span className="text-[10px] font-black text-slate-400">{otherMatches.length} jogos</span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
-                {otherMatches.map(renderItem)}
+                {otherMatches.map((m, idx) => renderItem(m, idx))}
               </div>
             </div>
           )}

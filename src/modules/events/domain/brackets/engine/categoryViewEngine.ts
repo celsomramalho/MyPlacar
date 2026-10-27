@@ -119,3 +119,51 @@ export const filterMatchesBySearch = (
     return p1Text.includes(normalizedQuery) || p2Text.includes(normalizedQuery);
   });
 };
+
+export const getMatchDateKey = (m: TournamentMatch): string => {
+  if (m.matchDate && /^\d{4}-\d{2}-\d{2}$/.test(m.matchDate)) {
+    return m.matchDate;
+  }
+  if (m.startedAt) {
+    try {
+      const d = new Date(m.startedAt);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    } catch {}
+  }
+  if (m.finishedAt) {
+    try {
+      const d = new Date(m.finishedAt);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    } catch {}
+  }
+  return '';
+};
+
+export const sortMatchesByDateDesc = (matches: TournamentMatch[]): TournamentMatch[] => {
+  return [...matches].sort((a, b) => {
+    const dateA = getMatchDateKey(a);
+    const dateB = getMatchDateKey(b);
+    if (dateA !== dateB) {
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateB.localeCompare(dateA); // Mais atual para mais antiga
+    }
+
+    const timeA = a.startedAt
+      ? new Date(a.startedAt).getTime()
+      : a.finishedAt
+      ? new Date(a.finishedAt).getTime()
+      : 0;
+    const timeB = b.startedAt
+      ? new Date(b.startedAt).getTime()
+      : b.finishedAt
+      ? new Date(b.finishedAt).getTime()
+      : 0;
+
+    if (timeA !== timeB && timeA > 0 && timeB > 0) {
+      return timeB - timeA;
+    }
+
+    return (b.matchNumber || 0) - (a.matchNumber || 0);
+  });
+};

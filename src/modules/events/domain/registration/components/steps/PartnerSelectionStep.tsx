@@ -147,7 +147,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
               </div>
 
               {/* Campos do parceiro */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 {/* E-mail */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
@@ -171,7 +171,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                 </div>
 
                 {/* Nome */}
-                <div className="space-y-1 sm:col-span-1">
+                <div className="space-y-1">
                   <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
                     Nome do parceiro(a)
                     {isTeamDrawPreDefined ? (

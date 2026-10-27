@@ -38,6 +38,8 @@ export {
   getCategoryEntries,
   getCategoryMatches,
   getCategoryPairs,
+  getMatchDateKey,
+  sortMatchesByDateDesc,
 } from './engine/categoryViewEngine';
 export { useCategoryBoard } from './hooks/useCategoryBoard';
 export { useTeamFormationActions } from './hooks/useTeamFormationActions';

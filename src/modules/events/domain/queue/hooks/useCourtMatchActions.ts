@@ -232,7 +232,7 @@ export function useCourtMatchActions({
           status: 'finished' as const,
           winnerPairId: winnerPairId || m.pair1Id,
           loserPairId: loserPairId || m.pair2Id,
-          court: undefined,
+          court: m.court,
           finishedAt: nowIso,
           durationMinutes: durationMinutes ?? m.durationMinutes,
         };

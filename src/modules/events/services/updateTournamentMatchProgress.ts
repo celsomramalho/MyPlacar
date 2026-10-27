@@ -79,7 +79,7 @@ export const markTournamentMatchFinished = async (
       result,
       winnerPairId,
       loserPairId,
-      court: undefined,
+      court: match.court,
       ownerPin: undefined,
       finishedAt: nowIso,
       durationMinutes: durationMinutes ?? match.durationMinutes,

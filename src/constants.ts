@@ -128,6 +128,68 @@ export const COURT_COLOR_PAIRS = [
   { p1Color: 'marrom', p2Color: 'roxo' },      // Quadra 4, 8, 12...
 ];
 
+export const COURT_TEAM_STYLES: Record<
+  string,
+  { bar: string; input: string; text: string; subText: string; wonInput: string }
+> = {
+  azul: {
+    bar: 'bg-[#0095ff] text-white',
+    input: 'bg-[#0055ff] text-white placeholder-white/50 border-2 border-black focus:bg-blue-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  vermelho: {
+    bar: 'bg-[#ff0055] text-white',
+    input: 'bg-[#cc0044] text-white placeholder-white/50 border-2 border-black focus:bg-red-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  amarelo: {
+    bar: 'bg-yellow-400 text-slate-900',
+    input: 'bg-yellow-300 text-slate-900 placeholder-slate-600 border-2 border-black focus:bg-yellow-200',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-slate-900',
+    subText: 'text-slate-700',
+  },
+  lilas: {
+    bar: 'bg-violet-500 text-white',
+    input: 'bg-violet-700 text-white placeholder-white/50 border-2 border-black focus:bg-violet-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  laranja: {
+    bar: 'bg-orange-500 text-white',
+    input: 'bg-orange-700 text-white placeholder-white/50 border-2 border-black focus:bg-orange-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  verde: {
+    bar: 'bg-emerald-500 text-white',
+    input: 'bg-emerald-700 text-white placeholder-white/50 border-2 border-black focus:bg-emerald-600',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  marrom: {
+    bar: 'bg-amber-800 text-white',
+    input: 'bg-amber-950 text-white placeholder-white/50 border-2 border-black focus:bg-amber-900',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+  roxo: {
+    bar: 'bg-purple-600 text-white',
+    input: 'bg-purple-800 text-white placeholder-white/50 border-2 border-black focus:bg-purple-700',
+    wonInput: 'bg-[#22c55e] text-white border-2 border-black',
+    text: 'text-white',
+    subText: 'text-white/80',
+  },
+};
+
 export const getCourtColors = (courtNameOrIndex: string | number): { p1Color: string; p2Color: string } => {
   let courtNum = 1;
   if (typeof courtNameOrIndex === 'number') {

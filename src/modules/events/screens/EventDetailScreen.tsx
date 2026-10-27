@@ -86,6 +86,7 @@ import {
   getCategoryPairs,
   pairHasSameParticipants,
   pairsSharePlayer,
+  sortMatchesByDateDesc,
   validateCategoryGenders,
 } from '../domain/brackets';
 import { calculateQueueState } from '../domain/queue';
@@ -912,7 +913,12 @@ export const EventDetailScreen: React.FC<Props> = ({
   );
 
   const categoryMatches = useMemo(
-    () => getCategoryMatches(event.matches || [], event.pairs || [], activeCategory, { includePairCategoryFallback: false }),
+    () =>
+      sortMatchesByDateDesc(
+        getCategoryMatches(event.matches || [], event.pairs || [], activeCategory, {
+          includePairCategoryFallback: false,
+        })
+      ),
     [event.matches, event.pairs, activeCategory]
   );
 
@@ -1734,7 +1740,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   );
 
   const visibleCategoryMatches = useMemo(
-    () => filterMatchesBySearch(categoryMatches, matchSearch, pairsById),
+    () => sortMatchesByDateDesc(filterMatchesBySearch(categoryMatches, matchSearch, pairsById)),
     [categoryMatches, matchSearch, pairsById]
   );
 
@@ -2505,7 +2511,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                             Nenhuma partida encontrada.
                           </div>
                         ) : (
-                          visibleCategoryMatches.map((match) => {
+                          visibleCategoryMatches.map((match, idx) => {
                             const queuePos =
                               match.status === 'waiting'
                                 ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1
@@ -2519,6 +2525,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                               <MatchCard
                                 key={match.id}
                                 match={match}
+                                colorIndex={idx}
                                 pairsById={pairsById}
                                 variant={isRanking ? 'detailed' : 'compact'}
                                 isRanking={isRanking}

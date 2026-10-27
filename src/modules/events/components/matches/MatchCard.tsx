@@ -1,7 +1,8 @@
-import React from 'react';
-import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play } from 'lucide-react';
+import React, { useCallback, useRef, useState } from 'react';
+import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw } from 'lucide-react';
 import type { TournamentMatch, TournamentPair } from '../../types';
 import { getPhaseLabel, parseMatchSets } from '../../domain/brackets';
+import { COURT_COLOR_PAIRS, COURT_TEAM_STYLES, getCourtColors } from '../../../../constants';
 
 type LegacyScoreChangeHandler = (matchId: string, player: 'p1' | 'p2', value: string) => void;
 type SetScoreChangeHandler = (
@@ -15,6 +16,7 @@ export interface MatchCardProps {
   match: TournamentMatch;
   pairsById?: Map<string, TournamentPair> | Record<string, TournamentPair>;
   variant?: 'compact' | 'detailed';
+  colorIndex?: number;
   isRanking?: boolean;
   totalSets?: number;
   gamesPerSet?: number;
@@ -38,6 +40,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   match,
   pairsById,
   variant = 'detailed',
+  colorIndex,
   isRanking = false,
   totalSets = 1,
   gamesPerSet = 6,
@@ -105,8 +108,72 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     }
   }
 
+  // Cores dos times:
+  // Se a partida foi para a quadra no gerenciar filas (match.court definido) -> usa as cores da quadra
+  // Se não foi para a quadra -> intercala os pares de cores de COURT_COLOR_PAIRS
+  const courtColors = match.court
+    ? getCourtColors(match.court)
+    : COURT_COLOR_PAIRS[
+        (colorIndex !== undefined
+          ? Math.abs(colorIndex)
+          : match.matchNumber
+          ? Math.max(0, match.matchNumber - 1)
+          : 0) % COURT_COLOR_PAIRS.length
+      ];
+
+  const t1Style = COURT_TEAM_STYLES[courtColors.p1Color] || COURT_TEAM_STYLES.azul;
+  const t2Style = COURT_TEAM_STYLES[courtColors.p2Color] || COURT_TEAM_STYLES.vermelho;
+
   // Dados de Sets e Pontuações
   const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets, gamesPerSet);
+
+  // ── Tap-to-score: histórico local de pontuações para undo ──────────────────
+  // Armazenamos o histórico como pares [p1, p2] por set. Só usado no variant=detailed.
+  const scoreHistoryRef = useRef<Array<{ setIdx: number; p1: string; p2: string }>>([]);
+  // hasUndoSteps só é necessário para re-render do botão undo
+  const [hasUndoSteps, setHasUndoSteps] = useState(false);
+
+  const canTapScore = canSubmitScore && !isFinished && !!onScoreChange;
+
+  const handleTapScore = useCallback(
+    (player: 'p1' | 'p2', setIdx: number) => {
+      if (!canTapScore) return;
+      const currentScore = scores[setIdx];
+      const curP1 = currentScore?.p1 !== null && currentScore?.p1 !== undefined ? String(currentScore.p1) : '0';
+      const curP2 = currentScore?.p2 !== null && currentScore?.p2 !== undefined ? String(currentScore.p2) : '0';
+
+      // Guarda estado anterior para undo
+      scoreHistoryRef.current = [
+        ...scoreHistoryRef.current,
+        { setIdx, p1: curP1, p2: curP2 },
+      ];
+      setHasUndoSteps(true);
+
+      const newVal = String(Number(player === 'p1' ? curP1 : curP2) + 1);
+      if (onScoreChange!.length <= 3) {
+        (onScoreChange as LegacyScoreChangeHandler)(match.id, player, newVal);
+      } else {
+        (onScoreChange as SetScoreChangeHandler)(match.id, setIdx, player, newVal);
+      }
+    },
+    [canTapScore, scores, onScoreChange, match.id]
+  );
+
+  const handleUndo = useCallback(() => {
+    if (!canTapScore || scoreHistoryRef.current.length === 0) return;
+    const prev = scoreHistoryRef.current[scoreHistoryRef.current.length - 1];
+    scoreHistoryRef.current = scoreHistoryRef.current.slice(0, -1);
+    setHasUndoSteps(scoreHistoryRef.current.length > 0);
+
+    // Restaura p1 e p2 do estado anterior
+    if (onScoreChange!.length <= 3) {
+      (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p1', prev.p1);
+      (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p2', prev.p2);
+    } else {
+      (onScoreChange as SetScoreChangeHandler)(match.id, prev.setIdx, 'p1', prev.p1);
+      (onScoreChange as SetScoreChangeHandler)(match.id, prev.setIdx, 'p2', prev.p2);
+    }
+  }, [canTapScore, onScoreChange, match.id]);
 
   const handleScoreInput = (setIdx: number, player: 'p1' | 'p2', val: string) => {
     if (!onScoreChange) return;
@@ -159,9 +226,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm hover:border-slate-200 transition-all">
         {/* Header do Card */}
         <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
-          <p className="text-sm font-black text-slate-800 tracking-tight">
-            [{code}] {phaseStr ? `[${phaseStr}]` : ''}
-          </p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-black text-slate-800 tracking-tight">
+              [{code}] {phaseStr ? `[${phaseStr}]` : ''}
+            </p>
+            {match.court && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-slate-100 text-slate-700 border border-slate-200">
+                <MapPin size={10} className="text-slate-500" />
+                {match.court}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>
               {statusLabel}
@@ -207,6 +282,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           {/* Equipe 1 */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${t1Style.bar.split(' ')[0]}`} />
               <p className="text-xs font-black text-slate-800 leading-tight truncate">
                 {team1Name}
               </p>
@@ -252,6 +328,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               <p className="text-xs font-black text-slate-800 leading-tight truncate">
                 {team2Name}
               </p>
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${t2Style.bar.split(' ')[0]}`} />
             </div>
             {team2Code && <p className="text-[10px] font-bold text-slate-400 truncate">{team2Code}</p>}
           </div>
@@ -268,9 +345,15 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     <div className="rounded-3xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm transition-all hover:border-slate-200">
       {/* Top row: Match Code & Phase on Left, Status Badge & Delete on Right */}
       <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
-        <div className="text-sm font-black text-slate-800 tracking-tight flex flex-wrap items-center gap-1">
+        <div className="text-sm font-black text-slate-800 tracking-tight flex flex-wrap items-center gap-1.5">
           <span>[{code}]</span>
           {phaseStr && <span>[{phaseStr}]</span>}
+          {match.court && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-slate-100 text-slate-700 border border-slate-200">
+              <MapPin size={10} className="text-slate-500" />
+              {match.court}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>
@@ -313,72 +396,40 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       </div>
 
       {totalSets === 1 ? (
-        /* Layout para 1 set (EXATAMENTE COMO IMAGEM 2 E 3) */
-        <div className="flex items-center justify-between gap-4">
-          {/* Lado esquerdo: Equipes */}
-          <div className="min-w-0 flex-1 space-y-4">
-            <div>
+        /* Layout para 1 set com cores de quadra / pares intercalados + tap-to-score */
+        <div className="space-y-2">
+          {/* Equipe 1 — clique fora do input incrementa +1 */}
+          <div
+            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
+            onClick={(e) => {
+              // Não aciona se o clique foi diretamente no input
+              if ((e.target as HTMLElement).tagName === 'INPUT') return;
+              handleTapScore('p1', 0);
+            }}
+          >
+            <div className="min-w-0 flex-1 pointer-events-none">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-black text-slate-800 leading-tight">
+                <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
                   {team1Name}
                 </p>
+                {isFinished && match.winnerPairId === match.pair1Id && (
+                  <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
+                )}
                 {p1FinalBadge && (
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
-                      p1FinalBadge.includes('🏆')
-                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : p1FinalBadge.includes('🥈')
-                        ? 'bg-slate-100 text-slate-600 border-slate-300'
-                        : p1FinalBadge.includes('🥉')
-                        ? 'bg-orange-100 text-orange-800 border-orange-300'
-                        : 'bg-slate-50 text-slate-400 border-slate-200'
-                    }`}
-                  >
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 bg-white/20 text-white border-white/30">
                     {p1FinalBadge}
                   </span>
                 )}
               </div>
               {team1Code && (
-                <p className="text-xs font-bold text-slate-500 mt-0.5">
+                <p className={`text-xs font-bold mt-0.5 ${t1Style.subText}`}>
                   [{team1Code}]
                 </p>
               )}
             </div>
 
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-black text-slate-800 leading-tight">
-                  {team2Name}
-                </p>
-                {p2FinalBadge && (
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
-                      p2FinalBadge.includes('🏆')
-                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : p2FinalBadge.includes('🥈')
-                        ? 'bg-slate-100 text-slate-600 border-slate-300'
-                        : p2FinalBadge.includes('🥉')
-                        ? 'bg-orange-100 text-orange-800 border-orange-300'
-                        : 'bg-slate-50 text-slate-400 border-slate-200'
-                    }`}
-                  >
-                    {p2FinalBadge}
-                  </span>
-                )}
-              </div>
-              {team2Code && (
-                <p className="text-xs font-bold text-slate-500 mt-0.5">
-                  [{team2Code}]
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Lado direito: Placar 1 Set */}
-          <div className="flex flex-col items-center shrink-0">
-            {/* Linha 1: Pontos Equipe 1 */}
-            <div className="flex items-center gap-2">
-              <span className="w-5 text-center text-sm font-black text-slate-800">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={`w-5 text-center text-sm font-black ${t1Style.text}`}>
                 {setsWon1}
               </span>
               <input
@@ -390,25 +441,72 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 value={scores[0]?.p1 !== null && scores[0]?.p1 !== undefined ? scores[0].p1 : ''}
                 onChange={(e) => handleScoreInput(0, 'p1', e.target.value)}
                 onBlur={onScoreBlur}
-                className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                onClick={(e) => e.stopPropagation()}
+                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                   isSet1WonByP1
-                    ? 'bg-[#22c55e] text-white'
-                    : 'bg-white text-slate-900 focus:bg-slate-50 disabled:bg-slate-50'
+                    ? t1Style.wonInput
+                    : t1Style.input
                 }`}
               />
             </div>
+          </div>
 
-            {/* Linha 2: Label set1 */}
-            <div className="flex items-center gap-2 py-1">
-              <span className="w-5" />
-              <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-600">
-                set1
-              </span>
+          {/* Linha central: label set1 + botão undo */}
+          <div className="flex items-center justify-between px-3 py-0.5">
+            <div className="w-9 sm:w-10" />
+            {canTapScore ? (
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={!hasUndoSteps}
+                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                  hasUndoSteps
+                    ? 'bg-white/90 border-slate-200 text-slate-600 hover:text-red-500 hover:border-red-200 shadow-sm cursor-pointer'
+                    : 'bg-white/30 border-white/20 text-white/30 cursor-not-allowed'
+                }`}
+                title="Desfazer último ponto"
+              >
+                <RotateCcw size={14} />
+              </button>
+            ) : (
+              <div />
+            )}
+            <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">
+              set1
+            </span>
+          </div>
+
+          {/* Equipe 2 — clique fora do input incrementa +1 */}
+          <div
+            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
+            onClick={(e) => {
+              if ((e.target as HTMLElement).tagName === 'INPUT') return;
+              handleTapScore('p2', 0);
+            }}
+          >
+            <div className="min-w-0 flex-1 pointer-events-none">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                  {team2Name}
+                </p>
+                {isFinished && match.winnerPairId === match.pair2Id && (
+                  <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
+                )}
+                {p2FinalBadge && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 bg-white/20 text-white border-white/30">
+                    {p2FinalBadge}
+                  </span>
+                )}
+              </div>
+              {team2Code && (
+                <p className={`text-xs font-bold mt-0.5 ${t2Style.subText}`}>
+                  [{team2Code}]
+                </p>
+              )}
             </div>
 
-            {/* Linha 3: Pontos Equipe 2 */}
-            <div className="flex items-center gap-2">
-              <span className="w-5 text-center text-sm font-black text-slate-800">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={`w-5 text-center text-sm font-black ${t2Style.text}`}>
                 {setsWon2}
               </span>
               <input
@@ -420,46 +518,52 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 value={scores[0]?.p2 !== null && scores[0]?.p2 !== undefined ? scores[0].p2 : ''}
                 onChange={(e) => handleScoreInput(0, 'p2', e.target.value)}
                 onBlur={onScoreBlur}
-                className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                onClick={(e) => e.stopPropagation()}
+                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                   isSet1WonByP2
-                    ? 'bg-[#22c55e] text-white'
-                    : 'bg-white text-slate-900 focus:bg-slate-50 disabled:bg-slate-50'
+                    ? t2Style.wonInput
+                    : t2Style.input
                 }`}
               />
             </div>
           </div>
         </div>
       ) : (
-        /* Layout para múltiplos sets */
-        <div className="space-y-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-black text-slate-800 leading-tight">
-                {team1Name}
-              </p>
-              {p1FinalBadge && (
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
-                    p1FinalBadge.includes('🏆')
-                      ? 'bg-amber-100 text-amber-900 border-amber-300'
-                      : p1FinalBadge.includes('🥈')
-                      ? 'bg-slate-100 text-slate-600 border-slate-300'
-                      : 'bg-slate-50 text-slate-400 border-slate-200'
-                  }`}
-                >
-                  {p1FinalBadge}
-                </span>
+        /* Layout para múltiplos sets com cores de quadra / pares intercalados + tap-to-score */
+        <div className="space-y-2">
+          {/* Equipe 1 */}
+          <div
+            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
+            onClick={(e) => {
+              if ((e.target as HTMLElement).tagName === 'INPUT') return;
+              // Para multi-set: incrementa o primeiro set ainda não finalizado
+              const activeSetIdx = scores.findIndex(
+                (s) => s.inProgress || (s.p1 === null && s.p2 === null)
+              );
+              handleTapScore('p1', activeSetIdx >= 0 ? activeSetIdx : 0);
+            }}
+          >
+            <div className="min-w-0 flex-1 pointer-events-none">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                  {team1Name}
+                </p>
+                {isFinished && match.winnerPairId === match.pair1Id && (
+                  <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
+                )}
+                {p1FinalBadge && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 bg-white/20 text-white border-white/30">
+                    {p1FinalBadge}
+                  </span>
+                )}
+              </div>
+              {team1Code && (
+                <p className={`text-xs font-bold mt-0.5 ${t1Style.subText}`}>[{team1Code}]</p>
               )}
             </div>
-            {team1Code && (
-              <p className="text-xs font-bold text-slate-500 mt-0.5">[{team1Code}]</p>
-            )}
-          </div>
 
-          <div className="flex flex-col items-center">
-            {/* Linha 1: Equipe 1 scores */}
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 text-center text-sm font-black text-slate-800">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className={`w-5 text-center text-sm font-black ${t1Style.text}`}>
                 {setsWon1}
               </span>
               {scores.map((setScore, setIdx) => {
@@ -482,32 +586,83 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                     value={setScore.p1 !== null && setScore.p1 !== undefined ? setScore.p1 : ''}
                     onChange={(e) => handleScoreInput(setIdx, 'p1', e.target.value)}
                     onBlur={onScoreBlur}
-                    className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                    onClick={(e) => e.stopPropagation()}
+                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                       isSetWon
-                        ? 'bg-[#22c55e] text-white'
-                        : 'bg-white text-slate-900 focus:bg-slate-50 disabled:bg-slate-50'
+                        ? t1Style.wonInput
+                        : t1Style.input
                     }`}
                   />
                 );
               })}
             </div>
+          </div>
 
-            {/* Linha 2: Labels dos sets */}
-            <div className="flex items-center gap-1.5 py-1">
+          {/* Labels dos sets + botão undo */}
+          <div className="flex items-center justify-between px-3 py-0.5">
+            <div />
+            {canTapScore ? (
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={!hasUndoSteps}
+                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                  hasUndoSteps
+                    ? 'bg-white/90 border-slate-200 text-slate-600 hover:text-red-500 hover:border-red-200 shadow-sm cursor-pointer'
+                    : 'bg-slate-100 border-slate-200 text-slate-300 cursor-not-allowed'
+                }`}
+                title="Desfazer último ponto"
+              >
+                <RotateCcw size={14} />
+              </button>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-1.5">
               <span className="w-5" />
               {scores.map((_, setIdx) => (
                 <span
                   key={`label_set_${setIdx}`}
-                  className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-600"
+                  className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400"
                 >
                   set{setIdx + 1}
                 </span>
               ))}
             </div>
+          </div>
 
-            {/* Linha 3: Equipe 2 scores */}
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 text-center text-sm font-black text-slate-800">
+          {/* Equipe 2 */}
+          <div
+            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
+            onClick={(e) => {
+              if ((e.target as HTMLElement).tagName === 'INPUT') return;
+              const activeSetIdx = scores.findIndex(
+                (s) => s.inProgress || (s.p1 === null && s.p2 === null)
+              );
+              handleTapScore('p2', activeSetIdx >= 0 ? activeSetIdx : 0);
+            }}
+          >
+            <div className="min-w-0 flex-1 pointer-events-none">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                  {team2Name}
+                </p>
+                {isFinished && match.winnerPairId === match.pair2Id && (
+                  <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
+                )}
+                {p2FinalBadge && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 bg-white/20 text-white border-white/30">
+                    {p2FinalBadge}
+                  </span>
+                )}
+              </div>
+              {team2Code && (
+                <p className={`text-xs font-bold mt-0.5 ${t2Style.subText}`}>[{team2Code}]</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className={`w-5 text-center text-sm font-black ${t2Style.text}`}>
                 {setsWon2}
               </span>
               {scores.map((setScore, setIdx) => {
@@ -530,39 +685,16 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                     value={setScore.p2 !== null && setScore.p2 !== undefined ? setScore.p2 : ''}
                     onChange={(e) => handleScoreInput(setIdx, 'p2', e.target.value)}
                     onBlur={onScoreBlur}
-                    className={`w-9 h-9 sm:w-10 sm:h-10 border-2 border-black flex items-center justify-center text-center font-black text-sm outline-none transition-colors ${
+                    onClick={(e) => e.stopPropagation()}
+                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                       isSetWon
-                        ? 'bg-[#22c55e] text-white'
-                        : 'bg-white text-slate-900 focus:bg-slate-50 disabled:bg-slate-50'
+                        ? t2Style.wonInput
+                        : t2Style.input
                     }`}
                   />
                 );
               })}
             </div>
-          </div>
-
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-black text-slate-800 leading-tight">
-                {team2Name}
-              </p>
-              {p2FinalBadge && (
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border shrink-0 ${
-                    p2FinalBadge.includes('🏆')
-                      ? 'bg-amber-100 text-amber-900 border-amber-300'
-                      : p2FinalBadge.includes('🥈')
-                      ? 'bg-slate-100 text-slate-600 border-slate-300'
-                      : 'bg-slate-50 text-slate-400 border-slate-200'
-                  }`}
-                >
-                  {p2FinalBadge}
-                </span>
-              )}
-            </div>
-            {team2Code && (
-              <p className="text-xs font-bold text-slate-500 mt-0.5">[{team2Code}]</p>
-            )}
           </div>
         </div>
       )}
