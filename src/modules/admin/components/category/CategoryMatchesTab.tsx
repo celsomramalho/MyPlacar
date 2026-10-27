@@ -19,6 +19,7 @@ export interface CategoryMatchesTabProps {
   allCategoryFinished: boolean;
   queuePosByMatchId?: Map<string, number>;
   onScoreChange: (matchId: string, setIndex: number, player: 'p1' | 'p2', rawVal: string) => void;
+  onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string) => void;
   onMatchDateChange: (matchId: string, matchDate: string) => void;
   onFinishMatch: (matchId: string) => void;
   onReopenMatch: (matchId: string) => void;
@@ -42,6 +43,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   allCategoryFinished,
   queuePosByMatchId,
   onScoreChange,
+  onUndoScore,
   onMatchDateChange,
   onFinishMatch,
   onReopenMatch,
@@ -111,6 +113,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       isReadOnly={isReadOnly}
       allCategoryFinished={allCategoryFinished}
       onScoreChange={onScoreChange}
+      onUndoScore={onUndoScore}
       onMatchDateChange={onMatchDateChange}
       onFinishMatch={onFinishMatch}
       onReopenMatch={onReopenMatch}

@@ -1341,6 +1341,54 @@ export const EventDetailScreen: React.FC<Props> = ({
     }, 600);
   };
 
+  // Restaura p1 e p2 de um set atomicamente (undo do tap-to-score)
+  // Evita race condition de dois handleScoreChange sequenciais lendo o mesmo snapshot.
+  const handleScoreUndoChange = (matchId: string, setIndex: number, p1Val: string, p2Val: string) => {
+    if (isReadOnly || !canSubmitScore) return;
+    const toVal = (raw: string) => {
+      const n = parseInt(raw, 10);
+      return isNaN(n) ? null : n;
+    };
+    const nextMatches = (event.matches || []).map((m) => {
+      if (m.id !== matchId) return m;
+
+      const currentScores: MatchSetScore[] = [
+        {
+          p1: m.scores?.[0]?.p1 !== undefined ? m.scores[0].p1 : null,
+          p2: m.scores?.[0]?.p2 !== undefined ? m.scores[0].p2 : null,
+        },
+      ];
+
+      currentScores[setIndex] = { p1: toVal(p1Val), p2: toVal(p2Val) };
+
+      const s1 = currentScores[0].p1;
+      const s2 = currentScores[0].p2;
+      const hasAnyScore = s1 !== null || s2 !== null;
+      const result = s1 !== null && s2 !== null ? `${s1}/${s2}` : m.result || '';
+
+      return {
+        ...m,
+        scores: currentScores,
+        result,
+        status: m.status === 'finished' ? ('finished' as const) : hasAnyScore ? ('live' as const) : ('waiting' as const),
+      };
+    });
+
+    setEvent((prev) => ({ ...prev, matches: nextMatches }));
+
+    if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+    saveMatchesTimeoutRef.current = setTimeout(async () => {
+      const db = getDb();
+      if (db) {
+        try {
+          await updateEventMatches(db as Firestore, event.pin, nextMatches);
+        } catch (err) {
+          console.error('Erro ao desfazer placar no Firestore:', err);
+        }
+      }
+    }, 600);
+  };
+
   const handleMatchDateChange = (matchId: string, dateVal: string) => {
     if (isReadOnly || !canSubmitScore) return;
     const nextMatches = (event.matches || []).map((m) =>
@@ -2545,6 +2593,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 isReadOnly={isReadOnly}
                                 allCategoryFinished={allCatFinished}
                                 onScoreChange={lockParticipantMatchControls ? undefined : handleScoreChange}
+                                onUndoScore={lockParticipantMatchControls ? undefined : handleScoreUndoChange}
                                 onMatchDateChange={lockParticipantMatchControls ? undefined : handleMatchDateChange}
                                 onFinishMatch={lockParticipantMatchControls ? undefined : handleFinishRankingMatch}
                                 onReopenMatch={

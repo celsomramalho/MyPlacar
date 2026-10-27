@@ -28,6 +28,11 @@ export interface MatchCardProps {
   isReadOnly?: boolean;
   allCategoryFinished?: boolean;
   onScoreChange?: LegacyScoreChangeHandler | SetScoreChangeHandler;
+  /**
+   * Chamado pelo undo do tap-to-score com p1 e p2 do set juntos,
+   * de forma atômica (evita race condition de dois onScoreChange sequenciais).
+   */
+  onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string) => void;
   onScoreBlur?: () => void;
   onMatchDateChange?: (matchId: string, date: string) => void;
   onFinishMatch?: (matchId: string) => void;
@@ -51,6 +56,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   isReadOnly = false,
   allCategoryFinished = false,
   onScoreChange,
+  onUndoScore,
   onScoreBlur,
   onMatchDateChange,
   onFinishMatch,
@@ -165,15 +171,21 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     scoreHistoryRef.current = scoreHistoryRef.current.slice(0, -1);
     setHasUndoSteps(scoreHistoryRef.current.length > 0);
 
-    // Restaura p1 e p2 do estado anterior
-    if (onScoreChange!.length <= 3) {
-      (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p1', prev.p1);
-      (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p2', prev.p2);
-    } else {
-      (onScoreChange as SetScoreChangeHandler)(match.id, prev.setIdx, 'p1', prev.p1);
-      (onScoreChange as SetScoreChangeHandler)(match.id, prev.setIdx, 'p2', prev.p2);
+    // Restaura p1 e p2 atomicamente via onUndoScore (handler dedicado),
+    // ou cai no onScoreChange legado se onUndoScore não for fornecido.
+    if (onUndoScore) {
+      onUndoScore(match.id, prev.setIdx, prev.p1, prev.p2);
+    } else if (onScoreChange) {
+      // Fallback: duas chamadas sequenciais (pode ter race condition em handlers async)
+      if (onScoreChange.length <= 3) {
+        (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p1', prev.p1);
+        (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p2', prev.p2);
+      } else {
+        (onScoreChange as SetScoreChangeHandler)(match.id, prev.setIdx, 'p1', prev.p1);
+        (onScoreChange as SetScoreChangeHandler)(match.id, prev.setIdx, 'p2', prev.p2);
+      }
     }
-  }, [canTapScore, onScoreChange, match.id]);
+  }, [canTapScore, onUndoScore, onScoreChange, match.id]);
 
   const handleScoreInput = (setIdx: number, player: 'p1' | 'p2', val: string) => {
     if (!onScoreChange) return;

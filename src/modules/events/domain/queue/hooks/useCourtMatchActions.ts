@@ -57,6 +57,16 @@ export interface UseCourtMatchActionsResult {
     player: 'p1' | 'p2',
     rawVal: string
   ) => void;
+  /**
+   * Restaura p1 e p2 de um set atomicamente (usado pelo undo do tap-to-score).
+   * Evita race condition de duas chamadas consecutivas ao handleScoreInputChange.
+   */
+  handleScoreUndoChange: (
+    matchId: string,
+    setIndex: number,
+    p1Val: string,
+    p2Val: string
+  ) => void;
   /** Persiste o placar imediatamente ao perder o foco */
   handleScoreBlur: () => Promise<void>;
   /** Salva a data da partida com debounce de persistência */
@@ -333,6 +343,74 @@ export function useCourtMatchActions({
     [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs]
   );
 
+  // ─── Ação: Restaurar placar atomicamente (undo do tap-to-score) ───────────
+  // Atualiza p1 e p2 de um set em uma única operação para evitar race condition
+  // quando dois onScoreChange sequenciais leriam o mesmo snapshot de event.
+
+  const handleScoreUndoChange = useCallback(
+    (matchId: string, setIndex: number, p1Val: string, p2Val: string) => {
+      if (isReadOnly) return;
+      const nextMatches = (event.matches || []).map((m) => {
+        if (m.id !== matchId) return m;
+
+        const resolved = resolveMatchRules(
+          event.sportRules,
+          m.phase,
+          (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+          Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6))
+        );
+        const totalSets = resolved.setsCount;
+        const gamesPerSet = resolved.gamesPerSet;
+
+        const currentScores: MatchSetScore[] = Array.from({ length: totalSets }, (_, i) => ({
+          p1: m.scores?.[i]?.p1 !== undefined ? m.scores[i].p1 : null,
+          p2: m.scores?.[i]?.p2 !== undefined ? m.scores[i].p2 : null,
+        }));
+
+        // Converte string para número ou null
+        const toVal = (raw: string) => {
+          const n = parseInt(raw, 10);
+          return isNaN(n) ? null : n;
+        };
+        currentScores[setIndex] = { p1: toVal(p1Val), p2: toVal(p2Val) };
+
+        let setsWon1 = 0;
+        let setsWon2 = 0;
+        const resultParts: string[] = [];
+        let hasAnyScore = false;
+
+        currentScores.forEach((s) => {
+          if (s.p1 != null && s.p2 != null) {
+            resultParts.push(`${s.p1}/${s.p2}`);
+            hasAnyScore = true;
+            const n1 = Number(s.p1);
+            const n2 = Number(s.p2);
+            if (n1 >= gamesPerSet && n1 > n2) setsWon1++;
+            else if (n2 >= gamesPerSet && n2 > n1) setsWon2++;
+          } else if (s.p1 != null || s.p2 != null) {
+            hasAnyScore = true;
+          }
+        });
+
+        let status: 'waiting' | 'live' | 'finished' = m.status || 'live';
+        if (status !== 'finished') {
+          status = m.court || hasAnyScore ? 'live' : m.status || 'waiting';
+        }
+
+        return { ...m, scores: currentScores, result: resultParts.join(' '), status, court: m.court };
+      });
+
+      const progressed = updatePlayoffProgression(event.pairs || [], nextMatches);
+      onUpdateEvent?.({ ...event, matches: progressed });
+
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        persistToFirestore({ matches: progressed });
+      }, saveDebounceMs);
+    },
+    [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs]
+  );
+
   // ─── Ação: Flush do placar ao perder o foco ───────────────────────────────
 
   const handleScoreBlur = useCallback(async () => {
@@ -369,6 +447,7 @@ export function useCourtMatchActions({
     toggleInterdictCourt,
     toggleFreezeMatch,
     handleScoreInputChange,
+    handleScoreUndoChange,
     handleScoreBlur,
     handleMatchDateChange,
     parseMatchSets,
