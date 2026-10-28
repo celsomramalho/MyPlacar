@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Layers,
   Ban,
@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Calendar,
   Check,
+  RotateCcw,
 } from 'lucide-react';
 import type { TournamentMatch, TournamentPair, MatchSetScore } from '../../../types';
 import type { CourtState } from '../types';
@@ -86,6 +87,12 @@ export interface CourtCardProps {
   onToggleInterdictCourt: (courtName: string) => void;
   onRefreshEventScore: (matchId: string) => void;
   onScoreInputChange: (matchId: string, setIndex: number, player: 'p1' | 'p2', rawVal: string) => void;
+  onScoreUndoChange?: (
+    matchId: string,
+    setIndex: number,
+    p1Val: string,
+    p2Val: string
+  ) => void;
   onScoreBlur: () => void;
   onMatchDateChange: (matchId: string, matchDate: string) => void;
   onFinishCourtMatch: (matchId: string) => void;
@@ -107,6 +114,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   onToggleInterdictCourt,
   onRefreshEventScore,
   onScoreInputChange,
+  onScoreUndoChange,
   onScoreBlur,
   onMatchDateChange,
   onFinishCourtMatch,
@@ -143,6 +151,145 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   const courtColors = getCourtColors(court.courtName || index);
   const t1Style = COURT_TEAM_STYLES[courtColors.p1Color] || COURT_TEAM_STYLES.azul;
   const t2Style = COURT_TEAM_STYLES[courtColors.p2Color] || COURT_TEAM_STYLES.vermelho;
+
+  // ── Tap-to-score e Undo com histórico fiel de ambos os times ──────────────
+  const scoreHistoryRef = useRef<Array<{ setIdx: number; p1: string; p2: string }>>([]);
+  const [hasUndoSteps, setHasUndoSteps] = useState(false);
+
+  // Mantém o estado mais recente de cada set em memória local para cliques rápidos
+  const latestScoresRef = useRef<Record<number, { p1: string; p2: string }>>({});
+
+  // Sincroniza latestScoresRef quando scores mudar de fora (props)
+  useEffect(() => {
+    scores.forEach((s, idx) => {
+      const p1 = s.p1 !== null && s.p1 !== undefined ? String(s.p1) : '';
+      const p2 = s.p2 !== null && s.p2 !== undefined ? String(s.p2) : '';
+      latestScoresRef.current[idx] = { p1, p2 };
+    });
+  }, [scores]);
+
+  const canTapScore = !isReadOnly && Boolean(activeMatch);
+
+  // Determina qual set está em jogo no momento (só pula para o próximo se o anterior estiver finalizado)
+  const getActiveSetIdx = useCallback((): number => {
+    if (totalSets === 1) return 0;
+    for (let i = 0; i < scores.length; i++) {
+      const s = scores[i];
+      if (s.inProgress) return i;
+      const cur = latestScoresRef.current[i] || {
+        p1: s.p1 !== null && s.p1 !== undefined ? String(s.p1) : '',
+        p2: s.p2 !== null && s.p2 !== undefined ? String(s.p2) : '',
+      };
+      if (cur.p1 === '' || cur.p2 === '') return i;
+      const n1 = Number(cur.p1);
+      const n2 = Number(cur.p2);
+      const isWon = (n1 >= gamesPerSet && n1 > n2) || (n2 >= gamesPerSet && n2 > n1);
+      if (!isWon) return i;
+    }
+    return Math.max(0, scores.length - 1);
+  }, [totalSets, scores, gamesPerSet]);
+
+  const applySetScore = useCallback(
+    (setIdx: number, p1Val: string, p2Val: string) => {
+      if (!activeMatch) return;
+      latestScoresRef.current[setIdx] = { p1: p1Val, p2: p2Val };
+
+      if (onScoreUndoChange) {
+        onScoreUndoChange(activeMatch.id, setIdx, p1Val, p2Val);
+      } else if (onScoreInputChange) {
+        onScoreInputChange(activeMatch.id, setIdx, 'p1', p1Val);
+        onScoreInputChange(activeMatch.id, setIdx, 'p2', p2Val);
+      }
+    },
+    [activeMatch?.id, onScoreUndoChange, onScoreInputChange]
+  );
+
+  const handleTapScore = useCallback(
+    (player: 'p1' | 'p2', setIdxOverride?: number) => {
+      if (!canTapScore || !activeMatch) return;
+      const setIdx = setIdxOverride !== undefined ? setIdxOverride : getActiveSetIdx();
+
+      const existing = latestScoresRef.current[setIdx] || {
+        p1: scores[setIdx]?.p1 !== null && scores[setIdx]?.p1 !== undefined ? String(scores[setIdx].p1) : '',
+        p2: scores[setIdx]?.p2 !== null && scores[setIdx]?.p2 !== undefined ? String(scores[setIdx].p2) : '',
+      };
+      const curP1 = existing.p1;
+      const curP2 = existing.p2;
+
+      // Salva snapshot exato de ambos os times ANTES do ponto
+      scoreHistoryRef.current = [
+        ...scoreHistoryRef.current,
+        { setIdx, p1: curP1, p2: curP2 },
+      ];
+      setHasUndoSteps(true);
+
+      const nextP1 = player === 'p1' ? String(Number(curP1 || 0) + 1) : (curP1 || '0');
+      const nextP2 = player === 'p2' ? String(Number(curP2 || 0) + 1) : (curP2 || '0');
+
+      applySetScore(setIdx, nextP1, nextP2);
+    },
+    [canTapScore, activeMatch, getActiveSetIdx, scores, applySetScore]
+  );
+
+  const handleUndo = useCallback(() => {
+    if (!canTapScore || !activeMatch) return;
+
+    if (scoreHistoryRef.current.length > 0) {
+      const prev = scoreHistoryRef.current[scoreHistoryRef.current.length - 1];
+      scoreHistoryRef.current = scoreHistoryRef.current.slice(0, -1);
+      setHasUndoSteps(scoreHistoryRef.current.length > 0);
+      applySetScore(prev.setIdx, prev.p1, prev.p2);
+      return;
+    }
+
+    // Se histórico local esvaziou mas ainda há pontos, decrementa até zerar
+    const activeSetIdx = getActiveSetIdx();
+    const cur = latestScoresRef.current[activeSetIdx] || {
+      p1: scores[activeSetIdx]?.p1 !== null && scores[activeSetIdx]?.p1 !== undefined ? String(scores[activeSetIdx].p1) : '',
+      p2: scores[activeSetIdx]?.p2 !== null && scores[activeSetIdx]?.p2 !== undefined ? String(scores[activeSetIdx].p2) : '',
+    };
+    const n1 = Number(cur.p1 || 0);
+    const n2 = Number(cur.p2 || 0);
+
+    if (n1 > 0 || n2 > 0) {
+      let nextP1 = cur.p1;
+      let nextP2 = cur.p2;
+      if (n1 > n2) {
+        nextP1 = String(Math.max(0, n1 - 1));
+      } else if (n2 > n1) {
+        nextP2 = String(Math.max(0, n2 - 1));
+      } else {
+        nextP2 = String(Math.max(0, n2 - 1));
+      }
+      if (nextP1 === '0' && nextP2 === '0') {
+        nextP1 = '';
+        nextP2 = '';
+      }
+      applySetScore(activeSetIdx, nextP1, nextP2);
+    }
+  }, [canTapScore, activeMatch, getActiveSetIdx, scores, applySetScore]);
+
+  const handleScoreInput = (setIdx: number, player: 'p1' | 'p2', val: string) => {
+    if (!activeMatch) return;
+    const existing = latestScoresRef.current[setIdx] || {
+      p1: scores[setIdx]?.p1 !== null && scores[setIdx]?.p1 !== undefined ? String(scores[setIdx].p1) : '0',
+      p2: scores[setIdx]?.p2 !== null && scores[setIdx]?.p2 !== undefined ? String(scores[setIdx].p2) : '0',
+    };
+    scoreHistoryRef.current = [
+      ...scoreHistoryRef.current,
+      { setIdx, p1: existing.p1, p2: existing.p2 },
+    ];
+    setHasUndoSteps(true);
+
+    const nextP1 = player === 'p1' ? val : existing.p1;
+    const nextP2 = player === 'p2' ? val : existing.p2;
+    applySetScore(setIdx, nextP1, nextP2);
+  };
+
+  const isAnyScorePositive = scores.some(
+    (s) => (s.p1 !== null && Number(s.p1) > 0) || (s.p2 !== null && Number(s.p2) > 0)
+  );
+  const canUndo = canTapScore && (hasUndoSteps || isAnyScorePositive);
 
   return (
     <div
@@ -279,8 +426,17 @@ export const CourtCard: React.FC<CourtCardProps> = ({
           {/* Placar */}
           {totalSets === 1 ? (
             <div className="space-y-2">
-              <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar}`}>
-                <div className="min-w-0 flex-1">
+              {/* Equipe 1 — clique fora do input incrementa +1 */}
+              <div
+                className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${
+                  canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
+                }`}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).tagName === 'INPUT') return;
+                  handleTapScore('p1', 0);
+                }}
+              >
+                <div className="min-w-0 flex-1 pointer-events-none">
                   <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>{team1Name}</p>
                   {team1Code && <p className={`text-xs font-bold ${t1Style.subText}`}>[{team1Code}]</p>}
                 </div>
@@ -293,8 +449,9 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     disabled={isReadOnly}
                     readOnly={isReadOnly}
                     value={scores[0]?.p1 !== null && scores[0]?.p1 !== undefined ? scores[0].p1 : ''}
-                    onChange={(e) => onScoreInputChange(activeMatch.id, 0, 'p1', e.target.value)}
+                    onChange={(e) => handleScoreInput(0, 'p1', e.target.value)}
                     onBlur={onScoreBlur}
+                    onClick={(e) => e.stopPropagation()}
                     className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                       !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) >= gamesPerSet && Number(scores[0].p1) > Number(scores[0].p2)
                         ? t1Style.wonInput
@@ -304,8 +461,42 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 </div>
               </div>
 
-              <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar}`}>
-                <div className="min-w-0 flex-1">
+              {/* Linha central: label set1 + botão undo */}
+              <div className="flex items-center justify-between px-3 py-0.5">
+                <div className="w-9 sm:w-10" />
+                {canTapScore ? (
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    disabled={!canUndo}
+                    className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                      canUndo
+                        ? 'bg-amber-50 border border-amber-300 text-amber-600 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-700 shadow-sm cursor-pointer'
+                        : 'bg-slate-50 border border-slate-200 text-slate-300 cursor-not-allowed'
+                    }`}
+                    title={canUndo ? 'Desfazer último ponto' : 'Nenhum ponto para desfazer'}
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">
+                  set1
+                </span>
+              </div>
+
+              {/* Equipe 2 — clique fora do input incrementa +1 */}
+              <div
+                className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${
+                  canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
+                }`}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).tagName === 'INPUT') return;
+                  handleTapScore('p2', 0);
+                }}
+              >
+                <div className="min-w-0 flex-1 pointer-events-none">
                   <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>{team2Name}</p>
                   {team2Code && <p className={`text-xs font-bold ${t2Style.subText}`}>[{team2Code}]</p>}
                 </div>
@@ -318,8 +509,9 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     disabled={isReadOnly}
                     readOnly={isReadOnly}
                     value={scores[0]?.p2 !== null && scores[0]?.p2 !== undefined ? scores[0].p2 : ''}
-                    onChange={(e) => onScoreInputChange(activeMatch.id, 0, 'p2', e.target.value)}
+                    onChange={(e) => handleScoreInput(0, 'p2', e.target.value)}
                     onBlur={onScoreBlur}
+                    onClick={(e) => e.stopPropagation()}
                     className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                       !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) >= gamesPerSet && Number(scores[0].p2) > Number(scores[0].p1)
                         ? t2Style.wonInput
@@ -331,8 +523,17 @@ export const CourtCard: React.FC<CourtCardProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar}`}>
-                <div className="min-w-0 flex-1">
+              {/* Equipe 1 — clique fora do input incrementa +1 */}
+              <div
+                className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${
+                  canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
+                }`}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).tagName === 'INPUT') return;
+                  handleTapScore('p1');
+                }}
+              >
+                <div className="min-w-0 flex-1 pointer-events-none">
                   <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>{team1Name}</p>
                   {team1Code && <p className={`text-xs font-bold ${t1Style.subText}`}>[{team1Code}]</p>}
                 </div>
@@ -358,8 +559,9 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                         disabled={isReadOnly}
                         readOnly={isReadOnly}
                         value={setScore.p1 !== null && setScore.p1 !== undefined ? setScore.p1 : ''}
-                        onChange={(e) => onScoreInputChange(activeMatch.id, setIdx, 'p1', e.target.value)}
+                        onChange={(e) => handleScoreInput(setIdx, 'p1', e.target.value)}
                         onBlur={onScoreBlur}
+                        onClick={(e) => e.stopPropagation()}
                         className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                           isSetWon ? t1Style.wonInput : t1Style.input
                         }`}
@@ -369,8 +571,50 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 </div>
               </div>
 
-              <div className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar}`}>
-                <div className="min-w-0 flex-1">
+              {/* Labels dos sets + botão undo */}
+              <div className="flex items-center justify-between px-3 py-0.5">
+                <div />
+                {canTapScore ? (
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    disabled={!canUndo}
+                    className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                      canUndo
+                        ? 'bg-amber-50 border border-amber-300 text-amber-600 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-700 shadow-sm cursor-pointer'
+                        : 'bg-slate-50 border border-slate-200 text-slate-300 cursor-not-allowed'
+                    }`}
+                    title={canUndo ? 'Desfazer último ponto' : 'Nenhum ponto para desfazer'}
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-1.5">
+                  <span className="w-5" />
+                  {scores.map((_, setIdx) => (
+                    <span
+                      key={`label_set_${setIdx}`}
+                      className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400"
+                    >
+                      set{setIdx + 1}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Equipe 2 — clique fora do input incrementa +1 */}
+              <div
+                className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${
+                  canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
+                }`}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).tagName === 'INPUT') return;
+                  handleTapScore('p2');
+                }}
+              >
+                <div className="min-w-0 flex-1 pointer-events-none">
                   <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>{team2Name}</p>
                   {team2Code && <p className={`text-xs font-bold ${t2Style.subText}`}>[{team2Code}]</p>}
                 </div>
@@ -396,8 +640,9 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                         disabled={isReadOnly}
                         readOnly={isReadOnly}
                         value={setScore.p2 !== null && setScore.p2 !== undefined ? setScore.p2 : ''}
-                        onChange={(e) => onScoreInputChange(activeMatch.id, setIdx, 'p2', e.target.value)}
+                        onChange={(e) => handleScoreInput(setIdx, 'p2', e.target.value)}
                         onBlur={onScoreBlur}
+                        onClick={(e) => e.stopPropagation()}
                         className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                           isSetWon ? t2Style.wonInput : t2Style.input
                         }`}

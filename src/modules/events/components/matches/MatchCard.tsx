@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw } from 'lucide-react';
 import type { TournamentMatch, TournamentPair } from '../../types';
 import { getPhaseLabel, parseMatchSets } from '../../domain/brackets';
@@ -133,68 +133,153 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   // Dados de Sets e Pontuações
   const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets, gamesPerSet);
 
-  // ── Tap-to-score: histórico local de pontuações para undo ──────────────────
-  // Armazenamos o histórico como pares [p1, p2] por set. Só usado no variant=detailed.
+  // ── Tap-to-score e Undo com histórico fiel de ambos os times ──────────────
+  // Guarda a pilha de estados anteriores: { setIdx, p1, p2 }
   const scoreHistoryRef = useRef<Array<{ setIdx: number; p1: string; p2: string }>>([]);
-  // hasUndoSteps só é necessário para re-render do botão undo
   const [hasUndoSteps, setHasUndoSteps] = useState(false);
 
-  const canTapScore = canSubmitScore && !isFinished && !!onScoreChange;
+  // Mantém o estado mais recente de cada set em memória local para cliques rápidos
+  const latestScoresRef = useRef<Record<number, { p1: string; p2: string }>>({});
+
+  // Sincroniza latestScoresRef quando scores mudar de fora (props)
+  useEffect(() => {
+    scores.forEach((s, idx) => {
+      const p1 = s.p1 !== null && s.p1 !== undefined ? String(s.p1) : '';
+      const p2 = s.p2 !== null && s.p2 !== undefined ? String(s.p2) : '';
+      latestScoresRef.current[idx] = { p1, p2 };
+    });
+  }, [scores]);
+
+  const canTapScore = canSubmitScore && !isFinished && (!!onUndoScore || !!onScoreChange);
+
+  // Determina qual set está em jogo no momento (só pula para o próximo se o anterior estiver finalizado)
+  const getActiveSetIdx = useCallback((): number => {
+    if (totalSets === 1) return 0;
+    for (let i = 0; i < scores.length; i++) {
+      const s = scores[i];
+      if (s.inProgress) return i;
+      const cur = latestScoresRef.current[i] || {
+        p1: s.p1 !== null && s.p1 !== undefined ? String(s.p1) : '',
+        p2: s.p2 !== null && s.p2 !== undefined ? String(s.p2) : '',
+      };
+      if (cur.p1 === '' || cur.p2 === '') return i;
+      const n1 = Number(cur.p1);
+      const n2 = Number(cur.p2);
+      const isWon = (n1 >= gamesPerSet && n1 > n2) || (n2 >= gamesPerSet && n2 > n1);
+      if (!isWon) return i;
+    }
+    return Math.max(0, scores.length - 1);
+  }, [totalSets, scores, gamesPerSet]);
+
+  const applySetScore = useCallback(
+    (setIdx: number, p1Val: string, p2Val: string) => {
+      latestScoresRef.current[setIdx] = { p1: p1Val, p2: p2Val };
+
+      if (onUndoScore) {
+        onUndoScore(match.id, setIdx, p1Val, p2Val);
+      } else if (onScoreChange) {
+        if (onScoreChange.length <= 3) {
+          (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p1', p1Val);
+          (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p2', p2Val);
+        } else {
+          (onScoreChange as SetScoreChangeHandler)(match.id, setIdx, 'p1', p1Val);
+          (onScoreChange as SetScoreChangeHandler)(match.id, setIdx, 'p2', p2Val);
+        }
+      }
+    },
+    [match.id, onUndoScore, onScoreChange]
+  );
 
   const handleTapScore = useCallback(
-    (player: 'p1' | 'p2', setIdx: number) => {
+    (player: 'p1' | 'p2', setIdxOverride?: number) => {
       if (!canTapScore) return;
-      const currentScore = scores[setIdx];
-      const curP1 = currentScore?.p1 !== null && currentScore?.p1 !== undefined ? String(currentScore.p1) : '0';
-      const curP2 = currentScore?.p2 !== null && currentScore?.p2 !== undefined ? String(currentScore.p2) : '0';
+      const setIdx = setIdxOverride !== undefined ? setIdxOverride : getActiveSetIdx();
 
-      // Guarda estado anterior para undo
+      const existing = latestScoresRef.current[setIdx] || {
+        p1: scores[setIdx]?.p1 !== null && scores[setIdx]?.p1 !== undefined ? String(scores[setIdx].p1) : '',
+        p2: scores[setIdx]?.p2 !== null && scores[setIdx]?.p2 !== undefined ? String(scores[setIdx].p2) : '',
+      };
+      const curP1 = existing.p1;
+      const curP2 = existing.p2;
+
+      // Salva o snapshot EXATO do placar de ambos os times ANTES do ponto
       scoreHistoryRef.current = [
         ...scoreHistoryRef.current,
         { setIdx, p1: curP1, p2: curP2 },
       ];
       setHasUndoSteps(true);
 
-      const newVal = String(Number(player === 'p1' ? curP1 : curP2) + 1);
-      if (onScoreChange!.length <= 3) {
-        (onScoreChange as LegacyScoreChangeHandler)(match.id, player, newVal);
-      } else {
-        (onScoreChange as SetScoreChangeHandler)(match.id, setIdx, player, newVal);
-      }
+      const nextP1 = player === 'p1' ? String(Number(curP1 || 0) + 1) : (curP1 || '0');
+      const nextP2 = player === 'p2' ? String(Number(curP2 || 0) + 1) : (curP2 || '0');
+
+      applySetScore(setIdx, nextP1, nextP2);
     },
-    [canTapScore, scores, onScoreChange, match.id]
+    [canTapScore, getActiveSetIdx, scores, applySetScore]
   );
 
   const handleUndo = useCallback(() => {
-    if (!canTapScore || scoreHistoryRef.current.length === 0) return;
-    const prev = scoreHistoryRef.current[scoreHistoryRef.current.length - 1];
-    scoreHistoryRef.current = scoreHistoryRef.current.slice(0, -1);
-    setHasUndoSteps(scoreHistoryRef.current.length > 0);
+    if (!canTapScore) return;
 
-    // Restaura p1 e p2 atomicamente via onUndoScore (handler dedicado),
-    // ou cai no onScoreChange legado se onUndoScore não for fornecido.
-    if (onUndoScore) {
-      onUndoScore(match.id, prev.setIdx, prev.p1, prev.p2);
-    } else if (onScoreChange) {
-      // Fallback: duas chamadas sequenciais (pode ter race condition em handlers async)
-      if (onScoreChange.length <= 3) {
-        (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p1', prev.p1);
-        (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p2', prev.p2);
-      } else {
-        (onScoreChange as SetScoreChangeHandler)(match.id, prev.setIdx, 'p1', prev.p1);
-        (onScoreChange as SetScoreChangeHandler)(match.id, prev.setIdx, 'p2', prev.p2);
-      }
+    // Se temos passos gravados no histórico, restaura o último passo
+    if (scoreHistoryRef.current.length > 0) {
+      const prev = scoreHistoryRef.current[scoreHistoryRef.current.length - 1];
+      scoreHistoryRef.current = scoreHistoryRef.current.slice(0, -1);
+      setHasUndoSteps(scoreHistoryRef.current.length > 0);
+      applySetScore(prev.setIdx, prev.p1, prev.p2);
+      return;
     }
-  }, [canTapScore, onUndoScore, onScoreChange, match.id]);
+
+    // Se o histórico local esvaziou (ou a página já abriu com pontos),
+    // permite decrementar até zerar ("voltar ao placar anterior até zerar")
+    const activeSetIdx = getActiveSetIdx();
+    const cur = latestScoresRef.current[activeSetIdx] || {
+      p1: scores[activeSetIdx]?.p1 !== null && scores[activeSetIdx]?.p1 !== undefined ? String(scores[activeSetIdx].p1) : '',
+      p2: scores[activeSetIdx]?.p2 !== null && scores[activeSetIdx]?.p2 !== undefined ? String(scores[activeSetIdx].p2) : '',
+    };
+    const n1 = Number(cur.p1 || 0);
+    const n2 = Number(cur.p2 || 0);
+
+    if (n1 > 0 || n2 > 0) {
+      let nextP1 = cur.p1;
+      let nextP2 = cur.p2;
+      if (n1 > n2) {
+        nextP1 = String(Math.max(0, n1 - 1));
+      } else if (n2 > n1) {
+        nextP2 = String(Math.max(0, n2 - 1));
+      } else {
+        nextP2 = String(Math.max(0, n2 - 1));
+      }
+      if (nextP1 === '0' && nextP2 === '0') {
+        nextP1 = '';
+        nextP2 = '';
+      }
+      applySetScore(activeSetIdx, nextP1, nextP2);
+    }
+  }, [canTapScore, getActiveSetIdx, scores, applySetScore]);
 
   const handleScoreInput = (setIdx: number, player: 'p1' | 'p2', val: string) => {
-    if (!onScoreChange) return;
-    if (onScoreChange.length <= 3) {
-      (onScoreChange as LegacyScoreChangeHandler)(match.id, player, val);
-    } else {
-      (onScoreChange as SetScoreChangeHandler)(match.id, setIdx, player, val);
-    }
+    if (!onScoreChange && !onUndoScore) return;
+
+    // Registra no histórico para permitir desfazer digitação direta também
+    const existing = latestScoresRef.current[setIdx] || {
+      p1: scores[setIdx]?.p1 !== null && scores[setIdx]?.p1 !== undefined ? String(scores[setIdx].p1) : '0',
+      p2: scores[setIdx]?.p2 !== null && scores[setIdx]?.p2 !== undefined ? String(scores[setIdx].p2) : '0',
+    };
+    scoreHistoryRef.current = [
+      ...scoreHistoryRef.current,
+      { setIdx, p1: existing.p1, p2: existing.p2 },
+    ];
+    setHasUndoSteps(true);
+
+    const nextP1 = player === 'p1' ? val : existing.p1;
+    const nextP2 = player === 'p2' ? val : existing.p2;
+    applySetScore(setIdx, nextP1, nextP2);
   };
+
+  const isAnyScorePositive = scores.some(
+    (s) => (s.p1 !== null && Number(s.p1) > 0) || (s.p2 !== null && Number(s.p2) > 0)
+  );
+  const canUndo = canTapScore && (hasUndoSteps || isAnyScorePositive);
 
   const isSet1WonByP1 =
     scores[0]?.p1 !== null &&
@@ -470,13 +555,13 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               <button
                 type="button"
                 onClick={handleUndo}
-                disabled={!hasUndoSteps}
+                disabled={!canUndo}
                 className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
-                  hasUndoSteps
-                    ? 'bg-white/90 border-slate-200 text-slate-600 hover:text-red-500 hover:border-red-200 shadow-sm cursor-pointer'
-                    : 'bg-white/30 border-white/20 text-white/30 cursor-not-allowed'
+                  canUndo
+                    ? 'bg-amber-50 border border-amber-300 text-amber-600 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-700 shadow-sm cursor-pointer'
+                    : 'bg-slate-50 border border-slate-200 text-slate-300 cursor-not-allowed'
                 }`}
-                title="Desfazer último ponto"
+                title={canUndo ? 'Desfazer último ponto' : 'Nenhum ponto para desfazer'}
               >
                 <RotateCcw size={14} />
               </button>
@@ -548,11 +633,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
             onClick={(e) => {
               if ((e.target as HTMLElement).tagName === 'INPUT') return;
-              // Para multi-set: incrementa o primeiro set ainda não finalizado
-              const activeSetIdx = scores.findIndex(
-                (s) => s.inProgress || (s.p1 === null && s.p2 === null)
-              );
-              handleTapScore('p1', activeSetIdx >= 0 ? activeSetIdx : 0);
+              handleTapScore('p1');
             }}
           >
             <div className="min-w-0 flex-1 pointer-events-none">
@@ -617,13 +698,13 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               <button
                 type="button"
                 onClick={handleUndo}
-                disabled={!hasUndoSteps}
+                disabled={!canUndo}
                 className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
-                  hasUndoSteps
-                    ? 'bg-white/90 border-slate-200 text-slate-600 hover:text-red-500 hover:border-red-200 shadow-sm cursor-pointer'
-                    : 'bg-slate-100 border-slate-200 text-slate-300 cursor-not-allowed'
+                  canUndo
+                    ? 'bg-amber-50 border border-amber-300 text-amber-600 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-700 shadow-sm cursor-pointer'
+                    : 'bg-slate-50 border border-slate-200 text-slate-300 cursor-not-allowed'
                 }`}
-                title="Desfazer último ponto"
+                title={canUndo ? 'Desfazer último ponto' : 'Nenhum ponto para desfazer'}
               >
                 <RotateCcw size={14} />
               </button>
@@ -648,10 +729,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
             onClick={(e) => {
               if ((e.target as HTMLElement).tagName === 'INPUT') return;
-              const activeSetIdx = scores.findIndex(
-                (s) => s.inProgress || (s.p1 === null && s.p2 === null)
-              );
-              handleTapScore('p2', activeSetIdx >= 0 ? activeSetIdx : 0);
+              handleTapScore('p2');
             }}
           >
             <div className="min-w-0 flex-1 pointer-events-none">

@@ -109,6 +109,7 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
                 onToggleInterdictCourt={actions.toggleInterdictCourt}
                 onRefreshEventScore={(matchId) => onRefreshEventScore?.(matchId)}
                 onScoreInputChange={actions.handleScoreInputChange}
+                onScoreUndoChange={actions.handleScoreUndoChange}
                 onScoreBlur={actions.handleScoreBlur}
                 onMatchDateChange={actions.handleMatchDateChange}
                 onFinishCourtMatch={actions.finishCourtMatch}

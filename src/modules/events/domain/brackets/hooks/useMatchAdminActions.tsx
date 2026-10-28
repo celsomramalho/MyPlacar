@@ -362,6 +362,104 @@ export function useMatchAdminActions({
     }, 1000);
   };
 
+  const handleScoreUndoChange = (
+    matchId: string,
+    setIndex: number,
+    p1Val: string,
+    p2Val: string
+  ) => {
+    const gamesPerSet = getGamesPerSet();
+
+    const toVal = (raw: string) => {
+      const n = parseInt(raw, 10);
+      return isNaN(n) ? null : n;
+    };
+
+    const nextMatches = matches.map((m) => {
+      if (m.id !== matchId) return m;
+
+      const currentScores: MatchSetScore[] = Array.from(
+        { length: totalSets },
+        (_, i) => {
+          const existing = m.scores?.[i] || {};
+          return {
+            p1: existing.p1 !== undefined ? existing.p1 : null,
+            p2: existing.p2 !== undefined ? existing.p2 : null,
+          };
+        }
+      );
+
+      currentScores[setIndex] = {
+        p1: toVal(p1Val),
+        p2: toVal(p2Val),
+      };
+
+      let setsWon1 = 0;
+      let setsWon2 = 0;
+      const resultParts: string[] = [];
+      let hasAnyScore = false;
+
+      currentScores.forEach((s) => {
+        if (
+          s.p1 !== null &&
+          s.p1 !== undefined &&
+          s.p2 !== null &&
+          s.p2 !== undefined
+        ) {
+          resultParts.push(`${s.p1}/${s.p2}`);
+          hasAnyScore = true;
+          const n1 = Number(s.p1);
+          const n2 = Number(s.p2);
+          if (n1 >= gamesPerSet && n1 > n2) {
+            setsWon1 += 1;
+          } else if (n2 >= gamesPerSet && n2 > n1) {
+            setsWon2 += 1;
+          }
+        } else if (s.p1 !== null || s.p2 !== null) {
+          hasAnyScore = true;
+        }
+      });
+
+      let status: 'waiting' | 'live' | 'finished' =
+        m.status === 'finished'
+          ? 'finished'
+          : hasAnyScore
+            ? 'live'
+            : 'waiting';
+      let winnerPairId: string | undefined = m.winnerPairId;
+      let loserPairId: string | undefined = m.loserPairId;
+
+      if (status === 'finished') {
+        if (setsWon1 > setsWon2) {
+          winnerPairId = m.pair1Id;
+          loserPairId = m.pair2Id;
+        } else if (setsWon2 > setsWon1) {
+          winnerPairId = m.pair2Id;
+          loserPairId = m.pair1Id;
+        }
+      }
+
+      return {
+        ...m,
+        scores: currentScores,
+        result: resultParts.join(' '),
+        status,
+        winnerPairId,
+        loserPairId,
+      };
+    });
+
+    onUpdateEvent({ ...event, matches: nextMatches });
+
+    if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+    saveMatchesTimeoutRef.current = setTimeout(async () => {
+      await persistPatch(
+        { matches: nextMatches },
+        'Erro ao salvar placar no Firestore debounce:'
+      );
+    }, 1000);
+  };
+
   const handleMatchDateChange = (matchId: string, dateVal: string) => {
     const nextMatches = matches.map((m) =>
       m.id !== matchId ? m : { ...m, matchDate: dateVal || undefined }
@@ -597,6 +695,7 @@ export function useMatchAdminActions({
     handleDeleteMatch,
     handleDeleteAllCategoryMatches,
     handleScoreInputChange,
+    handleScoreUndoChange,
     handleMatchDateChange,
     handleFinishMatchWithValidation,
     handleReopenMatch,

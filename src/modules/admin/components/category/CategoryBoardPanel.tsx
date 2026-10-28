@@ -68,6 +68,7 @@ export interface CategoryBoardPanelProps {
   totalSets: number;
   queuePosByMatchId: Map<string, number>;
   onScoreChange: (matchId: string, setIndex: number, player: 'p1' | 'p2', rawVal: string) => void;
+  onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string) => void;
   onMatchDateChange: (matchId: string, dateVal: string) => void;
   onFinishMatch: (matchId: string) => void;
   onReopenMatch: (matchId: string) => Promise<void>;
@@ -126,6 +127,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   totalSets,
   queuePosByMatchId,
   onScoreChange,
+  onUndoScore,
   onMatchDateChange,
   onFinishMatch,
   onReopenMatch,
@@ -218,6 +220,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
           }
           queuePosByMatchId={queuePosByMatchId}
           onScoreChange={onScoreChange}
+          onUndoScore={onUndoScore}
           onMatchDateChange={onMatchDateChange}
           onFinishMatch={onFinishMatch}
           onReopenMatch={onReopenMatch}
