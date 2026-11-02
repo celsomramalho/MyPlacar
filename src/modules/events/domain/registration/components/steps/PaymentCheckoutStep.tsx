@@ -10,6 +10,7 @@ export interface PaymentCheckoutStepProps {
   pricing: PricingCalculationResult;
   payment: UseRegistrationPaymentResult;
   readOnly?: boolean;
+  requiresReceipt?: boolean;
 }
 
 export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
@@ -17,6 +18,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
   pricing,
   payment,
   readOnly = false,
+  requiresReceipt = false,
 }) => {
   // Se o tipo de pagamento do evento é manual, inicia sempre no modo manual
   const eventPaymentType = event.paymentType ?? 'manual';
@@ -172,10 +174,23 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
           </button>
         </div>
       ) : (
-        <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
-          <label className="text-xs font-black text-slate-700 block">
+        <div className={`p-4 bg-white rounded-2xl border space-y-3 ${
+          requiresReceipt && !payment.manualReceiptFile
+            ? 'border-amber-400 bg-amber-50/40'
+            : 'border-slate-200'
+        }`}>
+          <label className="text-xs font-black text-slate-700 block flex items-center gap-1">
             Anexar comprovante de pagamento
+            {requiresReceipt && (
+              <span className="text-rose-500 font-black ml-0.5">*</span>
+            )}
           </label>
+          {requiresReceipt && !payment.manualReceiptFile && (
+            <p className="text-[11px] font-bold text-amber-700 flex items-center gap-1">
+              <AlertCircle size={12} />
+              Obrigatório para finalizar a inscrição
+            </p>
+          )}
           <input
             type="file"
             disabled={readOnly}

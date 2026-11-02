@@ -218,6 +218,15 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       return;
     }
 
+    // Comprovante obrigatório quando: pagamento manual + tipo inscrição App + evento não gratuito
+    const isManualPaymentEvent = (event.paymentType ?? 'manual') === 'manual';
+    const isAppRegistration = (event.registrationType ?? 'App') === 'App';
+    const requiresReceipt = isManualPaymentEvent && isAppRegistration && !form.pricing.isFree;
+    if (requiresReceipt && !payment.manualReceiptFile && !isAdmin) {
+      setFeedback('Anexe o comprovante de pagamento para finalizar a inscrição.');
+      return;
+    }
+
     if (!submission.registrationId) {
       submission.registrationId = getNextRegistrationId(liveEntries);
     }
@@ -411,6 +420,12 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             pricing={form.pricing}
             payment={payment}
             readOnly={readOnly}
+            requiresReceipt={
+              (event.paymentType ?? 'manual') === 'manual' &&
+              (event.registrationType ?? 'App') === 'App' &&
+              !form.pricing.isFree &&
+              !isAdmin
+            }
           />
         )}
       </div>
