@@ -1,5 +1,5 @@
 export * from './domain/rules/eventMatchRules';
-import type { EventSportRules } from './domain/rules/eventMatchRules';
+import { getPhaseCategory, type EventSportRules } from './domain/rules/eventMatchRules';
 
 export interface TournamentPair {
   id: string;
@@ -209,6 +209,10 @@ export interface EventCategory {
   name: string;
   description?: string;
   format: 'Simples' | 'Duplas';
+  /** Configuração padrão de formação das duplas nesta categoria. */
+  duplaType?: 'Fixo' | 'Livre';
+  /** Substituições por fase; fases sem valor usam duplaType (padrão: Fixo). */
+  phaseDuplaTypes?: Partial<Record<'groups' | 'playoffs' | 'semifinal' | 'final', 'Fixo' | 'Livre'>>;
   priority: number;
   sportId: string;
   sportName?: string;
@@ -218,6 +222,15 @@ export interface EventCategory {
   gender2?: 'M' | 'F';
   maxPlayers?: number;
 }
+
+/** Resolve a categoria de dupla para a fase, preservando Fixo como padrão legado. */
+export const resolveCategoryDuplaType = (
+  category: Pick<EventCategory, 'duplaType' | 'phaseDuplaTypes'> | undefined,
+  phase?: string
+): 'Fixo' | 'Livre' => {
+  const phaseCategory = getPhaseCategory(phase);
+  return category?.phaseDuplaTypes?.[phaseCategory] ?? category?.duplaType ?? 'Fixo';
+};
 
 export interface EventSponsor {
   id: string;
@@ -262,6 +275,8 @@ export interface TournamentEvent {
   marketplaceFeePercent?: number;
   eventStatus?: EventStatusOption;
   eventType?: EventTypeOption;
+  /** Define se a classificação soma resultados por inscrição individual ou por time. */
+  scoreTarget?: 'Inscrito' | 'Time';
   registrationType?: EventRegistrationTypeOption;
   sportGroup?: string;
   sportId?: string;

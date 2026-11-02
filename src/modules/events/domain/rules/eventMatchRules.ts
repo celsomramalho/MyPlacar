@@ -91,6 +91,24 @@ export const SYSTEM_RULE_PRESETS: MatchRulesPreset[] = [
     },
   },
   {
+    id: 'beach_tennis_total_7_games',
+    name: 'Beach tênis · 1 set com total de 7 games',
+    description: 'Encerra após 7 games no total · Sem tie-break',
+    sportId: 'beach-tennis',
+    isSystem: true,
+    rules: {
+      setsCount: 1,
+      gamesPerSet: 7,
+      noAd: true,
+      switchSidesOdd: true,
+      tieBreak: false,
+      tieBreakAt: '3-3',
+      tieBreakPoints: 7,
+      tieBreakWinByTwo: true,
+      superTieBreakFinalSet: false,
+    },
+  },
+  {
     id: 'beach_tennis_best3_super_tb',
     name: 'Beach tênis · Melhor de 3 sets (com super TB)',
     description: 'Sets a 6 · No-ad · TB no 5-5 · 3º set super TB (10 pts)',
@@ -391,6 +409,54 @@ export const resolveMatchRules = (
           tieBreakWinByTwo: true,
           superTieBreakFinalSet: false,
         });
+
+  const rulesSignature = (rules: MatchRulesConfig) => [
+    rules.setsCount,
+    rules.gamesPerSet,
+    rules.noAd,
+    rules.switchSidesOdd,
+    rules.tieBreak,
+    rules.tieBreakAt,
+    rules.tieBreakPoints,
+    rules.tieBreakWinByTwo,
+    rules.superTieBreakFinalSet ?? false,
+    rules.pickleballScoringMode ?? '',
+  ].join('|');
+
+  // Eventos antigos podem ter as quatro fases preenchidas com uma cópia do
+  // preset anterior. Quando o formato geral foi trocado para outro preset do
+  // sistema, essa cópia não deve manter, por exemplo, TB em 5-5 contra o
+  // preset oficial selecionado em 6-6.
+  if (sportRules?.customPhasesEnabled && sportRules.phaseRules && sportId) {
+    const configuredPhases = Object.values(sportRules.phaseRules).filter(
+      (rules): rules is MatchRulesConfig => Boolean(rules)
+    );
+    const phaseSignatures = new Set(configuredPhases.map(rulesSignature));
+    const defaultSignature = rulesSignature(defaultRules);
+    const defaultIsSystemPreset = SYSTEM_RULE_PRESETS.some(
+      (preset) => preset.sportId === sportId && rulesSignature(preset.rules) === defaultSignature
+    );
+    const allPhasesShareOldSystemPreset =
+      configuredPhases.length > 0 &&
+      phaseSignatures.size === 1 &&
+      !phaseSignatures.has(defaultSignature) &&
+      SYSTEM_RULE_PRESETS.some(
+        (preset) => preset.sportId === sportId && phaseSignatures.has(rulesSignature(preset.rules))
+      );
+
+    if (defaultIsSystemPreset && allPhasesShareOldSystemPreset) return defaultRules;
+  }
+
+  // O preset de Beach Tennis por total combinado de 7 games é um formato
+  // global do evento. Evita que regras de fase antigas (ex.: Super 8 até 4)
+  // se sobreponham ao preset recém-selecionado.
+  if (
+    sportId === 'beach-tennis' &&
+    defaultRules.gamesPerSet === 7 &&
+    !defaultRules.tieBreak
+  ) {
+    return defaultRules;
+  }
 
   if (!sportRules?.customPhasesEnabled || !sportRules.phaseRules) {
     return defaultRules;

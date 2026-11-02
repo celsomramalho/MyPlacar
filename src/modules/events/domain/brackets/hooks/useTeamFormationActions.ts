@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { Firestore } from 'firebase/firestore';
 import {
   minifyPairForStorage,
+  resolveCategoryDuplaType,
   type EventCategory,
   type TournamentEntry,
   type TournamentEvent,
@@ -132,6 +133,23 @@ export function useTeamFormationActions({
         onConfirm: () => setModalConfig(null),
       });
       return;
+    }
+
+    if (resolveCategoryDuplaType(selectedCategory, event.eventType === 'Ranking' ? 'ranking' : undefined) === 'Fixo') {
+      const participantAlreadyPaired = categoryPairs.find((pair) =>
+        [selected[0], selected[1]].some((entry) =>
+          (pair.p1.email === entry.email || pair.p1.pin === entry.pin) ||
+          (pair.p2.email === entry.email || pair.p2.pin === entry.pin)
+        )
+      );
+      if (participantAlreadyPaired) {
+        setModalConfig({
+          title: 'Atleta já tem dupla fixa',
+          message: 'Nesta categoria, cada atleta pode ter apenas um parceiro fixo. Altere a categoria para Livre para permitir combinações diferentes por partida.',
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
     }
 
     const newPair = createTournamentPair({

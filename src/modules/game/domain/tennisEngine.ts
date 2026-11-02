@@ -26,6 +26,7 @@ export const incrementScore = (state: GameState, rallyWinner: 1 | 2, pointType: 
 
 export const isTennisTieBreak = (state: GameState): boolean => {
     if (state.matchConfig.sportType !== 'tennis' && state.matchConfig.sportType !== 'beach-tennis') return false;
+    if (state.matchConfig.sportType === 'beach-tennis' && Number(state.matchConfig.gamesPerSet) === 7) return false;
     if (!state.matchConfig.tieBreak) return false;
     
     const gamesLimit = Number(state.matchConfig.gamesPerSet) || 6;
@@ -101,7 +102,7 @@ const winGame = (state: GameState, winner: 1 | 2) => {
   if (lastPoint) lastPoint.resultingScore = `${state.p1.games}-${state.p2.games}`;
 
   // VERIFICAÇÃO DE TIE-BREAK: Antes de encerrar o set, checa se chegamos no gatilho de empate
-  if (state.matchConfig.tieBreak) {
+  if (state.matchConfig.tieBreak && !(state.matchConfig.sportType === 'beach-tennis' && gamesLimit === 7)) {
       const configTieBreakAt = state.matchConfig.tieBreakAt;
       const tieBreakAt = configTieBreakAt || (gamesLimit === 4 ? '3-3' : '6-6');
       const [t1, t2] = tieBreakAt.split('-').map(Number);
@@ -115,6 +116,17 @@ const winGame = (state: GameState, winner: 1 | 2) => {
   // LÓGICA DE VITÓRIA DO SET
   const reachedTarget = winnerObj.games >= gamesLimit;
   const hasLeadOfTwo = winnerObj.games >= (loserObj.games + 2);
+
+  // Formato curto de Beach Tennis: o set termina ao concluir exatamente
+  // sete games, independentemente da margem (ex.: 4-3, 5-2, 6-1 ou 7-0).
+  if (state.matchConfig.sportType === 'beach-tennis' && gamesLimit === 7) {
+      if (state.p1.games + state.p2.games >= 7) {
+          winSet(state);
+      } else {
+          rotateServer(state);
+      }
+      return;
+  }
   
   // No Beach Tennis ou Tênis com games=4 (Fast 4), se não houver regra de 2 games de vantagem configurada ou se atingiu o teto
   // Beach Tennis normalmente encerra em 6 games direto ou Tie-break em 6-6.

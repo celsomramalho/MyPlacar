@@ -2,6 +2,7 @@ import React, { useRef, useState, type Dispatch, type SetStateAction } from 'rea
 import type { Firestore } from 'firebase/firestore';
 import {
   minifyPairForStorage,
+  resolveCategoryDuplaType,
   type EventCategory,
   type MatchSetScore,
   type TournamentEntry,
@@ -17,13 +18,14 @@ import {
   generateSystemMatchesForCategory,
   pairsSharePlayer,
 } from '../engine/bracketGenerator';
-import { parseMatchSets } from '../engine/matchScoreEngine';
+import { parseMatchSets, isSetScoreComplete } from '../engine/matchScoreEngine';
 import { updatePlayoffProgression } from '../engine/bracketProgressionEngine';
 import {
   generateSuper8MatchesForCategory,
   generateSuper8DuplasMatchesForCategory,
 } from '@modules/events/services/matchGenerator';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
+import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
 
 interface UseMatchAdminActionsOptions {
   event: TournamentEvent;
@@ -65,12 +67,18 @@ export function useMatchAdminActions({
   const [isSuper8dDrawModalOpen, setIsSuper8dDrawModalOpen] = useState(false);
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const getGamesPerSet = () =>
-    Number(
-      event.gamesPerSet ||
-        event.config?.gamesPerSet ||
-        (event.eventType === 'Super 8' ? 4 : 6)
-    );
+  const getRulesForPhase = (phase?: string) => resolveMatchRules(
+    event.sportRules,
+    phase,
+    (event.setsCount || event.config?.sets || totalSets) as 1 | 3 | 5,
+    Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6)),
+    event.sportId || event.config?.sportType
+  );
+  const getGamesPerSet = (phase?: string) => getRulesForPhase(phase).gamesPerSet;
+  const isTotalGamesSet = (phase?: string) => {
+    const rules = getRulesForPhase(phase);
+    return (event.sportId || event.config?.sportType) === 'beach-tennis' && rules.gamesPerSet === 7;
+  };
 
   const persistPatch = async (
     patch: Partial<TournamentEvent>,
@@ -104,12 +112,19 @@ export function useMatchAdminActions({
 
     const rankingMatchesLimit = Number(event.rankingMatchesPerTeam || 0);
     if (isRanking && rankingMatchesLimit > 0) {
-      const blockedPair = [p1, p2].find(
-        (pair) =>
-          categoryMatches.filter(
-            (m) => m.pair1Id === pair.id || m.pair2Id === pair.id
-          ).length >= rankingMatchesLimit
-      );
+      const isFree = resolveCategoryDuplaType(selectedCategory, 'ranking') === 'Livre';
+      const blockedPair = [p1, p2].find((pair) => {
+        const playerKeys = new Set([pair.p1, pair.p2].map((entry) =>
+          (entry.email || entry.pin || '').toLowerCase().trim()
+        ));
+        const playedMatches = categoryMatches.filter((match) => {
+          if (!isFree) return match.pair1Id === pair.id || match.pair2Id === pair.id;
+          return [match.pair1, match.pair2].some((matchPair) => matchPair &&
+            [matchPair.p1, matchPair.p2].some((entry) => playerKeys.has((entry.email || entry.pin || '').toLowerCase().trim()))
+          );
+        });
+        return playedMatches.length >= rankingMatchesLimit;
+      });
       if (blockedPair) {
         setModalConfig({
           title: 'Limite de partidas atingido',
@@ -272,10 +287,10 @@ export function useMatchAdminActions({
     player: 'p1' | 'p2',
     rawVal: string
   ) => {
-    const gamesPerSet = getGamesPerSet();
-
     const nextMatches = matches.map((m) => {
       if (m.id !== matchId) return m;
+      const gamesPerSet = getGamesPerSet(m.phase);
+      const totalGamesSet = isTotalGamesSet(m.phase);
 
       const currentScores: MatchSetScore[] = Array.from(
         { length: totalSets },
@@ -312,9 +327,11 @@ export function useMatchAdminActions({
           hasAnyScore = true;
           const n1 = Number(s.p1);
           const n2 = Number(s.p2);
-          if (n1 >= gamesPerSet && n1 > n2) {
+          const rules = getRulesForPhase(m.phase);
+          const complete = isSetScoreComplete(n1, n2, gamesPerSet, { isTotalGamesSet: totalGamesSet, tieBreak: rules.tieBreak, tieBreakAt: rules.tieBreakAt });
+          if (complete && n1 > n2) {
             setsWon1 += 1;
-          } else if (n2 >= gamesPerSet && n2 > n1) {
+          } else if (complete && n2 > n1) {
             setsWon2 += 1;
           }
         } else if (s.p1 !== null || s.p2 !== null) {
@@ -368,8 +385,6 @@ export function useMatchAdminActions({
     p1Val: string,
     p2Val: string
   ) => {
-    const gamesPerSet = getGamesPerSet();
-
     const toVal = (raw: string) => {
       const n = parseInt(raw, 10);
       return isNaN(n) ? null : n;
@@ -377,6 +392,8 @@ export function useMatchAdminActions({
 
     const nextMatches = matches.map((m) => {
       if (m.id !== matchId) return m;
+      const gamesPerSet = getGamesPerSet(m.phase);
+      const totalGamesSet = isTotalGamesSet(m.phase);
 
       const currentScores: MatchSetScore[] = Array.from(
         { length: totalSets },
@@ -410,9 +427,11 @@ export function useMatchAdminActions({
           hasAnyScore = true;
           const n1 = Number(s.p1);
           const n2 = Number(s.p2);
-          if (n1 >= gamesPerSet && n1 > n2) {
+          const rules = getRulesForPhase(m.phase);
+          const complete = isSetScoreComplete(n1, n2, gamesPerSet, { isTotalGamesSet: totalGamesSet, tieBreak: rules.tieBreak, tieBreakAt: rules.tieBreakAt });
+          if (complete && n1 > n2) {
             setsWon1 += 1;
-          } else if (n2 >= gamesPerSet && n2 > n1) {
+          } else if (complete && n2 > n1) {
             setsWon2 += 1;
           }
         } else if (s.p1 !== null || s.p2 !== null) {
@@ -477,14 +496,16 @@ export function useMatchAdminActions({
 
   const handleFinishMatch = async (matchId: string) => {
     const nowIso = new Date().toISOString();
-    const gamesPerSet = getGamesPerSet();
 
     const nextMatches = matches.map((m) => {
       if (m.id !== matchId) return m;
+      const gamesPerSet = getGamesPerSet(m.phase);
+      const totalGamesSet = isTotalGamesSet(m.phase);
       const { setsWon1, setsWon2, scores } = parseMatchSets(
         m,
         totalSets,
-        gamesPerSet
+        gamesPerSet,
+        { isTotalGamesSet: totalGamesSet, tieBreak: getRulesForPhase(m.phase).tieBreak, tieBreakAt: getRulesForPhase(m.phase).tieBreakAt }
       );
       let winnerPairId = m.winnerPairId;
       let loserPairId = m.loserPairId;
@@ -545,10 +566,11 @@ export function useMatchAdminActions({
 
   const handleFinishMatchWithValidation = (matchId: string) => {
     const setsToWin = Math.ceil(totalSets / 2);
-    const gamesPerSet = getGamesPerSet();
 
     const match = matches.find((m) => m.id === matchId);
     if (!match) return;
+    const gamesPerSet = getGamesPerSet(match.phase);
+    const totalGamesSet = isTotalGamesSet(match.phase);
 
     if (!match.matchDate) {
       setModalConfig({
@@ -563,7 +585,8 @@ export function useMatchAdminActions({
     const { scores, setsWon1, setsWon2 } = parseMatchSets(
       match,
       totalSets,
-      gamesPerSet
+      gamesPerSet,
+      { isTotalGamesSet: totalGamesSet, tieBreak: getRulesForPhase(match.phase).tieBreak, tieBreakAt: getRulesForPhase(match.phase).tieBreakAt }
     );
 
     const hasAnyScore = scores.some((s) => s.p1 !== null || s.p2 !== null);
@@ -589,7 +612,11 @@ export function useMatchAdminActions({
       const n2 = Number(s.p2);
       const maxScore = Math.max(n1, n2);
       const minScore = Math.min(n1, n2);
-      if (maxScore < gamesPerSet) {
+      if (totalGamesSet) {
+        if (n1 + n2 !== gamesPerSet) {
+          scoreWarnings.push(`Set ${idx + 1}: a soma precisa ser exatamente ${gamesPerSet} games`);
+        }
+      } else if (maxScore < gamesPerSet) {
         scoreWarnings.push(
           `Set ${idx + 1}: vencedor tem ${maxScore} games, esperado ${gamesPerSet}`
         );

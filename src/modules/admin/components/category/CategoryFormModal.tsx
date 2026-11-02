@@ -9,6 +9,8 @@ export interface CategoryFormModalProps {
   name: string;
   description: string;
   format: 'Simples' | 'Duplas';
+  duplaType: 'Fixo' | 'Livre';
+  phaseDuplaTypes: Partial<Record<'groups' | 'playoffs' | 'semifinal' | 'final', 'Fixo' | 'Livre'>>;
   sportId: string;
   abbreviation: string;
   priority: number;
@@ -19,6 +21,8 @@ export interface CategoryFormModalProps {
   onNameChange: (val: string) => void;
   onDescriptionChange: (val: string) => void;
   onFormatChange: (val: 'Simples' | 'Duplas') => void;
+  onDuplaTypeChange: (val: 'Fixo' | 'Livre') => void;
+  onPhaseDuplaTypeChange: (phase: 'groups' | 'playoffs' | 'semifinal' | 'final', val: 'Fixo' | 'Livre' | '') => void;
   onSportIdChange: (val: string) => void;
   onAbbreviationChange: (val: string) => void;
   onPriorityChange: (val: number) => void;
@@ -35,6 +39,8 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   name,
   description,
   format,
+  duplaType,
+  phaseDuplaTypes,
   sportId,
   abbreviation,
   priority,
@@ -45,6 +51,8 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   onNameChange,
   onDescriptionChange,
   onFormatChange,
+  onDuplaTypeChange,
+  onPhaseDuplaTypeChange,
   onSportIdChange,
   onAbbreviationChange,
   onPriorityChange,
@@ -82,10 +90,11 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
             <ChevronUp size={20} />
           </button>
         </div>
+
       </div>
 
       <div className="space-y-3">
-        {/* Linha 1: Nome */}
+        {/* Campo: Nome */}
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 ml-1">Nome</label>
           <input
@@ -98,32 +107,19 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           />
         </div>
 
-        {/* Linha 2: Descrição */}
+        {/* Campo: Abreviação */}
         <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Descrição</label>
+          <label className="text-[10px] font-black text-slate-400 ml-1">Abreviação</label>
           <input
             type="text"
-            value={description}
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            placeholder="Ex: Categoria avançada masculina"
+            value={abbreviation}
+            onChange={(e) => onAbbreviationChange(e.target.value)}
+            placeholder="Ex: DMa_A"
             className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
           />
         </div>
 
-        {/* Linha 3: Formato */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Formato</label>
-          <select
-            value={format}
-            onChange={(e) => onFormatChange(e.target.value as 'Simples' | 'Duplas')}
-            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
-          >
-            <option value="Duplas">Duplas</option>
-            <option value="Simples">Simples</option>
-          </select>
-        </div>
-
-        {/* Linha 4: Esporte */}
+        {/* Campo: Esporte */}
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
           <select
@@ -143,17 +139,69 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           </select>
         </div>
 
-        {/* Linha 5: Abreviação */}
+        {/* Campo: Formato */}
         <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Abreviação</label>
+          <label className="text-[10px] font-black text-slate-400 ml-1">Formato</label>
+          <select
+            value={format}
+            onChange={(e) => onFormatChange(e.target.value as 'Simples' | 'Duplas')}
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
+          >
+            <option value="Duplas">Duplas</option>
+            <option value="Simples">Simples</option>
+          </select>
+        </div>
+
+        {/* Campo: Descrição */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Descrição</label>
           <input
             type="text"
-            value={abbreviation}
-            onChange={(e) => onAbbreviationChange(e.target.value)}
-            placeholder="Ex: DMa_A"
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            placeholder="Ex: Categoria avançada masculina"
             className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
           />
         </div>
+
+        {format === 'Duplas' && (
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-500 ml-1">Duplas</label>
+              <select
+                value={duplaType}
+                onChange={(e) => onDuplaTypeChange(e.target.value as 'Fixo' | 'Livre')}
+                className="w-full h-11 bg-white border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
+              >
+                <option value="Fixo">Fixo</option>
+                <option value="Livre">Livre</option>
+              </select>
+              <p className="text-[10px] text-slate-500 px-1">Fixo mantém os parceiros; livre permite combinações diferentes por partida.</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-black text-slate-500 ml-1">Substituir por fase (opcional)</p>
+              {([
+                ['groups', 'Fase de grupos'],
+                ['playoffs', 'Eliminatórias'],
+                ['semifinal', 'Semifinais'],
+                ['final', 'Final e 3º lugar'],
+              ] as const).map(([phase, label]) => (
+                <div key={phase} className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-bold text-slate-600">{label}</span>
+                  <select
+                    value={phaseDuplaTypes[phase] ?? ''}
+                    onChange={(e) => onPhaseDuplaTypeChange(phase, e.target.value as 'Fixo' | 'Livre' | '')}
+                    className="h-9 bg-white border border-slate-200 rounded-lg px-2 font-bold text-xs outline-none"
+                  >
+                    <option value="">Usar padrão ({duplaType})</option>
+                    <option value="Fixo">Fixo</option>
+                    <option value="Livre">Livre</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Linha 6: Limite de jogadores */}
         <div className="space-y-1">

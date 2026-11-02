@@ -5,6 +5,7 @@ import { MatchCard } from '@modules/events/components/matches/MatchCard';
 import { RankingMatchImportModal } from './RankingMatchImportModal';
 import { ParticipantSearchInput } from '@modules/events/components/ParticipantSearchInput';
 import { filterMatchesBySearch, sortMatchesByDateDesc } from '@modules/events/domain/brackets';
+import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
 
 export interface CategoryMatchesTabProps {
   event: TournamentEvent;
@@ -97,7 +98,17 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
     [categoryMatches, searchQuery, pairsById]
   );
 
-  const renderItem = (match: TournamentMatch, idx?: number) => (
+  const renderItem = (match: TournamentMatch, idx?: number) => {
+    const sportId = event.sportId || event.config?.sportType;
+    const rules = resolveMatchRules(
+      event.sportRules,
+      match.phase,
+      (event.setsCount || event.config?.sets || totalSets) as 1 | 3 | 5,
+      Number(category.gamesPerSet || event.gamesPerSet || event.config?.gamesPerSet || ((isSuper8 || isSuper8Duplas) ? 4 : 6)),
+      sportId
+    );
+    const isTotalGamesSet = sportId === 'beach-tennis' && rules.gamesPerSet === 7;
+    return (
     <MatchCard
       key={match.id}
       match={match}
@@ -105,8 +116,11 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       pairsById={pairsById}
       variant="detailed"
       isRanking={isRanking}
-      totalSets={totalSets}
-      gamesPerSet={category.gamesPerSet ?? ((isSuper8 || isSuper8Duplas) ? 4 : 6)}
+      totalSets={rules.setsCount}
+      gamesPerSet={rules.gamesPerSet}
+      isTotalGamesSet={isTotalGamesSet}
+      tieBreak={rules.tieBreak}
+      tieBreakAt={rules.tieBreakAt}
       queuePosition={queuePosByMatchId?.get(match.id) ?? 0}
       canSubmitScore={!isReadOnly}
       canManage={!isReadOnly}
@@ -119,7 +133,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       onReopenMatch={onReopenMatch}
       onDeleteMatch={onDeleteMatch}
     />
-  );
+    );
+  };
 
   const descriptionText = isRanking
     ? 'Confrontos gerados para o ranking. Registre os placares ou reabra partidas.'

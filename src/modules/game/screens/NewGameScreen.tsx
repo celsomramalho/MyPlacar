@@ -458,7 +458,7 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
             <div className="flex items-center justify-between">
               <span className="text-sm font-black text-black">{settings.sportType === 'pickleball' ? 'Pontos por game' : 'Games por set'}</span>
               <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-                {(settings.sportType === 'pickleball' ? [11, 15, 21] : [4, 6]).map(num => (
+                {(settings.sportType === 'pickleball' ? [11, 15, 21] : settings.sportType === 'beach-tennis' ? [4, 6, 7] : [4, 6]).map(num => (
                   <button 
                     disabled={isReadOnly}
                     key={num} onClick={() => setSettings({...settings, gamesPerSet: num})} className={`w-10 h-10 rounded-lg text-xs font-black transition-all ${Number(settings.gamesPerSet) === num ? 'bg-blue-600 text-white shadow-md' : 'text-black'}`}>{num}</button>

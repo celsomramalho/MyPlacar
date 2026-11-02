@@ -124,6 +124,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             regulationFileName: freshEventDoc.regulationFileName || freshestEvent.regulationFileName,
             information: freshEventDoc.information || freshestEvent.information,
             eventType: (freshEventDoc.eventType as any) || freshestEvent.eventType,
+            scoreTarget: freshEventDoc.scoreTarget || freshestEvent.scoreTarget,
             eventStatus: freshEventDoc.eventStatus || freshestEvent.eventStatus,
             paymentType: freshEventDoc.paymentType || freshestEvent.paymentType || 'manual',
             courtsCount: freshEventDoc.courtsCount ?? freshestEvent.courtsCount,

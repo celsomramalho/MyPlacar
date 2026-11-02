@@ -42,7 +42,7 @@ import type {
   MatchSetScore,
   EventCategory,
 } from '../types';
-import { minifyPairForStorage } from '../types';
+import { minifyPairForStorage, resolveCategoryDuplaType } from '../types';
 import type { UserProfile } from '@modules/auth/types';
 import {
   getDb,
@@ -99,7 +99,7 @@ import {
   isEntryCheckedInToday,
   getTodayDateStr,
 } from '../services/eventRegistrationPeriod';
-import { isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
+import { isIndividualScoreEvent, isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
 import { isSimplifiedRegistrationEvent, isSimplifiedEntry } from '../types';
 import { openPdfOrUrl } from '../services/openRegulationPdf';
 
@@ -937,6 +937,17 @@ export const EventDetailScreen: React.FC<Props> = ({
       const limit = Number(event.rankingMatchesPerTeam || 0);
       if (!isRanking || limit <= 0) return false;
       const targetPair = (event.pairs || []).find((pair) => pair.id === pairId);
+      const isFreeRankingPair = resolveCategoryDuplaType(activeCategory, 'ranking') === 'Livre';
+      if (isFreeRankingPair && targetPair) {
+        const playerKeys = new Set([targetPair.p1, targetPair.p2].map((entry) =>
+          (entry.email || entry.pin || '').toLowerCase().trim()
+        ));
+        return categoryMatches.filter((match) =>
+          [match.pair1, match.pair2].some((pair) => pair && [pair.p1, pair.p2].some((entry) =>
+            playerKeys.has((entry.email || entry.pin || '').toLowerCase().trim())
+          ))
+        ).length >= limit;
+      }
       const sameParticipants = (left?: TournamentPair, right?: TournamentPair) => {
         if (!left || !right) return false;
         const key = (entry: TournamentEntry) => (entry.email || entry.pin || '').toLowerCase().trim();
@@ -954,7 +965,7 @@ export const EventDetailScreen: React.FC<Props> = ({
           sameParticipants(match.pair2, targetPair)
       ).length >= limit;
     },
-    [categoryMatches, event.rankingMatchesPerTeam, event.pairs, isRanking]
+    [activeCategory, categoryMatches, event.rankingMatchesPerTeam, event.pairs, isRanking]
   );
 
   const pairHasFinishedMatches = useCallback(
@@ -1129,6 +1140,23 @@ export const EventDetailScreen: React.FC<Props> = ({
       return;
     }
 
+    if (resolveCategoryDuplaType(activeCategory, event.eventType === 'Ranking' ? 'ranking' : undefined) === 'Fixo') {
+      const participantAlreadyPaired = categoryPairs.find((pair) =>
+        [first, second].some((entry) =>
+          pair.p1.email === entry.email || pair.p1.pin === entry.pin ||
+          pair.p2.email === entry.email || pair.p2.pin === entry.pin
+        )
+      );
+      if (participantAlreadyPaired) {
+        setModalConfig({
+          title: 'Atleta já tem dupla fixa',
+          message: 'Nesta categoria, cada atleta pode ter apenas um parceiro fixo. Altere a categoria para Livre para permitir combinações diferentes por partida.',
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
+    }
+
     const newPair = createTournamentPair({
       first,
       second,
@@ -1178,9 +1206,16 @@ export const EventDetailScreen: React.FC<Props> = ({
         .map((pairId) => categoryPairs.find((pair) => pair.id === pairId))
         .find((pair) => {
           if (!pair) return false;
-          const matchesCount = categoryMatchesForNumber.filter(
-            (match) => match.pair1Id === pair.id || match.pair2Id === pair.id
-          ).length;
+          const freeRankingPair = resolveCategoryDuplaType(activeCategory, 'ranking') === 'Livre';
+          const playerKeys = new Set([pair.p1, pair.p2].map((entry) =>
+            (entry.email || entry.pin || '').toLowerCase().trim()
+          ));
+          const matchesCount = categoryMatchesForNumber.filter((match) => {
+            if (!freeRankingPair) return match.pair1Id === pair.id || match.pair2Id === pair.id;
+            return [match.pair1, match.pair2].some((matchPair) => matchPair &&
+              [matchPair.p1, matchPair.p2].some((entry) => playerKeys.has((entry.email || entry.pin || '').toLowerCase().trim()))
+            );
+          }).length;
           return matchesCount >= rankingMatchesLimit;
         });
 
@@ -1659,7 +1694,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   );
 
   // Classificações calculadas para a categoria ativa (Super 8 e Ranking possuem ranking individual por atleta)
-  const isIndividualRanking = isSuper8 || isRanking;
+  const isIndividualRanking = isIndividualScoreEvent(event);
 
   const standingsData = useMemo(() => {
     if (!activeCategory) return { teamStandings: [], playerStandings: [] };

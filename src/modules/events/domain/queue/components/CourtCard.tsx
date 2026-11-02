@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { TournamentMatch, TournamentPair, MatchSetScore } from '../../../types';
 import type { CourtState } from '../types';
+import { isSetScoreComplete } from '@modules/events/domain/brackets/engine/matchScoreEngine';
 import { getCourtColors, COURT_TEAM_STYLES } from '../../../../../constants';
 
 export { COURT_TEAM_STYLES };
@@ -75,6 +76,9 @@ export interface CourtCardProps {
   pairsById: Record<string, TournamentPair>;
   totalSets: number;
   gamesPerSet: number;
+  isTotalGamesSet: boolean;
+  tieBreak: boolean;
+  tieBreakAt: string;
   averageMatchDurationMinutes: number;
   refreshingMatchId: string | null;
   getPlayerNick: (p?: { nickname?: string; name?: string; email?: string; pin?: string }) => string;
@@ -105,6 +109,9 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   pairsById,
   totalSets,
   gamesPerSet,
+  isTotalGamesSet,
+  tieBreak,
+  tieBreakAt,
   averageMatchDurationMinutes,
   refreshingMatchId,
   getPlayerNick,
@@ -145,6 +152,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
   const parsedSets = activeMatch ? parseMatchSets(activeMatch, totalSets) : { scores: [], setsWon1: 0, setsWon2: 0 };
   const { scores, setsWon1, setsWon2 } = parsedSets;
+  const isSetWonByScore = (p1: number, p2: number) =>
+    isSetScoreComplete(p1, p2, gamesPerSet, { isTotalGamesSet, tieBreak, tieBreakAt });
   const matchCodeLabel = activeMatch ? activeMatch.matchCode || String(activeMatch.matchNumber || 1).padStart(2, '0') : '';
   const phaseLabel = activeMatch?.phase === 'chave1' ? 'Chave 1' : activeMatch?.phase === 'chave2' ? 'Chave 2' : activeMatch?.phase || 'Jogo';
 
@@ -170,6 +179,20 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
   const canTapScore = !isReadOnly && Boolean(activeMatch);
 
+  // Determina se já há um vencedor definido pelo placar
+  const setsToWin = Math.ceil(totalSets / 2);
+  const hasWinnerDefined =
+    totalSets === 1
+      ? (scores[0]?.p1 !== null &&
+          scores[0]?.p1 !== undefined &&
+          scores[0]?.p2 !== null &&
+          scores[0]?.p2 !== undefined &&
+          isSetWonByScore(Number(scores[0].p1), Number(scores[0].p2)))
+      : setsWon1 >= setsToWin || setsWon2 >= setsToWin;
+
+  // Botões de incremento desabilitados quando houver vencedor
+  const canIncrementScore = canTapScore && !hasWinnerDefined;
+
   // Determina qual set está em jogo no momento (só pula para o próximo se o anterior estiver finalizado)
   const getActiveSetIdx = useCallback((): number => {
     if (totalSets === 1) return 0;
@@ -183,11 +206,11 @@ export const CourtCard: React.FC<CourtCardProps> = ({
       if (cur.p1 === '' || cur.p2 === '') return i;
       const n1 = Number(cur.p1);
       const n2 = Number(cur.p2);
-      const isWon = (n1 >= gamesPerSet && n1 > n2) || (n2 >= gamesPerSet && n2 > n1);
+      const isWon = isSetWonByScore(n1, n2);
       if (!isWon) return i;
     }
     return Math.max(0, scores.length - 1);
-  }, [totalSets, scores, gamesPerSet]);
+  }, [totalSets, scores, gamesPerSet, isTotalGamesSet, tieBreak, tieBreakAt]);
 
   const applySetScore = useCallback(
     (setIdx: number, p1Val: string, p2Val: string) => {
@@ -206,7 +229,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
   const handleTapScore = useCallback(
     (player: 'p1' | 'p2', setIdxOverride?: number) => {
-      if (!canTapScore || !activeMatch) return;
+      if (!canIncrementScore || !activeMatch) return;
       const setIdx = setIdxOverride !== undefined ? setIdxOverride : getActiveSetIdx();
 
       const existing = latestScoresRef.current[setIdx] || {
@@ -228,7 +251,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
       applySetScore(setIdx, nextP1, nextP2);
     },
-    [canTapScore, activeMatch, getActiveSetIdx, scores, applySetScore]
+    [canIncrementScore, activeMatch, getActiveSetIdx, scores, applySetScore]
   );
 
   const handleUndo = useCallback(() => {
@@ -289,6 +312,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   const isAnyScorePositive = scores.some(
     (s) => (s.p1 !== null && Number(s.p1) > 0) || (s.p2 !== null && Number(s.p2) > 0)
   );
+  // Botão Undo permanece habilitado mesmo com vencedor (para permitir corrigir placar)
   const canUndo = canTapScore && (hasUndoSteps || isAnyScorePositive);
 
   return (
@@ -429,7 +453,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               {/* Equipe 1 — clique fora do input incrementa +1 */}
               <div
                 className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${
-                  canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
+                  canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
                 }`}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -437,7 +461,16 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 }}
               >
                 <div className="min-w-0 flex-1 pointer-events-none">
-                  <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>{team1Name}</p>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                      {team1P1Name || team1Name}
+                    </p>
+                    {team1P2Name && (
+                      <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                        {team1P2Name}
+                      </p>
+                    )}
+                  </div>
                   {team1Code && <p className={`text-xs font-bold ${t1Style.subText}`}>[{team1Code}]</p>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -453,7 +486,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     onBlur={onScoreBlur}
                     onClick={(e) => e.stopPropagation()}
                     className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-                      !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p1) >= gamesPerSet && Number(scores[0].p1) > Number(scores[0].p2)
+                      !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && isSetWonByScore(Number(scores[0].p1), Number(scores[0].p2)) && Number(scores[0].p1) > Number(scores[0].p2)
                         ? t1Style.wonInput
                         : t1Style.input
                     }`}
@@ -489,7 +522,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               {/* Equipe 2 — clique fora do input incrementa +1 */}
               <div
                 className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${
-                  canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
+                  canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
                 }`}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -497,7 +530,16 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 }}
               >
                 <div className="min-w-0 flex-1 pointer-events-none">
-                  <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>{team2Name}</p>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                      {team2P1Name || team2Name}
+                    </p>
+                    {team2P2Name && (
+                      <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                        {team2P2Name}
+                      </p>
+                    )}
+                  </div>
                   {team2Code && <p className={`text-xs font-bold ${t2Style.subText}`}>[{team2Code}]</p>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -513,7 +555,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     onBlur={onScoreBlur}
                     onClick={(e) => e.stopPropagation()}
                     className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-                      !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && Number(scores[0].p2) >= gamesPerSet && Number(scores[0].p2) > Number(scores[0].p1)
+                      !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && isSetWonByScore(Number(scores[0].p1), Number(scores[0].p2)) && Number(scores[0].p2) > Number(scores[0].p1)
                         ? t2Style.wonInput
                         : t2Style.input
                     }`}
@@ -526,7 +568,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               {/* Equipe 1 — clique fora do input incrementa +1 */}
               <div
                 className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${
-                  canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
+                  canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
                 }`}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -534,7 +576,16 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 }}
               >
                 <div className="min-w-0 flex-1 pointer-events-none">
-                  <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>{team1Name}</p>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                      {team1P1Name || team1Name}
+                    </p>
+                    {team1P2Name && (
+                      <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                        {team1P2Name}
+                      </p>
+                    )}
+                  </div>
                   {team1Code && <p className={`text-xs font-bold ${t1Style.subText}`}>[{team1Code}]</p>}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -546,7 +597,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                       setScore.p1 !== undefined &&
                       setScore.p2 !== null &&
                       setScore.p2 !== undefined &&
-                      Number(setScore.p1) >= gamesPerSet &&
+                      isSetWonByScore(Number(setScore.p1), Number(setScore.p2)) &&
                       Number(setScore.p1) > Number(setScore.p2);
 
                     return (
@@ -607,7 +658,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               {/* Equipe 2 — clique fora do input incrementa +1 */}
               <div
                 className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${
-                  canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
+                  canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
                 }`}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -615,7 +666,16 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 }}
               >
                 <div className="min-w-0 flex-1 pointer-events-none">
-                  <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>{team2Name}</p>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                      {team2P1Name || team2Name}
+                    </p>
+                    {team2P2Name && (
+                      <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                        {team2P2Name}
+                      </p>
+                    )}
+                  </div>
                   {team2Code && <p className={`text-xs font-bold ${t2Style.subText}`}>[{team2Code}]</p>}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -627,7 +687,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                       setScore.p1 !== undefined &&
                       setScore.p2 !== null &&
                       setScore.p2 !== undefined &&
-                      Number(setScore.p2) >= gamesPerSet &&
+                      isSetWonByScore(Number(setScore.p1), Number(setScore.p2)) &&
                       Number(setScore.p2) > Number(setScore.p1);
 
                     return (
@@ -673,10 +733,14 @@ export const CourtCard: React.FC<CourtCardProps> = ({
             </div>
             <button
               type="button"
-              disabled={isReadOnly}
+              disabled={isReadOnly || !hasWinnerDefined}
               onClick={() => onFinishCourtMatch(activeMatch.id)}
               className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-              title="Registrar placar final e liberar a quadra"
+              title={
+                hasWinnerDefined
+                  ? 'Registrar placar final e liberar a quadra'
+                  : 'Defina um vencedor no placar para poder finalizar a partida'
+              }
             >
               <Check size={14} />
               Finalizar partida

@@ -37,7 +37,7 @@ import {
 } from '@modules/events/types';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
-import { isRankingEvent, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
+import { isIndividualScoreEvent, isRankingEvent, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import { openPdfOrUrl } from '@modules/events/services/openRegulationPdf';
 import { EventCoAdminsManager } from './EventCoAdminsManager';
 import { EventMatchRulesEditor } from './EventMatchRulesEditor';
@@ -538,6 +538,20 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Pontuação</label>
+          <select
+            value={editingEvent.scoreTarget || (isIndividualScoreEvent(editingEvent) ? 'Inscrito' : 'Time')}
+            disabled={isAdminOnlyDisabled}
+            onChange={(e) => handleProtectedChange({ ...editingEvent, scoreTarget: e.target.value as 'Inscrito' | 'Time' })}
+            className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+          >
+            <option value="Inscrito">Inscrito</option>
+            <option value="Time">Time</option>
+          </select>
+          <p className="text-[10px] text-slate-500 ml-1">Define se a classificação considera os resultados de cada inscrito ou do time.</p>
         </div>
 
         {/* Config Ranking - condicional exclusivo se for do tipo Ranking */}

@@ -1,6 +1,8 @@
 export {
   parseMatchSets,
   parseScoresFromMatch,
+  isSetScoreComplete,
+  type MatchSetCompletionRules,
 } from './engine/matchScoreEngine';
 export {
   createManualMatch,

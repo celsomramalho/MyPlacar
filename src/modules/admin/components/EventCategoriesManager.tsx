@@ -17,7 +17,7 @@ import {
   useTeamFormationActions,
 } from '@modules/events/domain/brackets';
 import { updateSuper8DuplasProgression } from '@modules/events/services/matchProgression';
-import { isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
+import { isIndividualScoreEvent, isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb, getAuthInstance } from '@infra/firebase';
 import { updateEvent, saveEventEntry, deleteEventEntry } from '@infra/firebase/events';
@@ -70,6 +70,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [format, setFormat] = useState<'Simples' | 'Duplas'>('Duplas');
+  const [duplaType, setDuplaType] = useState<'Fixo' | 'Livre'>('Fixo');
+  const [phaseDuplaTypes, setPhaseDuplaTypes] = useState<NonNullable<EventCategory['phaseDuplaTypes']>>({});
   const [priority, setPriority] = useState<number>(categories.length + 1);
   const [sportId, setSportId] = useState<string>(activeSports[0]?.id || 'beach-tennis');
   const [abbreviation, setAbbreviation] = useState('');
@@ -110,6 +112,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setName('');
     setDescription('');
     setFormat('Duplas');
+    setDuplaType('Fixo');
+    setPhaseDuplaTypes({});
     setPriority(categories.length + 1);
     setSportId(activeSports[0]?.id || 'beach-tennis');
     setAbbreviation('');
@@ -158,6 +162,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setName(cat.name);
     setDescription(cat.description || '');
     setFormat(cat.format);
+    setDuplaType(cat.duplaType ?? 'Fixo');
+    setPhaseDuplaTypes(cat.phaseDuplaTypes ?? {});
     setPriority(cat.priority);
     setSportId(cat.sportId);
     setAbbreviation(cat.abbreviation || '');
@@ -184,6 +190,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
               name: name.trim(),
               description: description.trim(),
               format,
+              duplaType: format === 'Duplas' ? duplaType : undefined,
+              phaseDuplaTypes: format === 'Duplas' ? phaseDuplaTypes : undefined,
               priority,
               sportId,
               sportName,
@@ -200,6 +208,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
         name: name.trim(),
         description: description.trim(),
         format,
+        duplaType: format === 'Duplas' ? duplaType : undefined,
+        phaseDuplaTypes: format === 'Duplas' ? phaseDuplaTypes : undefined,
         priority,
         sportId,
         sportName,
@@ -238,7 +248,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   };
 
   const isRanking = isRankingEvent(event);
-  const isIndividualRanking = isSuper8 || isSuper8Duplas || isRanking;
+  const isIndividualRanking = isIndividualScoreEvent(event);
   const isManualMatchDraw = event.matchDrawType === 'Manual';
   const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;
   const totalSets = (event.setsCount || event.config?.sets || 1) as number;
@@ -1005,6 +1015,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
           name={name}
           description={description}
           format={format}
+          duplaType={duplaType}
+          phaseDuplaTypes={phaseDuplaTypes}
           sportId={sportId}
           abbreviation={abbreviation}
           priority={priority}
@@ -1015,6 +1027,13 @@ export const EventCategoriesManager: React.FC<Props> = ({
           onNameChange={setName}
           onDescriptionChange={setDescription}
           onFormatChange={setFormat}
+          onDuplaTypeChange={setDuplaType}
+          onPhaseDuplaTypeChange={(phase, value) => setPhaseDuplaTypes((previous) => {
+            const next = { ...previous };
+            if (value) next[phase] = value;
+            else delete next[phase];
+            return next;
+          })}
           onSportIdChange={setSportId}
           onAbbreviationChange={setAbbreviation}
           onPriorityChange={setPriority}
@@ -1071,6 +1090,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     name={name}
                     description={description}
                     format={format}
+                    duplaType={duplaType}
+                    phaseDuplaTypes={phaseDuplaTypes}
                     sportId={sportId}
                     abbreviation={abbreviation}
                     priority={priority}
@@ -1081,6 +1102,13 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onNameChange={setName}
                     onDescriptionChange={setDescription}
                     onFormatChange={setFormat}
+                    onDuplaTypeChange={setDuplaType}
+                    onPhaseDuplaTypeChange={(phase, value) => setPhaseDuplaTypes((previous) => {
+                      const next = { ...previous };
+                      if (value) next[phase] = value;
+                      else delete next[phase];
+                      return next;
+                    })}
                     onSportIdChange={setSportId}
                     onAbbreviationChange={setAbbreviation}
                     onPriorityChange={setPriority}

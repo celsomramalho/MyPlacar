@@ -18,7 +18,12 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
   payment,
   readOnly = false,
 }) => {
-  const [paymentMode, setPaymentMode] = useState<'mercadopago' | 'manual'>('mercadopago');
+  // Se o tipo de pagamento do evento é manual, inicia sempre no modo manual
+  const eventPaymentType = event.paymentType ?? 'manual';
+  const allowMercadoPago = eventPaymentType === 'mercadopago';
+  const [paymentMode, setPaymentMode] = useState<'mercadopago' | 'manual'>(
+    allowMercadoPago ? 'mercadopago' : 'manual',
+  );
 
   if (pricing.isFree) {
     return (
@@ -80,9 +85,10 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
         </span>
       </div>
 
-      {/* Escolha do Método */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Opção Pix Automático */}
+      {/* Escolha do Método — só exibe os dois cards se MP estiver habilitado */}
+      <div className={`grid grid-cols-1 gap-3 ${allowMercadoPago ? 'sm:grid-cols-2' : ''}`}>
+        {/* Opção Pix Automático — oculta quando tipo pagamento = manual */}
+        {allowMercadoPago && (
         <div
           onClick={() => setPaymentMode('mercadopago')}
           className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-3 ${
@@ -107,11 +113,14 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
             Recomendado · Sem espera
           </span>
         </div>
+        )}
 
         {/* Opção Manual / Comprovante */}
         <div
           onClick={() => setPaymentMode('manual')}
-          className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+          className={`p-4 rounded-2xl border-2 transition-all flex flex-col justify-between gap-3 ${
+            allowMercadoPago ? 'cursor-pointer' : 'cursor-default'
+          } ${
             paymentMode === 'manual'
               ? 'bg-blue-50/50 border-blue-500 shadow-xs'
               : 'bg-white border-slate-200 hover:border-slate-300'

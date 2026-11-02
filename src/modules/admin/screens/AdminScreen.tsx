@@ -290,6 +290,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       active: true,
       eventStatus: 'Em configuração',
       eventType: 'Chave classificatória',
+      scoreTarget: 'Inscrito',
       registrationType: 'App',
       setsCount: 1,
       gamesPerSet: 6,

@@ -58,3 +58,10 @@ export const isSuper8DuplasEvent = (event?: Partial<TournamentEvent> | null): bo
 export const isSinglePlayerEvent = (event?: Partial<TournamentEvent> | null): boolean => {
   return isSuper8Event(event) || isSuper8DuplasEvent(event) || isRankingEvent(event);
 };
+
+/** O campo explícito prevalece; eventos antigos mantêm a classificação histórica pelo tipo. */
+export const isIndividualScoreEvent = (event?: Partial<TournamentEvent> | null): boolean => {
+  if (!event) return true;
+  if (event.scoreTarget) return event.scoreTarget === 'Inscrito';
+  return isSinglePlayerEvent(event);
+};

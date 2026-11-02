@@ -18,6 +18,7 @@
 import { useRef, useCallback } from 'react';
 import type { TournamentEvent, TournamentMatch, MatchSetScore } from '@modules/events/types';
 import { updatePlayoffProgression } from '@modules/events/domain/brackets/engine/bracketProgressionEngine';
+import { isSetScoreComplete } from '@modules/events/domain/brackets/engine/matchScoreEngine';
 import { resolveMatchRules } from '../../rules/eventMatchRules';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
@@ -127,7 +128,8 @@ export function useCourtMatchActions({
         event.sportRules,
         match.phase,
         (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
-        Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6))
+        Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6)),
+        event.sportId || event.config?.sportType
       );
       const totalSets = customTotalSets ?? resolved.setsCount;
       const gamesPerSet = resolved.gamesPerSet;
@@ -151,8 +153,10 @@ export function useCourtMatchActions({
         if (s.p1 != null && s.p2 != null) {
           const n1 = Number(s.p1);
           const n2 = Number(s.p2);
-          if (n1 >= gamesPerSet && n1 > n2) setsWon1++;
-          else if (n2 >= gamesPerSet && n2 > n1) setsWon2++;
+          const isTotalGamesRule = (event.sportId || event.config?.sportType) === 'beach-tennis' && gamesPerSet === 7;
+          const setComplete = isSetScoreComplete(n1, n2, gamesPerSet, { isTotalGamesSet: isTotalGamesRule, tieBreak: resolved.tieBreak, tieBreakAt: resolved.tieBreakAt });
+          if (setComplete && n1 > n2) setsWon1++;
+          else if (setComplete && n2 > n1) setsWon2++;
         }
       });
 
@@ -292,7 +296,8 @@ export function useCourtMatchActions({
           event.sportRules,
           m.phase,
           (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
-          Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6))
+          Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6)),
+          event.sportId || event.config?.sportType
         );
         const totalSets = resolved.setsCount;
         const gamesPerSet = resolved.gamesPerSet;
@@ -317,8 +322,10 @@ export function useCourtMatchActions({
             hasAnyScore = true;
             const n1 = Number(s.p1);
             const n2 = Number(s.p2);
-            if (n1 >= gamesPerSet && n1 > n2) setsWon1++;
-            else if (n2 >= gamesPerSet && n2 > n1) setsWon2++;
+            const isTotalGamesRule = (event.sportId || event.config?.sportType) === 'beach-tennis' && gamesPerSet === 7;
+            const setComplete = isSetScoreComplete(n1, n2, gamesPerSet, { isTotalGamesSet: isTotalGamesRule, tieBreak: resolved.tieBreak, tieBreakAt: resolved.tieBreakAt });
+            if (setComplete && n1 > n2) setsWon1++;
+            else if (setComplete && n2 > n1) setsWon2++;
           } else if (s.p1 != null || s.p2 != null) {
             hasAnyScore = true;
           }
@@ -357,7 +364,8 @@ export function useCourtMatchActions({
           event.sportRules,
           m.phase,
           (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
-          Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6))
+          Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6)),
+          event.sportId || event.config?.sportType
         );
         const totalSets = resolved.setsCount;
         const gamesPerSet = resolved.gamesPerSet;
@@ -385,8 +393,10 @@ export function useCourtMatchActions({
             hasAnyScore = true;
             const n1 = Number(s.p1);
             const n2 = Number(s.p2);
-            if (n1 >= gamesPerSet && n1 > n2) setsWon1++;
-            else if (n2 >= gamesPerSet && n2 > n1) setsWon2++;
+            const isTotalGamesRule = (event.sportId || event.config?.sportType) === 'beach-tennis' && gamesPerSet === 7;
+            const setComplete = isSetScoreComplete(n1, n2, gamesPerSet, { isTotalGamesSet: isTotalGamesRule, tieBreak: resolved.tieBreak, tieBreakAt: resolved.tieBreakAt });
+            if (setComplete && n1 > n2) setsWon1++;
+            else if (setComplete && n2 > n1) setsWon2++;
           } else if (s.p1 != null || s.p2 != null) {
             hasAnyScore = true;
           }

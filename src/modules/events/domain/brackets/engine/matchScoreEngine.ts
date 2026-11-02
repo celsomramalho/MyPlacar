@@ -1,5 +1,36 @@
 import type { MatchSetScore, TournamentMatch } from '@modules/events/types';
 
+export interface MatchSetCompletionRules {
+  isTotalGamesSet?: boolean;
+  tieBreak?: boolean;
+  tieBreakAt?: string;
+}
+
+/** Resolve se um placar de games representa um set concluído segundo as regras configuradas. */
+export const isSetScoreComplete = (
+  p1: number,
+  p2: number,
+  gamesPerSet: number,
+  rules: MatchSetCompletionRules = {}
+): boolean => {
+  if (rules.isTotalGamesSet) return p1 + p2 >= gamesPerSet;
+
+  const winner = Math.max(p1, p2);
+  const loser = Math.min(p1, p2);
+  // Fast 4 vence ao alcançar 4 games; o empate em 3-3 não encerra o set.
+  if (gamesPerSet === 4) return winner >= 4;
+
+  if (rules.tieBreak) {
+    const [tbP1, tbP2] = (rules.tieBreakAt || '6-6').split('-').map(Number);
+    if (Number.isFinite(tbP1) && Number.isFinite(tbP2)) {
+      // No score da categoria o tie-break aparece como um game adicional (6-6 → 7-6).
+      if ((p1 === tbP1 + 1 && p2 === tbP2) || (p2 === tbP2 + 1 && p1 === tbP1)) return true;
+    }
+  }
+
+  return winner >= gamesPerSet && winner - loser >= 2;
+};
+
 export const parseScoresFromMatch = (match: TournamentMatch) => {
   let g1 = 0;
   let g2 = 0;
@@ -42,7 +73,8 @@ export const parseScoresFromMatch = (match: TournamentMatch) => {
 export const parseMatchSets = (
   match: TournamentMatch,
   totalSetsCount: number,
-  gamesPerSet = 6
+  gamesPerSet = 6,
+  completionRules: MatchSetCompletionRules = {}
 ): { scores: MatchSetScore[]; setsWon1: number; setsWon2: number } => {
   const scores: MatchSetScore[] = Array.from({ length: totalSetsCount }, (_, i) => {
     if (match.scores && match.scores[i]) {
@@ -68,9 +100,10 @@ export const parseMatchSets = (
     if (s.p1 !== null && s.p1 !== undefined && s.p2 !== null && s.p2 !== undefined) {
       const n1 = Number(s.p1);
       const n2 = Number(s.p2);
-      if (n1 >= gamesPerSet && n1 > n2) {
+      const complete = isSetScoreComplete(n1, n2, gamesPerSet, completionRules);
+      if (complete && n1 > n2) {
         setsWon1 += 1;
-      } else if (n2 >= gamesPerSet && n2 > n1) {
+      } else if (complete && n2 > n1) {
         setsWon2 += 1;
       }
     }

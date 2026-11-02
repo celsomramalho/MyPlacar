@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw } from 'lucide-react';
 import type { TournamentMatch, TournamentPair } from '../../types';
-import { getPhaseLabel, parseMatchSets } from '../../domain/brackets';
+import { getPhaseLabel, parseMatchSets, isSetScoreComplete } from '../../domain/brackets';
 import { COURT_COLOR_PAIRS, COURT_TEAM_STYLES, getCourtColors } from '../../../../constants';
 
 type LegacyScoreChangeHandler = (matchId: string, player: 'p1' | 'p2', value: string) => void;
@@ -20,6 +20,9 @@ export interface MatchCardProps {
   isRanking?: boolean;
   totalSets?: number;
   gamesPerSet?: number;
+  isTotalGamesSet?: boolean;
+  tieBreak?: boolean;
+  tieBreakAt?: string;
   liveScore?: { p1Score: number | string; p2Score: number | string };
   queuePosition?: number;
 
@@ -49,6 +52,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   isRanking = false,
   totalSets = 1,
   gamesPerSet = 6,
+  isTotalGamesSet = false,
+  tieBreak = false,
+  tieBreakAt = '6-6',
   liveScore,
   queuePosition = 0,
   canSubmitScore = false,
@@ -74,13 +80,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   const pair1 = getPair(match.pair1Id, match.pair1);
   const pair2 = getPair(match.pair2Id, match.pair2);
 
+  const team1P1Name = pair1 ? pair1.p1.nickname || pair1.p1.name : '';
+  const team1P2Name = pair1?.p2 ? pair1.p2.nickname || pair1.p2.name : '';
   const team1Name = pair1
-    ? `${pair1.p1.nickname || pair1.p1.name} & ${pair1.p2.nickname || pair1.p2.name}`
+    ? (team1P2Name ? `${team1P1Name} & ${team1P2Name}` : team1P1Name)
     : match.pair1Label || 'A definir';
   const team1Code = pair1?.teamCode || (pair1?.teamNumber ? `Time ${pair1.teamNumber}` : '');
 
+  const team2P1Name = pair2 ? pair2.p1.nickname || pair2.p1.name : '';
+  const team2P2Name = pair2?.p2 ? pair2.p2.nickname || pair2.p2.name : '';
   const team2Name = pair2
-    ? `${pair2.p1.nickname || pair2.p1.name} & ${pair2.p2.nickname || pair2.p2.name}`
+    ? (team2P2Name ? `${team2P1Name} & ${team2P2Name}` : team2P1Name)
     : match.pair2Label || 'A definir';
   const team2Code = pair2?.teamCode || (pair2?.teamNumber ? `Time ${pair2.teamNumber}` : '');
 
@@ -131,7 +141,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   const t2Style = COURT_TEAM_STYLES[courtColors.p2Color] || COURT_TEAM_STYLES.vermelho;
 
   // Dados de Sets e Pontuações
-  const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets, gamesPerSet);
+  const completionRules = { isTotalGamesSet, tieBreak, tieBreakAt };
+  const { scores, setsWon1, setsWon2 } = parseMatchSets(match, totalSets, gamesPerSet, completionRules);
+  const isSetWonByScore = (p1: number, p2: number) => isSetScoreComplete(p1, p2, gamesPerSet, completionRules);
 
   // ── Tap-to-score e Undo com histórico fiel de ambos os times ──────────────
   // Guarda a pilha de estados anteriores: { setIdx, p1, p2 }
@@ -152,6 +164,20 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
   const canTapScore = canSubmitScore && !isFinished && (!!onUndoScore || !!onScoreChange);
 
+  // Determina se já há um vencedor definido pelo placar
+  const setsToWin = Math.ceil(totalSets / 2);
+  const hasWinnerDefined =
+    totalSets === 1
+      ? (scores[0]?.p1 !== null &&
+          scores[0]?.p1 !== undefined &&
+          scores[0]?.p2 !== null &&
+          scores[0]?.p2 !== undefined &&
+          isSetWonByScore(Number(scores[0].p1), Number(scores[0].p2)))
+      : setsWon1 >= setsToWin || setsWon2 >= setsToWin;
+
+  // Botões de incremento só habilitados se canTapScore e ainda NÃO houver vencedor
+  const canIncrementScore = canTapScore && !hasWinnerDefined;
+
   // Determina qual set está em jogo no momento (só pula para o próximo se o anterior estiver finalizado)
   const getActiveSetIdx = useCallback((): number => {
     if (totalSets === 1) return 0;
@@ -165,11 +191,11 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       if (cur.p1 === '' || cur.p2 === '') return i;
       const n1 = Number(cur.p1);
       const n2 = Number(cur.p2);
-      const isWon = (n1 >= gamesPerSet && n1 > n2) || (n2 >= gamesPerSet && n2 > n1);
+      const isWon = isSetWonByScore(n1, n2);
       if (!isWon) return i;
     }
     return Math.max(0, scores.length - 1);
-  }, [totalSets, scores, gamesPerSet]);
+  }, [totalSets, scores, gamesPerSet, isTotalGamesSet, tieBreak, tieBreakAt]);
 
   const applySetScore = useCallback(
     (setIdx: number, p1Val: string, p2Val: string) => {
@@ -192,7 +218,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
   const handleTapScore = useCallback(
     (player: 'p1' | 'p2', setIdxOverride?: number) => {
-      if (!canTapScore) return;
+      if (!canIncrementScore) return;
       const setIdx = setIdxOverride !== undefined ? setIdxOverride : getActiveSetIdx();
 
       const existing = latestScoresRef.current[setIdx] || {
@@ -214,7 +240,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
       applySetScore(setIdx, nextP1, nextP2);
     },
-    [canTapScore, getActiveSetIdx, scores, applySetScore]
+    [canIncrementScore, getActiveSetIdx, scores, applySetScore]
   );
 
   const handleUndo = useCallback(() => {
@@ -279,6 +305,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   const isAnyScorePositive = scores.some(
     (s) => (s.p1 !== null && Number(s.p1) > 0) || (s.p2 !== null && Number(s.p2) > 0)
   );
+  // Botão Undo permanece habilitado mesmo com vencedor (para permitir corrigir/voltar placar)
   const canUndo = canTapScore && (hasUndoSteps || isAnyScorePositive);
 
   const isSet1WonByP1 =
@@ -286,7 +313,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     scores[0]?.p1 !== undefined &&
     scores[0]?.p2 !== null &&
     scores[0]?.p2 !== undefined &&
-    ((Number(scores[0].p1) >= gamesPerSet && Number(scores[0].p1) > Number(scores[0].p2)) ||
+    (isSetWonByScore(Number(scores[0].p1), Number(scores[0].p2)) && Number(scores[0].p1) > Number(scores[0].p2) ||
       (isFinished && match.winnerPairId === match.pair1Id));
 
   const isSet1WonByP2 =
@@ -294,7 +321,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     scores[0]?.p1 !== undefined &&
     scores[0]?.p2 !== null &&
     scores[0]?.p2 !== undefined &&
-    ((Number(scores[0].p2) >= gamesPerSet && Number(scores[0].p2) > Number(scores[0].p1)) ||
+    (isSetWonByScore(Number(scores[0].p1), Number(scores[0].p2)) && Number(scores[0].p2) > Number(scores[0].p1) ||
       (isFinished && match.winnerPairId === match.pair2Id));
 
   // Metadados de Início e Duração
@@ -497,7 +524,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
         <div className="space-y-2">
           {/* Equipe 1 — clique fora do input incrementa +1 */}
           <div
-            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
+            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
             onClick={(e) => {
               // Não aciona se o clique foi diretamente no input
               if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -506,9 +533,16 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           >
             <div className="min-w-0 flex-1 pointer-events-none">
               <div className="flex flex-wrap items-center gap-2">
-                <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
-                  {team1Name}
-                </p>
+                <div className="min-w-0">
+                  <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                    {team1P1Name || team1Name}
+                  </p>
+                  {team1P2Name && (
+                    <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                      {team1P2Name}
+                    </p>
+                  )}
+                </div>
                 {isFinished && match.winnerPairId === match.pair1Id && (
                   <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
                 )}
@@ -575,7 +609,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
           {/* Equipe 2 — clique fora do input incrementa +1 */}
           <div
-            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
+            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
             onClick={(e) => {
               if ((e.target as HTMLElement).tagName === 'INPUT') return;
               handleTapScore('p2', 0);
@@ -583,9 +617,16 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           >
             <div className="min-w-0 flex-1 pointer-events-none">
               <div className="flex flex-wrap items-center gap-2">
-                <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
-                  {team2Name}
-                </p>
+                <div className="min-w-0">
+                  <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                    {team2P1Name || team2Name}
+                  </p>
+                  {team2P2Name && (
+                    <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                      {team2P2Name}
+                    </p>
+                  )}
+                </div>
                 {isFinished && match.winnerPairId === match.pair2Id && (
                   <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
                 )}
@@ -630,7 +671,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
         <div className="space-y-2">
           {/* Equipe 1 */}
           <div
-            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
+            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
             onClick={(e) => {
               if ((e.target as HTMLElement).tagName === 'INPUT') return;
               handleTapScore('p1');
@@ -638,9 +679,16 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           >
             <div className="min-w-0 flex-1 pointer-events-none">
               <div className="flex flex-wrap items-center gap-2">
-                <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
-                  {team1Name}
-                </p>
+                <div className="min-w-0">
+                  <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                    {team1P1Name || team1Name}
+                  </p>
+                  {team1P2Name && (
+                    <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
+                      {team1P2Name}
+                    </p>
+                  )}
+                </div>
                 {isFinished && match.winnerPairId === match.pair1Id && (
                   <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
                 )}
@@ -665,7 +713,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   setScore.p1 !== undefined &&
                   setScore.p2 !== null &&
                   setScore.p2 !== undefined &&
-                  Number(setScore.p1) >= gamesPerSet &&
+                  isSetWonByScore(Number(setScore.p1), Number(setScore.p2)) &&
                   Number(setScore.p1) > Number(setScore.p2);
 
                 return (
@@ -726,7 +774,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
           {/* Equipe 2 */}
           <div
-            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${canTapScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
+            className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''}`}
             onClick={(e) => {
               if ((e.target as HTMLElement).tagName === 'INPUT') return;
               handleTapScore('p2');
@@ -734,9 +782,16 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           >
             <div className="min-w-0 flex-1 pointer-events-none">
               <div className="flex flex-wrap items-center gap-2">
-                <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
-                  {team2Name}
-                </p>
+                <div className="min-w-0">
+                  <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                    {team2P1Name || team2Name}
+                  </p>
+                  {team2P2Name && (
+                    <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
+                      {team2P2Name}
+                    </p>
+                  )}
+                </div>
                 {isFinished && match.winnerPairId === match.pair2Id && (
                   <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
                 )}
@@ -761,7 +816,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   setScore.p1 !== undefined &&
                   setScore.p2 !== null &&
                   setScore.p2 !== undefined &&
-                  Number(setScore.p2) >= gamesPerSet &&
+                  isSetWonByScore(Number(setScore.p1), Number(setScore.p2)) &&
                   Number(setScore.p2) > Number(setScore.p1);
 
                 return (
@@ -812,9 +867,14 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             {onFinishMatch && (
               <button
                 type="button"
+                disabled={!hasWinnerDefined}
                 onClick={() => onFinishMatch(match.id)}
-                className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm cursor-pointer"
-                title="Registrar placar final e concluir partida"
+                className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                title={
+                  hasWinnerDefined
+                    ? 'Registrar placar final e concluir partida'
+                    : 'Defina um vencedor no placar para poder finalizar a partida'
+                }
               >
                 <Check size={14} />
                 Finalizar partida

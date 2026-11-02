@@ -17,6 +17,7 @@
 import { useMemo, useEffect, useRef, useCallback, useState } from 'react';
 import type { TournamentEvent, TournamentMatch, TournamentPair, MatchSetScore } from '@modules/events/types';
 import { resolveMatchRules } from '../../rules/eventMatchRules';
+import { isSetScoreComplete } from '@modules/events/domain/brackets/engine/matchScoreEngine';
 import { calculateQueueState } from '../engine/queueEngine';
 import type { QueueCalculationResult } from '../types';
 
@@ -45,6 +46,10 @@ export interface UseCourtQueueResult extends QueueCalculationResult {
   totalSets: number;
   /** Nº de games por set configurados para o evento */
   gamesPerSet: number;
+  /** Formato em que o set termina ao completar um total combinado de games. */
+  isTotalGamesSet: boolean;
+  tieBreak: boolean;
+  tieBreakAt: string;
 }
 
 // ─── Implementação ────────────────────────────────────────────────────────────
@@ -121,12 +126,17 @@ export function useCourtQueue(
   );
 
   // ─── Configurações de sets/games ──────────────────────────────────────────
-  const totalSets = (event.setsCount || event.config?.sets || 1) as number;
-  const gamesPerSet = Number(
+  const fallbackSets = (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5;
+  const fallbackGames = Number(
     event.gamesPerSet ||
     event.config?.gamesPerSet ||
     (event.eventType === 'Super 8' ? 4 : 6)
   );
+  const sportId = event.sportId || event.config?.sportType;
+  const defaultRules = resolveMatchRules(event.sportRules, undefined, fallbackSets, fallbackGames, sportId);
+  const totalSets = defaultRules.setsCount;
+  const gamesPerSet = defaultRules.gamesPerSet;
+  const isTotalGamesSet = sportId === 'beach-tennis' && gamesPerSet === 7;
 
   const parseMatchSets = useCallback(
     (match: TournamentMatch, customSets?: number) => {
@@ -134,7 +144,8 @@ export function useCourtQueue(
         event.sportRules,
         match.phase,
         (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
-        Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6))
+        Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6)),
+        sportId
       );
       const sets = customSets ?? resolved.setsCount;
       const gpS = resolved.gamesPerSet;
@@ -157,8 +168,10 @@ export function useCourtQueue(
         if (s.p1 != null && s.p2 != null) {
           const n1 = Number(s.p1);
           const n2 = Number(s.p2);
-          if (n1 >= gpS && n1 > n2) setsWon1++;
-          else if (n2 >= gpS && n2 > n1) setsWon2++;
+          const isTotalGamesRule = sportId === 'beach-tennis' && gpS === 7;
+          const setComplete = isSetScoreComplete(n1, n2, gpS, { isTotalGamesSet: isTotalGamesRule, tieBreak: resolved.tieBreak, tieBreakAt: resolved.tieBreakAt });
+          if (setComplete && n1 > n2) setsWon1++;
+          else if (setComplete && n2 > n1) setsWon2++;
         }
       });
 
@@ -176,5 +189,8 @@ export function useCourtQueue(
     parseMatchSets,
     totalSets,
     gamesPerSet,
+    isTotalGamesSet,
+    tieBreak: defaultRules.tieBreak,
+    tieBreakAt: defaultRules.tieBreakAt,
   };
 }
