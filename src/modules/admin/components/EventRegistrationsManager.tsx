@@ -1338,8 +1338,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                                   {entry.name || entry.nickname}
                                 </p>
                                 {isEntryCancelled && (
-                                  <span className="bg-red-100 text-red-700 border border-red-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider" title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição cancelada ou desativada'}>
-                                    {entry.paymentStatus === 'Cancelado' ? 'CANCELADO' : 'DESATIVADO'} {entry.disabledReason ? `• ${entry.disabledReason}` : ''}
+                                  <span className="bg-red-100 text-red-700 border border-red-200 text-[9px] font-bold px-2 py-0.5 rounded-md" title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição cancelada ou desativada'}>
+                                    {entry.paymentStatus === 'Cancelado' ? 'Cancelado' : 'Desativado'} {entry.disabledReason ? `• ${entry.disabledReason}` : ''}
                                   </span>
                                 )}
                               </>
@@ -1371,7 +1371,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                         {/* Linha 4: Status do Pagamento + Valores */}
                         <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                           <span
-                            className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                            className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-bold ${
                               entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || (isFreeEvent && entry.paymentStatus !== 'Cancelado')
                                 ? 'bg-emerald-100 text-emerald-700'
                                 : entry.paymentStatus === 'Isento'
@@ -1386,7 +1386,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                               : entry.paymentStatus === 'Pago'
                               ? 'Confirmado'
                               : entry.paymentStatus === 'Aguardando Confirmação'
-                              ? 'Ag. Confirmação'
+                              ? 'Ag. confirmação'
                               : entry.paymentStatus || 'Pendente'}
                           </span>
                           <span className="text-xs font-bold text-slate-600">

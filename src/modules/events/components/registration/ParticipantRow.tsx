@@ -131,13 +131,13 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
                 {isCurrentUser && <span className="text-[10px] text-indigo-600 font-bold ml-1">(você)</span>}
               </p>
 
-              {/* Badge CANCELADO / DESATIVADO */}
+              {/* Badge Cancelado / Desativado */}
               {isCancelled && (
                 <span
-                  className="bg-red-100 text-red-700 border border-red-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider"
+                  className="bg-red-100 text-red-700 border border-red-200 text-[9px] font-bold px-2 py-0.5 rounded-md"
                   title={entry.disabledReason ? `Motivo: ${entry.disabledReason}` : 'Inscrição cancelada ou desativada'}
                 >
-                  {entry.paymentStatus === 'Cancelado' ? 'CANCELADO' : 'DESATIVADO'}
+                  {entry.paymentStatus === 'Cancelado' ? 'Cancelado' : 'Desativado'}
                 </span>
               )}
 
@@ -216,7 +216,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
           <div className="flex items-center gap-2">
             {isSimplified && !isCurrentUser && !isCancelled && (
               <span
-                className="bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider"
+                className="bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-bold px-2 py-0.5 rounded-md"
                 title="Cadastro temporário — aguardando vinculação ao perfil do atleta"
               >
                 Temporário

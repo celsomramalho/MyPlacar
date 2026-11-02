@@ -1949,7 +1949,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-black text-slate-800">Minha inscrição no evento</p>
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black ${
                         isCancelled
                           ? 'bg-red-100 text-red-700 border border-red-200'
                           : isConfirmed
@@ -1959,14 +1959,14 @@ export const EventDetailScreen: React.FC<Props> = ({
                           : 'bg-amber-100 text-amber-700 border border-amber-200'
                       }`}>
                         {currentUserEntry.disabled && currentUserEntry.paymentStatus !== 'Cancelado'
-                          ? 'Inscrição Desativada'
+                          ? 'Inscrição desativada'
                           : isCancelled
-                          ? 'Inscrição Cancelada'
+                          ? 'Inscrição cancelada'
                           : isConfirmed
-                          ? 'Inscrição Ativa'
+                          ? 'Inscrição ativa'
                           : isWaitingConfirmation
-                          ? 'Pendente de Confirmação'
-                          : 'Pendente de Pagamento'}
+                          ? 'Pendente de confirmação'
+                          : 'Pendente de pagamento'}
                       </span>
                     </div>
                     <p className="text-[11px] font-bold text-slate-400 mt-0.5">
