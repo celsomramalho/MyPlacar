@@ -37,6 +37,7 @@ import {
 } from './steps';
 
 import type { UserProfile } from '@modules/auth/types';
+import { compressImageToDataUrl } from '@shared/utils/imageResize';
 
 export interface EventRegistrationFormProps {
   event: TournamentEvent;
@@ -233,6 +234,42 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
     setIsSubmitting(true);
     try {
+      // Se comprovante foi anexado (pagamento manual), processa e salva comprovante e define status
+      if (payment.manualReceiptFile) {
+        submission.paymentStatus = 'Aguardando Confirmação';
+        try {
+          let receiptDataUrl = '';
+          if (payment.manualReceiptFile.type.startsWith('image/')) {
+            receiptDataUrl = await compressImageToDataUrl(payment.manualReceiptFile, {
+              maxWidth: 1200,
+              maxHeight: 1200,
+              quality: 0.7,
+            });
+          } else {
+            receiptDataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => resolve(String(e.target?.result || ''));
+              reader.onerror = (err) => reject(err);
+              reader.readAsDataURL(payment.manualReceiptFile!);
+            });
+          }
+
+          const existingPayments = Array.isArray(submission.payments) ? [...submission.payments] : [];
+          existingPayments.push({
+            id: `manual-${Date.now()}`,
+            amount: submission.dueAmount || form.pricing.dueAmount || 0,
+            date: Date.now(),
+            receiptUrl: receiptDataUrl,
+            receiptFileName: payment.manualReceiptFile.name,
+            provider: 'manual',
+            status: 'pending',
+          });
+          submission.payments = existingPayments;
+        } catch (fileErr) {
+          console.warn('[EventRegistrationForm] Erro ao processar arquivo de comprovante:', fileErr);
+        }
+      }
+
       await onSave(submission);
       // Sincroniza WhatsApp e Gênero de volta ao perfil do usuário se tiver mudado
       if (onProfileSync && userProfile) {

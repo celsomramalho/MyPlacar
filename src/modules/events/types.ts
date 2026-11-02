@@ -1,6 +1,16 @@
 export * from './domain/rules/eventMatchRules';
 import { getPhaseCategory, type EventSportRules } from './domain/rules/eventMatchRules';
 
+/** Status de pagamento de uma inscrição */
+export type PaymentStatus =
+  | 'Pendente'
+  | 'Aguardando Confirmação'
+  | 'Confirmado'
+  | 'Pago'
+  | 'Isento'
+  | 'Recusado'
+  | 'Cancelado';
+
 export interface TournamentPair {
   id: string;
   p1: TournamentEntry;
@@ -345,7 +355,7 @@ export interface TournamentEntry {
   checkInDate?: string;
   checkInDates?: string[];
   dueAmount?: number;
-  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
+  paymentStatus?: PaymentStatus;
   paidAmount?: number;
   payments?: PaymentItem[];
   mercadoPagoCheckout?: MercadoPagoCheckoutInfo;
@@ -392,5 +402,5 @@ export interface EventRegistration {
   name: string;
   joinedAt: number;
   bannerUrl?: string | null;
-  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
+  paymentStatus?: PaymentStatus;
 }

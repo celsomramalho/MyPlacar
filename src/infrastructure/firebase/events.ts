@@ -14,14 +14,14 @@ import {
   type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { minifyPairForStorage, type TournamentPair } from '@modules/events/types';
+import { minifyPairForStorage, type PaymentStatus, type TournamentPair } from '@modules/events/types';
 
 interface FirebaseEventRegistration {
   pin: string;
   name: string;
   joinedAt: number;
   bannerUrl?: string | null;
-  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
+  paymentStatus?: PaymentStatus;
 }
 
 interface FirebaseTournamentEntry {
@@ -36,7 +36,7 @@ interface FirebaseTournamentEntry {
   categoryIds?: string[];
   dueAmount?: number;
   paidAmount?: number;
-  paymentStatus?: 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado';
+  paymentStatus?: PaymentStatus;
   payments?: Array<{
     id: string;
     amount: number;

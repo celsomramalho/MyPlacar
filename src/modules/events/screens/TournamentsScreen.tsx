@@ -529,12 +529,13 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
 
                 // Badge de status de inscrição
                 const statusConfig: Record<string, { label: string; className: string }> = {
-                  'Confirmado': { label: 'Inscrição ativa', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-                  'Pago':       { label: 'Inscrição ativa', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-                  'Isento':     { label: 'Isento',          className: 'bg-blue-100 text-blue-700 border-blue-200' },
-                  'Pendente':   { label: 'Pendente de pagamento', className: 'bg-amber-100 text-amber-700 border-amber-200' },
-                  'Recusado':   { label: 'Pagamento recusado', className: 'bg-red-100 text-red-700 border-red-200' },
-                  'Cancelado':  { label: 'Cancelado',       className: 'bg-red-100 text-red-700 border-red-200' },
+                  'Confirmado':            { label: 'Inscrição ativa',         className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+                  'Pago':                  { label: 'Inscrição ativa',         className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+                  'Isento':                { label: 'Isento',                  className: 'bg-blue-100 text-blue-700 border-blue-200' },
+                  'Pendente':              { label: 'Pendente de pagamento',    className: 'bg-amber-100 text-amber-700 border-amber-200' },
+                  'Aguardando Confirmação':{ label: 'Pendente de confirmação',  className: 'bg-orange-100 text-orange-700 border-orange-200' },
+                  'Recusado':              { label: 'Pagamento recusado',       className: 'bg-red-100 text-red-700 border-red-200' },
+                  'Cancelado':             { label: 'Cancelado',               className: 'bg-red-100 text-red-700 border-red-200' },
                 };
                 const statusInfo = paymentStatus ? statusConfig[paymentStatus] : null;
 

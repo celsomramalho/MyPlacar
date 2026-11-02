@@ -1026,10 +1026,11 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                 <label className="text-[10px] font-black text-slate-400 ml-1">Status do pagamento</label>
                 <select
                   value={paymentStatus === 'Pago' ? 'Confirmado' : paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value as 'Pendente' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado')}
+                  onChange={(e) => setPaymentStatus(e.target.value as 'Pendente' | 'Aguardando Confirmação' | 'Confirmado' | 'Pago' | 'Isento' | 'Recusado' | 'Cancelado')}
                   className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
                 >
                   <option value="Pendente">Pendente</option>
+                  <option value="Aguardando Confirmação">Aguardando Confirmação</option>
                   <option value="Confirmado">Confirmado</option>
                   <option value="Isento">Isento</option>
                   <option value="Recusado">Recusado</option>
@@ -1375,6 +1376,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                                 ? 'bg-emerald-100 text-emerald-700'
                                 : entry.paymentStatus === 'Isento'
                                 ? 'bg-blue-100 text-blue-700'
+                                : entry.paymentStatus === 'Aguardando Confirmação'
+                                ? 'bg-orange-100 text-orange-700'
                                 : 'bg-amber-100 text-amber-700'
                             }`}
                           >
@@ -1382,6 +1385,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                               ? 'Confirmado'
                               : entry.paymentStatus === 'Pago'
                               ? 'Confirmado'
+                              : entry.paymentStatus === 'Aguardando Confirmação'
+                              ? 'Ag. Confirmação'
                               : entry.paymentStatus || 'Pendente'}
                           </span>
                           <span className="text-xs font-bold text-slate-600">

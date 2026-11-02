@@ -1934,6 +1934,11 @@ export const EventDetailScreen: React.FC<Props> = ({
                 currentUserEntry.paymentStatus === 'Pago' ||
                 currentUserEntry.paymentStatus === 'Isento'
               );
+              const isWaitingConfirmation =
+                !isConfirmed &&
+                !isCancelled &&
+                (currentUserEntry.paymentStatus === 'Aguardando Confirmação' ||
+                  Boolean(currentUserEntry.payments?.some((p) => Boolean(p.receiptUrl || p.provider === 'manual'))));
               const isTournamentActive = isTournamentPeriodActive(event);
               const todayStr = getTodayDateStr();
               const hasFinishedToday = entryHasFinishedMatchOnDate(currentUserEntry, event.matches, pairsById, todayStr);
@@ -1949,19 +1954,30 @@ export const EventDetailScreen: React.FC<Props> = ({
                           ? 'bg-red-100 text-red-700 border border-red-200'
                           : isConfirmed
                           ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                          : isWaitingConfirmation
+                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
                           : 'bg-amber-100 text-amber-700 border border-amber-200'
                       }`}>
                         {currentUserEntry.disabled && currentUserEntry.paymentStatus !== 'Cancelado'
                           ? 'Inscrição Desativada'
                           : isCancelled
                           ? 'Inscrição Cancelada'
-                          : isConfirmed ? 'Inscrição Ativa' : 'Pendente de Pagamento'}
+                          : isConfirmed
+                          ? 'Inscrição Ativa'
+                          : isWaitingConfirmation
+                          ? 'Pendente de Confirmação'
+                          : 'Pendente de Pagamento'}
                       </span>
                     </div>
                     <p className="text-[11px] font-bold text-slate-400 mt-0.5">
                       {currentUserEntry.nickname || currentUserEntry.name}
                     </p>
-                    {canPayCurrentEntry && !isCancelled && (
+                    {isWaitingConfirmation && !isCancelled && !isConfirmed && (
+                      <p className="text-[11px] font-bold text-amber-700 mt-1">
+                        Comprovante anexado · Aguardando validação do organizador
+                      </p>
+                    )}
+                    {canPayCurrentEntry && !isCancelled && !isWaitingConfirmation && (
                       <p className="text-[11px] font-black text-amber-600 mt-1">
                         Pendente: R$ {currentEntryPendingAmount.toFixed(2)}
                       </p>
@@ -2679,7 +2695,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                     ? 'As categorias, lista de inscritos, times e jogos deste evento estão disponíveis apenas para atletas com inscrição ativa e confirmada.'
                     : currentUserEntry.disabled || currentUserEntry.paymentStatus === 'Cancelado'
                     ? 'Sua inscrição neste evento está cancelada ou desativada. Reative sua inscrição para acessar as categorias, times e partidas.'
-                    : 'Sua inscrição está aguardando confirmação do pagamento. Conclua o pagamento para liberar o acesso às categorias, times e jogos.'}
+                    : currentUserEntry.paymentStatus === 'Aguardando Confirmação' || Boolean(currentUserEntry.payments?.some((p) => Boolean(p.receiptUrl || p.provider === 'manual')))
+                    ? 'Seu comprovante foi anexado e está pendente de confirmação pelo organizador. Assim que for validado, seu acesso completo será liberado.'
+                    : 'Sua inscrição está aguardando pagamento. Conclua o pagamento para liberar o acesso às categorias, times e jogos.'}
                 </p>
               </div>
               {!currentUserEntry && getRegistrationPeriodStatus(event).isOpen && (
