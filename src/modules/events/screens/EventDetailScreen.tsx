@@ -22,6 +22,7 @@ import {
   CreditCard,
   Lock,
   ChevronDown,
+  ChevronUp,
   History,
   Check,
   Search,
@@ -72,6 +73,7 @@ import {
 } from '../components/registration/ParticipantMatchHistory';
 import { useEventPermissions } from '../domain/access/useEventPermissions';
 import { useEventRealtime } from '../domain/realtime/useEventRealtime';
+import { resolveMatchRules } from '../domain/rules/eventMatchRules';
 import { calculateSuper8PlayerStandings } from '../services/matchProgression';
 import {
   buildPairsById,
@@ -313,6 +315,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   const [userCategoryView, setUserCategoryView] = useState<'entries' | 'teams' | 'matches'>(
     isChaveEvent ? 'teams' : 'entries'
   );
+  const [isFinishedMatchesOpen, setIsFinishedMatchesOpen] = useState(true);
   const [showMyRegistrationModal, setShowMyRegistrationModal] = useState(false);
   const [showPartnerRegistrationModal, setShowPartnerRegistrationModal] = useState(false);
   const [editingSimplifiedEntry, setEditingSimplifiedEntry] = useState<TournamentEntry | null>(null);
@@ -1822,9 +1825,64 @@ export const EventDetailScreen: React.FC<Props> = ({
     [filteredCategoryPairs, teamSearch]
   );
 
-  const visibleCategoryMatches = useMemo(
-    () => sortMatchesByDateDesc(filterMatchesBySearch(categoryMatches, matchSearch, pairsById)),
+  const filteredCategoryMatches = useMemo(
+    () => filterMatchesBySearch(categoryMatches, matchSearch, pairsById),
     [categoryMatches, matchSearch, pairsById]
+  );
+
+  const liveCategoryMatches = useMemo(() => {
+    return filteredCategoryMatches
+      .filter((m) => m.status === 'live')
+      .sort((a, b) => {
+        const courtA = a.court || '';
+        const courtB = b.court || '';
+        if (courtA && courtB) return courtA.localeCompare(courtB, undefined, { numeric: true });
+        if (courtA) return -1;
+        if (courtB) return 1;
+        return (a.matchNumber || 0) - (b.matchNumber || 0);
+      });
+  }, [filteredCategoryMatches]);
+
+  const waitingCategoryMatches = useMemo(() => {
+    return filteredCategoryMatches
+      .filter((m) => m.status === 'waiting')
+      .sort((a, b) => {
+        const qA = orderedQueue.findIndex((item) => item.match.id === a.id);
+        const qB = orderedQueue.findIndex((item) => item.match.id === b.id);
+        if (qA !== -1 && qB !== -1) return qA - qB;
+        if (qA !== -1) return -1;
+        if (qB !== -1) return 1;
+        return (a.matchNumber || 0) - (b.matchNumber || 0);
+      });
+  }, [filteredCategoryMatches, orderedQueue]);
+
+  const finishedCategoryMatches = useMemo(() => {
+    return filteredCategoryMatches
+      .filter((m) => m.status === 'finished')
+      .sort((a, b) => {
+        const timeA = a.finishedAt
+          ? new Date(a.finishedAt).getTime()
+          : a.startedAt
+          ? new Date(a.startedAt).getTime()
+          : 0;
+        const timeB = b.finishedAt
+          ? new Date(b.finishedAt).getTime()
+          : b.startedAt
+          ? new Date(b.startedAt).getTime()
+          : 0;
+        if (timeA !== timeB && timeA > 0 && timeB > 0) {
+          return timeB - timeA; // Mais recente primeiro
+        }
+        const dateA = a.matchDate || '';
+        const dateB = b.matchDate || '';
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
+        return (b.matchNumber || 0) - (a.matchNumber || 0);
+      });
+  }, [filteredCategoryMatches]);
+
+  const visibleCategoryMatches = useMemo(
+    () => sortMatchesByDateDesc(filteredCategoryMatches),
+    [filteredCategoryMatches]
   );
 
   const canAthleteFormTeam = !canManageEvent && (canUserFormRankingTeam || event.allowUserTeamFormation === true) && !isSuper8;
@@ -2593,7 +2651,7 @@ export const EventDetailScreen: React.FC<Props> = ({
 
                     {/* ABA: PARTIDAS */}
                     {userCategoryView === 'matches' && (
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {isRanking && (
                           <RankingHelpIllustrativeCard
                             type="matches"
@@ -2605,74 +2663,182 @@ export const EventDetailScreen: React.FC<Props> = ({
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             Nenhuma partida programada para esta categoria.
                           </div>
-                        ) : visibleCategoryMatches.length === 0 ? (
+                        ) : filteredCategoryMatches.length === 0 ? (
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             Nenhuma partida encontrada.
                           </div>
                         ) : (
-                          visibleCategoryMatches.map((match, idx) => {
-                            const queuePos =
-                              match.status === 'waiting'
-                                ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1
-                                : 0;
-                            const live = liveScores[match.id];
-                            const isCurrentUserMatchParticipant = isCurrentUserInMatch(match);
-                            const canUseRankingMatchActions =
-                              isRanking && canSubmitScore && isCurrentUserMatchParticipant && !isCurrentPlayerCancelled;
+                          (() => {
+                            const isSearching = matchSearch.trim().length > 0;
+                            const renderMatchCard = (match: TournamentMatch, idx: number) => {
+                              const queuePos =
+                                match.status === 'waiting'
+                                  ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1
+                                  : 0;
+                              const live = liveScores[match.id];
+                              const isCurrentUserMatchParticipant = isCurrentUserInMatch(match);
+                              const canUseRankingMatchActions =
+                                isRanking && canSubmitScore && isCurrentUserMatchParticipant && !isCurrentPlayerCancelled;
+
+                              const sportId = event.sportId || event.config?.sportType;
+                              const rules = resolveMatchRules(
+                                event.sportRules,
+                                match.phase,
+                                (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+                                Number(activeCategory.gamesPerSet || event.gamesPerSet || event.config?.gamesPerSet || (isSuper8 ? 4 : 6)),
+                                sportId
+                              );
+                              const isTotalGamesSet = sportId === 'beach-tennis' && rules.gamesPerSet === 7;
+
+                              return (
+                                <MatchCard
+                                  key={match.id}
+                                  match={match}
+                                  colorIndex={idx}
+                                  pairsById={pairsById}
+                                  variant="detailed"
+                                  isRanking={isRanking}
+                                  totalSets={rules.setsCount}
+                                  gamesPerSet={rules.gamesPerSet}
+                                  isTotalGamesSet={isTotalGamesSet}
+                                  tieBreak={rules.tieBreak}
+                                  tieBreakAt={rules.tieBreakAt}
+                                  liveScore={
+                                    live
+                                      ? {
+                                          p1Score: live.p1Score ?? 0,
+                                          p2Score: live.p2Score ?? 0,
+                                        }
+                                      : undefined
+                                  }
+                                  queuePosition={queuePos}
+                                  canSubmitScore={lockParticipantMatchControls ? false : canSubmitScore}
+                                  canManage={lockParticipantMatchControls ? false : canUseRankingMatchActions}
+                                  isReadOnly={isReadOnly}
+                                  allCategoryFinished={allCatFinished}
+                                  onScoreChange={lockParticipantMatchControls ? undefined : handleScoreChange}
+                                  onUndoScore={lockParticipantMatchControls ? undefined : handleScoreUndoChange}
+                                  onMatchDateChange={lockParticipantMatchControls ? undefined : handleMatchDateChange}
+                                  onFinishMatch={lockParticipantMatchControls ? undefined : handleFinishRankingMatch}
+                                  onReopenMatch={
+                                    lockParticipantMatchControls || !canUseRankingMatchActions
+                                      ? undefined
+                                      : handleReopenMatch
+                                  }
+                                  onDeleteMatch={
+                                    lockParticipantMatchControls ||
+                                    !canUseRankingMatchActions ||
+                                    match.status !== 'waiting'
+                                      ? undefined
+                                      : openDeleteMatchRequest
+                                  }
+                                  onStartLiveMatch={(m, p1, p2) => {
+                                    if (!canManageEvent && isCurrentPlayerCancelled) {
+                                      setModalConfig({
+                                        title: 'Inscrição cancelada',
+                                        message: 'Sua inscrição está cancelada. Você não pode participar de partidas.',
+                                        onConfirm: () => setModalConfig(null),
+                                      });
+                                      return;
+                                    }
+                                    onStartTournamentMatch(m, p1, p2, event);
+                                  }}
+                                />
+                              );
+                            };
 
                             return (
-                              <MatchCard
-                                key={match.id}
-                                match={match}
-                                colorIndex={idx}
-                                pairsById={pairsById}
-                                variant={isRanking ? 'detailed' : 'compact'}
-                                isRanking={isRanking}
-                                totalSets={(event.setsCount || event.config?.sets || 1) as number}
-                                gamesPerSet={activeCategory.gamesPerSet ?? (isSuper8 ? 4 : 6)}
-                                liveScore={
-                                  live
-                                    ? {
-                                        p1Score: live.p1Score ?? 0,
-                                        p2Score: live.p2Score ?? 0,
-                                      }
-                                    : undefined
-                                }
-                                queuePosition={queuePos}
-                                canSubmitScore={lockParticipantMatchControls ? false : canSubmitScore}
-                                canManage={lockParticipantMatchControls ? false : canUseRankingMatchActions}
-                                isReadOnly={isReadOnly}
-                                allCategoryFinished={allCatFinished}
-                                onScoreChange={lockParticipantMatchControls ? undefined : handleScoreChange}
-                                onUndoScore={lockParticipantMatchControls ? undefined : handleScoreUndoChange}
-                                onMatchDateChange={lockParticipantMatchControls ? undefined : handleMatchDateChange}
-                                onFinishMatch={lockParticipantMatchControls ? undefined : handleFinishRankingMatch}
-                                onReopenMatch={
-                                  lockParticipantMatchControls || !canUseRankingMatchActions
-                                    ? undefined
-                                    : handleReopenMatch
-                                }
-                                onDeleteMatch={
-                                  lockParticipantMatchControls ||
-                                  !canUseRankingMatchActions ||
-                                  match.status !== 'waiting'
-                                    ? undefined
-                                    : openDeleteMatchRequest
-                                }
-                                onStartLiveMatch={(m, p1, p2) => {
-                                  if (!canManageEvent && isCurrentPlayerCancelled) {
-                                    setModalConfig({
-                                      title: 'Inscrição cancelada',
-                                      message: 'Sua inscrição está cancelada. Você não pode participar de partidas.',
-                                      onConfirm: () => setModalConfig(null),
-                                    });
-                                    return;
-                                  }
-                                  onStartTournamentMatch(m, p1, p2, event);
-                                }}
-                              />
+                              <div className="space-y-6">
+                                {/* 1. Bloco: Ao vivo */}
+                                {(liveCategoryMatches.length > 0 || !isSearching) && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between px-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="flex h-2.5 w-2.5 relative">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                                        </span>
+                                        <h4 className="text-xs font-black tracking-wide text-rose-700">Ao vivo</h4>
+                                        <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-700 border border-rose-200">
+                                          {liveCategoryMatches.length}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {liveCategoryMatches.length === 0 ? (
+                                      <div className="text-xs text-slate-400 font-bold bg-white/70 border border-dashed border-slate-200 rounded-2xl p-4 text-center">
+                                        Nenhuma partida em andamento no momento.
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2.5">
+                                        {liveCategoryMatches.map((match, idx) => renderMatchCard(match, idx))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* 2. Bloco: Aguardando */}
+                                {(waitingCategoryMatches.length > 0 || !isSearching) && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between px-1">
+                                      <div className="flex items-center gap-2">
+                                        <Clock size={14} className="text-amber-500" />
+                                        <h4 className="text-xs font-black tracking-wide text-amber-800">Aguardando</h4>
+                                        <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 border border-amber-200">
+                                          {waitingCategoryMatches.length}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {waitingCategoryMatches.length === 0 ? (
+                                      <div className="text-xs text-slate-400 font-bold bg-white/70 border border-dashed border-slate-200 rounded-2xl p-4 text-center">
+                                        Nenhuma partida aguardando na fila.
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2.5">
+                                        {waitingCategoryMatches.map((match, idx) => renderMatchCard(match, idx))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* 3. Bloco: Finalizadas */}
+                                {(finishedCategoryMatches.length > 0 || !isSearching) && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between px-1">
+                                      <div className="flex items-center gap-2">
+                                        <CheckCircle2 size={14} className="text-emerald-600" />
+                                        <h4 className="text-xs font-black tracking-wide text-emerald-800">Finalizadas</h4>
+                                        <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                          {finishedCategoryMatches.length}
+                                        </span>
+                                      </div>
+                                      {finishedCategoryMatches.length > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setIsFinishedMatchesOpen((prev) => !prev)}
+                                          className="flex items-center gap-1.5 text-[11px] font-black text-slate-500 hover:text-slate-800 bg-white border border-slate-200 hover:bg-slate-50 px-2.5 py-1 rounded-xl transition-all cursor-pointer shadow-2xs"
+                                        >
+                                          <span>{isFinishedMatchesOpen ? 'Recolher' : 'Expandir'}</span>
+                                          {isFinishedMatchesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {finishedCategoryMatches.length === 0 ? (
+                                      <div className="text-xs text-slate-400 font-bold bg-white/70 border border-dashed border-slate-200 rounded-2xl p-4 text-center">
+                                        Nenhuma partida finalizada ainda.
+                                      </div>
+                                    ) : isFinishedMatchesOpen ? (
+                                      <div className="space-y-2.5">
+                                        {finishedCategoryMatches.map((match, idx) => renderMatchCard(match, idx))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                )}
+                              </div>
                             );
-                          })
+                          })()
                         )}
                       </div>
                     )}

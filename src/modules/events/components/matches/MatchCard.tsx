@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw } from 'lucide-react';
 import type { TournamentMatch, TournamentPair } from '../../types';
 import { getPhaseLabel, parseMatchSets, isSetScoreComplete } from '../../domain/brackets';
@@ -308,6 +308,23 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   // Botão Undo permanece habilitado mesmo com vencedor (para permitir corrigir/voltar placar)
   const canUndo = canTapScore && (hasUndoSteps || isAnyScorePositive);
 
+  // Detecta se algum set ativo está em tie-break
+  // tieBreakAt é uma string no formato "X-Y" (ex: "6-6")
+  const tieBreakSetFlags = useMemo(() => {
+    if (!tieBreak || !isLive) return scores.map(() => false);
+    const [tbP1Str, tbP2Str] = tieBreakAt.split('-');
+    const tbP1 = Number(tbP1Str ?? 6);
+    const tbP2 = Number(tbP2Str ?? 6);
+    return scores.map((s) => {
+      if (s.p1 === null || s.p1 === undefined || s.p2 === null || s.p2 === undefined) return false;
+      const n1 = Number(s.p1);
+      const n2 = Number(s.p2);
+      // Está em TB se ambos atingiram o threshold e o set ainda não foi finalizado
+      if (isSetWonByScore(n1, n2)) return false;
+      return n1 >= tbP1 && n2 >= tbP2;
+    });
+  }, [tieBreak, tieBreakAt, isLive, scores, isSetWonByScore]);
+
   const isSet1WonByP1 =
     scores[0]?.p1 !== null &&
     scores[0]?.p1 !== undefined &&
@@ -602,9 +619,14 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             ) : (
               <div />
             )}
-            <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">
-              set1
-            </span>
+            <div className="flex items-center gap-1 w-9 sm:w-10 justify-center">
+              {tieBreakSetFlags[0] && (
+                <span className="text-[9px] font-black text-amber-600 animate-pulse leading-none">TB</span>
+              )}
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                set1
+              </span>
+            </div>
           </div>
 
           {/* Equipe 2 — clique fora do input incrementa +1 */}
@@ -762,12 +784,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="w-5" />
               {scores.map((_, setIdx) => (
-                <span
+                <div
                   key={`label_set_${setIdx}`}
-                  className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400"
+                  className="w-9 sm:w-10 flex flex-col items-center justify-center"
                 >
-                  set{setIdx + 1}
-                </span>
+                  {tieBreakSetFlags[setIdx] && (
+                    <span className="text-[9px] font-black text-amber-600 animate-pulse leading-none mb-0.5">TB</span>
+                  )}
+                  <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                    set{setIdx + 1}
+                  </span>
+                </div>
               ))}
             </div>
           </div>

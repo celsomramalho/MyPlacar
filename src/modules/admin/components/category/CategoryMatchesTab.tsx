@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Sparkles, FileText, Trash2, Upload } from 'lucide-react';
+import { Sparkles, FileText, Trash2, Upload, Clock, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import type { EventCategory, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { MatchCard } from '@modules/events/components/matches/MatchCard';
 import { RankingMatchImportModal } from './RankingMatchImportModal';
@@ -56,6 +56,61 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
 }) => {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'status' | 'phase'>('status');
+  const [isFinishedOpen, setIsFinishedOpen] = useState(true);
+
+  const rawFilteredMatches = useMemo(
+    () => filterMatchesBySearch(categoryMatches, searchQuery, pairsById),
+    [categoryMatches, searchQuery, pairsById]
+  );
+
+  const liveMatches = useMemo(() => {
+    return rawFilteredMatches
+      .filter((m) => m.status === 'live')
+      .sort((a, b) => {
+        const courtA = a.court || '';
+        const courtB = b.court || '';
+        if (courtA && courtB) return courtA.localeCompare(courtB, undefined, { numeric: true });
+        if (courtA) return -1;
+        if (courtB) return 1;
+        return (a.matchNumber || 0) - (b.matchNumber || 0);
+      });
+  }, [rawFilteredMatches]);
+
+  const waitingMatches = useMemo(() => {
+    return rawFilteredMatches
+      .filter((m) => m.status === 'waiting')
+      .sort((a, b) => {
+        const posA = queuePosByMatchId?.get(a.id) ?? 9999;
+        const posB = queuePosByMatchId?.get(b.id) ?? 9999;
+        if (posA !== posB) return posA - posB;
+        return (a.matchNumber || 0) - (b.matchNumber || 0);
+      });
+  }, [rawFilteredMatches, queuePosByMatchId]);
+
+  const finishedMatches = useMemo(() => {
+    return rawFilteredMatches
+      .filter((m) => m.status === 'finished')
+      .sort((a, b) => {
+        const timeA = a.finishedAt
+          ? new Date(a.finishedAt).getTime()
+          : a.startedAt
+          ? new Date(a.startedAt).getTime()
+          : 0;
+        const timeB = b.finishedAt
+          ? new Date(b.finishedAt).getTime()
+          : b.startedAt
+          ? new Date(b.startedAt).getTime()
+          : 0;
+        if (timeA !== timeB && timeA > 0 && timeB > 0) {
+          return timeB - timeA; // Mais recente primeiro
+        }
+        const dateA = a.matchDate || '';
+        const dateB = b.matchDate || '';
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
+        return (b.matchNumber || 0) - (a.matchNumber || 0);
+      });
+  }, [rawFilteredMatches]);
 
   const sortedCategoryMatches = useMemo(
     () => sortMatchesByDateDesc(categoryMatches),
@@ -94,8 +149,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   );
 
   const filteredMatches = useMemo(
-    () => sortMatchesByDateDesc(filterMatchesBySearch(categoryMatches, searchQuery, pairsById)),
-    [categoryMatches, searchQuery, pairsById]
+    () => sortMatchesByDateDesc(rawFilteredMatches),
+    [rawFilteredMatches]
   );
 
   const renderItem = (match: TournamentMatch, idx?: number) => {
@@ -133,6 +188,101 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       onReopenMatch={onReopenMatch}
       onDeleteMatch={onDeleteMatch}
     />
+    );
+  };
+
+  const renderStatusBlocks = () => {
+    const isSearching = searchQuery.trim().length > 0;
+    return (
+      <div className="p-4 space-y-6">
+        {/* 1. Ao vivo */}
+        {(liveMatches.length > 0 || !isSearching) && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                </span>
+                <h4 className="text-xs font-black tracking-wide text-rose-700">Ao vivo</h4>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-700 border border-rose-200">
+                  {liveMatches.length}
+                </span>
+              </div>
+            </div>
+
+            {liveMatches.length === 0 ? (
+              <div className="text-xs text-slate-400 font-bold bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-4 text-center">
+                Nenhuma partida em andamento no momento.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2.5">
+                {liveMatches.map((m, idx) => renderItem(m, idx))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. Aguardando */}
+        {(waitingMatches.length > 0 || !isSearching) && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-amber-500" />
+                <h4 className="text-xs font-black tracking-wide text-amber-800">Aguardando</h4>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 border border-amber-200">
+                  {waitingMatches.length}
+                </span>
+              </div>
+            </div>
+
+            {waitingMatches.length === 0 ? (
+              <div className="text-xs text-slate-400 font-bold bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-4 text-center">
+                Nenhuma partida aguardando na fila.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2.5">
+                {waitingMatches.map((m, idx) => renderItem(m, idx))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Finalizadas */}
+        {(finishedMatches.length > 0 || !isSearching) && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-emerald-600" />
+                <h4 className="text-xs font-black tracking-wide text-emerald-800">Finalizadas</h4>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  {finishedMatches.length}
+                </span>
+              </div>
+              {finishedMatches.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsFinishedOpen((prev) => !prev)}
+                  className="flex items-center gap-1.5 text-[11px] font-black text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-xl transition-all cursor-pointer"
+                >
+                  <span>{isFinishedOpen ? 'Recolher' : 'Expandir'}</span>
+                  {isFinishedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              )}
+            </div>
+
+            {finishedMatches.length === 0 ? (
+              <div className="text-xs text-slate-400 font-bold bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-4 text-center">
+                Nenhuma partida finalizada ainda.
+              </div>
+            ) : isFinishedOpen ? (
+              <div className="grid grid-cols-1 gap-2.5">
+                {finishedMatches.map((m, idx) => renderItem(m, idx))}
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -188,13 +338,43 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
           )}
         </div>
 
-        {/* Campo de pesquisa */}
+        {/* Toggle de visualização e Campo de pesquisa */}
         {categoryMatches.length > 0 && (
-          <ParticipantSearchInput
-            value={searchQuery}
-            onChange={setSearchQuery}
-            placeholder="Pesquisar partida por nome..."
-          />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex-1">
+              <ParticipantSearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Pesquisar partida por nome..."
+              />
+            </div>
+            {!isRanking && (
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl shrink-0 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('status')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                    viewMode === 'status'
+                      ? 'bg-white text-slate-800 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Por Status (Fila)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('phase')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                    viewMode === 'phase'
+                      ? 'bg-white text-slate-800 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Por Fases
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -212,22 +392,11 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             </button>
           )}
         </div>
-      ) : filteredMatches.length === 0 ? (
+      ) : rawFilteredMatches.length === 0 ? (
         <div className="p-10 text-center text-sm font-bold text-slate-400">Nenhuma partida encontrada.</div>
-      ) : isRanking ? (
-        <div className="p-4 space-y-3">
-          <div className="grid grid-cols-1 gap-2.5">
-            {filteredMatches.map((m, idx) => renderItem(m, idx))}
-          </div>
-        </div>
+      ) : isRanking || viewMode === 'status' || searchQuery ? (
+        renderStatusBlocks()
       ) : isSuper8Duplas ? (
-        searchQuery ? (
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-1 gap-2.5">
-              {filteredMatches.map((m, idx) => renderItem(m, idx))}
-            </div>
-          </div>
-        ) : (
         <div className="p-4 space-y-5">
           {/* Fase 1: agrupado por grupo (A1, A2, B1, B2, ...) */}
           {(() => {
@@ -317,15 +486,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             );
           })()}
         </div>
-        )
       ) : isSuper8 ? (
-        searchQuery ? (
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-1 gap-2.5">
-              {filteredMatches.map((m, idx) => renderItem(m, idx))}
-            </div>
-          </div>
-        ) : (
         <div className="p-4 space-y-6">
           {(() => {
             const roundMap = new Map<string, { label: string; matches: TournamentMatch[] }>();
@@ -359,15 +520,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             ));
           })()}
         </div>
-        )
       ) : (
-        searchQuery ? (
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-1 gap-2.5">
-              {filteredMatches.map((m, idx) => renderItem(m, idx))}
-            </div>
-          </div>
-        ) : (
         <div className="p-4 space-y-6">
           {b1Matches.length > 0 && (
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
@@ -416,7 +569,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
           {otherMatches.length > 0 && (
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black text-slate-800">Outras Partidas</h4>
+                <h4 className="text-xs font-black text-slate-800">Outras partidas</h4>
                 <span className="text-[10px] font-black text-slate-400">{otherMatches.length} jogos</span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
@@ -425,7 +578,6 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             </div>
           )}
         </div>
-        )
       )}
       {isImportOpen && <RankingMatchImportModal event={event} category={category} onClose={() => setIsImportOpen(false)} onImport={onImportMatches}/>}
     </section>

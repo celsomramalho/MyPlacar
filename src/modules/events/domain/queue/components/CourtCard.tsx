@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Layers,
   Ban,
@@ -315,6 +315,21 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   // Botão Undo permanece habilitado mesmo com vencedor (para permitir corrigir placar)
   const canUndo = canTapScore && (hasUndoSteps || isAnyScorePositive);
 
+  // Detecta se o set atual está em tie-break (ambos os times >= threshold e set não finalizado)
+  const tieBreakSetFlags = useMemo(() => {
+    if (!tieBreak || !isBusy || !activeMatch) return scores.map(() => false);
+    const [tbP1Str, tbP2Str] = tieBreakAt.split('-');
+    const tbP1 = Number(tbP1Str ?? 6);
+    const tbP2 = Number(tbP2Str ?? 6);
+    return scores.map((s) => {
+      if (s.p1 === null || s.p1 === undefined || s.p2 === null || s.p2 === undefined) return false;
+      const n1 = Number(s.p1);
+      const n2 = Number(s.p2);
+      if (isSetWonByScore(n1, n2)) return false;
+      return n1 >= tbP1 && n2 >= tbP2;
+    });
+  }, [tieBreak, tieBreakAt, isBusy, activeMatch, scores, isSetWonByScore]);
+
   return (
     <div
       className={`rounded-3xl border shadow-sm p-4 flex flex-col gap-2.5 transition-all overflow-hidden ${
@@ -514,9 +529,12 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 ) : (
                   <div />
                 )}
-                <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">
-                  set1
-                </span>
+                <div className="flex items-center gap-1 w-9 sm:w-10 justify-center">
+                  {tieBreakSetFlags[0] && (
+                    <span className="text-[9px] font-black text-amber-600 animate-pulse leading-none">TB</span>
+                  )}
+                  <span className="text-[10px] sm:text-xs font-bold text-slate-400">set1</span>
+                </div>
               </div>
 
               {/* Equipe 2 — clique fora do input incrementa +1 */}
@@ -645,12 +663,17 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <div className="flex items-center gap-1.5">
                   <span className="w-5" />
                   {scores.map((_, setIdx) => (
-                    <span
+                    <div
                       key={`label_set_${setIdx}`}
-                      className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400"
+                      className="w-9 sm:w-10 flex flex-col items-center justify-center"
                     >
-                      set{setIdx + 1}
-                    </span>
+                      {tieBreakSetFlags[setIdx] && (
+                        <span className="text-[9px] font-black text-amber-600 animate-pulse leading-none mb-0.5">TB</span>
+                      )}
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                        set{setIdx + 1}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
