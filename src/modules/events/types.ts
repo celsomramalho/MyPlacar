@@ -264,6 +264,7 @@ export interface TournamentEvent {
   entries?: TournamentEntry[];
   sponsors?: EventSponsor[];
   coAdminPins?: string[];
+  judgePins?: string[];
   eventDateText?: string;
   /** Período de inscrição */
   startDate?: string;

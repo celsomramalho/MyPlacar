@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Eye,
   FileText,
+  Gavel,
   Image as ImageIcon,
   Info,
   Loader2,
@@ -16,6 +17,7 @@ import {
   Menu,
   Save,
   Settings,
+  ShieldCheck,
   Trophy,
   X,
 } from 'lucide-react';
@@ -40,6 +42,7 @@ import { Toggle } from '@shared/components/Toggle';
 import { isIndividualScoreEvent, isRankingEvent, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import { openPdfOrUrl } from '@modules/events/services/openRegulationPdf';
 import { EventCoAdminsManager } from './EventCoAdminsManager';
+import { EventJudgesManager } from './EventJudgesManager';
 import { EventMatchRulesEditor } from './EventMatchRulesEditor';
 import { SPORT_GROUPS, SPORT_LIST } from '../../../../constants';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
@@ -51,6 +54,8 @@ import { getDefaultRulesForSport } from '@modules/events/domain/rules/eventMatch
 export type EventConfigBlockKey =
   | 'evento'
   | 'configuracoes'
+  | 'coadministradores'
+  | 'juizes'
   | 'valores'
   | 'informacoes'
   | 'localizacao'
@@ -67,11 +72,13 @@ export interface EventBlockMenuItem {
 export const EVENT_CONFIG_BLOCKS: EventBlockMenuItem[] = [
   { key: 'evento', label: 'Evento', icon: Trophy, isAdminOnly: true },
   { key: 'configuracoes', label: 'Configurações', icon: Settings, isAdminOnly: true },
+  { key: 'coadministradores', label: 'Co-administradores', icon: ShieldCheck, isAdminOnly: true },
   { key: 'valores', label: 'Valores', icon: DollarSign, isAdminOnly: true },
   { key: 'informacoes', label: 'Informações', icon: Info, isAdminOnly: false },
   { key: 'localizacao', label: 'Localização', icon: MapPin, isAdminOnly: false },
   { key: 'datas', label: 'Datas', icon: CalendarDays, isAdminOnly: false },
   { key: 'esporte', label: 'Esporte', icon: Activity, isAdminOnly: false },
+  { key: 'juizes', label: 'Juízes', icon: Gavel, isAdminOnly: false },
 ];
 
 interface FormBlockProps {
@@ -122,6 +129,7 @@ export interface EventConfigFormProps {
   isSavingEvent: boolean;
   bannerInputRef: React.RefObject<HTMLInputElement>;
   coAdminNamesByPin: Record<string, string>;
+  judgeNamesByPin?: Record<string, string>;
   adminEmail?: string;
   initialBlock?: string;
   activeSports?: FirebaseAdminSportIcon[];
@@ -139,6 +147,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   isSavingEvent,
   bannerInputRef,
   coAdminNamesByPin,
+  judgeNamesByPin = {},
   adminEmail,
   initialBlock,
   activeSports,
@@ -270,7 +279,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   }>({ loading: false });
 
   // ── Permissões ───────────────────────────────────────────────────────────────
-  // Blocos 1 (Evento), 2 (Configurações) e 3 (Valores) são exclusivos do admin global
+  // Blocos 1 (Evento), 2 (Configurações), Co-administradores, Juízes e Valores são exclusivos do admin global
   const isGlobalAdmin = adminEmail === 'celsomramalho@gmail.com';
   const isAdminOnlyDisabled = !isGlobalAdmin || isReadOnlyRegistration;
 
@@ -278,6 +287,8 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   const [openSections, setOpenSections] = useState({
     evento: initialBlock === 'evento',
     configuracoes: initialBlock === 'configuracoes',
+    coadministradores: initialBlock === 'coadministradores',
+    juizes: initialBlock === 'juizes',
     valores: initialBlock === 'valores',
     informacoes: initialBlock === 'informacoes',
     localizacao: initialBlock === 'localizacao',
@@ -290,6 +301,8 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
       setOpenSections({
         evento: initialBlock === 'evento',
         configuracoes: initialBlock === 'configuracoes',
+        coadministradores: initialBlock === 'coadministradores',
+        juizes: initialBlock === 'juizes',
         valores: initialBlock === 'valores',
         informacoes: initialBlock === 'informacoes',
         localizacao: initialBlock === 'localizacao',
@@ -321,6 +334,8 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
     setOpenSections({
       evento: false,
       configuracoes: false,
+      coadministradores: false,
+      juizes: false,
       valores: false,
       informacoes: false,
       localizacao: false,
@@ -382,6 +397,21 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
     handleProtectedChange({
       ...editingEvent,
       coAdminPins: (editingEvent.coAdminPins || []).filter(
+        (p) => p.toUpperCase().trim() !== pin.toUpperCase().trim()
+      ),
+    });
+  };
+
+  const handleAddJudge = (pin: string) => {
+    const currentJudges = (editingEvent.judgePins || []).map((p) => p.toUpperCase().trim());
+    if (currentJudges.includes(pin)) return;
+    handleProtectedChange({ ...editingEvent, judgePins: [...currentJudges, pin] });
+  };
+
+  const handleRemoveJudge = (pin: string) => {
+    handleProtectedChange({
+      ...editingEvent,
+      judgePins: (editingEvent.judgePins || []).filter(
         (p) => p.toUpperCase().trim() !== pin.toUpperCase().trim()
       ),
     });
@@ -929,10 +959,19 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
             </div>
           </div>
         ) : null}
+      </FormBlock>
 
-        {/* Separador: Co-admins */}
-        <p className="text-[10px] font-black text-slate-400 tracking-wider pt-1 border-t border-slate-100">Co-administradores</p>
-
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* CO-ADMINISTRADORES — somente admin global                             */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <FormBlock
+        id="event-block-coadministradores"
+        title="Co-administradores"
+        icon={ShieldCheck}
+        isOpen={openSections.coadministradores}
+        onToggle={() => toggleSection('coadministradores')}
+        isAdminOnly
+      >
         <EventCoAdminsManager
           coAdminPins={editingEvent.coAdminPins || []}
           coAdminNamesByPin={coAdminNamesByPin}
@@ -1273,6 +1312,26 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           sportId={currentSportId}
           isReadOnly={isReadOnlyRegistration}
           onChangeSportRules={handleSportRulesChange}
+        />
+      </FormBlock>
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* 8. JUÍZES — liberado para admin global e co-administradores            */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <FormBlock
+        id="event-block-juizes"
+        title="Juízes"
+        icon={Gavel}
+        isOpen={openSections.juizes}
+        onToggle={() => toggleSection('juizes')}
+      >
+        <EventJudgesManager
+          judgePins={editingEvent.judgePins || []}
+          judgeNamesByPin={judgeNamesByPin}
+          canManageEventAdmins={!isReadOnlyRegistration}
+          isReadOnlyRegistration={isReadOnlyRegistration}
+          onAddJudge={handleAddJudge}
+          onRemoveJudge={handleRemoveJudge}
         />
       </FormBlock>
 

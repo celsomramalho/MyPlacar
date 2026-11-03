@@ -97,6 +97,7 @@ export interface FirebaseTournamentEvent {
   matches?: FirebaseTournamentMatch[];
   interdictedCourts?: string[];
   coAdminPins?: string[];
+  judgePins?: string[];
   regulationUrl?: string;
   regulationFileName?: string;
   information?: string;

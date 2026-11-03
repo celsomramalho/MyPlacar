@@ -61,6 +61,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
 
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
   const [coAdminNamesByPin, setCoAdminNamesByPin] = useState<Record<string, string>>({});
+  const [judgeNamesByPin, setJudgeNamesByPin] = useState<Record<string, string>>({});
   const [initialConfigBlock, setInitialConfigBlock] = useState<string | undefined>(undefined);
   const isPrimaryAdmin = isPrimaryAdminEmail(adminEmail);
   const isReadOnlyRegistration = !isPrimaryAdmin;
@@ -120,6 +121,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             pairs: (freshEventDoc.pairs as any) || freshestEvent.pairs || [],
             matches: (freshEventDoc.matches as any) || freshestEvent.matches,
             coAdminPins: freshEventDoc.coAdminPins || freshestEvent.coAdminPins,
+            judgePins: freshEventDoc.judgePins || freshestEvent.judgePins,
             regulationUrl: freshEventDoc.regulationUrl || freshestEvent.regulationUrl,
             regulationFileName: freshEventDoc.regulationFileName || freshestEvent.regulationFileName,
             information: freshEventDoc.information || freshestEvent.information,
@@ -231,6 +233,28 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
       .catch(() => setCoAdminNamesByPin({}));
   }, [editingEvent?.coAdminPins]);
 
+  React.useEffect(() => {
+    const pins = editingEvent?.judgePins || [];
+    if (pins.length === 0) {
+      setJudgeNamesByPin({});
+      return;
+    }
+
+    const db = getDb();
+    if (!db) return;
+
+    findUsersByPins(db, pins)
+      .then((usersByPin) => {
+        const names: Record<string, string> = {};
+        pins.forEach((pin) => {
+          const normalizedPin = pin.toUpperCase().trim();
+          names[normalizedPin] = usersByPin.get(normalizedPin)?.nickname || 'Juiz';
+        });
+        setJudgeNamesByPin(names);
+      })
+      .catch(() => setJudgeNamesByPin({}));
+  }, [editingEvent?.judgePins]);
+
   const handleUpdateDashboardEvent = (updated: TournamentEvent) => {
     setSelectedDashboardEvent(updated);
     if (onSaveDashboardEvent) {
@@ -248,6 +272,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         isSavingEvent={isSavingEvent}
         bannerInputRef={bannerInputRef}
         coAdminNamesByPin={coAdminNamesByPin}
+        judgeNamesByPin={judgeNamesByPin}
         adminEmail={adminEmail}
         initialBlock={initialConfigBlock}
         activeSports={activeSports}

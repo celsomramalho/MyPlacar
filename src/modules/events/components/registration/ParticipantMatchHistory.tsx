@@ -14,6 +14,8 @@ export interface ParticipantMatchHistoryProps {
   category?: EventCategory;
   pairsById?: Record<string, TournamentPair>;
   allPairs?: TournamentPair[];
+  orderedQueue?: Array<{ match: { id: string } }>;
+  queuePositions?: Record<string, number>;
   defaultExpanded?: boolean;
 }
 
@@ -33,6 +35,7 @@ export interface AthleteMatchDetail {
   scoreDisplay: string;
   phaseLabel: string;
   matchCode: string;
+  queuePosition?: number;
 }
 
 const normalizeStr = (s?: string | null) => (s || '').toLowerCase().trim();
@@ -128,7 +131,9 @@ export const extractAthleteMatchDetail = (
   entry: TournamentEntry,
   match: TournamentMatch,
   pairsById?: Record<string, TournamentPair>,
-  allPairs?: TournamentPair[]
+  allPairs?: TournamentPair[],
+  orderedQueue?: Array<{ match: { id: string } }>,
+  queuePositions?: Record<string, number>
 ): AthleteMatchDetail | null => {
   const p1 = getMatchPair(match, 1, pairsById, allPairs);
   const p2 = getMatchPair(match, 2, pairsById, allPairs);
@@ -175,6 +180,18 @@ export const extractAthleteMatchDetail = (
   const isInProgress = match.status === 'live' || (match.status as unknown as string) === 'in_progress';
   const isWaiting = !isFinished && !isInProgress;
 
+  let queuePosition = 0;
+  if (isWaiting) {
+    if (queuePositions && queuePositions[match.id] !== undefined) {
+      queuePosition = queuePositions[match.id];
+    } else if (orderedQueue && Array.isArray(orderedQueue)) {
+      const idx = orderedQueue.findIndex((item) => item.match?.id === match.id);
+      if (idx >= 0) {
+        queuePosition = idx + 1;
+      }
+    }
+  }
+
   const { g1, g2, s1, s2 } = parseScoresFromMatch(match);
   let isWinner = false;
   if (isFinished) {
@@ -219,7 +236,7 @@ export const extractAthleteMatchDetail = (
     } else if (isInProgress) {
       scoreDisplay = g1 > 0 || g2 > 0 ? `${isPair1 ? g1 : g2} x ${isPair1 ? g2 : g1}` : 'Ao vivo';
     } else {
-      scoreDisplay = 'Aguardando';
+      scoreDisplay = queuePosition > 0 ? `#${queuePosition} na fila` : 'Aguardando';
     }
   }
 
@@ -243,6 +260,7 @@ export const extractAthleteMatchDetail = (
     scoreDisplay,
     phaseLabel,
     matchCode,
+    queuePosition,
   };
 };
 
@@ -253,6 +271,8 @@ export const ParticipantMatchHistory: React.FC<ParticipantMatchHistoryProps> = (
   category,
   pairsById,
   allPairs,
+  orderedQueue,
+  queuePositions,
   defaultExpanded = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -261,7 +281,14 @@ export const ParticipantMatchHistory: React.FC<ParticipantMatchHistoryProps> = (
     if (!matches || matches.length === 0) return [];
     const list: AthleteMatchDetail[] = [];
     matches.forEach((m) => {
-      const detail = extractAthleteMatchDetail(entry, m, pairsById, allPairs);
+      const detail = extractAthleteMatchDetail(
+        entry,
+        m,
+        pairsById,
+        allPairs,
+        orderedQueue,
+        queuePositions
+      );
       if (detail) {
         list.push(detail);
       }
@@ -276,7 +303,7 @@ export const ParticipantMatchHistory: React.FC<ParticipantMatchHistoryProps> = (
     });
 
     return list;
-  }, [entry, matches, pairsById, allPairs]);
+  }, [entry, matches, pairsById, allPairs, orderedQueue, queuePositions]);
 
   // Agrupa as partidas por categoria
   const matchesByCategory = React.useMemo(() => {
@@ -410,10 +437,12 @@ export const ParticipantMatchHistory: React.FC<ParticipantMatchHistoryProps> = (
                       opponentsName,
                       isFinished,
                       isInProgress,
+                      isWaiting,
                       isWinner,
                       scoreDisplay,
                       phaseLabel,
                       matchCode,
+                      queuePosition,
                     } = detail;
 
                     return (
@@ -469,10 +498,17 @@ export const ParticipantMatchHistory: React.FC<ParticipantMatchHistoryProps> = (
                             )}
                           </div>
 
-                          {/* Placar em Destaque */}
-                          <div className="shrink-0 font-mono font-black text-xs text-slate-800 bg-white/80 border border-slate-200/70 px-2 py-0.5 rounded-md shadow-2xs">
-                            {scoreDisplay}
-                          </div>
+                          {/* Placar em Destaque / Posição na Fila */}
+                          {isWaiting && queuePosition && queuePosition > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black border bg-sky-50 text-sky-700 border-sky-200 whitespace-nowrap shadow-2xs">
+                              <Clock size={10} />
+                              #{queuePosition} na fila
+                            </span>
+                          ) : (
+                            <div className="shrink-0 font-mono font-black text-xs text-slate-800 bg-white/80 border border-slate-200/70 px-2 py-0.5 rounded-md shadow-2xs">
+                              {scoreDisplay}
+                            </div>
+                          )}
                         </div>
 
                         {/* Linha 2: Informações de Parceiro e Adversários */}

@@ -2200,7 +2200,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                 >
                   <div className="flex items-center gap-2">
                     <History size={16} className="text-indigo-500 shrink-0" />
-                    <span className="text-sm font-black text-slate-800">Meu histórico</span>
+                    <span className="text-sm font-black text-slate-800">Minhas partidas</span>
                     <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
                       {myHistoryMatches.length} {myHistoryMatches.length === 1 ? 'partida' : 'partidas'}
                     </span>
@@ -2221,6 +2221,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                         categories={event.categories}
                         pairsById={pairsMap}
                         allPairs={event.pairs}
+                        orderedQueue={orderedQueue}
                         defaultExpanded
                       />
                     ) : (
@@ -2553,6 +2554,10 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 isExpanded={expandedRankingEntryKey === standingKey}
                                 canSelect={(canManageEvent && !pair && !isSuper8) || canAthleteSelectEntry}
                                 hasCategoryMatches={categoryMatches.length > 0}
+                                matches={event.matches || []}
+                                pairsById={pairsMap}
+                                allPairs={event.pairs}
+                                orderedQueue={orderedQueue}
                                 onToggleSelect={toggleEntrySelection}
                                 onToggleExpanded={isRanking
                                   ? () => setExpandedRankingEntryKey((current) => current === standingKey ? null : standingKey)

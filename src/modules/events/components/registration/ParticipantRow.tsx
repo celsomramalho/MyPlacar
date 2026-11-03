@@ -27,6 +27,8 @@ export interface ParticipantRowProps {
   matches?: TournamentMatch[];
   pairsById?: Record<string, TournamentPair>;
   allPairs?: TournamentPair[];
+  orderedQueue?: Array<{ match: { id: string } }>;
+  queuePositions?: Record<string, number>;
   onToggleSelect?: (entry: TournamentEntry) => void;
   isExpanded?: boolean;
   onToggleExpanded?: () => void;
@@ -51,6 +53,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
   matches,
   pairsById,
   allPairs,
+  orderedQueue,
+  queuePositions,
   onToggleSelect,
   isExpanded = false,
   onToggleExpanded,
@@ -103,9 +107,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
             </div>
             <div
               className={`p-1.5 rounded-xl border flex items-center justify-center shrink-0 ${
-                isSimplified && !isCurrentUser
-                  ? 'bg-amber-50 text-amber-500 border-amber-200'
-                  : entry.gender === 'F'
+                entry.gender === 'F'
                   ? 'bg-pink-50 text-pink-500 border-pink-100'
                   : 'bg-sky-50 text-sky-500 border-sky-100'
               }`}
@@ -267,6 +269,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
           category={category}
           pairsById={pairsById}
           allPairs={allPairs}
+          orderedQueue={orderedQueue}
+          queuePositions={queuePositions}
         />
       )}
     </div>
