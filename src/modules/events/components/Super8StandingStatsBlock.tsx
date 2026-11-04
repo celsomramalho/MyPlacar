@@ -77,13 +77,19 @@ export const Super8StandingStatsBlock: React.FC<Props> = ({ standing }) => {
         <StatCell label="Contra" value={gamesContra} />
       </div>
 
-      {standing.tieBreakNote && (
+      {standing.isTechnicalTie ? (
         <div className="pt-0.5">
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg leading-snug">
-            {standing.tieBreakNote}
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-800 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-lg leading-snug">
+            🤝 {standing.tieBreakNote || 'Empate técnico — critérios matemáticos idênticos'}
           </span>
         </div>
-      )}
+      ) : standing.tieBreakNote ? (
+        <div className="pt-0.5">
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg leading-snug">
+            ⚖️ {standing.tieBreakNote}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 };

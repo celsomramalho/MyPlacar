@@ -28,12 +28,14 @@ import {
   TEAM_DRAW_TYPE_OPTIONS,
   EVENT_PAYMENT_TYPE_OPTIONS,
   EVENT_REGISTRATION_TYPE_OPTIONS,
+  TECHNICAL_TIE_BREAK_OPTIONS,
   type EventStatusOption,
   type EventTypeOption,
   type DrawTypeOption,
   type TeamDrawTypeOption,
   type EventPaymentTypeOption,
   type EventRegistrationTypeOption,
+  type TechnicalTieBreakOption,
   type TournamentEvent,
   isSimplifiedRegistrationEvent,
 } from '@modules/events/types';
@@ -808,6 +810,30 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
             </div>
           </div>
         )}
+
+        {/* Desempate técnico */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Desempate técnico</label>
+          <select
+            value={editingEvent.technicalTieBreak || 'Rank compartilhado'}
+            disabled={isAdminOnlyDisabled}
+            onChange={(e) =>
+              handleProtectedChange({ ...editingEvent, technicalTieBreak: e.target.value as TechnicalTieBreakOption })
+            }
+            className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none cursor-pointer text-slate-700"
+          >
+            {TECHNICAL_TIE_BREAK_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <p className="text-[10px] text-slate-500 ml-1">
+            {editingEvent.technicalTieBreak === 'Alfabético'
+              ? 'Em caso de empate em todos os critérios, desempata pela ordem alfabética do nome.'
+              : editingEvent.technicalTieBreak === 'Sorteio'
+              ? 'Em caso de empate em todos os critérios, a comissão aponta o ganhador do sorteio manual.'
+              : 'Em caso de empate em todos os critérios, os atletas compartilham a mesma posição.'}
+          </p>
+        </div>
 
         {/* Separador: Times */}
         <p className="text-[10px] font-black text-slate-400 tracking-wider pt-1 border-t border-slate-100">Times &amp; sorteios</p>

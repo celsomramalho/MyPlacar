@@ -190,6 +190,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
                   }`}
                 >
                   {standing.rank === 1 ? '🥇 1º' : standing.rank === 2 ? '🥈 2º' : standing.rank === 3 ? '🥉 3º' : `${standing.rank}º`}
+                  {standing.isTechnicalTie && <span className="ml-1 text-[9px] font-bold text-violet-700">(Empate)</span>}
                 </span>
               )}
               {isRanking && standing && (

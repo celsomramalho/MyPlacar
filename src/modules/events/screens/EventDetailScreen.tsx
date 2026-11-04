@@ -62,6 +62,7 @@ import type { ModalConfig } from '@modules/ui/types';
 import { EventRegistrationForm } from '../domain/registration';
 import { RankingStandingStatsBlock } from '../components/RankingStandingStatsBlock';
 import { Super8StandingStatsBlock } from '../components/Super8StandingStatsBlock';
+import { TechnicalTieDrawModal } from '../components/TechnicalTieDrawModal';
 import { MatchCard } from '../components/matches/MatchCard';
 import { TeamCard } from '../components/teams/TeamCard';
 import { ParticipantRow } from '../components/registration/ParticipantRow';
@@ -317,6 +318,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   );
   const [isFinishedMatchesOpen, setIsFinishedMatchesOpen] = useState(true);
   const [showMyRegistrationModal, setShowMyRegistrationModal] = useState(false);
+  const [isTechnicalTieDrawModalOpen, setIsTechnicalTieDrawModalOpen] = useState(false);
   const [showPartnerRegistrationModal, setShowPartnerRegistrationModal] = useState(false);
   const [editingSimplifiedEntry, setEditingSimplifiedEntry] = useState<TournamentEntry | null>(null);
   /**
@@ -1702,12 +1704,22 @@ export const EventDetailScreen: React.FC<Props> = ({
   const standingsData = useMemo(() => {
     if (!activeCategory) return { teamStandings: [], playerStandings: [] };
     if (isIndividualRanking) {
+      const drawWinners =
+        activeCategory.technicalTieDrawWinners ||
+        (activeCategory.id && event.technicalTieDrawWinners
+          ? event.technicalTieDrawWinners[activeCategory.id]
+          : undefined) ||
+        [];
       return {
         teamStandings: [],
         playerStandings: calculateSuper8PlayerStandings(
           categoryEntries,
           categoryMatches,
-          isRanking ? 'rankingPoints' : 'wins'
+          {
+            scoringMode: isRanking ? 'rankingPoints' : 'wins',
+            technicalTieBreak: event.technicalTieBreak || 'Rank Compartilhado',
+            drawWinners,
+          }
         ),
       };
     }
@@ -1723,7 +1735,16 @@ export const EventDetailScreen: React.FC<Props> = ({
       teamStandings: [...s1, ...s2],
       playerStandings: [],
     };
-  }, [activeCategory, isIndividualRanking, categoryEntries, categoryMatches, isRanking, categoryPairs]);
+  }, [
+    activeCategory,
+    isIndividualRanking,
+    categoryEntries,
+    categoryMatches,
+    isRanking,
+    categoryPairs,
+    event.technicalTieBreak,
+    event.technicalTieDrawWinners,
+  ]);
 
   const teamStandingsMap = useMemo(() => {
     const map = new Map<string, (typeof standingsData.teamStandings)[0]>();
@@ -1744,6 +1765,66 @@ export const EventDetailScreen: React.FC<Props> = ({
     });
     return map;
   }, [standingsData.playerStandings]);
+
+  const isDrawTieBreak = event.technicalTieBreak === 'Sorteio';
+  const hasTechnicalTieInActiveCategory = useMemo(() => {
+    return Boolean(
+      isIndividualRanking &&
+        standingsData.playerStandings.some(
+          (st) => st.isTechnicalTie || Boolean(st.tieBreakNote && st.tieBreakNote.toLowerCase().includes('sorteio'))
+        )
+    );
+  }, [isIndividualRanking, standingsData.playerStandings]);
+
+  const hasAwaitingDrawInActiveCategory = useMemo(() => {
+    return Boolean(
+      isIndividualRanking &&
+        standingsData.playerStandings.some(
+          (st) => st.isTechnicalTie && Boolean(st.tieBreakNote && st.tieBreakNote.toLowerCase().includes('aguardando sorteio'))
+        )
+    );
+  }, [isIndividualRanking, standingsData.playerStandings]);
+
+  const currentCategoryDrawWinners = useMemo(() => {
+    return (
+      activeCategory?.technicalTieDrawWinners ||
+      (activeCategory?.id && event.technicalTieDrawWinners ? event.technicalTieDrawWinners[activeCategory.id] : undefined) ||
+      []
+    );
+  }, [activeCategory, event.technicalTieDrawWinners]);
+
+  const handleConfirmDrawWinners = useCallback(
+    async (winners: string[]) => {
+      if (!activeCategory || !event) return;
+      const updatedCategories = (event.categories || []).map((cat) =>
+        cat.id === activeCategory.id ? { ...cat, technicalTieDrawWinners: winners } : cat
+      );
+      const updatedWinnersMap = {
+        ...(event.technicalTieDrawWinners || {}),
+        [activeCategory.id]: winners,
+      };
+      setEvent((prev) =>
+        !prev
+          ? prev
+          : {
+              ...prev,
+              categories: updatedCategories,
+              technicalTieDrawWinners: updatedWinnersMap,
+            }
+      );
+      if (db && event.pin) {
+        try {
+          await updateEvent(db as Firestore, event.pin, {
+            categories: updatedCategories,
+            technicalTieDrawWinners: updatedWinnersMap,
+          } as any);
+        } catch (e) {
+          console.error('Erro ao atualizar sorteio de desempate técnico:', e);
+        }
+      }
+    },
+    [activeCategory, event, setEvent]
+  );
 
   const sortedCategoryEntries = useMemo(() => {
     let entries = isIndividualRanking
@@ -2487,6 +2568,34 @@ export const EventDetailScreen: React.FC<Props> = ({
                             <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-lg">
                               Classificação {isRanking ? 'Ranking' : 'Super 8'}
                             </span>
+                          </div>
+                        )}
+
+                        {/* Banner de Sorteio de Desempate Técnico */}
+                        {isDrawTieBreak && (hasTechnicalTieInActiveCategory || currentCategoryDrawWinners.length > 0) && (
+                          <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-2xl shadow-2xs space-y-2.5">
+                            <div className="flex items-start gap-2.5">
+                              <span className="text-xl shrink-0">🎲</span>
+                              <div>
+                                <p className="text-xs font-black text-amber-900">
+                                  Desempate técnico por sorteio
+                                </p>
+                                <p className="text-[11px] font-bold text-amber-700 leading-tight">
+                                  {hasAwaitingDrawInActiveCategory
+                                    ? 'Há atletas com estatísticas idênticas aguardando o sorteio manual.'
+                                    : 'Ganhador do sorteio já definido e aplicado à classificação.'}
+                                </p>
+                              </div>
+                            </div>
+                            {canManageEvent && (
+                              <button
+                                type="button"
+                                onClick={() => setIsTechnicalTieDrawModalOpen(true)}
+                                className="w-full px-3.5 py-2 text-xs font-black text-white bg-amber-600 hover:bg-amber-700 active:scale-95 rounded-xl shadow-xs transition-all cursor-pointer"
+                              >
+                                {hasAwaitingDrawInActiveCategory ? 'Apontar ganhador' : 'Alterar sorteio'}
+                              </button>
+                            )}
                           </div>
                         )}
 
@@ -3313,6 +3422,17 @@ export const EventDetailScreen: React.FC<Props> = ({
               }
             }
           }}
+        />
+      )}
+      {/* Modal de Desempate Técnico por Sorteio */}
+      {isTechnicalTieDrawModalOpen && (
+        <TechnicalTieDrawModal
+          isOpen={isTechnicalTieDrawModalOpen}
+          categoryName={activeCategory?.name}
+          standings={standingsData.playerStandings}
+          currentWinnerKeys={currentCategoryDrawWinners}
+          onClose={() => setIsTechnicalTieDrawModalOpen(false)}
+          onConfirm={handleConfirmDrawWinners}
         />
       )}
     </div>

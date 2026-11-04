@@ -128,12 +128,30 @@ export function useCategoryBoard({
 
   const playerStandings = useMemo(() => {
     if (!isIndividualRanking || !selectedCategory) return [];
+    const drawWinners =
+      selectedCategory.technicalTieDrawWinners ||
+      (selectedCategory.id && event?.technicalTieDrawWinners
+        ? event.technicalTieDrawWinners[selectedCategory.id]
+        : undefined) ||
+      [];
     return calculateSuper8PlayerStandings(
       categoryEntries,
       categoryMatches,
-      isRanking ? 'rankingPoints' : 'wins'
+      {
+        scoringMode: isRanking ? 'rankingPoints' : 'wins',
+        technicalTieBreak: event?.technicalTieBreak || 'Rank Compartilhado',
+        drawWinners,
+      }
     );
-  }, [isIndividualRanking, isRanking, selectedCategory, categoryEntries, categoryMatches]);
+  }, [
+    isIndividualRanking,
+    isRanking,
+    selectedCategory,
+    categoryEntries,
+    categoryMatches,
+    event?.technicalTieBreak,
+    event?.technicalTieDrawWinners,
+  ]);
 
   const playerStandingsMap = useMemo(() => {
     const map = new Map<string, PlayerStanding>();

@@ -5,6 +5,7 @@ import { filterEntriesByParticipantSearch } from '@modules/events/domain/bracket
 import { isSimplifiedEntry } from '@modules/events/types';
 import type { EventCategory, TournamentEntry, TournamentEvent, PlayerStanding, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { ParticipantRow } from '@modules/events/components/registration/ParticipantRow';
+import { TechnicalTieDrawModal } from '@modules/events/components/TechnicalTieDrawModal';
 import { EventRegistrationForm } from '@modules/events/domain/registration';
 
 export interface CategoryEntriesTabProps {
@@ -60,9 +61,66 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
 }) => {
   const isSuper8Like = isSuper8 || isSuper8Duplas;
   const [expandedStatsEmail, setExpandedStatsEmail] = React.useState<string | null>(null);
+  const [isDrawModalOpen, setIsDrawModalOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const maxPlayers = category.maxPlayers && category.maxPlayers > 0 ? category.maxPlayers : 8;
   const canGenerateMore = entries.length < maxPlayers;
+
+  const allStandings = React.useMemo(() => {
+    const seen = new Set<string>();
+    const list: PlayerStanding[] = [];
+    playerStandingsMap.forEach((st) => {
+      const key = (
+        st.entry.pin ||
+        st.entry.email ||
+        (st.entry.registrationId ? `reg_${st.entry.registrationId}` : '') ||
+        st.entry.name ||
+        ''
+      )
+        .toLowerCase()
+        .trim();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        list.push(st);
+      }
+    });
+    return list;
+  }, [playerStandingsMap]);
+
+  const hasTechnicalTie = React.useMemo(() => {
+    return allStandings.some(
+      (st) => st.isTechnicalTie || Boolean(st.tieBreakNote && st.tieBreakNote.toLowerCase().includes('sorteio'))
+    );
+  }, [allStandings]);
+
+  const hasAwaitingDraw = React.useMemo(() => {
+    return allStandings.some(
+      (st) => st.isTechnicalTie && Boolean(st.tieBreakNote && st.tieBreakNote.toLowerCase().includes('aguardando sorteio'))
+    );
+  }, [allStandings]);
+
+  const currentDrawWinners = React.useMemo(() => {
+    return (
+      category.technicalTieDrawWinners ||
+      (category.id && event.technicalTieDrawWinners ? event.technicalTieDrawWinners[category.id] : undefined) ||
+      []
+    );
+  }, [category.technicalTieDrawWinners, category.id, event.technicalTieDrawWinners]);
+
+  const handleConfirmDrawWinners = (winners: string[]) => {
+    const updatedCategories = (event.categories || []).map((cat) =>
+      cat.id === category.id ? { ...cat, technicalTieDrawWinners: winners } : cat
+    );
+    const updatedEvent: TournamentEvent = {
+      ...event,
+      categories: updatedCategories,
+      technicalTieDrawWinners: {
+        ...(event.technicalTieDrawWinners || {}),
+        [category.id]: winners,
+      },
+    };
+    onUpdateEvent(updatedEvent);
+  };
 
   const visibleEntries = filterEntriesByParticipantSearch(entries, searchQuery);
 
@@ -113,6 +171,34 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
             onChange={setSearchQuery}
             placeholder="Pesquisar inscrito por nome..."
           />
+        )}
+
+        {/* Banner de Sorteio de Desempate Técnico */}
+        {event.technicalTieBreak === 'Sorteio' && (hasTechnicalTie || currentDrawWinners.length > 0) && (
+          <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-2xl shadow-2xs space-y-2.5">
+            <div className="flex items-start gap-2.5">
+              <span className="text-xl shrink-0">🎲</span>
+              <div>
+                <p className="text-xs font-black text-amber-900">
+                  Desempate técnico por sorteio
+                </p>
+                <p className="text-[11px] font-bold text-amber-700 leading-tight">
+                  {hasAwaitingDraw
+                    ? 'Há atletas com estatísticas idênticas aguardando a indicação do sorteio manual.'
+                    : 'Ganhador do sorteio já definido e aplicado à classificação.'}
+                </p>
+              </div>
+            </div>
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={() => setIsDrawModalOpen(true)}
+                className="w-full px-3.5 py-2 text-xs font-black text-white bg-amber-600 hover:bg-amber-700 active:scale-95 rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                {hasAwaitingDraw ? 'Apontar ganhador' : 'Alterar sorteio'}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -285,6 +371,17 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
             );
           })}
         </div>
+      )}
+
+      {isDrawModalOpen && (
+        <TechnicalTieDrawModal
+          isOpen={isDrawModalOpen}
+          categoryName={category.name}
+          standings={allStandings}
+          currentWinnerKeys={currentDrawWinners}
+          onClose={() => setIsDrawModalOpen(false)}
+          onConfirm={handleConfirmDrawWinners}
+        />
       )}
     </section>
   );

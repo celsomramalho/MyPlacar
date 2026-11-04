@@ -1,4 +1,11 @@
-import type { PlayerStanding, TournamentEntry, TournamentMatch, TournamentPair } from '../types';
+import type {
+  PlayerStanding,
+  Super8StandingsOptions,
+  TechnicalTieBreakOption,
+  TournamentEntry,
+  TournamentMatch,
+  TournamentPair,
+} from '../types';
 import { minifyPairForStorage, minifyEntryForPair } from '../types';
 import {
   parseMatchSets,
@@ -24,18 +31,362 @@ const getEntryKey = (e?: Partial<TournamentEntry>): string => {
   return (e.email || e.pin || e.name || '').toLowerCase().trim();
 };
 
+const matchesPlayer = (player: TournamentEntry, candidate?: Partial<TournamentEntry>): boolean => {
+  if (!candidate) return false;
+  if (player.registrationId && candidate.registrationId) {
+    return player.registrationId === candidate.registrationId;
+  }
+  if (player.email && candidate.email) {
+    return player.email.toLowerCase().trim() === candidate.email.toLowerCase().trim();
+  }
+  if (player.pin && candidate.pin) {
+    return player.pin.toLowerCase().trim() === candidate.pin.toLowerCase().trim();
+  }
+  const k1 = getEntryKey(player);
+  const k2 = getEntryKey(candidate);
+  return Boolean(k1 && k2 && k1 === k2);
+};
+
+interface PlayerH2H {
+  matchesCount: number;
+  p1Wins: number;
+  p2Wins: number;
+  p1Games: number;
+  p2Games: number;
+}
+
+const getPlayersHeadToHead = (
+  p1: TournamentEntry,
+  p2: TournamentEntry,
+  matches: TournamentMatch[]
+): PlayerH2H => {
+  let matchesCount = 0;
+  let p1Wins = 0;
+  let p2Wins = 0;
+  let p1Games = 0;
+  let p2Games = 0;
+
+  matches.forEach((m) => {
+    if (m.status !== 'finished') return;
+
+    const team1 = [m.pair1?.p1, m.pair1?.p2].filter(Boolean) as TournamentEntry[];
+    const team2 = [m.pair2?.p1, m.pair2?.p2].filter(Boolean) as TournamentEntry[];
+
+    const p1InT1 = team1.some((a) => matchesPlayer(p1, a));
+    const p1InT2 = team2.some((a) => matchesPlayer(p1, a));
+    const p2InT1 = team1.some((a) => matchesPlayer(p2, a));
+    const p2InT2 = team2.some((a) => matchesPlayer(p2, a));
+
+    // Devem ter jogado em lados opostos na partida
+    const isOpposite = (p1InT1 && p2InT2) || (p1InT2 && p2InT1);
+    if (!isOpposite) return;
+
+    matchesCount += 1;
+    const { g1, g2 } = parseScoresFromMatch(m);
+    const isTeam1Winner = m.winnerPairId
+      ? m.winnerPairId === m.pair1Id || m.winnerPairId === m.pair1?.id
+      : g1 > g2;
+
+    if (p1InT1 && p2InT2) {
+      if (isTeam1Winner) p1Wins += 1;
+      else p2Wins += 1;
+      p1Games += g1;
+      p2Games += g2;
+    } else {
+      if (!isTeam1Winner) p1Wins += 1;
+      else p2Wins += 1;
+      p1Games += g2;
+      p2Games += g1;
+    }
+  });
+
+  return { matchesCount, p1Wins, p2Wins, p1Games, p2Games };
+};
+
+const isDrawWinner = (entry: TournamentEntry, drawWinners: string[]): boolean => {
+  if (!drawWinners || drawWinners.length === 0) return false;
+  return drawWinners.some((dw) => {
+    const val = String(dw || '').toLowerCase().trim();
+    if (!val) return false;
+    if (entry.registrationId && String(entry.registrationId).toLowerCase().trim() === val) return true;
+    if (entry.email && entry.email.toLowerCase().trim() === val) return true;
+    if (entry.pin && entry.pin.toLowerCase().trim() === val) return true;
+    if (entry.name && entry.name.toLowerCase().trim() === val) return true;
+    if (entry.nickname && entry.nickname.toLowerCase().trim() === val) return true;
+    return false;
+  });
+};
+
+const getDrawWinnerIndex = (entry: TournamentEntry, drawWinners: string[]): number => {
+  if (!drawWinners || drawWinners.length === 0) return 999;
+  for (let i = 0; i < drawWinners.length; i++) {
+    const val = String(drawWinners[i] || '').toLowerCase().trim();
+    if (!val) continue;
+    if (entry.registrationId && String(entry.registrationId).toLowerCase().trim() === val) return i;
+    if (entry.email && entry.email.toLowerCase().trim() === val) return i;
+    if (entry.pin && entry.pin.toLowerCase().trim() === val) return i;
+    if (entry.name && entry.name.toLowerCase().trim() === val) return i;
+    if (entry.nickname && entry.nickname.toLowerCase().trim() === val) return i;
+  }
+  return 999;
+};
+
+const resolveTechnicalTieSubgroup = (
+  subgroup: PlayerStanding[],
+  technicalTieBreak: TechnicalTieBreakOption = 'Rank compartilhado',
+  drawWinners: string[] = []
+): PlayerStanding[] => {
+  if (subgroup.length <= 1) return subgroup;
+
+  if (technicalTieBreak === 'Alfabético') {
+    const sorted = [...subgroup].sort((a, b) =>
+      (a.entry.name || a.entry.nickname || '').localeCompare(b.entry.name || b.entry.nickname || '')
+    );
+    sorted.forEach((st) => {
+      st.isTechnicalTie = false;
+      st.tieBreakNote = 'Desempate por ordem alfabética';
+    });
+    return sorted;
+  }
+
+  if (technicalTieBreak === 'Sorteio') {
+    const winners = subgroup.filter((st) => isDrawWinner(st.entry, drawWinners));
+    const nonWinners = subgroup.filter((st) => !isDrawWinner(st.entry, drawWinners));
+
+    if (winners.length > 0) {
+      // Ordena os ganhadores pela ordem em que foram indicados no sorteio
+      winners.sort((a, b) => {
+        const idxA = getDrawWinnerIndex(a.entry, drawWinners);
+        const idxB = getDrawWinnerIndex(b.entry, drawWinners);
+        return idxA - idxB;
+      });
+
+      winners.forEach((st, idx) => {
+        st.isTechnicalTie = false;
+        st.tieBreakNote =
+          idx === 0
+            ? 'Desempate por sorteio (ganhador do sorteio)'
+            : 'Desempate por sorteio';
+      });
+
+      nonWinners.sort((a, b) => (a.entry.name || '').localeCompare(b.entry.name || ''));
+      nonWinners.forEach((st) => {
+        // Se sobrou mais de 1 não sorteado, continuam em empate técnico aguardando definição
+        st.isTechnicalTie = nonWinners.length > 1;
+        st.tieBreakNote =
+          nonWinners.length > 1
+            ? 'Empate técnico (aguardando sorteio)'
+            : 'Desempate por sorteio';
+      });
+
+      return [...winners, ...nonWinners];
+    } else {
+      subgroup.forEach((st) => {
+        st.isTechnicalTie = true;
+        st.tieBreakNote = 'Empate técnico (aguardando sorteio)';
+      });
+      return [...subgroup].sort((a, b) => (a.entry.name || '').localeCompare(b.entry.name || ''));
+    }
+  }
+
+  // Padrão: Rank compartilhado
+  subgroup.forEach((st) => {
+    st.isTechnicalTie = true;
+    st.tieBreakNote = 'Empate técnico (critérios matemáticos iguais)';
+  });
+  return [...subgroup].sort((a, b) => (a.entry.name || '').localeCompare(b.entry.name || ''));
+};
+
 /**
- * Calcula a classificação individual dos atletas no Super 8 de acordo com os critérios:
- * 1º Critério: Número de Vitórias (Pontos)
- * 2º Critério: Saldo de Games (SG = Games a Favor - Games Sofridos)
- * 3º Critério: Games Pró (GP = total de Games a Favor)
- * 4º Critério: Confronto Direto (caso 2 jogadores continuem empatados, verifica quem venceu em lados opostos)
+ * Desempate recursivo de atletas no Super 8:
+ * 1º Critério: Saldo de Games (SG = Games Pró - Games Contra) -> Classificação simples/direta
+ * 2º Critério: Games Pró (GP) -> Classificação simples/direta
+ * 3º Critério: Confronto Direto (apenas quando SG e GP forem rigorosamente iguais entre 2 atletas)
+ * 4º Critério: % de Games
+ * 5º Critério: Empate Técnico (conforme configuração: Rank Compartilhado / Alfabético / Sorteio)
+ */
+const resolvePlayerTies = (
+  group: PlayerStanding[],
+  matches: TournamentMatch[],
+  technicalTieBreak: TechnicalTieBreakOption = 'Rank Compartilhado',
+  drawWinners: string[] = []
+): PlayerStanding[] => {
+  if (group.length <= 1) return group;
+
+  group.forEach((st) => {
+    st.isTiedWithOthers = true;
+  });
+
+  // CASO 1: Exatamente 2 atletas empatados em vitórias
+  if (group.length === 2) {
+    const [p1, p2] = group;
+
+    // 1º Critério: Saldo de Games (SG) -> Classificação simples sem nota de desempate
+    if (p1.gamesDiff !== p2.gamesDiff) {
+      const higher = p1.gamesDiff > p2.gamesDiff ? p1 : p2;
+      const lower = p1.gamesDiff > p2.gamesDiff ? p2 : p1;
+      higher.tieBreakNote = undefined;
+      lower.tieBreakNote = undefined;
+      return [higher, lower];
+    }
+
+    // 2º Critério: Games Pró (GP) -> Classificação simples sem nota de desempate
+    if (p1.gamesWon !== p2.gamesWon) {
+      const higher = p1.gamesWon > p2.gamesWon ? p1 : p2;
+      const lower = p1.gamesWon > p2.gamesWon ? p2 : p1;
+      higher.tieBreakNote = undefined;
+      lower.tieBreakNote = undefined;
+      return [higher, lower];
+    }
+
+    // 3º Critério: Confronto Direto (apenas quando Vitórias, SG e GP forem rigorosamente iguais)
+    const h2h = getPlayersHeadToHead(p1.entry, p2.entry, matches);
+    if (h2h.matchesCount > 0) {
+      if (h2h.p1Wins !== h2h.p2Wins) {
+        const winner = h2h.p1Wins > h2h.p2Wins ? p1 : p2;
+        const loser = h2h.p1Wins > h2h.p2Wins ? p2 : p1;
+        winner.tieBreakNote = 'Desempate por confronto direto';
+        loser.tieBreakNote = 'Desempate por confronto direto';
+        return [winner, loser];
+      }
+      if (h2h.p1Games !== h2h.p2Games) {
+        const winner = h2h.p1Games > h2h.p2Games ? p1 : p2;
+        const loser = h2h.p1Games > h2h.p2Games ? p2 : p1;
+        winner.tieBreakNote = 'Desempate por confronto direto (saldo no confronto)';
+        loser.tieBreakNote = 'Desempate por confronto direto (saldo no confronto)';
+        return [winner, loser];
+      }
+    }
+
+    // 4º Critério: % de Games
+    const pct1 = (p1.gamesWon + p1.gamesLost) > 0 ? p1.gamesWon / (p1.gamesWon + p1.gamesLost) : 0;
+    const pct2 = (p2.gamesWon + p2.gamesLost) > 0 ? p2.gamesWon / (p2.gamesWon + p2.gamesLost) : 0;
+    if (Math.abs(pct1 - pct2) > 0.0001) {
+      const higher = pct1 > pct2 ? p1 : p2;
+      const lower = pct1 > pct2 ? p2 : p1;
+      higher.tieBreakNote = `Desempate por maior % de games: ${(Math.max(pct1, pct2) * 100).toFixed(1)}%`;
+      lower.tieBreakNote = `Desempate por maior % de games: ${(Math.min(pct1, pct2) * 100).toFixed(1)}%`;
+      return [higher, lower];
+    }
+
+    // 5º Critério: Empate Técnico (todos os critérios matemáticos iguais)
+    return resolveTechnicalTieSubgroup([p1, p2], technicalTieBreak, drawWinners);
+  }
+
+  // CASO 2: 3 ou mais atletas empatados em vitórias
+  // Separa subgrupos por Saldo de Games (SG)
+  const gamesDiffMap = new Map<number, PlayerStanding[]>();
+  group.forEach((st) => {
+    const list = gamesDiffMap.get(st.gamesDiff) || [];
+    list.push(st);
+    gamesDiffMap.set(st.gamesDiff, list);
+  });
+
+  if (gamesDiffMap.size > 1) {
+    const sortedDiffs = Array.from(gamesDiffMap.keys()).sort((a, b) => b - a);
+    const result: PlayerStanding[] = [];
+
+    sortedDiffs.forEach((diff) => {
+      const subgroup = gamesDiffMap.get(diff)!;
+      if (subgroup.length === 1) {
+        const st = subgroup[0];
+        st.tieBreakNote = undefined;
+        result.push(st);
+      } else {
+        const resolved = resolvePlayerTies(subgroup, matches, technicalTieBreak, drawWinners);
+        result.push(...resolved);
+      }
+    });
+
+    return result;
+  }
+
+  // Se todos tiverem o mesmo Saldo de Games, separa por Games Pró (GP)
+  const gamesWonMap = new Map<number, PlayerStanding[]>();
+  group.forEach((st) => {
+    const list = gamesWonMap.get(st.gamesWon) || [];
+    list.push(st);
+    gamesWonMap.set(st.gamesWon, list);
+  });
+
+  if (gamesWonMap.size > 1) {
+    const sortedWon = Array.from(gamesWonMap.keys()).sort((a, b) => b - a);
+    const result: PlayerStanding[] = [];
+
+    sortedWon.forEach((won) => {
+      const subgroup = gamesWonMap.get(won)!;
+      if (subgroup.length === 1) {
+        const st = subgroup[0];
+        st.tieBreakNote = undefined;
+        result.push(st);
+      } else {
+        const resolved = resolvePlayerTies(subgroup, matches, technicalTieBreak, drawWinners);
+        result.push(...resolved);
+      }
+    });
+
+    return result;
+  }
+
+  // Se todos tiverem o mesmo GP, separa por % de Games
+  const pctKey = (st: PlayerStanding) => {
+    const total = st.gamesWon + st.gamesLost;
+    return total > 0 ? (st.gamesWon / total).toFixed(4) : '0';
+  };
+
+  const pctMap = new Map<string, PlayerStanding[]>();
+  group.forEach((st) => {
+    const k = pctKey(st);
+    const list = pctMap.get(k) || [];
+    list.push(st);
+    pctMap.set(k, list);
+  });
+
+  if (pctMap.size > 1) {
+    const sortedPcts = Array.from(pctMap.keys()).sort((a, b) => Number(b) - Number(a));
+    const result: PlayerStanding[] = [];
+
+    sortedPcts.forEach((pct) => {
+      const subgroup = pctMap.get(pct)!;
+      if (subgroup.length === 1) {
+        const st = subgroup[0];
+        st.tieBreakNote = `Desempate por maior % de games: ${(Number(pct) * 100).toFixed(1)}%`;
+        result.push(st);
+      } else {
+        const resolved = resolvePlayerTies(subgroup, matches, technicalTieBreak, drawWinners);
+        result.push(...resolved);
+      }
+    });
+
+    return result;
+  }
+
+  // Todos os atletas têm estatísticas idênticas -> Empate Técnico
+  return resolveTechnicalTieSubgroup(group, technicalTieBreak, drawWinners);
+};
+
+/**
+ * Calcula a classificação individual dos atletas no Super 8 de acordo com os critérios oficiais:
+ * 1º Critério: Número de Vitórias (ou Pontos no Ranking)
+ * 2º Critério: Confronto Direto (em caso de 2 atletas)
+ * 3º Critério: Saldo de Games (SG = Games a Favor - Games Sofridos)
+ * 4º Critério: Games Pró (GP = total de Games a Favor)
+ * 5º Critério: % de Games (Games Pró / Total de Games)
+ * 6º Critério: Empate Técnico (critérios matemáticos iguais)
  */
 export const calculateSuper8PlayerStandings = (
   entries: TournamentEntry[],
   categoryMatches: TournamentMatch[],
-  scoringMode: 'wins' | 'rankingPoints' = 'wins'
+  optionsOrMode: Super8StandingsOptions | 'wins' | 'rankingPoints' = 'wins'
 ): PlayerStanding[] => {
+  const options: Super8StandingsOptions =
+    typeof optionsOrMode === 'string'
+      ? { scoringMode: optionsOrMode }
+      : optionsOrMode || {};
+  const scoringMode = options.scoringMode || 'wins';
+  const technicalTieBreak = options.technicalTieBreak || 'Rank compartilhado';
+  const drawWinners = options.drawWinners || [];
+
   const playerMap = new Map<string, PlayerStanding>();
   const uniqueStandings: PlayerStanding[] = [];
 
@@ -51,6 +402,7 @@ export const calculateSuper8PlayerStandings = (
       gamesDiff: 0,
       rank: 1,
       isTiedWithOthers: false,
+      isTechnicalTie: false,
       tieBreakNote: undefined,
     };
     uniqueStandings.push(standing);
@@ -137,6 +489,7 @@ export const calculateSuper8PlayerStandings = (
       rank: undefined,
       tieBreakNote: undefined,
       isTiedWithOthers: false,
+      isTechnicalTie: false,
     }));
   }
 
@@ -164,120 +517,39 @@ export const calculateSuper8PlayerStandings = (
       return;
     }
 
-    const hasAnyPlayed = group.some((st) => st.played > 0);
-    if (!hasAnyPlayed) {
+    const hasAnyPlayedInGroup = group.some((st) => st.played > 0);
+    if (!hasAnyPlayedInGroup) {
       group.sort((a, b) => (a.entry.name || '').localeCompare(b.entry.name || ''));
       finalSortedStandings.push(...group);
       return;
     }
 
-    group.forEach((st) => {
-      st.isTiedWithOthers = true;
-    });
-
-    // 1. Caso de empate entre exatamente 2 atletas -> Saldo de Games -> Games Pró -> Confronto Direto
-    if (group.length === 2) {
-      const [p1, p2] = group;
-      if (p1.gamesDiff !== p2.gamesDiff) {
-        const higher = p1.gamesDiff > p2.gamesDiff ? p1 : p2;
-        const lower = p1.gamesDiff > p2.gamesDiff ? p2 : p1;
-        higher.tieBreakNote = `Desempate por Saldo de Games: ${higher.gamesDiff > 0 ? '+' : ''}${higher.gamesDiff} (${higher.gamesWon} - ${higher.gamesLost})`;
-        lower.tieBreakNote = `Desempate por Saldo de Games: ${lower.gamesDiff > 0 ? '+' : ''}${lower.gamesDiff} (${lower.gamesWon} - ${lower.gamesLost})`;
-        finalSortedStandings.push(higher, lower);
-        return;
-      }
-
-      if (p1.gamesWon !== p2.gamesWon) {
-        const higher = p1.gamesWon > p2.gamesWon ? p1 : p2;
-        const lower = p1.gamesWon > p2.gamesWon ? p2 : p1;
-        higher.tieBreakNote = `Desempate por Games Pró: ${higher.gamesWon} games`;
-        lower.tieBreakNote = `Desempate por Games Pró: ${lower.gamesWon} games`;
-        finalSortedStandings.push(higher, lower);
-        return;
-      }
-
-      // Se empatados em SG e GP, verifica confronto direto
-      const key1 = getEntryKey(p1.entry);
-      const key2 = getEntryKey(p2.entry);
-
-      const directMatch = categoryMatches.find((m) => {
-        if (m.status !== 'finished') return false;
-        const p1Athletes = [m.pair1?.p1, m.pair1?.p2].map(getEntryKey);
-        const p2Athletes = [m.pair2?.p1, m.pair2?.p2].map(getEntryKey);
-        const inOppositeTeams =
-          (p1Athletes.includes(key1) && p2Athletes.includes(key2)) ||
-          (p1Athletes.includes(key2) && p2Athletes.includes(key1));
-        return inOppositeTeams;
-      });
-
-      if (directMatch) {
-        const { g1, g2 } = parseScoresFromMatch(directMatch);
-        const isPair1Winner = directMatch.winnerPairId
-          ? directMatch.winnerPairId === directMatch.pair1Id || directMatch.winnerPairId === directMatch.pair1?.id
-          : g1 > g2;
-
-        const p1Athletes = [directMatch.pair1?.p1, directMatch.pair1?.p2].map(getEntryKey);
-        const p1Won = p1Athletes.includes(key1) ? isPair1Winner : !isPair1Winner;
-
-        const winner = p1Won ? p1 : p2;
-        const loser = p1Won ? p2 : p1;
-        winner.tieBreakNote = 'Desempate por Confronto Direto';
-        loser.tieBreakNote = 'Desempate por Confronto Direto';
-        finalSortedStandings.push(winner, loser);
-        return;
-      }
-    }
-
-    // 2. Empate entre 3 ou mais atletas (ou 2 sem confronto direto finalizado):
-    group.sort((a, b) => {
-      // 2º Critério: Saldo de Games (SG)
-      if (b.gamesDiff !== a.gamesDiff) {
-        return b.gamesDiff - a.gamesDiff;
-      }
-      // 3º Critério: Games Pró (GP)
-      if (b.gamesWon !== a.gamesWon) {
-        return b.gamesWon - a.gamesWon;
-      }
-      // 4º Critério: Confronto Direto caso sobrem 2
-      const keyA = getEntryKey(a.entry);
-      const keyB = getEntryKey(b.entry);
-      const direct = categoryMatches.find((m) => {
-        if (m.status !== 'finished') return false;
-        const team1 = [m.pair1?.p1, m.pair1?.p2].map(getEntryKey);
-        const team2 = [m.pair2?.p1, m.pair2?.p2].map(getEntryKey);
-        return (team1.includes(keyA) && team2.includes(keyB)) || (team1.includes(keyB) && team2.includes(keyA));
-      });
-      if (direct) {
-        const { g1, g2 } = parseScoresFromMatch(direct);
-        const pair1Won = direct.winnerPairId
-          ? direct.winnerPairId === direct.pair1Id || direct.winnerPairId === direct.pair1?.id
-          : g1 > g2;
-        const team1 = [direct.pair1?.p1, direct.pair1?.p2].map(getEntryKey);
-        const aWon = team1.includes(keyA) ? pair1Won : !pair1Won;
-        return aWon ? -1 : 1;
-      }
-      return (a.entry.name || '').localeCompare(b.entry.name || '');
-    });
-
-    const gamesDiffVaries = group.some((st) => st.gamesDiff !== group[0].gamesDiff);
-    const gamesWonVaries = group.some((st) => st.gamesWon !== group[0].gamesWon);
-
-    group.forEach((st) => {
-      if (gamesDiffVaries) {
-        st.tieBreakNote = `Desempate por Saldo de Games: ${st.gamesDiff > 0 ? '+' : ''}${st.gamesDiff} (${st.gamesWon} - ${st.gamesLost})`;
-      } else if (gamesWonVaries) {
-        st.tieBreakNote = `Desempate por Games Pró (GP): ${st.gamesWon} games`;
-      } else {
-        st.tieBreakNote = 'Desempate por Sorteio / Comissão';
-      }
-    });
-
-    finalSortedStandings.push(...group);
+    const resolved = resolvePlayerTies(group, categoryMatches, technicalTieBreak, drawWinners);
+    finalSortedStandings.push(...resolved);
   });
 
-  // Atribui posições finais (rank)
+  // Atribui posições finais (rank) com suporte oficial a empate técnico compartilhado
   finalSortedStandings.forEach((st, idx) => {
-    st.rank = idx + 1;
+    if (idx === 0) {
+      st.rank = 1;
+      return;
+    }
+
+    const prev = finalSortedStandings[idx - 1];
+    const areEqualTechnicalTie =
+      Boolean(st.isTechnicalTie) &&
+      Boolean(prev.isTechnicalTie) &&
+      st.wins === prev.wins &&
+      st.gamesDiff === prev.gamesDiff &&
+      st.gamesWon === prev.gamesWon &&
+      st.gamesLost === prev.gamesLost &&
+      (st.points ?? 0) === (prev.points ?? 0);
+
+    if (areEqualTechnicalTie) {
+      st.rank = prev.rank;
+    } else {
+      st.rank = idx + 1;
+    }
   });
 
   return finalSortedStandings;

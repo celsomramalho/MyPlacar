@@ -157,6 +157,25 @@ export interface PlayerStanding {
   rank?: number;
   tieBreakNote?: string;
   isTiedWithOthers?: boolean;
+  isTechnicalTie?: boolean;
+}
+
+export type TechnicalTieBreakOption =
+  | 'Rank compartilhado'
+  | 'Rank Compartilhado'
+  | 'Alfabético'
+  | 'Sorteio';
+
+export const TECHNICAL_TIE_BREAK_OPTIONS: TechnicalTieBreakOption[] = [
+  'Rank compartilhado',
+  'Alfabético',
+  'Sorteio',
+];
+
+export interface Super8StandingsOptions {
+  scoringMode?: 'wins' | 'rankingPoints';
+  technicalTieBreak?: TechnicalTieBreakOption;
+  drawWinners?: string[];
 }
 
 export type DrawTypeOption =
@@ -231,6 +250,8 @@ export interface EventCategory {
   gender1?: 'M' | 'F';
   gender2?: 'M' | 'F';
   maxPlayers?: number;
+  /** Ordem/ganhadores do sorteio manual para desempate técnico (pins/emails dos inscritos) */
+  technicalTieDrawWinners?: string[];
 }
 
 /** Resolve a categoria de dupla para a fase, preservando Fixo como padrão legado. */
@@ -304,6 +325,10 @@ export interface TournamentEvent {
   /** Permite que qualquer usuário inscrito inscreva parceiros não cadastrados (inscrição simplificada) */
   allowUserPartnerRegistration?: boolean;
   rankingMatchesPerTeam?: number;
+  /** Critério para desempate técnico quando todos os números forem matematicamente iguais: Rank Compartilhado, Alfabético ou Sorteio */
+  technicalTieBreak?: TechnicalTieBreakOption;
+  /** Mapeamento de categoryId -> array de pins/emails dos ganhadores de sorteio manual */
+  technicalTieDrawWinners?: Record<string, string[]>;
   /** Número de grupos por chave no Super 8 duplas (padrão 2, ex: A1, A2 por chave) */
   groupsPerBracket?: number;
   categories?: EventCategory[];
