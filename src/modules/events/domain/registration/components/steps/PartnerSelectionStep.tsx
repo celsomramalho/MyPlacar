@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Users, UserPlus, Phone, Mail, UserCheck } from 'lucide-react';
+import React, { useState, useRef, useCallback } from 'react';
+import { Users, UserPlus, Phone, Mail, UserCheck, CheckCircle2, Loader2, Check } from 'lucide-react';
+import { getDb } from '@infra/firebase';
+import { findUserByPinOrEmail, type FirebaseUserByPin } from '@infra/firebase/users';
 import type { EventCategory, CategoryPartnerInfo, TournamentEntry, TournamentPair } from '@modules/events/types';
 
 export interface PartnerSelectionStepProps {
@@ -45,12 +47,82 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
   isSelfCancelled = false,
 }) => {
   const [isForming, setIsForming] = useState(false);
+  const [searchingCatId, setSearchingCatId] = useState<string | null>(null);
+  const [candidateUser, setCandidateUser] = useState<FirebaseUserByPin | null>(null);
+  const [targetCatId, setTargetCatId] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [boundMessage, setBoundMessage] = useState<{ [catId: string]: string }>({});
+  const lastSearchEmailRef = useRef<{ [catId: string]: string }>({});
 
   const doublesCategories = categories.filter(
-    (c) => selectedCategoryIds.includes(c.id) && c.format === 'Duplas'
+    (c) => selectedCategoryIds.includes(c.id) && c.format === 'Duplas' && c.requiresPartner !== false
   );
 
-  if ((!isTeamDrawPreDefined && !allowUserTeamFormation) || doublesCategories.length === 0) return null;
+  const handleEmailLookup = useCallback(
+    async (catId: string, email: string) => {
+      const clean = email.trim();
+      if (!clean || clean.length < 5 || !clean.includes('@') || clean === lastSearchEmailRef.current[catId]) return;
+      lastSearchEmailRef.current[catId] = clean;
+
+      const db = getDb();
+      if (!db) return;
+
+      try {
+        setSearchingCatId(catId);
+        const user = await findUserByPinOrEmail(db, clean);
+        if (user) {
+          setCandidateUser(user);
+          setTargetCatId(catId);
+          setShowConfirmModal(true);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar parceiro por e-mail:', err);
+      } finally {
+        setSearchingCatId(null);
+      }
+    },
+    []
+  );
+
+  const handleConfirmCandidate = () => {
+    if (!candidateUser || !targetCatId) return;
+
+    const currentPartner = categoryPartners[targetCatId] || { name: '', email: '', phone: '' };
+    const updatedPartner: CategoryPartnerInfo = {
+      ...currentPartner,
+      email: candidateUser.email || currentPartner.email,
+      name: candidateUser.name || candidateUser.nickname || currentPartner.name,
+      phone: candidateUser.phone ? formatPhone(candidateUser.phone) : currentPartner.phone,
+    };
+
+    updateCategoryPartner(targetCatId, updatedPartner);
+
+    const displayName = candidateUser.nickname || candidateUser.name || candidateUser.email;
+    setBoundMessage((prev) => ({
+      ...prev,
+      [targetCatId]: `Parceiro vinculado ao cadastro: ${displayName}`,
+    }));
+
+    setTimeout(() => {
+      setBoundMessage((prev) => {
+        const next = { ...prev };
+        delete next[targetCatId];
+        return next;
+      });
+    }, 4000);
+
+    setShowConfirmModal(false);
+    setCandidateUser(null);
+    setTargetCatId(null);
+  };
+
+  const handleCancelCandidate = () => {
+    setShowConfirmModal(false);
+    setCandidateUser(null);
+    setTargetCatId(null);
+  };
+
+  if (doublesCategories.length === 0) return null;
 
   const handleFormTeam = async (categoryId: string, partnerEntry: TournamentEntry) => {
     if (!onFormTeam || isForming) return;
@@ -72,14 +144,15 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
           Indicação de parceiro(a)
         </h3>
         <p className="text-xs text-slate-400 font-bold mt-0.5">
-          {isTeamDrawPreDefined
-            ? 'Este evento exige duplas pré-definidas. Preencha todos os dados obrigatórios do seu parceiro(a).'
+          {doublesCategories.some((c) => c.requiresPartner !== false)
+            ? 'Preencha os dados do parceiro(a) para as categorias em duplas selecionadas.'
             : 'A formação de duplas deste evento é manual ou por sorteio. Os dados do parceiro são opcionais.'}
         </p>
       </div>
 
       <div className="space-y-4">
         {doublesCategories.map((cat) => {
+          const isPartnerRequired = cat.requiresPartner !== false;
           const partner = categoryPartners[cat.id] || { name: '', email: '', phone: '' };
           const existingPair = getPairForCategory?.(cat.id);
           const partnerEntry = getPartnerEntryForCategory?.(cat.id, partner.email);
@@ -146,25 +219,45 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                 )}
               </div>
 
+              {/* Mensagem de Parceiro Vinculado */}
+              {boundMessage[cat.id] && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                  <span>{boundMessage[cat.id]}</span>
+                </div>
+              )}
+
               {/* Campos do parceiro */}
               <div className="grid grid-cols-1 gap-3">
                 {/* E-mail */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
-                    <Mail size={12} className="text-slate-400" />
-                    E-mail do parceiro
-                    {isTeamDrawPreDefined ? (
-                      <span className="text-rose-500 font-black">*</span>
-                    ) : (
-                      <span className="text-slate-400 font-bold text-[10px]">(opcional)</span>
+                  <label className="text-[11px] font-black text-slate-600 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Mail size={12} className="text-slate-400" />
+                      E-mail do parceiro
+                      {isPartnerRequired ? (
+                        <span className="text-rose-500 font-black">*</span>
+                      ) : (
+                        <span className="text-slate-400 font-bold text-[10px]">(opcional)</span>
+                      )}
+                    </span>
+                    {searchingCatId === cat.id && (
+                      <Loader2 size={12} className="animate-spin text-blue-500" />
                     )}
                   </label>
                   <input
                     type="email"
                     disabled={readOnly || Boolean(existingPair)}
-                    required={isTeamDrawPreDefined}
+                    required={isPartnerRequired}
                     value={partner.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      handleChange('email', val);
+                      if (val.includes('@') && val.length > 5) {
+                        handleEmailLookup(cat.id, val);
+                      }
+                    }}
+                    onBlur={(e) => handleEmailLookup(cat.id, e.target.value)}
                     placeholder="parceiro@email.com"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs font-bold text-slate-800 bg-white disabled:bg-slate-50 outline-none"
                   />
@@ -174,7 +267,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                 <div className="space-y-1">
                   <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
                     Nome do parceiro(a)
-                    {isTeamDrawPreDefined ? (
+                    {isPartnerRequired ? (
                       <span className="text-rose-500 font-black">*</span>
                     ) : (
                       <span className="text-slate-400 font-bold text-[10px]">(opcional)</span>
@@ -183,7 +276,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                   <input
                     type="text"
                     disabled={readOnly || Boolean(existingPair)}
-                    required={isTeamDrawPreDefined}
+                    required={isPartnerRequired}
                     value={partner.name}
                     onChange={(e) => handleChange('name', e.target.value)}
                     placeholder="Nome completo"
@@ -196,16 +289,11 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                   <label className="text-[11px] font-black text-slate-600 flex items-center gap-1">
                     <Phone size={12} className="text-slate-400" />
                     WhatsApp
-                    {isTeamDrawPreDefined ? (
-                      <span className="text-rose-500 font-black">*</span>
-                    ) : (
-                      <span className="text-slate-400 font-bold text-[10px]">(opcional)</span>
-                    )}
+                    <span className="text-slate-400 font-bold text-[10px]">(opcional)</span>
                   </label>
                   <input
                     type="tel"
                     disabled={readOnly || Boolean(existingPair)}
-                    required={isTeamDrawPreDefined}
                     value={partner.phone}
                     onChange={(e) => handleChange('phone', e.target.value)}
                     placeholder="(00) 00000-0000"
@@ -250,6 +338,82 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
           );
         })}
       </div>
+
+      {/* Modal de Confirmação de Parceiro Localizado */}
+      {showConfirmModal && candidateUser && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs animate-in fade-in"
+            onClick={handleCancelCandidate}
+          />
+          <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Confirmar parceiro(a)</h3>
+                <p className="text-xs font-bold text-slate-400">Cadastro localizado no sistema</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 text-xs font-bold text-slate-700">
+              {candidateUser.name && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">Nome:</span>
+                  <span className="text-slate-900 font-black truncate">{candidateUser.name}</span>
+                </div>
+              )}
+              {candidateUser.nickname && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">Nome como quer ser chamado:</span>
+                  <span className="text-slate-900 font-black truncate">{candidateUser.nickname}</span>
+                </div>
+              )}
+              {candidateUser.email && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">E-mail:</span>
+                  <span className="text-slate-900 font-black truncate">{candidateUser.email}</span>
+                </div>
+              )}
+              {candidateUser.phone && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">WhatsApp:</span>
+                  <span className="text-slate-900 font-black truncate">{formatPhone(candidateUser.phone)}</span>
+                </div>
+              )}
+              {candidateUser.pin && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 font-semibold shrink-0">PIN:</span>
+                  <span className="text-slate-900 font-black truncate">{candidateUser.pin}</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500 font-semibold">
+              Deseja vincular o parceiro ao cadastro localizado e preencher os dados?
+            </p>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelCandidate}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCandidate}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-black text-white flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+              >
+                <Check size={14} className="stroke-[3]" />
+                Confirmar e preencher
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

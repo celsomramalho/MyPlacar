@@ -19,14 +19,14 @@ export const eventNotificationService = {
         ? await getDocs(collection(db, 'users'))
         : null;
       const coAdmins = (usersSnapshot?.docs || [])
-        .map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }))
-        .filter((user) => coAdminPins.includes(String(user.pin || '').trim().toUpperCase()));
+        .map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() as Record<string, unknown>) }))
+        .filter((user) => coAdminPins.includes(String(user['pin'] || '').trim().toUpperCase()));
       const recipients = [
         { targetUserId: 'admin', targetUserEmail: 'celsomramalho@gmail.com', targetUserPin: '' },
         ...coAdmins.map((user) => ({
-          targetUserId: String(user.pin || '').trim().toUpperCase(),
-          targetUserEmail: String(user.email || '').trim().toLowerCase(),
-          targetUserPin: String(user.pin || '').trim().toUpperCase(),
+          targetUserId: String(user['pin'] || '').trim().toUpperCase(),
+          targetUserEmail: String(user['email'] || '').trim().toLowerCase(),
+          targetUserPin: String(user['pin'] || '').trim().toUpperCase(),
         })),
       ];
       const seen = new Set<string>();

@@ -252,6 +252,11 @@ export interface EventCategory {
   maxPlayers?: number;
   /** Ordem/ganhadores do sorteio manual para desempate técnico (pins/emails dos inscritos) */
   technicalTieDrawWinners?: string[];
+  /**
+   * Exige que o atleta informe o parceiro na inscrição (apenas para categorias com format === 'Duplas').
+   * Quando `false`, o bloco de parceiro é ocultado na inscrição. Padrão: `true`.
+   */
+  requiresPartner?: boolean;
 }
 
 /** Resolve a categoria de dupla para a fase, preservando Fixo como padrão legado. */

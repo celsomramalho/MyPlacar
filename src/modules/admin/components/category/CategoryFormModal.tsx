@@ -11,6 +11,7 @@ export interface CategoryFormModalProps {
   format: 'Simples' | 'Duplas';
   duplaType: 'Fixo' | 'Livre';
   phaseDuplaTypes: Partial<Record<'groups' | 'playoffs' | 'semifinal' | 'final', 'Fixo' | 'Livre'>>;
+  requiresPartner: boolean;
   sportId: string;
   abbreviation: string;
   priority: number;
@@ -23,6 +24,7 @@ export interface CategoryFormModalProps {
   onFormatChange: (val: 'Simples' | 'Duplas') => void;
   onDuplaTypeChange: (val: 'Fixo' | 'Livre') => void;
   onPhaseDuplaTypeChange: (phase: 'groups' | 'playoffs' | 'semifinal' | 'final', val: 'Fixo' | 'Livre' | '') => void;
+  onRequiresPartnerChange: (val: boolean) => void;
   onSportIdChange: (val: string) => void;
   onAbbreviationChange: (val: string) => void;
   onPriorityChange: (val: number) => void;
@@ -41,6 +43,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   format,
   duplaType,
   phaseDuplaTypes,
+  requiresPartner,
   sportId,
   abbreviation,
   priority,
@@ -53,6 +56,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   onFormatChange,
   onDuplaTypeChange,
   onPhaseDuplaTypeChange,
+  onRequiresPartnerChange,
   onSportIdChange,
   onAbbreviationChange,
   onPriorityChange,
@@ -119,6 +123,18 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           />
         </div>
 
+        {/* Campo: Descrição */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Descrição</label>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            placeholder="Ex: Categoria avançada masculina"
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+          />
+        </div>
+
         {/* Campo: Esporte */}
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 ml-1">Esporte</label>
@@ -150,18 +166,6 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
             <option value="Duplas">Duplas</option>
             <option value="Simples">Simples</option>
           </select>
-        </div>
-
-        {/* Campo: Descrição */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Descrição</label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            placeholder="Ex: Categoria avançada masculina"
-            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
-          />
         </div>
 
         {format === 'Duplas' && (
@@ -199,6 +203,29 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
                   </select>
                 </div>
               ))}
+            </div>
+
+            {/* Toggle: Parceiro obrigatório */}
+            <div className="flex items-center justify-between pt-1">
+              <div>
+                <p className="text-xs font-black text-slate-600">Parceiro obrigatório</p>
+                <p className="text-[10px] text-slate-400">Exibir bloco de indicação do parceiro na inscrição.</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={requiresPartner}
+                onClick={() => onRequiresPartnerChange(!requiresPartner)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                  requiresPartner ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                    requiresPartner ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
             </div>
           </div>
         )}

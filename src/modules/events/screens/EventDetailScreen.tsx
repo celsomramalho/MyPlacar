@@ -1812,6 +1812,7 @@ export const EventDetailScreen: React.FC<Props> = ({
               technicalTieDrawWinners: updatedWinnersMap,
             }
       );
+      const db = getDb();
       if (db && event.pin) {
         try {
           await updateEvent(db as Firestore, event.pin, {

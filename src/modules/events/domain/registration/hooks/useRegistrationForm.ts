@@ -356,23 +356,13 @@ export function useRegistrationForm({
         const categories = event.categories || [];
         for (const catId of formData.categoryIds) {
           const cat = categories.find((c) => c.id === catId);
-          if (cat && cat.format === 'Duplas') {
+          if (cat && cat.format === 'Duplas' && cat.requiresPartner !== false) {
             const partner = formData.categoryPartners[catId];
-            if (isSimplified) {
-              if (!partner || !partner.name?.trim()) {
-                return {
-                  isValid: false,
-                  error: `Preencha o nome do parceiro(a) para a categoria ${cat.name}.`,
-                };
-              }
-            } else {
-              const cleanedPhone = (partner?.phone || '').replace(/\D/g, '');
-              if (!partner || !partner.name?.trim() || !partner.email?.trim() || !cleanedPhone) {
-                return {
-                  isValid: false,
-                  error: `Preencha todos os dados do parceiro(a) (nome, e-mail e WhatsApp) para a categoria ${cat.name}.`,
-                };
-              }
+            if (!partner || !partner.name?.trim() || !partner.email?.trim()) {
+              return {
+                isValid: false,
+                error: `Preencha o e-mail e o nome do parceiro(a) para a categoria ${cat.name}.`,
+              };
             }
           }
         }

@@ -72,6 +72,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [format, setFormat] = useState<'Simples' | 'Duplas'>('Duplas');
   const [duplaType, setDuplaType] = useState<'Fixo' | 'Livre'>('Fixo');
   const [phaseDuplaTypes, setPhaseDuplaTypes] = useState<NonNullable<EventCategory['phaseDuplaTypes']>>({});
+  const [requiresPartner, setRequiresPartner] = useState<boolean>(true);
   const [priority, setPriority] = useState<number>(categories.length + 1);
   const [sportId, setSportId] = useState<string>(activeSports[0]?.id || 'beach-tennis');
   const [abbreviation, setAbbreviation] = useState('');
@@ -115,6 +116,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setDuplaType('Fixo');
     setPhaseDuplaTypes({});
     setPriority(categories.length + 1);
+    setRequiresPartner(true);
     setSportId(activeSports[0]?.id || 'beach-tennis');
     setAbbreviation('');
     setGender1('M');
@@ -165,6 +167,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setDuplaType(cat.duplaType ?? 'Fixo');
     setPhaseDuplaTypes(cat.phaseDuplaTypes ?? {});
     setPriority(cat.priority);
+    setRequiresPartner(cat.requiresPartner !== false);
     setSportId(cat.sportId);
     setAbbreviation(cat.abbreviation || '');
     setGender1(cat.gender1 || 'M');
@@ -199,6 +202,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
               gender1,
               gender2: format === 'Duplas' ? gender2 : undefined,
               maxPlayers: maxPlayers > 0 ? maxPlayers : 8,
+              requiresPartner: format === 'Duplas' ? requiresPartner : undefined,
             }
           : c
       );
@@ -217,6 +221,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
         gender1,
         gender2: format === 'Duplas' ? gender2 : undefined,
         maxPlayers: maxPlayers > 0 ? maxPlayers : 8,
+        requiresPartner: format === 'Duplas' ? requiresPartner : undefined,
       };
       updated = [...categories, newCategory];
     }
@@ -1017,6 +1022,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
           format={format}
           duplaType={duplaType}
           phaseDuplaTypes={phaseDuplaTypes}
+          requiresPartner={requiresPartner}
           sportId={sportId}
           abbreviation={abbreviation}
           priority={priority}
@@ -1034,6 +1040,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
             else delete next[phase];
             return next;
           })}
+          onRequiresPartnerChange={setRequiresPartner}
           onSportIdChange={setSportId}
           onAbbreviationChange={setAbbreviation}
           onPriorityChange={setPriority}
@@ -1092,6 +1099,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     format={format}
                     duplaType={duplaType}
                     phaseDuplaTypes={phaseDuplaTypes}
+                    requiresPartner={requiresPartner}
                     sportId={sportId}
                     abbreviation={abbreviation}
                     priority={priority}
@@ -1109,6 +1117,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                       else delete next[phase];
                       return next;
                     })}
+                    onRequiresPartnerChange={setRequiresPartner}
                     onSportIdChange={setSportId}
                     onAbbreviationChange={setAbbreviation}
                     onPriorityChange={setPriority}
