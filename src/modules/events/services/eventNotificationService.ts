@@ -2,6 +2,48 @@ import { addDoc, collection, getDocs, query, where, type Firestore } from 'fireb
 import type { EventCategory, PaymentItem, TournamentEntry, TournamentEvent } from '../types';
 
 export const eventNotificationService = {
+  /** Cria avisos direcionados ao administrador principal e aos co-administradores do evento. */
+  notifyEventAdmins: async (
+    db: Firestore,
+    event: TournamentEvent,
+    title: string,
+    content: string,
+    notificationType: string,
+    metadata: Record<string, unknown> = {},
+  ) => {
+    try {
+      const coAdminPins = Array.from(new Set((event.coAdminPins || [])
+        .map((pin) => pin.trim().toUpperCase())
+        .filter(Boolean)));
+      const usersSnapshot = coAdminPins.length
+        ? await getDocs(collection(db, 'users'))
+        : null;
+      const coAdmins = (usersSnapshot?.docs || [])
+        .map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }))
+        .filter((user) => coAdminPins.includes(String(user.pin || '').trim().toUpperCase()));
+      const recipients = [
+        { targetUserId: 'admin', targetUserEmail: 'celsomramalho@gmail.com', targetUserPin: '' },
+        ...coAdmins.map((user) => ({
+          targetUserId: String(user.pin || '').trim().toUpperCase(),
+          targetUserEmail: String(user.email || '').trim().toLowerCase(),
+          targetUserPin: String(user.pin || '').trim().toUpperCase(),
+        })),
+      ];
+      const seen = new Set<string>();
+      for (const recipient of recipients) {
+        const key = recipient.targetUserEmail || recipient.targetUserPin;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        await addDoc(collection(db, 'communications'), {
+          type: 'message', title, content,
+          authorId: 'system', authorName: event.name || 'Organização', createdAt: Date.now(),
+          ...recipient, isPinned: false, readBy: [], eventPin: event.pin, notificationType, ...metadata,
+        });
+      }
+    } catch (err) {
+      console.warn(`Erro ao criar aviso ${notificationType} para administradores do evento:`, err);
+    }
+  },
   /**
    * a & e) Envia aviso para o usuário toda vez que ele fizer uma inscrição e ela for confirmada:
    * "Inscrição confirmada no evento [nome do evento], categoria(s): [categorias], [local] e [data]" (uma única vez).
@@ -12,18 +54,8 @@ export const eventNotificationService = {
     entry: TournamentEntry,
   ) => {
     try {
-      if (event.registrationType === 'Simplificada') return;
       const userPin = (entry.pin || '').trim();
       const userEmail = (entry.email || '').trim().toLowerCase();
-      if (!userPin && !userEmail) return;
-
-      const locationStr = event.location ? `${event.location}` : 'Local a definir';
-      const dateStr = event.eventDateText
-        ? event.eventDateText
-        : event.startDate
-          ? new Date(event.startDate).toLocaleDateString('pt-BR')
-          : 'Data a confirmar';
-
       const catNames = (entry.categoryIds || [])
         .map((id) => {
           const cat = (event.categories || []).find((c) => c.id === id);
@@ -32,6 +64,23 @@ export const eventNotificationService = {
         .filter(Boolean)
         .join(', ');
       const catStr = catNames ? `, categoria(s): ${catNames}` : '';
+
+      await eventNotificationService.notifyEventAdmins(
+        db,
+        event,
+        'Nova Inscrição no Evento',
+        `${entry.name || entry.nickname || userEmail || userPin || 'Novo participante'} realizou inscrição no evento ${event.name}${catStr}.`,
+        'event_registration_created',
+        { registrationId: entry.registrationId || null },
+      );
+      if (event.registrationType === 'Simplificada' || (!userPin && !userEmail)) return;
+
+      const locationStr = event.location ? `${event.location}` : 'Local a definir';
+      const dateStr = event.eventDateText
+        ? event.eventDateText
+        : event.startDate
+          ? new Date(event.startDate).toLocaleDateString('pt-BR')
+          : 'Data a confirmar';
 
       const isConfirmed = entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || entry.paymentStatus === 'Isento';
       const title = isConfirmed ? 'Inscrição Confirmada' : 'Inscrição Recebida';
@@ -70,6 +119,14 @@ export const eventNotificationService = {
     payment: PaymentItem,
   ) => {
     try {
+      await eventNotificationService.notifyEventAdmins(
+        db,
+        event,
+        'Novo Pagamento no Evento',
+        `${entry.name || entry.nickname || entry.email || 'Participante'} registrou um pagamento de R$ ${payment.amount.toFixed(2)} no evento ${event.name}.`,
+        'event_payment_created',
+        { paymentId: payment.id || null, registrationId: entry.registrationId || null },
+      );
       if (event.registrationType === 'Simplificada') return;
       const userPin = (entry.pin || '').trim();
       const userEmail = (entry.email || '').trim().toLowerCase();

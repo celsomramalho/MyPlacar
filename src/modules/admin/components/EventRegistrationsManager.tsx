@@ -483,6 +483,19 @@ export const EventRegistrationsManager: React.FC<Props> = ({
           joinedAt: entryData.joinedAt,
           bannerUrl: event.bannerUrl || null,
         });
+        const { eventNotificationService } = await import('@modules/events/services/eventNotificationService');
+        if (!editingPin) {
+          void eventNotificationService.notifyRegistrationConfirmed(db, event, entryData);
+        }
+        const previousPaymentIds = new Set(
+          (editingPin ? entries.find((entry) => entry.pin === editingPin)?.payments || [] : [])
+            .map((payment) => payment.id),
+        );
+        for (const payment of payments) {
+          if (!previousPaymentIds.has(payment.id)) {
+            void eventNotificationService.notifyPaymentCreated(db, event, entryData, payment);
+          }
+        }
       } catch (err) {
         console.error("Erro ao salvar inscrição no Firestore:", err);
       }
