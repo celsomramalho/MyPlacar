@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
-import { CreditCard, QrCode, Upload, CheckCircle2, DollarSign, Loader2, AlertCircle } from 'lucide-react';
-import type { TournamentEvent } from '@modules/events/types';
+import {
+  CreditCard,
+  QrCode,
+  Upload,
+  CheckCircle2,
+  DollarSign,
+  Loader2,
+  AlertCircle,
+  Eye,
+  FileText,
+  ExternalLink,
+  X,
+} from 'lucide-react';
+import type { PaymentItem, TournamentEvent } from '@modules/events/types';
 import type { PricingCalculationResult } from '../../types';
 import type { UseRegistrationPaymentResult } from '../../hooks/useRegistrationPayment';
 import { PixPaymentView } from './PixPaymentView';
@@ -11,6 +23,10 @@ export interface PaymentCheckoutStepProps {
   payment: UseRegistrationPaymentResult;
   readOnly?: boolean;
   requiresReceipt?: boolean;
+  hasExistingReceipt?: boolean;
+  existingPayments?: PaymentItem[];
+  totalPaid?: number;
+  pendingAmount?: number;
 }
 
 export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
@@ -19,13 +35,28 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
   payment,
   readOnly = false,
   requiresReceipt = false,
+  hasExistingReceipt = false,
+  existingPayments = [],
+  totalPaid = 0,
+  pendingAmount = 0,
 }) => {
   // Se o tipo de pagamento do evento é manual, inicia sempre no modo manual
-  const eventPaymentType = event.paymentType ?? 'manual';
+  const eventPaymentType = String(event.paymentType ?? 'manual').trim().toLowerCase();
   const allowMercadoPago = eventPaymentType === 'mercadopago';
   const [paymentMode, setPaymentMode] = useState<'mercadopago' | 'manual'>(
     allowMercadoPago ? 'mercadopago' : 'manual',
   );
+  const [selectedReceipt, setSelectedReceipt] = useState<{ url: string; title: string } | null>(null);
+
+  const formatDateShort = (timestamp?: number) => {
+    if (!timestamp) return '-';
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return '-';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
 
   if (pricing.isFree) {
     return (
@@ -73,19 +104,134 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
       </div>
 
       {/* Resumo do Valor */}
-      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
-        <div>
-          <span className="text-xs font-bold text-slate-400">Total a pagar</span>
-          <h4 className="text-2xl font-black text-slate-800">
-            R$ {pricing.dueAmount.toFixed(2)}
-          </h4>
+      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-slate-400">
+              {totalPaid > 0 && pendingAmount > 0
+                ? 'Diferença a pagar'
+                : totalPaid > 0 && pendingAmount === 0
+                ? 'Saldo pendente'
+                : 'Total a pagar'}
+            </span>
+            <h4 className="text-2xl font-black text-slate-800">
+              R${' '}
+              {(totalPaid > 0 && pendingAmount > 0
+                ? pendingAmount
+                : totalPaid > 0 && pendingAmount === 0
+                ? 0
+                : pricing.dueAmount
+              ).toFixed(2)}
+            </h4>
+          </div>
+          <div className="text-xs font-bold px-3 py-1.5 rounded-2xl bg-blue-100/80 text-blue-700 flex flex-col items-center justify-center text-center leading-tight">
+            {pricing.extraCategoriesCount > 0 ? (
+              <>
+                <span>Taxa base</span>
+                <span className="whitespace-nowrap">
+                  + {pricing.extraCategoriesCount} adicional(is)
+                </span>
+              </>
+            ) : (
+              <span>Taxa de inscrição</span>
+            )}
+          </div>
         </div>
-        <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-blue-100 text-blue-700">
-          {pricing.extraCategoriesCount > 0
-            ? `Taxa base + ${pricing.extraCategoriesCount} adicional(is)`
-            : 'Taxa de inscrição'}
-        </span>
+
+        {totalPaid > 0 && (
+          <div className="pt-2 border-t border-slate-200/70 space-y-1 text-xs font-bold">
+            <p className="text-slate-500 whitespace-nowrap">
+              Total das categorias: R$ {pricing.dueAmount.toFixed(2)}
+            </p>
+            <p className="text-emerald-600 font-black whitespace-nowrap">
+              Total já comprovado: R$ {totalPaid.toFixed(2)}
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Histórico de Comprovantes / Pagamentos Anexados */}
+      {existingPayments.length > 0 && (
+        <div className="space-y-3 p-4 bg-white border border-slate-200 rounded-3xl shadow-xs">
+          <div className="space-y-1 border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <FileText size={16} className="text-blue-500 shrink-0" />
+              <h4 className="text-xs font-black text-slate-800">
+                Histórico de comprovantes / pagamentos ({existingPayments.length})
+              </h4>
+            </div>
+            <p className="text-xs font-black text-emerald-600 whitespace-nowrap pl-6">
+              Soma: R$ {totalPaid.toFixed(2)}
+            </p>
+          </div>
+
+          <div className="space-y-2.5">
+            {existingPayments.map((p, idx) => (
+              <div
+                key={p.id || idx}
+                className="p-3.5 bg-slate-50 border border-slate-100 rounded-2xl space-y-2.5"
+              >
+                {/* Linha superior: Valor, Data e Tipo */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-black text-slate-900 text-sm">
+                    R$ {(p.amount || 0).toFixed(2)}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400">
+                    {formatDateShort(p.date)}
+                  </span>
+                  <span className="text-xs font-bold px-3 py-0.5 rounded-xl bg-white border border-slate-200 text-slate-700">
+                    {p.provider === 'mercadopago' ? 'Mercado Pago' : 'Manual'}
+                  </span>
+                </div>
+
+                {/* Linha inferior: Botão Ver e Status */}
+                <div className="flex items-center gap-2">
+                  {p.receiptUrl ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedReceipt({
+                          url: p.receiptUrl!,
+                          title: `Comprovante - R$ ${(p.amount || 0).toFixed(2)} (${formatDateShort(p.date)})`,
+                        })
+                      }
+                      className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 font-black text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0"
+                      title="Ver comprovante"
+                    >
+                      <Eye size={14} className="stroke-[2.5]" />
+                      Ver
+                    </button>
+                  ) : (
+                    <span className="text-xs font-bold text-slate-400 px-2 py-1">
+                      Sem anexo
+                    </span>
+                  )}
+
+                  <span
+                    className={`text-xs font-bold px-3 py-1.5 rounded-xl truncate ${
+                      p.status === 'Confirmado' ||
+                      p.status === 'approved' ||
+                      p.status === 'Pago'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : p.status === 'Recusado' ||
+                          p.status === 'rejected' ||
+                          p.status === 'Cancelado'
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-amber-100/80 text-amber-900'
+                    }`}
+                  >
+                    {p.status === 'pending' ||
+                    p.status === 'Aguardando Confirmação' ||
+                    !p.status
+                      ? 'Aguardando confirmação'
+                      : p.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Escolha do Método — só exibe os dois cards se MP estiver habilitado */}
       <div className={`grid grid-cols-1 gap-3 ${allowMercadoPago ? 'sm:grid-cols-2' : ''}`}>
@@ -180,17 +326,44 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
             : 'border-slate-200'
         }`}>
           <label className="text-xs font-black text-slate-700 block flex items-center gap-1">
-            Anexar comprovante de pagamento
+            {totalPaid > 0 && pendingAmount > 0
+              ? `Anexar comprovante da diferença (R$ ${pendingAmount.toFixed(2)})`
+              : 'Anexar comprovante de pagamento'}
             {requiresReceipt && (
               <span className="text-rose-500 font-black ml-0.5">*</span>
             )}
           </label>
-          {requiresReceipt && !payment.manualReceiptFile && (
+
+          {/* Se a inscrição está 100% quitada */}
+          {!requiresReceipt && hasExistingReceipt && !payment.manualReceiptFile && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>Inscrição totalmente quitada pelos comprovantes anteriores. O envio de um novo arquivo é opcional.</span>
+            </div>
+          )}
+
+          {/* Se precisa de comprovante da diferença */}
+          {requiresReceipt && pendingAmount > 0 && totalPaid > 0 && !payment.manualReceiptFile && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-800 flex items-start gap-2">
+              <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-black">Diferença de novas categorias pendente!</p>
+                <p className="mt-0.5 text-[11px] font-bold text-amber-700">
+                  Total das categorias: R$ {pricing.dueAmount.toFixed(2)} · Já comprovado: R$ {totalPaid.toFixed(2)}.<br />
+                  É obrigatório anexar o comprovante da diferença de <strong>R$ {pendingAmount.toFixed(2)}</strong> para finalizar a inscrição.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Se é o primeiro comprovante obrigatório */}
+          {requiresReceipt && totalPaid === 0 && !payment.manualReceiptFile && (
             <p className="text-[11px] font-bold text-amber-700 flex items-center gap-1">
               <AlertCircle size={12} />
               Obrigatório para finalizar a inscrição
             </p>
           )}
+
           <input
             type="file"
             disabled={readOnly}
@@ -207,6 +380,58 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
               Arquivo selecionado: {payment.manualReceiptFile.name}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Modal de visualização de comprovante */}
+      {selectedReceipt && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in"
+          onClick={() => setSelectedReceipt(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-4 space-y-3 shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="font-black text-slate-800 text-sm truncate">{selectedReceipt.title}</h3>
+              <button
+                type="button"
+                onClick={() => setSelectedReceipt(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-slate-200">
+              {selectedReceipt.url.startsWith('data:application/pdf') || selectedReceipt.url.endsWith('.pdf') ? (
+                <iframe src={selectedReceipt.url} className="w-full h-96 rounded-xl border-0" title="PDF" />
+              ) : (
+                <img
+                  src={selectedReceipt.url}
+                  alt={selectedReceipt.title}
+                  className="max-h-[65vh] object-contain rounded-xl"
+                />
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <a
+                href={selectedReceipt.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 font-black text-xs hover:bg-blue-100 flex items-center gap-1.5"
+              >
+                <ExternalLink size={14} /> Abrir em nova aba
+              </a>
+              <button
+                type="button"
+                onClick={() => setSelectedReceipt(null)}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 font-black text-xs hover:bg-slate-200"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

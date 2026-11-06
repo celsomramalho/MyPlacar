@@ -7,7 +7,7 @@
  * @see docs/PLANO_REFATORACAO_INSCRICOES_TORNEIO.md — Fase 4
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Check, Trash2, X, AlertCircle } from 'lucide-react';
 import {
   getNextRegistrationId,
@@ -18,6 +18,7 @@ import {
   type TournamentEntry,
   type TournamentPair,
   type EventCategory,
+  type PaymentItem,
 } from '@modules/events/types';
 import { getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
@@ -144,6 +145,40 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     },
   });
 
+  // ─── Pagamentos e Comprovantes Anteriores ────────────────────────────────────
+  const existingPayments: PaymentItem[] = useMemo(() => {
+    if (Array.isArray(entry.payments) && entry.payments.length > 0) {
+      return entry.payments;
+    }
+    if ((entry as any)?.receiptUrl) {
+      return [
+        {
+          id: `legacy-${entry.pin || Date.now()}`,
+          amount: entry.paidAmount || entry.dueAmount || 0,
+          date: entry.joinedAt || Date.now(),
+          receiptUrl: (entry as any).receiptUrl,
+          receiptFileName: (entry as any).receiptFileName || 'Comprovante',
+          provider: 'manual',
+          status: entry.paymentStatus || 'pending',
+        },
+      ];
+    }
+    return [];
+  }, [entry.payments, entry.paidAmount, entry.dueAmount, entry.joinedAt, entry.pin, entry.paymentStatus]);
+
+  const totalPaid = useMemo(() => {
+    return existingPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+  }, [existingPayments]);
+
+  const currentDueAmount = form.pricing.dueAmount;
+  const pendingAmount = Math.max(0, currentDueAmount - totalPaid);
+  const isFullyPaid = currentDueAmount > 0 && totalPaid >= currentDueAmount;
+  const hasExistingReceipt = existingPayments.some((p) => Boolean(p.receiptUrl));
+  const isManualPaymentEvent = String(event.paymentType || 'manual').trim().toLowerCase() === 'manual';
+
+  // Comprovante é obrigatório se o pagamento é manual, não é gratuito e ainda resta saldo a pagar (ou não tem nenhum comprovante)
+  const requiresReceipt = isManualPaymentEvent && !form.pricing.isFree && (!isFullyPaid || !hasExistingReceipt);
+
   // ── Formação de Time ─────────────────────────────────────────────────────────
   const handleFormTeam = useCallback(async (categoryId: string, partnerEntry: TournamentEntry) => {
     if (!onUpdateEvent || (!form.isTeamDrawPreDefined && event.allowUserTeamFormation !== true)) return;
@@ -219,12 +254,15 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       return;
     }
 
-    // Comprovante obrigatório quando: pagamento manual + tipo inscrição App + evento não gratuito
-    const isManualPaymentEvent = (event.paymentType ?? 'manual') === 'manual';
-    const isAppRegistration = (event.registrationType ?? 'App') === 'App';
-    const requiresReceipt = isManualPaymentEvent && isAppRegistration && !form.pricing.isFree;
-    if (requiresReceipt && !payment.manualReceiptFile && !isAdmin) {
-      setFeedback('Anexe o comprovante de pagamento para finalizar a inscrição.');
+    // Validação de comprovante manual
+    if (requiresReceipt && !payment.manualReceiptFile && !isFullyPaid) {
+      if (existingPayments.length > 0 && pendingAmount > 0) {
+        setFeedback(
+          `Anexe o comprovante referente à diferença de R$ ${pendingAmount.toFixed(2)} para finalizar a inscrição.`
+        );
+      } else {
+        setFeedback('Anexe o comprovante de pagamento para finalizar a inscrição.');
+      }
       return;
     }
 
@@ -254,20 +292,35 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             });
           }
 
-          const existingPayments = Array.isArray(submission.payments) ? [...submission.payments] : [];
-          existingPayments.push({
-            id: `manual-${Date.now()}`,
-            amount: submission.dueAmount || form.pricing.dueAmount || 0,
-            date: Date.now(),
-            receiptUrl: receiptDataUrl,
-            receiptFileName: payment.manualReceiptFile.name,
-            provider: 'manual',
-            status: 'pending',
-          });
-          submission.payments = existingPayments;
+          // Se já havia pagamentos e há diferença pendente, o valor do novo comprovante é a diferença pendente
+          const newPaymentAmount =
+            pendingAmount > 0
+              ? pendingAmount
+              : submission.dueAmount || form.pricing.dueAmount || 0;
+
+          const updatedPaymentsList: PaymentItem[] = [
+            ...existingPayments,
+            {
+              id: `manual-${Date.now()}`,
+              amount: newPaymentAmount,
+              date: Date.now(),
+              receiptUrl: receiptDataUrl,
+              receiptFileName: payment.manualReceiptFile.name,
+              provider: 'manual',
+              status: 'pending',
+            },
+          ];
+          submission.payments = updatedPaymentsList;
+          submission.paidAmount = updatedPaymentsList.reduce((acc, p) => acc + (p.amount || 0), 0);
+          submission.dueAmount = form.pricing.dueAmount;
         } catch (fileErr) {
           console.warn('[EventRegistrationForm] Erro ao processar arquivo de comprovante:', fileErr);
         }
+      } else {
+        // Se não enviou novo comprovante (ex: edição mantendo os comprovantes já enviados)
+        submission.payments = existingPayments;
+        submission.paidAmount = totalPaid;
+        submission.dueAmount = form.pricing.dueAmount;
       }
 
       await onSave(submission);
@@ -457,12 +510,11 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             pricing={form.pricing}
             payment={payment}
             readOnly={readOnly}
-            requiresReceipt={
-              (event.paymentType ?? 'manual') === 'manual' &&
-              (event.registrationType ?? 'App') === 'App' &&
-              !form.pricing.isFree &&
-              !isAdmin
-            }
+            requiresReceipt={requiresReceipt}
+            hasExistingReceipt={hasExistingReceipt}
+            existingPayments={existingPayments}
+            totalPaid={totalPaid}
+            pendingAmount={pendingAmount}
           />
         )}
       </div>
