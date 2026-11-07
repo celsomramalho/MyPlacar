@@ -69,6 +69,16 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
   const isCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
 
+  const [localExpanded, setLocalExpanded] = React.useState(false);
+  const isStatsExpanded = onToggleExpanded ? isExpanded : localExpanded;
+  const handleToggleStats = () => {
+    if (onToggleExpanded) {
+      onToggleExpanded();
+    } else {
+      setLocalExpanded((prev) => !prev);
+    }
+  };
+
   return (
     <div
       onClick={() => canSelect && !isCancelled && onToggleSelect?.(entry)}
@@ -175,9 +185,9 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
         {/* Lado Direito: Botão de Edição e/ou Número de Inscrição Super 8 */}
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {(isIndividualRanking && standing?.rank !== undefined || isRanking && standing) && (
+          {standing && (
             <div className="flex items-center justify-end gap-1.5 flex-wrap">
-              {isIndividualRanking && standing?.rank !== undefined && (
+              {standing?.rank !== undefined && (
                 <span
                   className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
                     standing.rank === 1
@@ -193,24 +203,27 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
                   {standing.isTechnicalTie && <span className="ml-1 text-[9px] font-bold text-violet-700">(Empate)</span>}
                 </span>
               )}
-              {isRanking && standing && (
+              {isRanking && (
                 <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-lg">
                   {standing.points || 0} pts
                 </span>
               )}
 
-              {isRanking && onToggleExpanded && (
+              {hasCategoryMatches && (
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleExpanded();
+                    handleToggleStats();
                   }}
-                  title={isExpanded ? 'Ocultar estatísticas' : 'Mostrar estatísticas'}
-                  aria-label={isExpanded ? 'Ocultar estatísticas' : 'Mostrar estatísticas'}
-                  className="w-7 h-7 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-all active:scale-95"
+                  title={isStatsExpanded ? 'Ocultar estatísticas' : 'Mostrar estatísticas'}
+                  aria-label={isStatsExpanded ? 'Ocultar estatísticas' : 'Mostrar estatísticas'}
+                  className="w-7 h-7 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
                 >
-                  <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  <ChevronDown
+                    size={16}
+                    className={`transition-transform duration-200 ${isStatsExpanded ? 'rotate-180' : ''}`}
+                  />
                 </button>
               )}
             </div>
@@ -251,8 +264,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
       </div>
 
       {/* Estatísticas de Ranking ou Super 8 Individual */}
-      {isIndividualRanking && standing && hasCategoryMatches && (!isRanking || isExpanded) && (
-        <div className="mt-2">
+      {(isIndividualRanking || isRanking || isSuper8) && standing && hasCategoryMatches && isStatsExpanded && (
+        <div className="mt-2 animate-in fade-in">
           {isRanking ? (
             <RankingStandingStatsBlock standing={standing} />
           ) : (

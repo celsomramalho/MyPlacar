@@ -1,5 +1,5 @@
-import React from 'react';
-import { Trophy, UserRound, Check, X, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trophy, UserRound, Check, X, Clock, ChevronDown } from 'lucide-react';
 import type { TournamentPair, TournamentMatch, EventCategory } from '../../types';
 import type { TeamStanding } from '../../domain/brackets';
 import { BracketTeamStatsBlock } from '../BracketTeamStatsBlock';
@@ -25,6 +25,8 @@ export interface TeamCardProps {
   onUndoPair?: (pairId: string) => void;
   isRanking?: boolean;
   isSuper8?: boolean;
+  isExpanded?: boolean;
+  onToggleExpanded?: () => void;
 }
 
 export const TeamCard: React.FC<TeamCardProps> = ({
@@ -48,7 +50,19 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   onUndoPair,
   isRanking = false,
   isSuper8 = false,
+  isExpanded,
+  onToggleExpanded,
 }) => {
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const isStatsExpanded = onToggleExpanded ? (isExpanded ?? false) : localExpanded;
+  const handleToggleStats = () => {
+    if (onToggleExpanded) {
+      onToggleExpanded();
+    } else {
+      setLocalExpanded((prev) => !prev);
+    }
+  };
+
   const getPair = (pairId?: string, embedded?: TournamentPair): TournamentPair | undefined => {
     if (embedded) return embedded;
     if (!pairId || !pairsById) return undefined;
@@ -204,33 +218,57 @@ export const TeamCard: React.FC<TeamCardProps> = ({
             <span className="text-xs font-bold text-slate-500">
               {isSuper8 ? 'Classificação do time:' : 'Fase de chaves:'}
             </span>
-            {standing && standing.played > 0 && (
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
-                  standing.rank === 1
-                    ? 'bg-amber-100 text-amber-900 border-amber-300'
-                    : standing.rank === 2
-                    ? 'bg-sky-100 text-sky-900 border-sky-300'
-                    : 'bg-slate-100 text-slate-600 border-slate-200'
-                }`}
-                title={
-                  isSuper8
-                    ? `${standing.rank}º lugar`
-                    : isChaveFinished
-                    ? `${standing.rank}º lugar - ${
-                        standing.rank <= 2 ? 'Classificado para semifinal' : 'Fase de chaves finalizada'
-                      }`
-                    : `${standing.rank}º lugar parcial`
-                }
-              >
-                {standing.rank === 1 ? '🥇 1º lugar' : standing.rank === 2 ? '🥈 2º lugar' : `${standing.rank}º lugar`}
-                {!isSuper8 && isChaveFinished && (standing.rank === 1 || standing.rank === 2) && ' (Classificado)'}
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {standing && standing.played > 0 && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
+                    standing.rank === 1
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : standing.rank === 2
+                      ? 'bg-sky-100 text-sky-900 border-sky-300'
+                      : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                  title={
+                    isSuper8
+                      ? `${standing.rank}º lugar`
+                      : isChaveFinished
+                      ? `${standing.rank}º lugar - ${
+                          standing.rank <= 2 ? 'Classificado para semifinal' : 'Fase de chaves finalizada'
+                        }`
+                      : `${standing.rank}º lugar parcial`
+                  }
+                >
+                  {standing.rank === 1 ? '🥇 1º lugar' : standing.rank === 2 ? '🥈 2º lugar' : `${standing.rank}º lugar`}
+                  {!isSuper8 && isChaveFinished && (standing.rank === 1 || standing.rank === 2) && ' (Classificado)'}
+                </span>
+              )}
+
+              {standing && standing.played > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleStats();
+                  }}
+                  title={isStatsExpanded ? 'Ocultar estatísticas' : 'Mostrar estatísticas'}
+                  aria-label={isStatsExpanded ? 'Ocultar estatísticas' : 'Mostrar estatísticas'}
+                  className="w-7 h-7 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                >
+                  <ChevronDown
+                    size={16}
+                    className={`transition-transform duration-200 ${isStatsExpanded ? 'rotate-180' : ''}`}
+                  />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Tabela de estatísticas com largura total */}
-          {standing && standing.played > 0 && <BracketTeamStatsBlock standing={standing} />}
+          {standing && standing.played > 0 && isStatsExpanded && (
+            <div className="animate-in fade-in">
+              <BracketTeamStatsBlock standing={standing} />
+            </div>
+          )}
 
           {/* Placar da semifinal */}
           {semiMatch && (

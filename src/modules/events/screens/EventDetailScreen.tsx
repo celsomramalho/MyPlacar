@@ -300,11 +300,29 @@ export const EventDetailScreen: React.FC<Props> = ({
   const isRanking = isRankingEvent(event);
   const isSuper8 = isSuper8Event(event);
   const isChaveEvent = !isRanking && !isSuper8;
-  const canUserFormRankingTeam =
-    isRanking &&
+
+  // 1. Formar time a partir de 2 inscritos na aba Inscritos:
+  // Só é permitido se a opção "Usuário forma time" estiver habilitada no evento (e não for Super 8)
+  const canFormTeamFromEntries =
     !isReadOnly &&
     event.allowUserTeamFormation === true &&
-    isParticipant;
+    !isSuper8 &&
+    (canManageEvent || hasActiveRegistration);
+
+  // 2. Lançar/Formar partida a partir de 2 times na aba Times:
+  // Só é permitido em RANKING e se a opção "Usuário lança placar" (lançar partidas) estiver habilitada
+  const canFormMatchFromTeams =
+    isRanking &&
+    !isReadOnly &&
+    event.allowUserScoreEntry === true &&
+    (canManageEvent || hasActiveRegistration);
+
+  // 3. Trocar chave do time:
+  const canChangeTeamBracket =
+    !isReadOnly &&
+    event.allowUserTeamFormation === true &&
+    !isSuper8 &&
+    (canManageEvent || hasActiveRegistration);
 
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [participantSearch, setParticipantSearch] = useState('');
@@ -1049,13 +1067,11 @@ export const EventDetailScreen: React.FC<Props> = ({
     return (event.matches || []).filter((m) => isCurrentUserInMatch(m));
   }, [event.matches, isCurrentUserInMatch, activeUserEntry]);
 
-  // Formação de duplas pelo gestor dentro da categoria
+  // Formação de duplas dentro da categoria
   const toggleEntrySelection = (entry: TournamentEntry) => {
-    const canAthleteSelect = !canManageEvent &&
-      (canUserFormRankingTeam || event.allowUserTeamFormation === true) &&
-      !isSuper8 && (isRanking || !findEntryPair(entry));
-    if ((!canManageEvent && !canAthleteSelect) || isSuper8 || entry.disabled || entry.paymentStatus === 'Cancelado') return;
+    if (!canFormTeamFromEntries || entry.disabled || entry.paymentStatus === 'Cancelado') return;
     const key = entry.email || entry.pin;
+    if (!key) return;
     setSelectedEntries((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -1069,8 +1085,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   const togglePairSelection = (pair: TournamentPair) => {
-    const canSelectTeamsForRanking = canUserFormRankingTeam;
-    if ((!canManageEvent && !canSelectTeamsForRanking) || isReadOnly) return;
+    if (!canFormMatchFromTeams || isReadOnly) return;
     setSelectedPairs((previous) => {
       const next = new Set(previous);
       if (next.has(pair.id)) {
@@ -1095,9 +1110,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   const handleFormTeam = async () => {
-    const canAthleteForm = !canManageEvent && (canUserFormRankingTeam || event.allowUserTeamFormation === true) &&
-      !isSuper8;
-    if ((!canManageEvent && !canAthleteForm) || selectedEntries.size !== 2 || !activeCategory) return;
+    if (!canFormTeamFromEntries || selectedEntries.size !== 2 || !activeCategory) return;
     const selectedList = categoryEntries.filter((e) => selectedEntries.has(e.email || e.pin));
     if (selectedList.length !== 2) return;
 
@@ -1185,8 +1198,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   const handleFormMatch = async () => {
-    const canFormMatch = canManageEvent || canUserFormRankingTeam;
-    if (!canFormMatch || isReadOnly || selectedPairs.size !== 2 || !activeCategory) return;
+    if (!canFormMatchFromTeams || isReadOnly || selectedPairs.size !== 2 || !activeCategory) return;
     const pairIds = Array.from(selectedPairs);
 
     const p1 = (event.pairs || []).find((p) => p.id === pairIds[0]);
@@ -1264,8 +1276,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   const handleToggleTeamBracket = async (pair: TournamentPair) => {
-    const canAthleteChangeBracket = event.allowUserTeamFormation === true && hasActiveRegistration;
-    if ((!canManageEvent && !canAthleteChangeBracket) || isReadOnly) return;
+    if (!canChangeTeamBracket || isReadOnly) return;
     if (pairHasMatches(pair.id)) {
       setModalConfig({
         title: 'Chave bloqueada',
@@ -1703,37 +1714,49 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   const standingsData = useMemo(() => {
     if (!activeCategory) return { teamStandings: [], playerStandings: [] };
-    if (isIndividualRanking) {
-      const drawWinners =
-        activeCategory.technicalTieDrawWinners ||
-        (activeCategory.id && event.technicalTieDrawWinners
-          ? event.technicalTieDrawWinners[activeCategory.id]
-          : undefined) ||
-        [];
-      return {
-        teamStandings: [],
-        playerStandings: calculateSuper8PlayerStandings(
+
+    const playerStandings = isIndividualRanking
+      ? calculateSuper8PlayerStandings(
           categoryEntries,
           categoryMatches,
           {
             scoringMode: isRanking ? 'rankingPoints' : 'wins',
             technicalTieBreak: event.technicalTieBreak || 'Rank Compartilhado',
-            drawWinners,
+            drawWinners:
+              activeCategory.technicalTieDrawWinners ||
+              (activeCategory.id && event.technicalTieDrawWinners
+                ? event.technicalTieDrawWinners[activeCategory.id]
+                : undefined) ||
+              [],
           }
-        ),
-      };
-    }
-    const b1Pairs = categoryPairs.filter((p) => (p.bracket ?? 1) === 1);
-    const b2Pairs = categoryPairs.filter((p) => p.bracket === 2);
-    const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1' || m.phase === 'chave 1');
-    const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2' || m.phase === 'chave 2');
+        )
+      : [];
 
-    const s1 = calculateBracketStandings(b1Pairs, b1Matches);
-    const s2 = calculateBracketStandings(b2Pairs, b2Matches);
+    let teamStandings: ReturnType<typeof calculateBracketStandings> = [];
+    if (categoryPairs.length > 0) {
+      const b1Pairs = categoryPairs.filter((p) => (p.bracket ?? 1) === 1);
+      const b2Pairs = categoryPairs.filter((p) => p.bracket === 2);
+      const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1' || m.phase === 'chave 1');
+      const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2' || m.phase === 'chave 2');
+
+      if (b1Matches.length > 0 || b2Matches.length > 0) {
+        const s1 = calculateBracketStandings(b1Pairs, b1Matches);
+        const s2 = calculateBracketStandings(b2Pairs, b2Matches);
+        teamStandings = [...s1, ...s2];
+      } else {
+        const relevantMatches = categoryMatches.filter(
+          (m) => m.phase === 'fase_grupos' || m.phase?.startsWith('rodada') || m.phase === 'ranking' || !m.phase
+        );
+        teamStandings = calculateBracketStandings(
+          categoryPairs,
+          relevantMatches.length > 0 ? relevantMatches : categoryMatches
+        );
+      }
+    }
 
     return {
-      teamStandings: [...s1, ...s2],
-      playerStandings: [],
+      teamStandings,
+      playerStandings,
     };
   }, [
     activeCategory,
@@ -1902,10 +1925,23 @@ export const EventDetailScreen: React.FC<Props> = ({
     return [...selectedList, ...others];
   }, [selectedPairs, selectedPairObj, categoryPairs, pairReachedRankingMatchLimit]);
 
-  const visibleCategoryPairs = useMemo(
-    () => filterPairsBySearch(filteredCategoryPairs, teamSearch),
-    [filteredCategoryPairs, teamSearch]
-  );
+  const visibleCategoryPairs = useMemo(() => {
+    const searched = filterPairsBySearch(filteredCategoryPairs, teamSearch);
+    if (teamStandingsMap.size > 0) {
+      return [...searched].sort((a, b) => {
+        const stA = teamStandingsMap.get(a.id);
+        const stB = teamStandingsMap.get(b.id);
+        const rankA = stA?.rank ?? 9999;
+        const rankB = stB?.rank ?? 9999;
+        if (rankA !== rankB) return rankA - rankB;
+        const winsA = stA?.wins ?? 0;
+        const winsB = stB?.wins ?? 0;
+        if (winsA !== winsB) return winsB - winsA;
+        return (a.teamNumber || 0) - (b.teamNumber || 0);
+      });
+    }
+    return searched;
+  }, [filteredCategoryPairs, teamSearch, teamStandingsMap]);
 
   const filteredCategoryMatches = useMemo(
     () => filterMatchesBySearch(categoryMatches, matchSearch, pairsById),
@@ -1967,9 +2003,8 @@ export const EventDetailScreen: React.FC<Props> = ({
     [filteredCategoryMatches]
   );
 
-  const canAthleteFormTeam = !canManageEvent && (canUserFormRankingTeam || event.allowUserTeamFormation === true) && !isSuper8;
-  const canSubmitSelectedTeam = selectedEntries.size === 2 &&
-    (canManageEvent || canAthleteFormTeam);
+  const canAthleteFormTeam = canFormTeamFromEntries;
+  const canSubmitSelectedTeam = selectedEntries.size === 2 && canFormTeamFromEntries;
 
   const allCatFinished = categoryMatches.length > 0 && categoryMatches.every((m) => m.status === 'finished');
   const finalMatch = categoryMatches.find((m) => m.phase === 'final');
@@ -2376,7 +2411,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {(canManageEvent || canAthleteFormTeam) && userCategoryView === 'entries' && selectedEntries.size > 0 && (
+                    {canFormTeamFromEntries && userCategoryView === 'entries' && selectedEntries.size > 0 && (
                       <header className="fixed inset-x-0 top-0 z-[60] flex min-h-[76px] items-center justify-between gap-3 bg-sky-600 px-5 py-3 text-white shadow-lg animate-in slide-in-from-top duration-200">
                         <div className="flex min-w-0 items-center gap-3">
                           <button
@@ -2410,7 +2445,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                       </header>
                     )}
 
-                    {(canManageEvent || canUserFormRankingTeam) && userCategoryView === 'teams' && selectedPairs.size > 0 && (
+                    {canFormMatchFromTeams && userCategoryView === 'teams' && selectedPairs.size > 0 && (
                       <header className="fixed inset-x-0 top-0 z-[60] flex min-h-[76px] items-center justify-between gap-3 bg-sky-600 px-5 py-3 text-white shadow-lg animate-in slide-in-from-top duration-200">
                         <div className="flex min-w-0 items-center gap-3">
                           <button
@@ -2475,20 +2510,18 @@ export const EventDetailScreen: React.FC<Props> = ({
                         >
                           Inscritos ({categoryEntries.length})
                         </button>
-                        {!isSuper8 && (
-                          <button
-                            id="event-detail-subtab-teams"
-                            type="button"
-                            onClick={() => setUserCategoryView('teams')}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                              userCategoryView === 'teams'
-                                ? 'bg-white text-slate-900 shadow-xs'
-                                : 'text-slate-500 hover:text-slate-900'
-                            }`}
-                          >
-                            Times ({categoryPairs.length})
-                          </button>
-                        )}
+                        <button
+                          id="event-detail-subtab-teams"
+                          type="button"
+                          onClick={() => setUserCategoryView('teams')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                            userCategoryView === 'teams'
+                              ? 'bg-white text-slate-900 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-900'
+                          }`}
+                        >
+                          Times ({categoryPairs.length})
+                        </button>
                         <button
                           id="event-detail-subtab-matches"
                           type="button"
@@ -2659,17 +2692,17 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 standing={standing}
                                 isIndividualRanking={isIndividualRanking}
                                 isRanking={isRanking}
-                                isSuper8={isSuper8}
+                                isSuper8={isSuper8 && isIndividualRanking}
                                 isSelected={selectedEntries.has(entry.email || entry.pin)}
                                 isExpanded={expandedRankingEntryKey === standingKey}
-                                canSelect={(canManageEvent && !pair && !isSuper8) || canAthleteSelectEntry}
+                                canSelect={canAthleteSelectEntry}
                                 hasCategoryMatches={categoryMatches.length > 0}
                                 matches={event.matches || []}
                                 pairsById={pairsMap}
                                 allPairs={event.pairs}
                                 orderedQueue={orderedQueue}
                                 onToggleSelect={toggleEntrySelection}
-                                onToggleExpanded={isRanking
+                                onToggleExpanded={standing
                                   ? () => setExpandedRankingEntryKey((current) => current === standingKey ? null : standingKey)
                                   : undefined}
                                 onEdit={canUserEditSimplified ? (targetEntry) => {
@@ -2746,15 +2779,12 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 thirdMatch={thirdMatch}
                                 index={idx}
                                 isRanking={isRanking}
+                                isSuper8={isSuper8}
                                 isSelected={selectedPairs.has(pair.id)}
-                                canSelect={(selectedPairs.has(pair.id) || !pairReachedRankingMatchLimit(pair.id)) &&
-                                  (canManageEvent || canUserFormRankingTeam) &&
-                                  !isReadOnly}
+                                canSelect={canFormMatchFromTeams && (selectedPairs.has(pair.id) || !pairReachedRankingMatchLimit(pair.id))}
                                 onToggleSelect={togglePairSelection}
                                 canManage={canManageEvent}
-                                canChangeBracket={(canManageEvent || (event.allowUserTeamFormation === true && hasActiveRegistration)) &&
-                                  !isReadOnly &&
-                                  !pairHasMatches(pair.id)}
+                                canChangeBracket={canChangeTeamBracket && !pairHasMatches(pair.id)}
                                 onToggleBracket={handleToggleTeamBracket}
                                 onUndoPair={pairHasFinishedMatches(pair.id) ? undefined : handleUndoPair}
                               />
@@ -2827,8 +2857,20 @@ export const EventDetailScreen: React.FC<Props> = ({
                                       : undefined
                                   }
                                   queuePosition={queuePos}
-                                  canSubmitScore={lockParticipantMatchControls ? false : canSubmitScore}
-                                  canManage={lockParticipantMatchControls ? false : canUseRankingMatchActions}
+                                  canSubmitScore={
+                                    lockParticipantMatchControls
+                                      ? false
+                                      : event.allowUserScoreEntry === true
+                                      ? canSubmitScore
+                                      : false
+                                  }
+                                  canManage={
+                                    lockParticipantMatchControls
+                                      ? false
+                                      : event.allowUserScoreEntry === true
+                                      ? canUseRankingMatchActions
+                                      : false
+                                  }
                                   isReadOnly={isReadOnly}
                                   allCategoryFinished={allCatFinished}
                                   onScoreChange={lockParticipantMatchControls ? undefined : handleScoreChange}
