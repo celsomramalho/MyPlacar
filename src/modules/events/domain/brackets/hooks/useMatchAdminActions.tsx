@@ -158,12 +158,16 @@ export function useMatchAdminActions({
     }
 
     let newCategoryMatches: TournamentMatch[] = [];
+    let newCategoryPairs: TournamentPair[] = [];
     if (isSuper8) {
-      newCategoryMatches = generateSuper8MatchesForCategory(
+      const result = generateSuper8MatchesForCategory(
         selectedCategory,
         categoryEntries,
-        matches
+        matches,
+        pairs
       );
+      newCategoryMatches = result.matches;
+      newCategoryPairs = result.pairs;
     } else {
       newCategoryMatches = generateSystemMatchesForCategory(
         selectedCategory,
@@ -196,9 +200,16 @@ export function useMatchAdminActions({
     );
 
     const nextMatches = [...otherMatches, ...newCategoryMatches];
-    onUpdateEvent({ ...event, matches: nextMatches });
+
+    let nextPairs = pairs;
+    if (newCategoryPairs && newCategoryPairs.length > 0) {
+      const otherPairs = pairs.filter((p) => p.categoryId !== selectedCategory.id);
+      nextPairs = [...otherPairs, ...newCategoryPairs];
+    }
+
+    onUpdateEvent({ ...event, matches: nextMatches, pairs: nextPairs });
     await persistPatch(
-      { matches: nextMatches },
+      { matches: nextMatches, pairs: nextPairs },
       'Erro ao gerar partidas pelo sistema no Firestore:'
     );
   };

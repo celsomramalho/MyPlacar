@@ -143,14 +143,20 @@ const SUPER_4_MIXED_ROUNDS: Array<Array<[[number, number], [number, number]]>> =
 export const generateSuper8MatchesForCategory = (
   category: EventCategory,
   categoryEntries: TournamentEntry[],
-  existingMatches: TournamentMatch[] = []
-): TournamentMatch[] => {
+  existingMatches: TournamentMatch[] = [],
+  existingPairs: TournamentPair[] = []
+): { matches: TournamentMatch[]; pairs: TournamentPair[] } => {
   const matchesFromOtherCategories = existingMatches.filter(
     (m) => m.categoryId && m.categoryId !== category.id
   );
   let currentMatchNum = getNextMatchNumber(matchesFromOtherCategories);
 
   const generatedMatches: TournamentMatch[] = [];
+  const generatedPairs: TournamentPair[] = [];
+
+  // Quando scoreTarget === 'Time', as duplas são fixas (vêm da inscrição com parceiro).
+  // Nesse caso, já existem TournamentPair na lista de pairs do evento — usamos elas diretamente.
+  const isFixedTeam = category.scoreTarget === 'Time';
 
   const makePair = (entryA: TournamentEntry, entryB: TournamentEntry, roundNum: number, pairIndex: number): TournamentPair => {
     const [e1, e2] = (category.gender1 && category.gender2 && category.gender1 !== category.gender2) || (entryA.gender && entryB.gender && entryA.gender !== entryB.gender)
@@ -165,6 +171,116 @@ export const generateSuper8MatchesForCategory = (
     });
   };
 
+  // ── Modo Dupla Fixa (scoreTarget === 'Time') ───────────────────────────────
+  // Quando scoreTarget === 'Time', as duplas competem juntas como um time fixo.
+  // Se os times já foram formados pelo admin ou inscrição, usamos eles.
+  // Caso contrário, formamos os times automaticamente a partir dos inscritos.
+  if (isFixedTeam) {
+    const existingCatPairs = existingPairs.filter((p) => p.categoryId === category.id);
+    let activePairs = [...existingCatPairs];
+
+    // Se não há times formados suficientes no evento, gera automaticamente a partir dos inscritos
+    if (activePairs.length < 2) {
+      const isMixed =
+        isCategoryMixed(category) ||
+        (Boolean(category.gender1 && category.gender2) && category.gender1 !== category.gender2);
+
+      const now = Date.now();
+
+      if (isMixed) {
+        const men = categoryEntries.filter((e) => e.gender === 'M');
+        const women = categoryEntries.filter((e) => e.gender === 'F');
+        const totalPairs = Math.min(men.length, women.length);
+
+        if (totalPairs < 2) return { matches: [], pairs: [] };
+
+        for (let i = 0; i < totalPairs; i++) {
+          const man = men[i];
+          const woman = women[i];
+          const teamNum = i + 1;
+          const [e1, e2] = orderPairEntriesForMixed(man, woman);
+
+          const pair = minifyPairForStorage({
+            id: `pair_${category.id}_${now}_${teamNum}`,
+            p1: minifyEntryForPair(e1),
+            p2: minifyEntryForPair(e2),
+            categoryId: category.id,
+            teamNumber: teamNum,
+            teamCode: `${String(teamNum).padStart(3, '0')} - ${category.abbreviation || category.name || 'Dupla'}`,
+          });
+
+          generatedPairs.push(pair);
+        }
+      } else {
+        const totalPairs = Math.floor(categoryEntries.length / 2);
+        if (totalPairs < 2) return { matches: [], pairs: [] };
+
+        for (let i = 0; i < totalPairs; i++) {
+          const e1 = categoryEntries[i * 2];
+          const e2 = categoryEntries[i * 2 + 1];
+          const teamNum = i + 1;
+
+          const pair = minifyPairForStorage({
+            id: `pair_${category.id}_${now}_${teamNum}`,
+            p1: minifyEntryForPair(e1),
+            p2: minifyEntryForPair(e2),
+            categoryId: category.id,
+            teamNumber: teamNum,
+            teamCode: `${String(teamNum).padStart(3, '0')} - ${category.abbreviation || category.name || 'Dupla'}`,
+          });
+
+          generatedPairs.push(pair);
+        }
+      }
+
+      activePairs = generatedPairs;
+    }
+
+    if (activePairs.length < 2) return { matches: [], pairs: [] };
+
+    // Gera rodadas de round-robin (círculo de Berger) para que todos joguem contra todos
+    const n = activePairs.length;
+    const isOdd = n % 2 !== 0;
+    const list: (TournamentPair | null)[] = [...activePairs];
+    if (isOdd) list.push(null);
+    const totalTeams = list.length;
+    const totalRounds = totalTeams - 1;
+    const half = totalTeams / 2;
+    const teamIndices = list.map((_, idx) => idx);
+
+    const now = Date.now();
+    for (let round = 0; round < totalRounds; round++) {
+      const roundNum = round + 1;
+      for (let i = 0; i < half; i++) {
+        const homeIdx = teamIndices[i];
+        const awayIdx = teamIndices[totalTeams - 1 - i];
+        const pair1 = list[homeIdx];
+        const pair2 = list[awayIdx];
+        if (pair1 !== null && pair2 !== null) {
+          const matchNum = currentMatchNum++;
+          const matchCode = formatMatchNumber(matchNum);
+          generatedMatches.push({
+            id: `match_${now}_${matchNum}`,
+            matchNumber: matchNum,
+            matchCode,
+            categoryId: category.id,
+            phase: `rodada${roundNum}`,
+            pair1Id: pair1.id,
+            pair2Id: pair2.id,
+            pair1,
+            pair2,
+            status: 'waiting',
+          });
+        }
+      }
+      teamIndices.splice(1, 0, teamIndices.pop()!);
+    }
+
+    return { matches: generatedMatches, pairs: generatedPairs };
+  }
+
+  // ── Modo Dupla Rotativa (padrão) ───────────────────────────────────────────
+
   const isMixed = isCategoryMixed(category);
   const men = categoryEntries.filter((e) => e.gender === 'M');
   const women = categoryEntries.filter((e) => e.gender === 'F');
@@ -176,7 +292,6 @@ export const generateSuper8MatchesForCategory = (
 
     if (is8 || is4) {
       const mixedTemplate = is8 ? SUPER_8_MIXED_ROUNDS : SUPER_4_MIXED_ROUNDS;
-
       mixedTemplate.forEach((roundMatches, roundIdx) => {
         const roundNum = roundIdx + 1;
         roundMatches.forEach((matchup, matchIdx) => {
@@ -209,13 +324,13 @@ export const generateSuper8MatchesForCategory = (
         });
       });
 
-      return generatedMatches;
+      return { matches: generatedMatches, pairs: generatedPairs };
     }
   }
 
   // Super 8 tradicional (mesmo gênero / todos contra todos rotativo)
   const players = [...categoryEntries];
-  if (players.length < 4) return [];
+  if (players.length < 4) return { matches: [], pairs: [] };
 
   const roundsTemplate = players.length >= 8 ? SUPER_8_ROUNDS : SUPER_4_ROUNDS;
 
@@ -251,7 +366,7 @@ export const generateSuper8MatchesForCategory = (
     });
   });
 
-  return generatedMatches;
+  return { matches: generatedMatches, pairs: generatedPairs };
 };
 
 /**

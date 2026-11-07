@@ -6,6 +6,7 @@ import { pairsSharePlayer } from '@modules/events/domain/brackets';
 interface CategorySelectionActionBarProps {
   isSuper8: boolean;
   isSuper8Duplas: boolean;
+  canFormTeams?: boolean;
   selectedEntries: Set<string>;
   onClearSelectedEntries: () => void;
   isReadOnly: boolean;
@@ -25,6 +26,7 @@ interface CategorySelectionActionBarProps {
 export const CategorySelectionActionBar: React.FC<CategorySelectionActionBarProps> = ({
   isSuper8,
   isSuper8Duplas,
+  canFormTeams,
   selectedEntries,
   onClearSelectedEntries,
   isReadOnly,
@@ -43,7 +45,7 @@ export const CategorySelectionActionBar: React.FC<CategorySelectionActionBarProp
   return (
     <>
       {/* Selection Header for ENTRIES (Formar time / Desfazer time) */}
-      {!isSuper8 && !isSuper8Duplas && selectedEntries.size > 0 && (
+      {(canFormTeams ?? (!isSuper8 && !isSuper8Duplas)) && selectedEntries.size > 0 && (
         <header className="px-6 py-5 flex items-center justify-between bg-sky-600 text-white fixed top-0 left-0 right-0 z-[60] shadow-lg animate-in slide-in-from-top duration-200">
           <div className="flex items-center gap-4">
             <button

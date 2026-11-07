@@ -59,6 +59,9 @@ export interface UseCategoryBoardResult {
   b2Finished: boolean;
   b1FinishedCount: number;
   b2FinishedCount: number;
+  /** Standings for Super 8 categories with scoreTarget === 'Time' (fixed pairs, single bracket). */
+  super8FixedStandings: TeamStanding[];
+  super8FixedStandingsMap: Map<string, TeamStanding>;
 }
 
 const sortBracketPairs = (pairs: TournamentPair[]): TournamentPair[] =>
@@ -313,6 +316,26 @@ export function useCategoryBoard({
   const b1Finished = b1Matches.length > 0 && b1Matches.every((match) => match.status === 'finished');
   const b2Finished = b2Matches.length > 0 && b2Matches.every((match) => match.status === 'finished');
 
+  // ── Super 8 dupla fixa (scoreTarget === 'Time') ────────────────────────────
+  // Partidas geradas com phase 'rodadaX' ou 'fase_grupos'; usa os categoryPairs.
+  const super8FixedMatches = useMemo(
+    () =>
+      categoryMatches.filter(
+        (m) => m.phase === 'fase_grupos' || m.phase?.startsWith('rodada')
+      ),
+    [categoryMatches]
+  );
+
+  const super8FixedStandings = useMemo(() => {
+    if (selectedCategory?.scoreTarget !== 'Time') return [];
+    return calculateBracketStandings(categoryPairs, super8FixedMatches, totalSets);
+  }, [selectedCategory?.scoreTarget, categoryPairs, super8FixedMatches, totalSets]);
+
+  const super8FixedStandingsMap = useMemo(
+    () => new Map<string, TeamStanding>(super8FixedStandings.map((s) => [s.pair.id, s])),
+    [super8FixedStandings]
+  );
+
   return {
     selectedCategory,
     categoryEntries,
@@ -340,5 +363,7 @@ export function useCategoryBoard({
     b2Finished,
     b1FinishedCount: b1Matches.filter((match) => match.status === 'finished').length,
     b2FinishedCount: b2Matches.filter((match) => match.status === 'finished').length,
+    super8FixedStandings,
+    super8FixedStandingsMap,
   };
 }

@@ -1,4 +1,4 @@
-import type { TournamentEvent } from '../types';
+import type { EventCategory, TournamentEvent } from '../types';
 
 /**
  * Identifica se um evento é do tipo Ranking.
@@ -64,4 +64,16 @@ export const isIndividualScoreEvent = (event?: Partial<TournamentEvent> | null):
   if (!event) return true;
   if (event.scoreTarget) return event.scoreTarget === 'Inscrito';
   return isSinglePlayerEvent(event);
+};
+
+/**
+ * Determina se a pontuação é individual (por inscrito) na categoria.
+ * A configuração da categoria tem precedência sobre a do evento.
+ */
+export const isIndividualScoreCategory = (
+  category?: Partial<EventCategory> | null,
+  event?: Partial<TournamentEvent> | null
+): boolean => {
+  if (category?.scoreTarget) return category.scoreTarget === 'Inscrito';
+  return isIndividualScoreEvent(event);
 };

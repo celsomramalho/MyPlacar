@@ -24,6 +24,7 @@ export interface TeamCardProps {
   onToggleBracket?: (pair: TournamentPair) => void;
   onUndoPair?: (pairId: string) => void;
   isRanking?: boolean;
+  isSuper8?: boolean;
 }
 
 export const TeamCard: React.FC<TeamCardProps> = ({
@@ -46,6 +47,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   onToggleBracket,
   onUndoPair,
   isRanking = false,
+  isSuper8 = false,
 }) => {
   const getPair = (pairId?: string, embedded?: TournamentPair): TournamentPair | undefined => {
     if (embedded) return embedded;
@@ -149,7 +151,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
 
         {/* Lado Direito: Badge da Chave e Ação de Desfazer Time */}
         <div className="flex items-center gap-2 shrink-0 pt-0.5">
-          {canChangeBracket && onToggleBracket ? (
+          {!isSuper8 && (canChangeBracket && onToggleBracket ? (
             <button
               type="button"
               onClick={(e) => {
@@ -176,7 +178,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
             >
               Chave {pair.bracket ?? 1}
             </span>
-          )}
+          ))}
           {canManage && onUndoPair && !categoryMatches.some(
             (m) => m.status === 'finished' && (m.pair1Id === pair.id || m.pair2Id === pair.id)
           ) && (
@@ -195,11 +197,13 @@ export const TeamCard: React.FC<TeamCardProps> = ({
         </div>
       </div>
 
-      {/* Informações da fase de chaves — ocupa 100% da largura do card */}
+      {/* Informações da fase de chaves / classificação — ocupa 100% da largura do card */}
       {hasCategoryMatches && (
         <div className="mt-2.5 pt-2 border-t border-slate-100/90 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-bold text-slate-500">
-            <span className="text-xs font-bold text-slate-500">Fase de chaves:</span>
+            <span className="text-xs font-bold text-slate-500">
+              {isSuper8 ? 'Classificação do time:' : 'Fase de chaves:'}
+            </span>
             {standing && standing.played > 0 && (
               <span
                 className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold shrink-0 border ${
@@ -210,7 +214,9 @@ export const TeamCard: React.FC<TeamCardProps> = ({
                     : 'bg-slate-100 text-slate-600 border-slate-200'
                 }`}
                 title={
-                  isChaveFinished
+                  isSuper8
+                    ? `${standing.rank}º lugar`
+                    : isChaveFinished
                     ? `${standing.rank}º lugar - ${
                         standing.rank <= 2 ? 'Classificado para semifinal' : 'Fase de chaves finalizada'
                       }`
@@ -218,7 +224,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
                 }
               >
                 {standing.rank === 1 ? '🥇 1º lugar' : standing.rank === 2 ? '🥈 2º lugar' : `${standing.rank}º lugar`}
-                {isChaveFinished && (standing.rank === 1 || standing.rank === 2) && ' (Classificado)'}
+                {!isSuper8 && isChaveFinished && (standing.rank === 1 || standing.rank === 2) && ' (Classificado)'}
               </span>
             )}
           </div>

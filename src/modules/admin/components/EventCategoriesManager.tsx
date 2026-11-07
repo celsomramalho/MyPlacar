@@ -17,7 +17,7 @@ import {
   useTeamFormationActions,
 } from '@modules/events/domain/brackets';
 import { updateSuper8DuplasProgression } from '@modules/events/services/matchProgression';
-import { isIndividualScoreEvent, isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
+import { isIndividualScoreCategory, isIndividualScoreEvent, isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb, getAuthInstance } from '@infra/firebase';
 import { updateEvent, saveEventEntry, deleteEventEntry } from '@infra/firebase/events';
@@ -70,6 +70,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [format, setFormat] = useState<'Simples' | 'Duplas'>('Duplas');
+  const [scoreTarget, setScoreTarget] = useState<'Inscrito' | 'Time'>('Inscrito');
   const [duplaType, setDuplaType] = useState<'Fixo' | 'Livre'>('Fixo');
   const [phaseDuplaTypes, setPhaseDuplaTypes] = useState<NonNullable<EventCategory['phaseDuplaTypes']>>({});
   const [requiresPartner, setRequiresPartner] = useState<boolean>(true);
@@ -113,6 +114,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setName('');
     setDescription('');
     setFormat('Duplas');
+    setScoreTarget(isIndividualScoreEvent(event) ? 'Inscrito' : 'Time');
     setDuplaType('Fixo');
     setPhaseDuplaTypes({});
     setPriority(categories.length + 1);
@@ -164,6 +166,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setName(cat.name);
     setDescription(cat.description || '');
     setFormat(cat.format);
+    setScoreTarget(cat.scoreTarget ?? (cat.requiresPartner === false ? 'Inscrito' : (isIndividualScoreEvent(event) ? 'Inscrito' : 'Time')));
     setDuplaType(cat.duplaType ?? 'Fixo');
     setPhaseDuplaTypes(cat.phaseDuplaTypes ?? {});
     setPriority(cat.priority);
@@ -175,6 +178,13 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setMaxPlayers(cat.maxPlayers ?? 8);
     setEditingId(cat.id);
     setIsAdding(true);
+  };
+
+  const handleScoreTargetChange = (val: 'Inscrito' | 'Time') => {
+    setScoreTarget(val);
+    if (val === 'Time') {
+      setRequiresPartner(true);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -193,6 +203,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
               name: name.trim(),
               description: description.trim(),
               format,
+              scoreTarget,
               duplaType: format === 'Duplas' ? duplaType : undefined,
               phaseDuplaTypes: format === 'Duplas' ? phaseDuplaTypes : undefined,
               priority,
@@ -212,6 +223,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
         name: name.trim(),
         description: description.trim(),
         format,
+        scoreTarget,
         duplaType: format === 'Duplas' ? duplaType : undefined,
         phaseDuplaTypes: format === 'Duplas' ? phaseDuplaTypes : undefined,
         priority,
@@ -252,8 +264,11 @@ export const EventCategoriesManager: React.FC<Props> = ({
     });
   };
 
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const isRanking = isRankingEvent(event);
-  const isIndividualRanking = isIndividualScoreEvent(event);
+  const isIndividualRanking = selectedCategory
+    ? isIndividualScoreCategory(selectedCategory, event)
+    : isIndividualScoreEvent(event);
   const isManualMatchDraw = event.matchDrawType === 'Manual';
   const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;
   const totalSets = (event.setsCount || event.config?.sets || 1) as number;
@@ -269,7 +284,6 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setCategoryPanelView(view);
   };
 
-  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const {
     categoryEntries,
     categoryMatches,
@@ -294,6 +308,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     b2Finished,
     b1FinishedCount,
     b2FinishedCount,
+    super8FixedStandingsMap,
   } = useCategoryBoard({
     event,
     categories,
@@ -951,6 +966,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
       <CategorySelectionActionBar
         isSuper8={isSuper8}
         isSuper8Duplas={isSuper8Duplas}
+        canFormTeams={(!isSuper8 && !isSuper8Duplas) || selectedCategory?.scoreTarget === 'Time'}
         selectedEntries={selectedEntries}
         onClearSelectedEntries={() => setSelectedEntries(new Set())}
         isReadOnly={Boolean(isReadOnly)}
@@ -1020,6 +1036,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
           name={name}
           description={description}
           format={format}
+          scoreTarget={scoreTarget}
           duplaType={duplaType}
           phaseDuplaTypes={phaseDuplaTypes}
           requiresPartner={requiresPartner}
@@ -1033,6 +1050,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
           onNameChange={setName}
           onDescriptionChange={setDescription}
           onFormatChange={setFormat}
+          onScoreTargetChange={handleScoreTargetChange}
           onDuplaTypeChange={setDuplaType}
           onPhaseDuplaTypeChange={(phase, value) => setPhaseDuplaTypes((previous) => {
             const next = { ...previous };
@@ -1097,6 +1115,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     name={name}
                     description={description}
                     format={format}
+                    scoreTarget={scoreTarget}
                     duplaType={duplaType}
                     phaseDuplaTypes={phaseDuplaTypes}
                     requiresPartner={requiresPartner}
@@ -1110,6 +1129,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onNameChange={setName}
                     onDescriptionChange={setDescription}
                     onFormatChange={setFormat}
+                    onScoreTargetChange={handleScoreTargetChange}
                     onDuplaTypeChange={setDuplaType}
                     onPhaseDuplaTypeChange={(phase, value) => setPhaseDuplaTypes((previous) => {
                       const next = { ...previous };
@@ -1161,6 +1181,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     bracketTwoPairs={bracketTwoPairs}
                     b1StandingsMap={b1StandingsMap}
                     b2StandingsMap={b2StandingsMap}
+                    super8StandingsMap={super8FixedStandingsMap}
                     b1Finished={b1Finished}
                     b2Finished={b2Finished}
                     b1MatchesCount={b1Matches.length}

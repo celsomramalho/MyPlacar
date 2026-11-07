@@ -15,6 +15,8 @@ export interface CategoryTeamsTabProps {
   bracketTwoList: TournamentPair[];
   b1StandingsMap: Map<string, TeamStanding>;
   b2StandingsMap: Map<string, TeamStanding>;
+  /** Standings map for Super 8 with scoreTarget === 'Time' (fixed pairs). */
+  super8StandingsMap?: Map<string, TeamStanding>;
   b1Finished: boolean;
   b2Finished: boolean;
   b1MatchesCount: number;
@@ -45,6 +47,7 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
   bracketTwoList,
   b1StandingsMap,
   b2StandingsMap,
+  super8StandingsMap,
   b1Finished,
   b2Finished,
   b1MatchesCount,
@@ -105,19 +108,35 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
   const visiblePairs = filterPairsBySearch(filteredCategoryPairs, searchQuery);
   const visibleBracketOne = filterPairsBySearch(filteredBracketOne, searchQuery);
   const visibleBracketTwo = filterPairsBySearch(filteredBracketTwo, searchQuery);
+
+  const sortedFixedPairs = useMemo(() => {
+    return [...visiblePairs].sort((a, b) => {
+      const standingA = super8StandingsMap?.get(a.id);
+      const standingB = super8StandingsMap?.get(b.id);
+      const rankA = standingA?.rank ?? 9999;
+      const rankB = standingB?.rank ?? 9999;
+      if (rankA !== rankB) return rankA - rankB;
+      const winsA = standingA?.wins ?? 0;
+      const winsB = standingB?.wins ?? 0;
+      if (winsA !== winsB) return winsB - winsA;
+      return (a.teamNumber || 0) - (b.teamNumber || 0);
+    });
+  }, [visiblePairs, super8StandingsMap]);
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
       <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5">
         <div>
           <h3 className="text-base font-black text-slate-800">Times ({category.name})</h3>
           <p className="text-xs text-slate-400 font-bold mt-0.5">
-            {isSuper8
-              ? 'No Super 8, as duplas são formadas automaticamente a cada partida.'
-              : isRanking
-              ? 'Classificação do ranking e times formados nesta categoria.'
-              : hasCategoryMatches
-              ? 'Times formados (chaves e posições bloqueadas pois as partidas já foram geradas).'
-              : 'Defina as chaves e use as setas ▲/▼ para ordenar a sequência dos confrontos.'}
+          {isSuper8 && category.scoreTarget !== 'Time'
+            ? 'No Super 8, as duplas são formadas automaticamente a cada partida.'
+            : isSuper8 && category.scoreTarget === 'Time'
+            ? 'Super 8 com duplas fixas. Os times são inscritos com parceiro fixo e jogam todos contra todos.'
+            : isRanking
+            ? 'Classificação do ranking e times formados nesta categoria.'
+            : hasCategoryMatches
+            ? 'Times formados (chaves e posições bloqueadas pois as partidas já foram geradas).'
+            : 'Defina as chaves e use as setas ▲/▼ para ordenar a sequência dos confrontos.'}
           </p>
         </div>
 
@@ -177,7 +196,40 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
         </div>
       )}
 
-      {isSuper8 ? (
+      {isSuper8 && category.scoreTarget === 'Time' ? (
+        // ── Super 8 Dupla Fixa: mostra times com classificação ───────────────
+        categoryPairs.length === 0 ? (
+          <div className="p-10 text-center text-sm font-bold text-slate-400">
+            Nenhum time inscrito nesta categoria. Inscreva atletas com parceiro fixo para formar as duplas.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 p-4">
+            {sortedFixedPairs.map((pair, index) => (
+              <TeamCard
+                key={pair.id}
+                pair={pair}
+                category={category}
+                isSuper8={true}
+                standing={super8StandingsMap?.get(pair.id)}
+                isChaveFinished={
+                  categoryMatches.length > 0 &&
+                  categoryMatches.every((m) => m.status === 'finished')
+                }
+                hasCategoryMatches={hasCategoryMatches}
+                categoryMatches={categoryMatches}
+                pairsById={pairsById}
+                index={index}
+                canManage={!isReadOnly}
+                isSelected={selectedTeamIds?.has(pair.id)}
+                canSelect={canSelectTeams}
+                onToggleSelect={() => onToggleTeamSelection?.(pair)}
+                onUndoPair={onUndoPair}
+              />
+            ))}
+          </div>
+        )
+      ) : isSuper8 ? (
+        // ── Super 8 Rotativo: mostra lista de partidas ───────────────────────
         categoryMatches.length === 0 ? (
           <div className="p-10 text-center text-sm font-bold text-slate-400">
             Nenhuma partida gerada ainda. As duplas são formadas automaticamente ao gerar as partidas na aba Partidas.

@@ -102,7 +102,7 @@ import {
   isEntryCheckedInToday,
   getTodayDateStr,
 } from '../services/eventRegistrationPeriod';
-import { isIndividualScoreEvent, isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
+import { isIndividualScoreCategory, isIndividualScoreEvent, isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
 import { isSimplifiedRegistrationEvent, isSimplifiedEntry } from '../types';
 import { openPdfOrUrl } from '../services/openRegulationPdf';
 
@@ -1699,7 +1699,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   );
 
   // Classificações calculadas para a categoria ativa (Super 8 e Ranking possuem ranking individual por atleta)
-  const isIndividualRanking = isIndividualScoreEvent(event);
+  const isIndividualRanking = isIndividualScoreCategory(activeCategory, event);
 
   const standingsData = useMemo(() => {
     if (!activeCategory) return { teamStandings: [], playerStandings: [] };

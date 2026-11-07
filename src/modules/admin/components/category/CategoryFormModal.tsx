@@ -9,6 +9,7 @@ export interface CategoryFormModalProps {
   name: string;
   description: string;
   format: 'Simples' | 'Duplas';
+  scoreTarget: 'Inscrito' | 'Time';
   duplaType: 'Fixo' | 'Livre';
   phaseDuplaTypes: Partial<Record<'groups' | 'playoffs' | 'semifinal' | 'final', 'Fixo' | 'Livre'>>;
   requiresPartner: boolean;
@@ -22,6 +23,7 @@ export interface CategoryFormModalProps {
   onNameChange: (val: string) => void;
   onDescriptionChange: (val: string) => void;
   onFormatChange: (val: 'Simples' | 'Duplas') => void;
+  onScoreTargetChange: (val: 'Inscrito' | 'Time') => void;
   onDuplaTypeChange: (val: 'Fixo' | 'Livre') => void;
   onPhaseDuplaTypeChange: (phase: 'groups' | 'playoffs' | 'semifinal' | 'final', val: 'Fixo' | 'Livre' | '') => void;
   onRequiresPartnerChange: (val: boolean) => void;
@@ -41,6 +43,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   name,
   description,
   format,
+  scoreTarget,
   duplaType,
   phaseDuplaTypes,
   requiresPartner,
@@ -54,6 +57,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   onNameChange,
   onDescriptionChange,
   onFormatChange,
+  onScoreTargetChange,
   onDuplaTypeChange,
   onPhaseDuplaTypeChange,
   onRequiresPartnerChange,
@@ -166,6 +170,22 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
             <option value="Duplas">Duplas</option>
             <option value="Simples">Simples</option>
           </select>
+        </div>
+
+        {/* Campo: Pontuação */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Pontuação</label>
+          <select
+            value={scoreTarget}
+            onChange={(e) => onScoreTargetChange(e.target.value as 'Inscrito' | 'Time')}
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer"
+          >
+            <option value="Inscrito">Inscrito</option>
+            <option value="Time">Time</option>
+          </select>
+          <p className="text-[10px] text-slate-500 ml-1">
+            Define se a classificação considera os resultados de cada inscrito ou do time.
+          </p>
         </div>
 
         {format === 'Duplas' && (

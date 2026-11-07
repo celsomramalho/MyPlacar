@@ -60,6 +60,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   onUpdateEvent,
 }) => {
   const isSuper8Like = isSuper8 || isSuper8Duplas;
+  const isSuper8Rotating = isSuper8Like && category.scoreTarget !== 'Time';
   const [expandedStatsEmail, setExpandedStatsEmail] = React.useState<string | null>(null);
   const [isDrawModalOpen, setIsDrawModalOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -130,7 +131,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
         <div>
           <h3 className="text-base font-black text-slate-800">Inscritos ({category.name})</h3>
           <p className="text-xs text-slate-400 font-bold mt-0.5">
-            {isSuper8Like || isRanking
+            {isSuper8Rotating || isRanking
               ? 'Classificação individual e estatísticas dos atletas.'
               : 'Clique nos participantes para formar ou desfazer times.'}
           </p>
@@ -203,7 +204,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
       </div>
 
       <div className="flex items-center justify-between gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
-        {isSuper8Like || isRanking ? (
+        {isSuper8Rotating || isRanking ? (
           <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-lg">
             Classificação {isRanking ? 'Ranking' : isSuper8Duplas ? 'Super 8 Duplas' : 'Super 8'}
           </span>
@@ -266,12 +267,12 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                     standing={standing}
                     isIndividualRanking={isIndividualRanking}
                     isRanking={isRanking}
-                    isSuper8={isSuper8Like}
+                    isSuper8={isSuper8Rotating}
                     isSimplified={isSimplified}
                     canViewHistory={!isReadOnly}
                     isSelected={Boolean((entry.email && selectedEntries.has(entry.email)) || (entry.pin && selectedEntries.has(entry.pin)))}
                     isExpanded={isStatsExpanded}
-                    canSelect={!isSuper8Like && !isReadOnly}
+                    canSelect={!isSuper8Rotating && !isReadOnly}
                     hasCategoryMatches={categoryMatches.length > 0}
                     matches={categoryMatches}
                     pairsById={pairsById}
@@ -336,12 +337,12 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                   standing={standing}
                   isIndividualRanking={isIndividualRanking}
                   isRanking={isRanking}
-                  isSuper8={isSuper8Like}
+                  isSuper8={isSuper8Rotating}
                   isSimplified={isSimplified}
                   canViewHistory={!isReadOnly}
                   isSelected={Boolean((entry.email && selectedEntries.has(entry.email)) || (entry.pin && selectedEntries.has(entry.pin)))}
                   isExpanded={isStatsExpanded}
-                  canSelect={!isSuper8Like && !isReadOnly}
+                  canSelect={!isSuper8Rotating && !isReadOnly}
                   hasCategoryMatches={categoryMatches.length > 0}
                   matches={categoryMatches}
                   pairsById={pairsById}

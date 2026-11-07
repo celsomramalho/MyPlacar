@@ -257,6 +257,8 @@ export interface EventCategory {
    * Quando `false`, o bloco de parceiro é ocultado na inscrição. Padrão: `true`.
    */
   requiresPartner?: boolean;
+  /** Alvo da pontuação na classificação: 'Inscrito' (individual/rotativo) ou 'Time' (dupla fixa). */
+  scoreTarget?: 'Inscrito' | 'Time';
 }
 
 /** Resolve a categoria de dupla para a fase, preservando Fixo como padrão legado. */

@@ -48,6 +48,8 @@ export interface CategoryBoardPanelProps {
   bracketTwoPairs: TournamentPair[];
   b1StandingsMap: Map<string, TeamStanding>;
   b2StandingsMap: Map<string, TeamStanding>;
+  /** Standings for Super 8 categories with scoreTarget === 'Time' (fixed pairs). */
+  super8StandingsMap?: Map<string, TeamStanding>;
   b1Finished: boolean;
   b2Finished: boolean;
   b1MatchesCount: number;
@@ -109,6 +111,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   bracketTwoPairs,
   b1StandingsMap,
   b2StandingsMap,
+  super8StandingsMap,
   b1Finished,
   b2Finished,
   b1MatchesCount,
@@ -181,6 +184,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
           bracketTwoList={bracketTwoPairs}
           b1StandingsMap={b1StandingsMap}
           b2StandingsMap={b2StandingsMap}
+          super8StandingsMap={super8StandingsMap}
           b1Finished={b1Finished}
           b2Finished={b2Finished}
           b1MatchesCount={b1MatchesCount}
