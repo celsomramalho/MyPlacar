@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getSportInfo } from '../services/sportInfo';
 import { Clock, MapPin, Loader2, Target, AlertTriangle } from 'lucide-react';
 import type { CircleMarker, Layer, Map as LeafletMap } from 'leaflet';
 import { getDb } from '@infra/firebase/client';
@@ -100,7 +101,7 @@ export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
       activeHistory
         .filter((match) => match.location && typeof match.location.lat === 'number' && typeof match.location.lng === 'number')
         .forEach((match) => {
-          const color = match.sportType === 'tennis' ? '#3b82f6' : '#22c55e';
+          const color = getSportInfo(match.sportType).color;
           const marker = L.circleMarker([match.location!.lat, match.location!.lng], {
             radius: 10,
             fillColor: color,
@@ -113,7 +114,7 @@ export const LocationScreen: React.FC<Props> = ({ focusMatchId, onBack }) => {
           marker.bindPopup(`
             <div style="font-family: sans-serif; min-width: 140px; padding: 4px;">
               <div style="font-size: 10px; font-weight: 900; color: ${color}; text-transform: uppercase; margin-bottom: 2px;">
-                ${match.sportType === 'tennis' ? '🎾 Tênis' : '🏓 Pickleball'}
+                 
               </div>
               <div style="font-size: 13px; font-weight: 800; color: #0f172a;">${match.p1Name} vs ${match.p2Name}</div>
               <div style="font-size: 14px; font-weight: 900; color: #1e293b; margin-top: 2px;">${match.scoreSummary}</div>

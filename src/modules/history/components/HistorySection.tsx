@@ -7,6 +7,7 @@ import { MatchTimeline } from '@shared/components/MatchTimeline';
 import type { MatchHistoryItem } from '../types';
 import { filterHistory } from '../services/filterHistory';
 import { groupHistoryByDate } from '../services/groupHistoryByDate';
+import { getSportInfo } from '../services/sportInfo';
 
 const COLOR_MAP: Record<string, string> = {
   azul: 'text-blue-600',
@@ -218,8 +219,8 @@ export const HistorySection: React.FC<Props> = ({
                           <span className={`text-xl font-black ${c2}`}>{p2SetsWon}</span>
                         </div>
                         <div className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 rounded-xl border border-gray-100">
-                          <LazySportIcon sportId={item.sportType} defaultIcon={item.sportType === 'tennis' ? '🎾' : '🥒'} className="w-5 h-5 rounded-sm" />
-                          <span className="text-[11px] font-black text-gray-400 tracking-tight leading-none">{item.sportType === 'tennis' ? 'Tênis' : 'Pickle'}</span>
+                          <LazySportIcon sportId={item.sportType} defaultIcon={getSportInfo(item.sportType).defaultIcon} className="w-5 h-5 rounded-sm" />
+                          <span className="text-[11px] font-black text-gray-400 tracking-tight leading-none">{getSportInfo(item.sportType).name}</span>
                         </div>
                       </div>
                     </div>

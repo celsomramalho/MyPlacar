@@ -9,6 +9,7 @@ export { markHistoryAsSynced } from './services/markHistoryAsSynced';
 export { mergeDownloadedHistory } from './services/mergeDownloadedHistory';
 export { persistLocalHistory } from './services/persistLocalHistory';
 export { removeHistoryMatches } from './services/removeHistoryMatches';
+export { getSportInfo, type SportInfo } from './services/sportInfo';
 export { useHistoryCloud } from './hooks/useHistoryCloud';
 export { useMatchDeletion } from './hooks/useMatchDeletion';
 export type { MatchHistoryItem } from './types';
