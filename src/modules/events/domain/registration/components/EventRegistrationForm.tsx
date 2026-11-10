@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Check, Trash2, X, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Trash2, X, AlertCircle, Loader2 } from 'lucide-react';
 import {
   getNextRegistrationId,
   orderPairEntriesForMixed,
@@ -39,6 +39,9 @@ import {
 
 import type { UserProfile } from '@modules/auth/types';
 import { compressImageToDataUrl } from '@shared/utils/imageResize';
+import { buildPixTxid } from '@shared/utils/pixTxid';
+import { buildPixBrCode } from '@shared/utils/pixBrCode';
+import { eventNotificationService } from '@modules/events/services/eventNotificationService';
 
 export interface EventRegistrationFormProps {
   event: TournamentEvent;
@@ -93,6 +96,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     (!isAdmin && isConfirmedUserBound);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSavedPreRegistration, setHasSavedPreRegistration] = useState(false);
+  const [localPaymentsOverride, setLocalPaymentsOverride] = useState<PaymentItem[] | null>(null);
 
   useEffect(() => {
     if (!shouldLoadMercadoPagoSecurity) return;
@@ -147,6 +152,9 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
   // ─── Pagamentos e Comprovantes Anteriores ────────────────────────────────────
   const existingPayments: PaymentItem[] = useMemo(() => {
+    if (localPaymentsOverride) {
+      return localPaymentsOverride;
+    }
     if (Array.isArray(entry.payments) && entry.payments.length > 0) {
       return entry.payments;
     }
@@ -164,7 +172,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       ];
     }
     return [];
-  }, [entry.payments, entry.paidAmount, entry.dueAmount, entry.joinedAt, entry.pin, entry.paymentStatus]);
+  }, [entry.payments, entry.paidAmount, entry.dueAmount, entry.joinedAt, entry.pin, entry.paymentStatus, localPaymentsOverride]);
 
   const totalPaid = useMemo(() => {
     return existingPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
@@ -176,8 +184,9 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   const hasExistingReceipt = existingPayments.some((p) => Boolean(p.receiptUrl));
   const isManualPaymentEvent = String(event.paymentType || 'manual').trim().toLowerCase() === 'manual';
 
-  // Comprovante é obrigatório se o pagamento é manual, não é gratuito e ainda resta saldo a pagar (ou não tem nenhum comprovante)
-  const requiresReceipt = isManualPaymentEvent && !form.pricing.isFree && (!isFullyPaid || !hasExistingReceipt);
+  // Comprovante é obrigatório se: o evento exige (requiresReceipt !== false), pagamento manual, não é gratuito e ainda há saldo pendente ou sem comprovante
+  const eventRequiresReceipt = event.requiresReceipt !== false; // default true
+  const requiresReceipt = isManualPaymentEvent && eventRequiresReceipt && !form.pricing.isFree && (!isFullyPaid || !hasExistingReceipt);
 
   // ── Formação de Time ─────────────────────────────────────────────────────────
   const handleFormTeam = useCallback(async (categoryId: string, partnerEntry: TournamentEntry) => {
@@ -226,14 +235,152 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     onUpdateEvent({ ...event, entries: updatedEntries, pairs: [...pairs, newPair] });
   }, [entry, event, form, onSave, onSaveDraft, onUpdateEvent]);
 
-  const handleNext = () => {
+  const isStepBeforePayment =
+    (form.currentStep === 'categories' && !form.requiresPartnerDetails && event.allowUserTeamFormation !== true) ||
+    form.currentStep === 'partners';
+
+  const isNextDisabled =
+    readOnly ||
+    (isStepBeforePayment && isSubmitting) ||
+    ((isStepBeforePayment || form.currentStep === 'categories') && form.formData.categoryIds.length === 0);
+
+  const handleNext = async () => {
     setFeedback(null);
     const validation = form.isStepValid(form.currentStep);
     if (!validation.isValid) {
       setFeedback(validation.error || 'Preencha os campos obrigatórios.');
       return;
     }
+
+    if (isStepBeforePayment) {
+      setIsSubmitting(true);
+      try {
+        const submission = form.getSubmissionEntry();
+        if (!submission.registrationId) {
+          submission.registrationId = entry.registrationId || getNextRegistrationId(liveEntries);
+        }
+        submission.paymentStatus = submission.paymentStatus || 'Pendente';
+        submission.dueAmount = form.pricing.dueAmount;
+
+        // Salva a pré-inscrição
+        await (onSaveDraft || onSave)(submission);
+        setHasSavedPreRegistration(true);
+
+        // Se o evento tem dados de Pix e há valor a pagar, gera o código e notifica o atleta
+        if (event.pixKey && event.pixReceiverName && event.pixCity && form.pricing.dueAmount > 0) {
+          const txid = buildPixTxid({
+            eventPin: event.pin,
+            registrationId: submission.registrationId,
+            paymentsCount: submission.payments?.length ?? 0,
+          });
+          const brCode = buildPixBrCode({
+            pixKey: event.pixKey,
+            amount: form.pricing.dueAmount,
+            receiverName: event.pixReceiverName,
+            city: event.pixCity,
+            txid,
+          });
+
+          const db = getDb();
+          if (db) {
+            void eventNotificationService.notifyPreRegistration(
+              db as Firestore,
+              event,
+              submission,
+              form.pricing.dueAmount,
+              brCode,
+            );
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao salvar pré-inscrição:', err);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+
     form.goToNextStep();
+  };
+
+  const handleUpdatePaymentItemStatus = async (
+    paymentId: string,
+    newStatus: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
+  ) => {
+    setFeedback(null);
+    const currentSubmission = form.getSubmissionEntry();
+    let currentPayments: PaymentItem[] =
+      Array.isArray(currentSubmission.payments) && currentSubmission.payments.length > 0
+        ? [...currentSubmission.payments]
+        : Array.isArray(entry.payments) && entry.payments.length > 0
+        ? [...entry.payments]
+        : [...existingPayments];
+
+    if (currentPayments.length === 0 && (entry as any)?.receiptUrl) {
+      currentPayments = [
+        {
+          id: `legacy-${entry.pin || Date.now()}`,
+          amount: entry.paidAmount || entry.dueAmount || 0,
+          date: entry.joinedAt || Date.now(),
+          receiptUrl: (entry as any).receiptUrl,
+          receiptFileName: (entry as any).receiptFileName || 'Comprovante',
+          provider: 'manual',
+          status: newStatus,
+        },
+      ];
+    } else {
+      const idx = currentPayments.findIndex(
+        (p, i) =>
+          p.id === paymentId ||
+          `payment-${i}` === paymentId ||
+          `legacy-${p.date || i}` === paymentId
+      );
+      if (idx !== -1) {
+        currentPayments[idx] = { ...currentPayments[idx], status: newStatus };
+      } else if (currentPayments.length > 0) {
+        currentPayments[0] = { ...currentPayments[0], status: newStatus };
+      }
+    }
+
+    setLocalPaymentsOverride(currentPayments);
+
+    const confirmedTotal = currentPayments
+      .filter((p) => p.status === 'Confirmado' || p.status === 'approved' || p.status === 'Pago')
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const totalDue = currentSubmission.dueAmount ?? entry.dueAmount ?? form.pricing.dueAmount ?? 0;
+
+    let nextPaymentStatus: TournamentEntry['paymentStatus'] = entry.paymentStatus;
+    if (newStatus === 'Confirmado') {
+      nextPaymentStatus = confirmedTotal >= totalDue || totalDue <= 0 ? 'Confirmado' : 'Pendente';
+    } else if (newStatus === 'Recusado') {
+      nextPaymentStatus = confirmedTotal > 0 ? 'Pendente' : 'Recusado';
+    } else {
+      nextPaymentStatus = 'Aguardando Confirmação';
+    }
+
+    const updatedEntry: TournamentEntry = {
+      ...entry,
+      ...currentSubmission,
+      payments: currentPayments,
+      paidAmount: confirmedTotal,
+      paymentStatus: nextPaymentStatus,
+    };
+
+    if (onSave) {
+      await onSave(updatedEntry);
+    } else if (onSaveDraft) {
+      await onSaveDraft(updatedEntry);
+    }
+
+    if (onUpdateEvent) {
+      const updatedEntries = (event.entries || []).map((item) =>
+        (item.pin && item.pin === updatedEntry.pin) ||
+        (item.email && item.email === updatedEntry.email)
+          ? updatedEntry
+          : item
+      );
+      onUpdateEvent({ ...event, entries: updatedEntries });
+    }
   };
 
   const handleSubmit = async () => {
@@ -401,6 +548,75 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     }
   };
 
+  const isPreRegistered = Boolean(
+    hasSavedPreRegistration ||
+    entry.registrationId ||
+    entry.paymentStatus ||
+    (!isNew && (entry.categoryIds?.length ?? 0) > 0)
+  );
+
+  const isConfirmedOrPaid =
+    entry.paymentStatus === 'Confirmado' ||
+    entry.paymentStatus === 'Pago' ||
+    (form.pricing.isFree && isPreRegistered) ||
+    isFullyPaid;
+
+  const isPendingPayment =
+    isPreRegistered &&
+    !isConfirmedOrPaid &&
+    entry.paymentStatus !== 'Cancelado';
+
+  const isStepCompleted = (stepKey: RegistrationStep): boolean => {
+    if (stepKey === 'identity') {
+      return Boolean(form.formData.name?.trim()) && Boolean(form.formData.email?.trim());
+    }
+    if (stepKey === 'information') {
+      return Boolean(form.formData.regulationAccepted);
+    }
+    if (stepKey === 'categories') {
+      return form.formData.categoryIds.length > 0;
+    }
+    if (stepKey === 'partners') {
+      return form.isStepValid('partners').isValid;
+    }
+    if (stepKey === 'payment') {
+      return isConfirmedOrPaid;
+    }
+    return false;
+  };
+
+  const getStepButtonClass = (stepKey: RegistrationStep, isActive: boolean) => {
+    // 1. Etapa de Pagamento
+    if (stepKey === 'payment') {
+      if (isConfirmedOrPaid) {
+        return isActive
+          ? 'bg-emerald-600 text-white shadow-xs'
+          : 'bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200';
+      }
+      if (isPendingPayment) {
+        return isActive
+          ? 'bg-amber-500 text-white shadow-xs'
+          : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200';
+      }
+      return isActive
+        ? 'bg-blue-600 text-white shadow-xs'
+        : 'bg-slate-100 text-slate-500 hover:bg-slate-200';
+    }
+
+    // 2. Etapas anteriores (Atleta, Informações, Categorias, Duplas)
+    const isCompleted = isPreRegistered || isStepCompleted(stepKey);
+
+    if (isCompleted) {
+      return isActive
+        ? 'bg-emerald-600 text-white shadow-xs'
+        : 'bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200';
+    }
+
+    return isActive
+      ? 'bg-blue-600 text-white shadow-xs'
+      : 'bg-slate-100 text-slate-500 hover:bg-slate-200';
+  };
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto p-4 sm:p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
       {/* Barra de Progresso dos Steps */}
@@ -414,11 +630,10 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
                 id={`reg-step-${stepKey}`}
                 type="button"
                 onClick={() => form.goToStep(stepKey)}
-                className={`flex min-w-0 items-center justify-center gap-1.5 text-xs font-black px-3 py-2.5 rounded-xl transition-all ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 text-xs font-black px-3 py-2.5 rounded-xl transition-all ${getStepButtonClass(
+                  stepKey,
                   isActive
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                }`}
+                )}`}
               >
                 <span>{idx + 1}.</span>
                 <span className="whitespace-nowrap">{stepLabels[stepKey]}</span>
@@ -507,6 +722,10 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
         {form.currentStep === 'payment' && (
           <PaymentCheckoutStep
             event={event}
+            entry={{
+              ...entry,
+              registrationId: entry.registrationId || getNextRegistrationId(liveEntries),
+            }}
             pricing={form.pricing}
             payment={payment}
             readOnly={readOnly}
@@ -515,6 +734,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             existingPayments={existingPayments}
             totalPaid={totalPaid}
             pendingAmount={pendingAmount}
+            isAdmin={isAdmin}
+            onUpdatePaymentItemStatus={!readOnly ? handleUpdatePaymentItemStatus : undefined}
           />
         )}
       </div>
@@ -551,10 +772,27 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             <button
               type="button"
               onClick={handleNext}
-              className="px-5 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-xs transition-all active:scale-95"
+              disabled={isNextDisabled}
+              className="px-5 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-xs transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Avançar
-              <ChevronRight size={16} />
+              {isStepBeforePayment ? (
+                isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    Salvar e ir para pagamento
+                  </>
+                )
+              ) : (
+                <>
+                  Avançar
+                  <ChevronRight size={16} />
+                </>
+              )}
             </button>
           ) : (
             <button

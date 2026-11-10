@@ -12,6 +12,7 @@ import {
   Gavel,
   Image as ImageIcon,
   Info,
+  KeyRound,
   Loader2,
   MapPin,
   Menu,
@@ -793,6 +794,109 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
                 {(100 * (1 - (editingEvent.marketplaceFeePercent ?? 10) / 100)).toFixed(2)} vai direto
                 para a conta do organizador.
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Pix Estático + Comprovante Obrigatório — apenas para pagamento manual */}
+        {editingEvent.paymentType !== 'mercadopago' && (
+          <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+            {/* Toggle: Comprovante obrigatório */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <p className="text-xs font-black text-slate-700">Comprovante obrigatório</p>
+                <p className="text-[10px] font-bold text-slate-400 leading-relaxed">
+                  Exige que o atleta anexe o comprovante para finalizar a inscrição.
+                </p>
+              </div>
+              <Toggle
+                id="requiresReceipt"
+                checked={editingEvent.requiresReceipt !== false}
+                disabled={isAdminOnlyDisabled}
+                onChange={(val) =>
+                  handleProtectedChange({ ...editingEvent, requiresReceipt: val })
+                }
+              />
+            </div>
+
+            {/* Separador */}
+            <div className="border-t border-slate-200" />
+
+            {/* Dados Pix Estático */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                <KeyRound size={13} className="text-emerald-600" />
+                <p className="text-xs font-black text-slate-700">Dados para Pix Estático</p>
+                <span className="text-[10px] font-bold text-slate-400">(opcional)</span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 leading-relaxed">
+                Quando preenchidos, o atleta verá o botão&nbsp;<strong>"Copiar Código Pix"</strong>&nbsp;na etapa de pagamento.
+              </p>
+            </div>
+
+            {/* Chave Pix */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-500 ml-1">
+                Chave Pix (CPF, e-mail, telefone ou chave aleatória)
+              </label>
+              <input
+                type="text"
+                value={editingEvent.pixKey ?? ''}
+                disabled={isAdminOnlyDisabled}
+                onChange={(e) =>
+                  handleProtectedChange({ ...editingEvent, pixKey: e.target.value.trim() })
+                }
+                placeholder="ex: organizador@email.com"
+                className="w-full h-11 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-bold text-xs outline-none focus:border-emerald-400"
+              />
+            </div>
+
+            {/* Nome do recebedor + Cidade lado a lado */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between ml-1">
+                  <label className="text-[10px] font-black text-slate-500">
+                    Nome do recebedor
+                  </label>
+                  <span className="text-[9px] font-bold text-slate-400">
+                    {(editingEvent.pixReceiverName ?? '').length}/25
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={editingEvent.pixReceiverName ?? ''}
+                  disabled={isAdminOnlyDisabled}
+                  maxLength={25}
+                  onChange={(e) =>
+                    handleProtectedChange({ ...editingEvent, pixReceiverName: e.target.value.toUpperCase() })
+                  }
+                  placeholder="ex: JOAO SILVA"
+                  className="w-full h-11 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-bold text-xs outline-none focus:border-emerald-400 uppercase"
+                />
+                <p className="text-[9px] text-slate-400 font-bold ml-1">Sem acentos, máx 25</p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between ml-1">
+                  <label className="text-[10px] font-black text-slate-500">
+                    Cidade
+                  </label>
+                  <span className="text-[9px] font-bold text-slate-400">
+                    {(editingEvent.pixCity ?? '').length}/15
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={editingEvent.pixCity ?? ''}
+                  disabled={isAdminOnlyDisabled}
+                  maxLength={15}
+                  onChange={(e) =>
+                    handleProtectedChange({ ...editingEvent, pixCity: e.target.value.toUpperCase() })
+                  }
+                  placeholder="ex: SAO PAULO"
+                  className="w-full h-11 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-bold text-xs outline-none focus:border-emerald-400 uppercase"
+                />
+                <p className="text-[9px] text-slate-400 font-bold ml-1">Sem acentos, máx 15</p>
+              </div>
             </div>
           </div>
         )}

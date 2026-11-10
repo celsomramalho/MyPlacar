@@ -352,6 +352,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   const [deleteRequestReason, setDeleteRequestReason] = useState('');
   const [isSendingDeleteRequest, setIsSendingDeleteRequest] = useState(false);
   const [myHistoryOpen, setMyHistoryOpen] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
 
   const handleSaveSimplifiedEntry = useCallback(
@@ -1789,25 +1790,6 @@ export const EventDetailScreen: React.FC<Props> = ({
     return map;
   }, [standingsData.playerStandings]);
 
-  const isDrawTieBreak = event.technicalTieBreak === 'Sorteio';
-  const hasTechnicalTieInActiveCategory = useMemo(() => {
-    return Boolean(
-      isIndividualRanking &&
-        standingsData.playerStandings.some(
-          (st) => st.isTechnicalTie || Boolean(st.tieBreakNote && st.tieBreakNote.toLowerCase().includes('sorteio'))
-        )
-    );
-  }, [isIndividualRanking, standingsData.playerStandings]);
-
-  const hasAwaitingDrawInActiveCategory = useMemo(() => {
-    return Boolean(
-      isIndividualRanking &&
-        standingsData.playerStandings.some(
-          (st) => st.isTechnicalTie && Boolean(st.tieBreakNote && st.tieBreakNote.toLowerCase().includes('aguardando sorteio'))
-        )
-    );
-  }, [isIndividualRanking, standingsData.playerStandings]);
-
   const currentCategoryDrawWinners = useMemo(() => {
     return (
       activeCategory?.technicalTieDrawWinners ||
@@ -2259,46 +2241,77 @@ export const EventDetailScreen: React.FC<Props> = ({
             })()
           )}
 
-          {/* Ações e Compartilhamento (QR Code / WhatsApp) */}
-          <div id="event-detail-actions-card" className="bg-[#0f172a] rounded-[2.5rem] p-6 shadow-xl border border-white/10 flex flex-col items-center gap-5">
-            <div className="bg-white p-3 rounded-2xl shadow-xl w-40 h-40 flex items-center justify-center shrink-0 border-4 border-sky-500/20">
-              <img src={qrCodeUrl} alt="Convite evento" className="w-full h-full object-contain" />
-            </div>
-            <p className="text-[11px] font-bold text-slate-400 text-center leading-tight">
-              Compartilhe o convite para que seus parceiros se inscrevam no evento com facilidade.
-            </p>
-            <div className="grid grid-cols-2 gap-2 w-full">
-              <button
-                onClick={() => {
-                  const text = `Participe do evento ${event.name} comigo no MyPlacar! Link: ${inviteLink}`;
-                  globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                }}
-                className="bg-[#25D366] text-white py-3 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow active:scale-95 transition-all cursor-pointer"
-              >
-                <Share2 size={16} /> WhatsApp
-              </button>
-              <button
-                onClick={async () => {
-                  const ok = await copyToClipboard(inviteLink);
-                  setModalConfig({
-                    title: ok ? 'Link copiado' : 'Aviso',
-                    message: ok ? 'Link de convite copiado para a área de transferência.' : inviteLink,
-                    onConfirm: () => setModalConfig(null),
-                  });
-                }}
-                className="bg-white/10 text-white py-3 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 border border-white/20 active:scale-95 transition-all cursor-pointer"
-              >
-                <Copy size={16} /> Copiar link
-              </button>
-            </div>
-            {event.regulationUrl && (
-              <button
-                type="button"
-                onClick={() => openPdfOrUrl(event.regulationUrl!, event.regulationFileName || 'regulamento.pdf')}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow active:scale-95 transition-all cursor-pointer"
-              >
-                <Eye size={16} /> Ver regulamento
-              </button>
+          {/* Regulamento do Evento (fora do bloco de convite) */}
+          {event.regulationUrl && (
+            <button
+              type="button"
+              onClick={() => openPdfOrUrl(event.regulationUrl!, event.regulationFileName || 'regulamento.pdf')}
+              className="w-full bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white py-3 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <Eye size={18} /> Ver regulamento
+            </button>
+          )}
+
+          {/* Ações e Compartilhamento (QR Code / WhatsApp) - Bloco colapsável */}
+          <div id="event-detail-actions-card" className="bg-[#0f172a] rounded-[2rem] shadow-xl border border-white/10 overflow-hidden transition-all">
+            <button
+              type="button"
+              onClick={() => setIsInviteOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between p-4 sm:p-5 text-left cursor-pointer hover:bg-white/[0.04] transition-colors"
+              aria-expanded={isInviteOpen}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-sky-400 shrink-0 border border-white/10">
+                  <Share2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white leading-tight">Convide seus amigos</h3>
+                  <p className="text-[11px] font-bold text-slate-400 leading-tight mt-0.5">
+                    {isInviteOpen ? 'Oculte o QR Code e links' : 'Toque para ver QR Code e links'}
+                  </p>
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-slate-300 shrink-0">
+                <ChevronDown
+                  size={18}
+                  className={`transition-transform duration-200 ${isInviteOpen ? 'rotate-180' : ''}`}
+                />
+              </div>
+            </button>
+
+            {isInviteOpen && (
+              <div className="px-5 pb-5 pt-1 flex flex-col items-center gap-4 border-t border-white/10">
+                <div className="bg-white p-3 rounded-2xl shadow-xl w-36 h-36 sm:w-40 sm:h-40 flex items-center justify-center shrink-0 border-4 border-sky-500/20 mt-2">
+                  <img src={qrCodeUrl} alt="Convite evento" className="w-full h-full object-contain" />
+                </div>
+                <p className="text-[11px] font-bold text-slate-400 text-center leading-tight max-w-xs">
+                  Compartilhe o convite para que seus parceiros se inscrevam no evento com facilidade.
+                </p>
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  <button
+                    onClick={() => {
+                      const text = `Participe do evento ${event.name} comigo no MyPlacar! Link: ${inviteLink}`;
+                      globalThis.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                    }}
+                    className="bg-[#25D366] hover:bg-[#20ba59] text-white py-3 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Share2 size={16} /> WhatsApp
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const ok = await copyToClipboard(inviteLink);
+                      setModalConfig({
+                        title: ok ? 'Link copiado' : 'Aviso',
+                        message: ok ? 'Link de convite copiado para a área de transferência.' : inviteLink,
+                        onConfirm: () => setModalConfig(null),
+                      });
+                    }}
+                    className="bg-white/10 hover:bg-white/15 text-white py-3 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 border border-white/20 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Copy size={16} /> Copiar link
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
@@ -2602,34 +2615,6 @@ export const EventDetailScreen: React.FC<Props> = ({
                             <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-lg">
                               Classificação {isRanking ? 'Ranking' : 'Super 8'}
                             </span>
-                          </div>
-                        )}
-
-                        {/* Banner de Sorteio de Desempate Técnico */}
-                        {isDrawTieBreak && (hasTechnicalTieInActiveCategory || currentCategoryDrawWinners.length > 0) && (
-                          <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-2xl shadow-2xs space-y-2.5">
-                            <div className="flex items-start gap-2.5">
-                              <span className="text-xl shrink-0">🎲</span>
-                              <div>
-                                <p className="text-xs font-black text-amber-900">
-                                  Desempate técnico por sorteio
-                                </p>
-                                <p className="text-[11px] font-bold text-amber-700 leading-tight">
-                                  {hasAwaitingDrawInActiveCategory
-                                    ? 'Há atletas com estatísticas idênticas aguardando o sorteio manual.'
-                                    : 'Ganhador do sorteio já definido e aplicado à classificação.'}
-                                </p>
-                              </div>
-                            </div>
-                            {canManageEvent && (
-                              <button
-                                type="button"
-                                onClick={() => setIsTechnicalTieDrawModalOpen(true)}
-                                className="w-full px-3.5 py-2 text-xs font-black text-white bg-amber-600 hover:bg-amber-700 active:scale-95 rounded-xl shadow-xs transition-all cursor-pointer"
-                              >
-                                {hasAwaitingDrawInActiveCategory ? 'Apontar ganhador' : 'Alterar sorteio'}
-                              </button>
-                            )}
                           </div>
                         )}
 

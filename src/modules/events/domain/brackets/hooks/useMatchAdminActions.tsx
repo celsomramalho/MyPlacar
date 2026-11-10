@@ -25,6 +25,7 @@ import {
   generateSuper8DuplasMatchesForCategory,
 } from '@modules/events/services/matchGenerator';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
+import { exportCategoryCalculationWorksheetPdf } from '@modules/events/services/calculationWorksheetPdf';
 import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
 
 interface UseMatchAdminActionsOptions {
@@ -724,6 +725,18 @@ export function useMatchAdminActions({
     );
   };
 
+  const handleGenerateCalculationPdf = () => {
+    if (!selectedCategory) return;
+    exportCategoryCalculationWorksheetPdf(
+      event,
+      selectedCategory,
+      categoryEntries,
+      categoryPairs,
+      categoryMatches,
+      pairsById
+    );
+  };
+
   return {
     isSuper8dDrawModalOpen,
     setIsSuper8dDrawModalOpen,
@@ -738,5 +751,6 @@ export function useMatchAdminActions({
     handleFinishMatchWithValidation,
     handleReopenMatch,
     handleGenerateBlankPdf,
+    handleGenerateCalculationPdf,
   };
 }

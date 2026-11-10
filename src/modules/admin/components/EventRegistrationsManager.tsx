@@ -64,14 +64,36 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const filteredEntries = useMemo(() => {
     if (!searchName.trim()) return entries;
     const term = searchName.toLowerCase().trim();
-    return entries.filter((e) =>
-      (e.name || '').toLowerCase().includes(term) ||
-      (e.nickname || '').toLowerCase().includes(term) ||
-      (e.pin || '').toLowerCase().includes(term) ||
-      (e.email || '').toLowerCase().includes(term) ||
-      (e.phone || '').toLowerCase().includes(term) ||
-      (e.partnerName || '').toLowerCase().includes(term)
-    );
+    const cleanNumericTerm = term.replace(/^[#0]+/, '') || term;
+
+    // Se o admin colou o identificador Pix completo (ex: 1super8peleI0002P1)
+    const txidMatch = term.match(/i(\d+)p/i);
+    const txidRegNum = txidMatch ? txidMatch[1].replace(/^0+/, '') : null;
+
+    return entries.filter((e) => {
+      const regId = e.registrationId;
+      const regIdStr = regId != null ? String(regId) : '';
+      const formattedRegId = formatRegistrationId(regId).toLowerCase();
+
+      const matchesRegId =
+        Boolean(regIdStr && (
+          regIdStr === term ||
+          regIdStr === cleanNumericTerm ||
+          formattedRegId === term ||
+          formattedRegId.includes(term) ||
+          (txidRegNum && (regIdStr === txidRegNum || formattedRegId.includes(txidRegNum)))
+        ));
+
+      return (
+        matchesRegId ||
+        (e.name || '').toLowerCase().includes(term) ||
+        (e.nickname || '').toLowerCase().includes(term) ||
+        (e.pin || '').toLowerCase().includes(term) ||
+        (e.email || '').toLowerCase().includes(term) ||
+        (e.phone || '').toLowerCase().includes(term) ||
+        (e.partnerName || '').toLowerCase().includes(term)
+      );
+    });
   }, [entries, searchName]);
 
   const handleToggleCheckIn = async (entry: TournamentEntry) => {
@@ -901,7 +923,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                 type="text"
                 value={searchName}
                 onChange={(e) => setSearchName(e.target.value)}
-                placeholder="Pesquisar participante por nome..."
+                placeholder="Pesquisar por nome ou ID da inscrição..."
                 className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
               />
               {searchName && (

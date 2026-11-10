@@ -11,14 +11,18 @@ import {
   FileText,
   ExternalLink,
   X,
+  ChevronDown,
 } from 'lucide-react';
-import type { PaymentItem, TournamentEvent } from '@modules/events/types';
+import type { PaymentItem, TournamentEvent, TournamentEntry } from '@modules/events/types';
 import type { PricingCalculationResult } from '../../types';
 import type { UseRegistrationPaymentResult } from '../../hooks/useRegistrationPayment';
 import { PixPaymentView } from './PixPaymentView';
+import { StaticPixSection } from './StaticPixSection';
 
 export interface PaymentCheckoutStepProps {
   event: TournamentEvent;
+  /** Inscrição atual do atleta — usada para geração do txid Pix Estático. */
+  entry: TournamentEntry;
   pricing: PricingCalculationResult;
   payment: UseRegistrationPaymentResult;
   readOnly?: boolean;
@@ -27,10 +31,16 @@ export interface PaymentCheckoutStepProps {
   existingPayments?: PaymentItem[];
   totalPaid?: number;
   pendingAmount?: number;
+  isAdmin?: boolean;
+  onUpdatePaymentItemStatus?: (
+    paymentId: string,
+    newStatus: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
+  ) => Promise<void> | void;
 }
 
 export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
   event,
+  entry,
   pricing,
   payment,
   readOnly = false,
@@ -39,7 +49,24 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
   existingPayments = [],
   totalPaid = 0,
   pendingAmount = 0,
+  isAdmin = false,
+  onUpdatePaymentItemStatus,
 }) => {
+  const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
+
+  const handlePaymentStatusChange = async (
+    paymentId: string,
+    newStatus: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
+  ) => {
+    if (!onUpdatePaymentItemStatus) return;
+    setUpdatingPaymentId(paymentId);
+    try {
+      await onUpdatePaymentItemStatus(paymentId, newStatus);
+    } finally {
+      setUpdatingPaymentId(null);
+    }
+  };
+
   // Se o tipo de pagamento do evento é manual, inicia sempre no modo manual
   const eventPaymentType = String(event.paymentType ?? 'manual').trim().toLowerCase();
   const allowMercadoPago = eventPaymentType === 'mercadopago';
@@ -207,30 +234,96 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
                     </span>
                   )}
 
-                  <span
-                    className={`text-xs font-bold px-3 py-1.5 rounded-xl truncate ${
-                      p.status === 'Confirmado' ||
-                      p.status === 'approved' ||
-                      p.status === 'Pago'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : p.status === 'Recusado' ||
-                          p.status === 'rejected' ||
-                          p.status === 'Cancelado'
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-amber-100/80 text-amber-900'
-                    }`}
-                  >
-                    {p.status === 'pending' ||
-                    p.status === 'Aguardando Confirmação' ||
-                    !p.status
-                      ? 'Aguardando confirmação'
-                      : p.status}
-                  </span>
+                  {isAdmin && !readOnly && onUpdatePaymentItemStatus ? (
+                    <div className="relative inline-flex items-center min-w-0">
+                      {updatingPaymentId === (p.id || `payment-${idx}`) ? (
+                        <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 flex items-center gap-1.5">
+                          <Loader2 size={12} className="animate-spin text-emerald-600" />
+                          Salvando...
+                        </span>
+                      ) : (
+                        <>
+                          <select
+                            value={
+                              p.status === 'Confirmado' ||
+                              p.status === 'approved' ||
+                              p.status === 'Pago'
+                                ? 'Confirmado'
+                                : p.status === 'Recusado' ||
+                                  p.status === 'rejected' ||
+                                  p.status === 'Cancelado'
+                                ? 'Recusado'
+                                : 'Aguardando Confirmação'
+                            }
+                            onChange={(e) =>
+                              void handlePaymentStatusChange(
+                                p.id || `payment-${idx}`,
+                                e.target.value as 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
+                              )
+                            }
+                            className={`text-xs font-black pl-3 pr-7 py-1.5 rounded-xl border appearance-none cursor-pointer transition-all shadow-xs ${
+                              p.status === 'Confirmado' ||
+                              p.status === 'approved' ||
+                              p.status === 'Pago'
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                                : p.status === 'Recusado' ||
+                                  p.status === 'rejected' ||
+                                  p.status === 'Cancelado'
+                                ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
+                                : 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                            }`}
+                            title="Alterar status deste pagamento"
+                          >
+                            <option value="Aguardando Confirmação">Aguardando confirmação</option>
+                            <option value="Confirmado">Pagamento confirmado</option>
+                            <option value="Recusado">Recusado</option>
+                          </select>
+                          <ChevronDown
+                            size={14}
+                            className="pointer-events-none absolute right-2 text-slate-500"
+                          />
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <span
+                      className={`text-xs font-bold px-3 py-1.5 rounded-xl truncate ${
+                        p.status === 'Confirmado' ||
+                        p.status === 'approved' ||
+                        p.status === 'Pago'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : p.status === 'Recusado' ||
+                            p.status === 'rejected' ||
+                            p.status === 'Cancelado'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-amber-100/80 text-amber-900'
+                      }`}
+                    >
+                      {p.status === 'pending' ||
+                      p.status === 'Aguardando Confirmação' ||
+                      !p.status
+                        ? 'Aguardando confirmação'
+                        : p.status}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {/* Pix Estático — exibido apenas para pagamentos manuais com chave Pix configurada */}
+      {!allowMercadoPago && event.pixKey && (
+        <StaticPixSection
+          event={event}
+          entry={entry}
+          amount={
+            totalPaid > 0 && pendingAmount > 0
+              ? pendingAmount
+              : pricing.dueAmount
+          }
+        />
       )}
 
       {/* Escolha do Método — só exibe os dois cards se MP estiver habilitado */}
@@ -279,10 +372,12 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
               <Upload size={20} />
             </div>
             <h4 className="text-sm font-black text-slate-800">
-              Transferência / Comprovante
+              {event.pixKey ? 'Pix / Comprovante' : 'Transferência / Comprovante'}
             </h4>
             <p className="text-xs text-slate-500 font-bold">
-              Faça a transferência para o organizador e anexe o comprovante.
+              {event.pixKey
+                ? 'Copie o código Pix acima, pague e anexe o comprovante.'
+                : 'Faça a transferência para o organizador e anexe o comprovante.'}
             </p>
           </div>
           <span className="text-[11px] font-bold text-slate-400">

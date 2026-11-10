@@ -16,6 +16,7 @@ NovosArquivos
 scripts
 *.local
 *.zip
+*.rar
 .tmp.driveupload
 .env.local
 

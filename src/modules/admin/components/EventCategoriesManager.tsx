@@ -417,6 +417,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     handleFinishMatchWithValidation,
     handleReopenMatch,
     handleGenerateBlankPdf,
+    handleGenerateCalculationPdf,
   } = useMatchAdminActions({
     event,
     selectedCategory,
@@ -1211,6 +1212,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onDeleteMatch={handleDeleteMatch}
                     onGenerateMatches={handleGenerateSystemMatches}
                     onGenerateBlankPdf={handleGenerateBlankPdf}
+                    onGenerateCalculationPdf={handleGenerateCalculationPdf}
                     onDeleteAllCategoryMatches={handleDeleteAllCategoryMatches}
                     onImportMatches={handleImportMatches}
                   />

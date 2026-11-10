@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, Loader2, LifeBuoy, TrendingUp } from 'lucide-react';
+import { Bell, ArrowLeft, MessageSquare, PieChart, Pin, Clock, CheckCircle2, ThumbsUp, Heart, Smile, PartyPopper, Send, Loader2, LifeBuoy, TrendingUp, QrCode, Copy, Check } from 'lucide-react';
 import type { Communication, Reply } from '@modules/communications/types';
 import { useGame } from '@modules/game';
 import { getDb } from '@infra/firebase';
@@ -12,6 +12,7 @@ import {
   updateCommunicationNpsVote,
 } from '@infra/firebase/communications';
 import { Button } from '@shared/components/Button';
+import { copyToClipboard } from '@shared/utils/clipboard';
 
 interface Props {
   onBack: () => void;
@@ -43,6 +44,15 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
   const { userProfile } = useGame();
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [copiedPixId, setCopiedPixId] = useState<string | null>(null);
+
+  const handleCopyPix = async (commId: string, pixCode: string) => {
+    const ok = await copyToClipboard(pixCode);
+    if (ok) {
+      setCopiedPixId(commId);
+      setTimeout(() => setCopiedPixId(null), 3000);
+    }
+  };
   const [replyText, setReplyText] = useState<Record<string, string>>({});
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({});
   const [isVoting, setIsVoting] = useState<Record<string, boolean>>({});
@@ -238,6 +248,49 @@ export const CommunicationsScreen: React.FC<Props> = ({ onBack }) => {
                 <div className={`text-slate-600 text-sm leading-relaxed whitespace-pre-wrap ${isEventComm ? 'mb-0' : 'mb-6'}`}>
                   {comm.content}
                 </div>
+
+                {comm.pixCode && (
+                  <div className="mt-4 p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                          <QrCode size={16} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-emerald-950">Pagamento Pix</p>
+                          {comm.dueAmount ? (
+                            <p className="text-sm font-black text-emerald-700">R$ {comm.dueAmount.toFixed(2)}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCopyPix(comm.id, comm.pixCode!)}
+                      className={`w-full py-2.5 px-4 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all shadow-xs active:scale-95 ${
+                        copiedPixId === comm.id
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                      }`}
+                    >
+                      {copiedPixId === comm.id ? (
+                        <>
+                          <Check size={14} />
+                          <span>Código Pix Copiado com Sucesso!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={14} />
+                          <span>Copiar Código Pix Copia e Cola</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[10px] font-bold text-slate-500 text-center">
+                      Após o pagamento, anexe o comprovante em &quot;Gerenciar inscrição&quot; no torneio.
+                    </p>
+                  </div>
+                )}
 
                 {comm.type === 'nps' && (
                   <div className="space-y-4 mb-6 p-4 bg-slate-50/80 rounded-2xl border border-slate-200">

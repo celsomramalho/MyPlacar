@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Sparkles, FileText, Trash2, Upload, Clock, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, FileText, Calculator, Trash2, Upload, Clock, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import type { EventCategory, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { MatchCard } from '@modules/events/components/matches/MatchCard';
 import { RankingMatchImportModal } from './RankingMatchImportModal';
@@ -27,6 +27,7 @@ export interface CategoryMatchesTabProps {
   onDeleteMatch: (matchId: string) => void;
   onGenerateMatches: () => void;
   onGenerateBlankPdf: () => void;
+  onGenerateCalculationPdf: () => void;
   onDeleteAllCategoryMatches: () => void;
   onImportMatches: (pairs: TournamentPair[], matches: TournamentMatch[]) => Promise<void>;
 }
@@ -51,6 +52,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   onDeleteMatch,
   onGenerateMatches,
   onGenerateBlankPdf,
+  onGenerateCalculationPdf,
   onDeleteAllCategoryMatches,
   onImportMatches,
 }) => {
@@ -323,7 +325,16 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             title="Gerar PDF com todas as partidas em branco para anotações manuais"
           >
             <FileText size={16} className="text-orange-500" />
-            <span>Gerar PDF</span>
+            <span>Gerar súmula PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={onGenerateCalculationPdf}
+            className="flex items-center justify-center gap-2 border-2 border-sky-500 text-sky-700 bg-white hover:bg-sky-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
+            title="Gerar folha para registrar placares e apurar a classificação manualmente"
+          >
+            <Calculator size={16} className="text-sky-600" />
+            <span>Gerar cálculos PDF</span>
           </button>
           {!isReadOnly && categoryMatches.length > 0 && (
             <button

@@ -310,6 +310,17 @@ export interface TournamentEvent {
   extraCategoryFee?: number;
   /** Limite de jogadores com pagamento confirmado por categoria (padrão 8) */
   paymentType?: EventPaymentTypeOption;
+  /** Chave Pix do recebedor para pagamento manual via Pix Estático. */
+  pixKey?: string;
+  /** Nome do recebedor para o BR Code Pix (máx 25 chars, sem acentos). */
+  pixReceiverName?: string;
+  /** Cidade do recebedor para o BR Code Pix (máx 15 chars, sem acentos). */
+  pixCity?: string;
+  /**
+   * Exige que o atleta anexe o comprovante de pagamento para finalizar a inscrição.
+   * Aplica-se apenas ao tipo de pagamento manual. Padrão: `true`.
+   */
+  requiresReceipt?: boolean;
   organizerEmail?: string;
   marketplaceFeePercent?: number;
   eventStatus?: EventStatusOption;

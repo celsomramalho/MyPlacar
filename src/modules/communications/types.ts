@@ -47,4 +47,6 @@ export interface Communication {
   notificationType?: string;
   categoryId?: string;
   paymentId?: string;
+  pixCode?: string;
+  dueAmount?: number;
 }

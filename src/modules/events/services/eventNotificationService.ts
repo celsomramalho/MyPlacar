@@ -1,5 +1,5 @@
 import { addDoc, collection, getDocs, query, where, type Firestore } from 'firebase/firestore';
-import type { EventCategory, PaymentItem, TournamentEntry, TournamentEvent } from '../types';
+import { formatRegistrationId, type EventCategory, type PaymentItem, type TournamentEntry, type TournamentEvent } from '../types';
 
 export const eventNotificationService = {
   /** Cria avisos direcionados ao administrador principal e aos co-administradores do evento. */
@@ -105,6 +105,71 @@ export const eventNotificationService = {
       });
     } catch (err) {
       console.warn('Erro ao criar aviso de inscrição:', err);
+    }
+  },
+
+  /**
+   * Envia aviso de pré-inscrição realizada para o atleta com os dados de pagamento Pix
+   * e instruções para anexar comprovante em Gerenciar Inscrição.
+   */
+  notifyPreRegistration: async (
+    db: Firestore,
+    event: TournamentEvent,
+    entry: TournamentEntry,
+    dueAmount: number,
+    pixCode?: string,
+  ) => {
+    try {
+      const userPin = (entry.pin || '').trim();
+      const userEmail = (entry.email || '').trim().toLowerCase();
+      if (!userPin && !userEmail) return;
+
+      const catNames = (entry.categoryIds || [])
+        .map((id) => {
+          const cat = (event.categories || []).find((c) => c.id === id);
+          return cat ? `${cat.name} (${cat.abbreviation})` : null;
+        })
+        .filter(Boolean)
+        .join(', ');
+      const catStr = catNames ? ` na(s) categoria(s) ${catNames}` : '';
+      const regIdFormatted = formatRegistrationId(entry.registrationId);
+      const regIdStr = regIdFormatted ? ` (Inscrição #${regIdFormatted})` : '';
+
+      // Evita duplicar comunicação de pré-inscrição recente para o mesmo evento e usuário
+      if (userEmail) {
+        const existingQuery = query(
+          collection(db, 'communications'),
+          where('eventPin', '==', event.pin),
+          where('notificationType', '==', 'pre_registration'),
+          where('targetUserEmail', '==', userEmail),
+        );
+        const existingSnap = await getDocs(existingQuery);
+        if (!existingSnap.empty) {
+          return;
+        }
+      }
+
+      const content = `Sua pré-inscrição no evento ${event.name}${regIdStr}${catStr} foi realizada com sucesso!\n\nPara garantir sua vaga, efetue o pagamento de R$ ${dueAmount.toFixed(2)} via Pix e anexe o comprovante em "Gerenciar inscrição" do torneio.`;
+
+      await addDoc(collection(db, 'communications'), {
+        type: 'message',
+        title: 'Pré-inscrição Realizada',
+        content,
+        authorId: 'system',
+        authorName: event.name || 'Organização',
+        createdAt: Date.now(),
+        targetUserId: userPin || userEmail,
+        targetUserPin: userPin,
+        targetUserEmail: userEmail,
+        isPinned: false,
+        readBy: [],
+        eventPin: event.pin,
+        notificationType: 'pre_registration',
+        pixCode: pixCode || null,
+        dueAmount: dueAmount || null,
+      });
+    } catch (err) {
+      console.warn('Erro ao criar aviso de pré-inscrição:', err);
     }
   },
 
