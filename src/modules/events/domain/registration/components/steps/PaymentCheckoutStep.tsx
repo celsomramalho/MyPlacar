@@ -19,6 +19,26 @@ import type { UseRegistrationPaymentResult } from '../../hooks/useRegistrationPa
 import { PixPaymentView } from './PixPaymentView';
 import { StaticPixSection } from './StaticPixSection';
 
+const openReceiptInNewTab = (url: string) => {
+  // Chrome blocks top-level navigation to data: URLs. Convert stored receipts
+  // to a temporary blob URL so the browser can render them in a new tab.
+  if (!url.startsWith('data:')) return;
+
+  try {
+    const [metadata, encodedData] = url.split(',', 2);
+    if (!metadata || encodedData === undefined) return;
+    const mimeType = metadata.match(/^data:([^;,]+)/)?.[1] || 'application/octet-stream';
+    const bytes = metadata.includes(';base64')
+      ? Uint8Array.from(atob(encodedData), (char) => char.charCodeAt(0))
+      : new TextEncoder().encode(decodeURIComponent(encodedData));
+    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+    window.open(blobUrl, '_blank', 'noopener,noreferrer');
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+  } catch (error) {
+    console.error('[PaymentCheckoutStep] Não foi possível abrir o comprovante:', error);
+  }
+};
+
 export interface PaymentCheckoutStepProps {
   event: TournamentEvent;
   /** Inscrição atual do atleta — usada para geração do txid Pix Estático. */
@@ -514,6 +534,12 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
                 href={selectedReceipt.url}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(event) => {
+                  if (selectedReceipt.url.startsWith('data:')) {
+                    event.preventDefault();
+                    openReceiptInNewTab(selectedReceipt.url);
+                  }
+                }}
                 className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 font-black text-xs hover:bg-blue-100 flex items-center gap-1.5"
               >
                 <ExternalLink size={14} /> Abrir em nova aba

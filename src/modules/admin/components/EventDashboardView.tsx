@@ -120,6 +120,12 @@ export const EventDashboardView: React.FC<Props> = ({
   const pendingPaymentsCount = entries.filter(
     (e) => !e.paymentStatus || e.paymentStatus === 'Pendente'
   ).length;
+  const preRegistrationCount = entries.filter((entry) =>
+    !entry.disabled && entry.paymentStatus !== 'Cancelado' &&
+    !entry.payments?.some((payment) => payment.receiptUrl) &&
+    entry.paymentStatus !== 'Confirmado' && entry.paymentStatus !== 'Pago' && entry.paymentStatus !== 'Isento'
+  ).length;
+  const refusedPaymentsCount = entries.filter((entry) => entry.paymentStatus === 'Recusado').length;
 
   const todayStr = getTodayDateStr();
   const pairsById = React.useMemo(() => {
@@ -412,6 +418,12 @@ export const EventDashboardView: React.FC<Props> = ({
               >
                 Pagamentos
               </p>
+              <p className={`text-[9px] font-black ${activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-500'}`}>
+                Pré-inscritos: {preRegistrationCount} · Sem anexo
+              </p>
+              <p className={`text-[9px] font-black ${activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-500'}`}>
+                Recusados: {refusedPaymentsCount}
+              </p>
               <div
                 className={`text-[9px] font-bold leading-tight space-y-0.5 ${
                   activeTab === 'pending-payments' ? 'text-white' : 'text-slate-500'
@@ -542,10 +554,7 @@ export const EventDashboardView: React.FC<Props> = ({
       {activeTab === 'pending-payments' && (
         <EventPaymentsView
           event={event}
-          onNavigateToEntry={(email) => {
-            setTargetRegistrationEmail(email);
-            setActiveTab('registrations');
-          }}
+          onUpdateEvent={safeUpdateEvent}
         />
       )}
 

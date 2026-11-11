@@ -703,7 +703,13 @@ export const EventDetailScreen: React.FC<Props> = ({
   }, [event]);
 
   const currentEntryDueAmount = currentUserEntry?.dueAmount ?? event.registrationFee ?? 0;
-  const currentEntryPaidAmount = currentUserEntry?.paidAmount ?? currentUserEntry?.payments?.reduce((sum, item) => sum + Number(item.amount || 0), 0) ?? 0;
+  const currentEntryPaidAmount = currentUserEntry?.payments?.length
+    ? currentUserEntry.payments.reduce((sum, item) => {
+        const isConfirmedPayment = item.status === 'Confirmado' || item.status === 'approved' || item.status === 'Pago';
+        const isLegacyConfirmedPayment = !item.status && (currentUserEntry.paymentStatus === 'Confirmado' || currentUserEntry.paymentStatus === 'Pago');
+        return sum + (isConfirmedPayment || isLegacyConfirmedPayment ? Number(item.amount || 0) : 0);
+      }, 0)
+    : currentUserEntry?.paidAmount ?? 0;
   const currentEntryPendingAmount = Math.max(0, currentEntryDueAmount - currentEntryPaidAmount);
   const canPayCurrentEntry = Boolean(
       currentUserEntry &&

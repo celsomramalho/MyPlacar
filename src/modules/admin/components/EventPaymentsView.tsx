@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, FileText, User, DollarSign, AlertCircle, CheckCircle2 } from 'lucide-react';
-import type { TournamentEvent, TournamentEntry, PaymentItem } from '@modules/events/types';
+import { ChevronDown, ChevronUp, Eye, CheckCircle2 } from 'lucide-react';
+import { formatRegistrationId, type TournamentEvent, type TournamentEntry } from '@modules/events/types';
 
 interface Props {
   event: TournamentEvent;
-  onNavigateToEntry: (email: string) => void;
+  onUpdateEvent: (event: TournamentEvent) => void;
 }
 
 interface FlattenedPayment {
@@ -18,6 +18,23 @@ interface FlattenedPayment {
   receiptFileName?: string;
 }
 
+const openReceiptInNewTab = (url: string) => {
+  if (!url.startsWith('data:')) return;
+  try {
+    const [metadata, encodedData] = url.split(',', 2);
+    if (!metadata || encodedData === undefined) return;
+    const mimeType = metadata.match(/^data:([^;,]+)/)?.[1] || 'application/octet-stream';
+    const bytes = metadata.includes(';base64')
+      ? Uint8Array.from(atob(encodedData), (char) => char.charCodeAt(0))
+      : new TextEncoder().encode(decodeURIComponent(encodedData));
+    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+    window.open(blobUrl, '_blank', 'noopener,noreferrer');
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+  } catch (error) {
+    console.error('[EventPaymentsView] Não foi possível abrir o comprovante:', error);
+  }
+};
+
 const formatDateShort = (timestamp: number) => {
   if (!timestamp) return '-';
   const d = new Date(timestamp);
@@ -28,9 +45,10 @@ const formatDateShort = (timestamp: number) => {
   return `${dd}/${mm}/${yy}`;
 };
 
-export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry }) => {
+export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => {
   const [isPaidExpanded, setIsPaidExpanded] = useState(true);
   const [isPendingExpanded, setIsPendingExpanded] = useState(true);
+  const [isPreRegistrationExpanded, setIsPreRegistrationExpanded] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState<{ url: string; title: string } | null>(null);
 
   const categories = event.categories || [];
@@ -57,6 +75,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
     pendingAmount: number;
     categoriesStr: string;
   }[] = [];
+  const preRegistrationEntries: TournamentEntry[] = [];
 
   entries.forEach((entry) => {
     const entryDue = entry.dueAmount ?? (event.registrationFee || 0);
@@ -67,20 +86,23 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
     let sumPayments = 0;
     if (entry.payments && entry.payments.length > 0) {
       entry.payments.forEach((p) => {
-        sumPayments += p.amount || 0;
-        // Adiciona ao histórico se confirmado ou se houver registro de pagamento
-        paidPaymentsList.push({
-          paymentId: p.id,
-          entryPin: entry.pin,
-          participantName: entry.nickname || entry.name,
-          date: p.date,
-          amount: p.amount,
-          categoriesStr: catStr,
-          receiptUrl: p.receiptUrl,
-          receiptFileName: p.receiptFileName,
-        });
+        const isPaymentConfirmed = p.status === 'Confirmado' || p.status === 'approved' || p.status === 'Pago';
+        const isLegacyConfirmed = !p.status && isConfirmed;
+        if (isPaymentConfirmed || isLegacyConfirmed) {
+          sumPayments += p.amount || 0;
+          paidPaymentsList.push({
+            paymentId: p.id,
+            entryPin: entry.pin,
+            participantName: entry.nickname || entry.name,
+            date: p.date,
+            amount: p.amount,
+            categoriesStr: catStr,
+            receiptUrl: p.receiptUrl,
+            receiptFileName: p.receiptFileName,
+          });
+        }
       });
-    } else if (entry.paidAmount && entry.paidAmount > 0) {
+    } else if (isConfirmed && entry.paidAmount && entry.paidAmount > 0) {
       sumPayments = entry.paidAmount;
       paidPaymentsList.push({
         paymentId: `legacy-${entry.pin}`,
@@ -123,7 +145,11 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
     totalPaidSum += entryPaid;
     totalPendingSum += entryPending;
 
-    if (entryPending > 0 || (!isConfirmed && !isIsento)) {
+    const hasReceiptHistory = Boolean(entry.payments?.some((payment) => payment.receiptUrl));
+    if (
+      (entry.paymentStatus === 'Aguardando Confirmação' || entry.paymentStatus === 'Recusado') &&
+      hasReceiptHistory
+    ) {
       pendingEntriesList.push({
         entry,
         dueAmount: entryDue,
@@ -131,6 +157,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
         pendingAmount: entryPending,
         categoriesStr: catStr,
       });
+    }
+    if (!entry.disabled && entry.paymentStatus !== 'Cancelado' && !hasReceiptHistory && !isConfirmed && !isIsento) {
+      preRegistrationEntries.push(entry);
     }
   });
 
@@ -142,8 +171,12 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
       alert(`Nenhum comprovante anexado para o pagamento de ${pay.participantName}.`);
       return;
     }
-    // Abrir em nova aba ou modal
-    window.open(pay.receiptUrl, '_blank', 'noopener,noreferrer');
+    // Chrome blocks top-level navigation to data: URLs; use a blob URL instead.
+    if (pay.receiptUrl.startsWith('data:')) {
+      openReceiptInNewTab(pay.receiptUrl);
+    } else {
+      window.open(pay.receiptUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
@@ -179,6 +212,12 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
                 href={selectedReceipt.url}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(event) => {
+                  if (selectedReceipt.url.startsWith('data:')) {
+                    event.preventDefault();
+                    openReceiptInNewTab(selectedReceipt.url);
+                  }
+                }}
                 className="bg-sky-500 hover:bg-sky-600 text-white font-black text-xs px-4 py-2.5 rounded-xl transition-all"
               >
                 Abrir em nova aba
@@ -203,7 +242,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
         >
           <div className="flex items-center gap-2">
             <span className="text-sm font-black text-slate-800 tracking-tight">
-              Valor pago: R$ {totalPaidSum.toFixed(2)}
+              Valor pago: R$ {totalPaidSum.toFixed(2)} · {paidPaymentsList.length} pagamentos
             </span>
           </div>
           <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors">
@@ -218,7 +257,16 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
                 Nenhum pagamento registrado até o momento.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="space-y-3 md:hidden">
+                {paidPaymentsList.map((pay, idx) => (
+                  <article key={`${pay.paymentId}-${idx}`} className="rounded-2xl border border-emerald-100 bg-white p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0"><p className="truncate font-black text-slate-800">{pay.participantName}</p><p className="text-[10px] font-bold text-slate-500">{formatDateShort(pay.date)} · {pay.categoriesStr}</p></div>
+                    <div className="shrink-0 text-right"><p className="mb-1 text-xs font-black text-slate-800">R$ {pay.amount.toFixed(2)}</p><button type="button" onClick={() => handleOpenReceipt(pay)} className="px-2.5 py-1.5 text-sky-700 bg-sky-50 rounded-lg inline-flex items-center gap-1 font-black text-xs"><Eye size={14} /> Ver</button></div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="text-[11px] font-black text-slate-700 border-b border-slate-100">
@@ -260,6 +308,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         )}
@@ -274,7 +323,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
         >
           <div className="flex items-center gap-2">
             <span className="text-sm font-black text-slate-800 tracking-tight">
-              Valor pendente: R$ {totalPendingSum.toFixed(2)}
+              Valor pendente: R$ {totalPendingSum.toFixed(2)} · {pendingEntriesList.length} inscrições
             </span>
           </div>
           <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors">
@@ -287,10 +336,20 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
             {pendingEntriesList.length === 0 ? (
               <div className="flex items-center justify-center gap-2 text-xs text-emerald-600 font-black py-4">
                 <CheckCircle2 size={16} />
-                Nenhum pagamento pendente! Todas as inscrições estão quitadas.
+                Nenhum comprovante aguardando análise ou recusado.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="space-y-3 md:hidden">
+                {pendingEntriesList.map((item) => (
+                  <article key={item.entry.pin} className="rounded-2xl border border-amber-100 p-3 space-y-2">
+                    <div className="flex justify-between gap-3"><div><p className="font-black text-slate-800">{item.entry.nickname || item.entry.name}</p><p className="text-[10px] font-bold text-amber-600">Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'}</p></div><p className="text-right text-xs font-black text-amber-600">R$ {item.pendingAmount.toFixed(2)}<span className="block text-[9px] text-slate-400">pendente</span></p></div>
+                    <div className="flex justify-between border-t pt-2 text-[10px] text-slate-500"><span>Devido R$ {item.dueAmount.toFixed(2)}</span><span>{item.categoriesStr}</span></div>
+                    <div className="flex flex-wrap gap-2 border-t pt-2"><button type="button" onClick={() => { const payment = item.entry.payments?.filter((p) => p.receiptUrl).at(-1); if (payment?.receiptUrl) handleOpenReceipt({ paymentId: payment.id, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: payment.date, amount: payment.amount, categoriesStr: item.categoriesStr, receiptUrl: payment.receiptUrl, receiptFileName: payment.receiptFileName }); }} className="rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700"><Eye size={14} className="mr-1 inline" />Ver comprovante</button><select aria-label={`Status do pagamento de ${item.entry.nickname || item.entry.name}`} value={item.entry.paymentStatus || 'Pendente'} onChange={(changeEvent) => onUpdateEvent({ ...event, entries: entries.map((entry) => entry.pin === item.entry.pin ? { ...entry, paymentStatus: changeEvent.target.value as TournamentEntry['paymentStatus'] } : entry) })} className="min-w-0 flex-1 rounded-xl border border-emerald-300 bg-emerald-100 px-2 py-2 text-[10px] font-bold text-emerald-900"><option value="Aguardando Confirmação">Aguardando confirmação</option><option value="Confirmado">Pagamento confirmado</option><option value="Recusado">Recusado</option></select></div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="text-[11px] font-black text-slate-700 border-b border-slate-100">
@@ -313,7 +372,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
                               {item.entry.nickname || item.entry.name}
                             </span>
                             <span className="block text-[10px] text-amber-600 font-bold">
-                              PIN: {item.entry.pin}
+                              Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'}
                             </span>
                           </div>
                         </td>
@@ -325,23 +384,47 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onNavigateToEntry })
                         </td>
                         <td className="py-3 px-3 text-slate-600">{item.categoriesStr}</td>
                         <td className="py-3 px-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => onNavigateToEntry(item.entry.email)}
-                            className="p-1.5 text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-all active:scale-95 inline-flex items-center gap-1 font-black text-xs"
-                            title="Ir para a inscrição deste participante"
-                          >
-                            <Eye size={18} />
-                          </button>
+                          <div className="flex flex-col items-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const payment = item.entry.payments?.filter((p) => p.receiptUrl).at(-1);
+                                if (payment?.receiptUrl) handleOpenReceipt({ paymentId: payment.id, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: payment.date, amount: payment.amount, categoriesStr: item.categoriesStr, receiptUrl: payment.receiptUrl, receiptFileName: payment.receiptFileName });
+                              }}
+                              className="px-2 py-1 text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg inline-flex items-center gap-1 font-black text-xs"
+                              title="Ver comprovante anexado"
+                            ><Eye size={14} /> Ver</button>
+                            <select
+                              aria-label={`Status do pagamento de ${item.entry.nickname || item.entry.name}`}
+                              value={item.entry.paymentStatus || 'Pendente'}
+                              onChange={(changeEvent) => onUpdateEvent({ ...event, entries: entries.map((entry) => entry.pin === item.entry.pin ? { ...entry, paymentStatus: changeEvent.target.value as TournamentEntry['paymentStatus'] } : entry) })}
+                              className="max-w-40 rounded-lg border border-emerald-300 bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-900"
+                            >
+                              <option value="Aguardando Confirmação">Aguardando confirmação</option>
+                              <option value="Confirmado">Pagamento confirmado</option>
+                              <option value="Recusado">Recusado</option>
+                            </select>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         )}
+      </div>
+
+      <div className="border-2 border-sky-200 bg-white rounded-3xl p-4 shadow-sm">
+        <button type="button" onClick={() => setIsPreRegistrationExpanded((prev) => !prev)} className="w-full flex items-center justify-between text-left select-none group">
+          <span className="text-sm font-black text-slate-800">Pré-inscrição: {preRegistrationEntries.length}</span>
+          <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">{isPreRegistrationExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+        </button>
+        {isPreRegistrationExpanded && <div className="mt-4 pt-3 border-t border-slate-100">
+          {preRegistrationEntries.length === 0 ? <p className="text-xs text-slate-400 font-bold text-center py-4">Nenhuma pré-inscrição sem comprovante.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-[11px] font-black text-slate-700 border-b border-slate-100"><th className="py-2.5 px-3">Participante</th><th className="py-2.5 px-3">Inscrição</th><th className="py-2.5 px-3">Categorias</th><th className="py-2.5 px-3 text-right">Anexo</th></tr></thead><tbody className="divide-y divide-slate-50 font-bold text-slate-700">{preRegistrationEntries.map((entry) => <tr key={entry.pin}><td className="py-3 px-3">{entry.nickname || entry.name}</td><td className="py-3 px-3">{formatRegistrationId(entry.registrationId) || '—'}</td><td className="py-3 px-3">{getCategoriesText(entry)}</td><td className="py-3 px-3 text-right"><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">Sem anexo</span></td></tr>)}</tbody></table></div>}
+        </div>}
       </div>
     </div>
   );

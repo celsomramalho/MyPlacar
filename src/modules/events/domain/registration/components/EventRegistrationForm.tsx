@@ -175,8 +175,13 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   }, [entry.payments, entry.paidAmount, entry.dueAmount, entry.joinedAt, entry.pin, entry.paymentStatus, localPaymentsOverride]);
 
   const totalPaid = useMemo(() => {
-    return existingPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-  }, [existingPayments]);
+    const entryIsConfirmed = entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago';
+    return existingPayments.reduce((acc, curr) => {
+      const isConfirmedPayment = curr.status === 'Confirmado' || curr.status === 'approved' || curr.status === 'Pago';
+      const isLegacyConfirmedPayment = !curr.status && entryIsConfirmed;
+      return acc + (isConfirmedPayment || isLegacyConfirmedPayment ? (curr.amount || 0) : 0);
+    }, 0);
+  }, [existingPayments, entry.paymentStatus]);
 
   const currentDueAmount = form.pricing.dueAmount;
   const pendingAmount = Math.max(0, currentDueAmount - totalPaid);
@@ -458,7 +463,10 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             },
           ];
           submission.payments = updatedPaymentsList;
-          submission.paidAmount = updatedPaymentsList.reduce((acc, p) => acc + (p.amount || 0), 0);
+          submission.paidAmount = updatedPaymentsList.reduce((acc, p) => {
+            const isConfirmedPayment = p.status === 'Confirmado' || p.status === 'approved' || p.status === 'Pago';
+            return acc + (isConfirmedPayment ? (p.amount || 0) : 0);
+          }, 0);
           submission.dueAmount = form.pricing.dueAmount;
         } catch (fileErr) {
           console.warn('[EventRegistrationForm] Erro ao processar arquivo de comprovante:', fileErr);
