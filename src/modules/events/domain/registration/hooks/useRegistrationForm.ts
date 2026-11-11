@@ -54,6 +54,7 @@ export interface UseRegistrationFormResult {
   isSimplified: boolean;
   nameConflictWarning: string | null;
   conflictingCategoryIds: string[];
+  groupConflictCategoryIds: string[];
   isStepValid: (step: RegistrationStep) => { isValid: boolean; error?: string };
   canProceedToNext: boolean;
   getSubmissionEntry: () => TournamentEntry;
@@ -253,10 +254,40 @@ export function useRegistrationForm({
     return map;
   }, [event, entry.categoryIds, confirmedCountMap]);
 
+  const groupConflictCategoryIds = useMemo(() => {
+    const categories = event.categories || [];
+    const currentEmail = (formData.email || entry.email || '').trim().toLowerCase();
+    const currentPin = (entry.pin || '').trim().toUpperCase();
+    const alreadyRegisteredGroupNames = new Set<string>();
+
+    liveEntries.forEach((other) => {
+      const sameEmail = currentEmail && (other.email || '').trim().toLowerCase() === currentEmail;
+      const samePin = currentPin && (other.pin || '').trim().toUpperCase() === currentPin;
+      const isCurrentEntry = sameEmail || samePin;
+      if (!isCurrentEntry) return;
+      (other.categoryIds || []).forEach((categoryId) => {
+        if ((entry.categoryIds || []).includes(categoryId)) return;
+        const group = categories.find((category) => category.id === categoryId)?.categoryGroup;
+        if (group) alreadyRegisteredGroupNames.add(group);
+      });
+    });
+
+    const selectedGroups = new Set(
+      categories
+        .filter((category) => formData.categoryIds.includes(category.id) && category.categoryGroup)
+        .map((category) => category.categoryGroup as string)
+    );
+    return categories
+      .filter((category) => category.categoryGroup && (selectedGroups.has(category.categoryGroup) || alreadyRegisteredGroupNames.has(category.categoryGroup)))
+      .filter((category) => !formData.categoryIds.includes(category.id))
+      .map((category) => category.id);
+  }, [event.categories, formData.categoryIds, formData.email, entry.email, entry.pin, entry.categoryIds, liveEntries]);
+
   // ─── Seleção de Categorias ─────────────────────────────────────────────────
   const toggleCategory = useCallback((categoryId: string) => {
     setFormData((prev) => {
       const exists = prev.categoryIds.includes(categoryId);
+      if (!exists && groupConflictCategoryIds.includes(categoryId)) return prev;
       const nextCategoryIds = exists
         ? prev.categoryIds.filter((id) => id !== categoryId)
         : [...prev.categoryIds, categoryId];
@@ -272,7 +303,7 @@ export function useRegistrationForm({
         categoryPartners: nextCategoryPartners,
       };
     });
-  }, []);
+  }, [groupConflictCategoryIds]);
 
   const updateCategoryPartner = useCallback((categoryId: string, partner: CategoryPartnerInfo) => {
     setFormData((prev) => ({
@@ -341,6 +372,17 @@ export function useRegistrationForm({
             error: `Já existe um participante com o nome "${formData.nickname.trim()}" na categoria ${conflictingCat?.name || 'selecionada'}. Por favor, volte ao passo anterior e troque ou complemente o nome.`,
           };
         }
+        const selectedCategoryGroups = (event.categories || [])
+          .filter((category) => formData.categoryIds.includes(category.id) && category.categoryGroup)
+          .map((category) => category.categoryGroup as string);
+        if (new Set(selectedCategoryGroups).size !== selectedCategoryGroups.length) {
+          return { isValid: false, error: 'Selecione apenas uma categoria de cada grupo.' };
+        }
+        const selectedBlockedCategory = formData.categoryIds.find((categoryId) => groupConflictCategoryIds.includes(categoryId));
+        if (selectedBlockedCategory) {
+          const group = (event.categories || []).find((category) => category.id === selectedBlockedCategory)?.categoryGroup;
+          return { isValid: false, error: `Você já está inscrito em outra categoria do grupo ${group || 'selecionado'}.` };
+        }
         for (const catId of formData.categoryIds) {
           const vacancy = categoryVacancyMap[catId];
           if (vacancy?.isFull) {
@@ -374,7 +416,7 @@ export function useRegistrationForm({
 
       return { isValid: true };
     },
-    [formData, isSimplified, nameConflictWarning, conflictingCategoryIds, categoryVacancyMap, event.categories, event.regulationUrl, requiresPartnerDetails]
+    [formData, isSimplified, nameConflictWarning, conflictingCategoryIds, groupConflictCategoryIds, categoryVacancyMap, event.categories, event.regulationUrl, requiresPartnerDetails]
   );
 
   const canProceedToNext = useMemo(() => isStepValid(currentStep).isValid, [currentStep, isStepValid]);
@@ -478,13 +520,14 @@ export function useRegistrationForm({
     });
   }, [event.pairs]);
 
-  const getPartnerEntryForCategory = useCallback((_categoryId: string, partnerEmail: string): TournamentEntry | undefined => {
+  const getPartnerEntryForCategory = useCallback((categoryId: string, partnerEmail: string): TournamentEntry | undefined => {
     const normalizedPartner = partnerEmail.toLowerCase().trim();
     const normalizedSelf = (formData.email || entry.email || '').toLowerCase().trim();
     if (!normalizedPartner) return undefined;
     return liveEntries.find((candidate) =>
       candidate.email.toLowerCase().trim() === normalizedPartner &&
-      candidate.email.toLowerCase().trim() !== normalizedSelf
+      candidate.email.toLowerCase().trim() !== normalizedSelf &&
+      (candidate.categoryIds || []).includes(categoryId)
     );
   }, [liveEntries, formData.email, entry.email]);
 
@@ -506,6 +549,7 @@ export function useRegistrationForm({
     isSimplified,
     nameConflictWarning,
     conflictingCategoryIds,
+    groupConflictCategoryIds,
     isStepValid,
     canProceedToNext,
     getSubmissionEntry,

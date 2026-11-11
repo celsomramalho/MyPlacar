@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   Info,
   KeyRound,
+  Layers,
   Loader2,
   MapPin,
   Menu,
@@ -60,6 +61,7 @@ export type EventConfigBlockKey =
   | 'evento'
   | 'configuracoes'
   | 'coadministradores'
+  | 'gruposCategorias'
   | 'juizes'
   | 'valores'
   | 'informacoes'
@@ -78,6 +80,7 @@ export const EVENT_CONFIG_BLOCKS: EventBlockMenuItem[] = [
   { key: 'evento', label: 'Evento', icon: Trophy, isAdminOnly: true },
   { key: 'configuracoes', label: 'Configurações', icon: Settings, isAdminOnly: true },
   { key: 'coadministradores', label: 'Co-administradores', icon: ShieldCheck, isAdminOnly: true },
+  { key: 'gruposCategorias', label: 'Grupos de categorias', icon: Layers, isAdminOnly: true },
   { key: 'valores', label: 'Valores', icon: DollarSign, isAdminOnly: true },
   { key: 'informacoes', label: 'Informações', icon: Info, isAdminOnly: false },
   { key: 'localizacao', label: 'Localização', icon: MapPin, isAdminOnly: false },
@@ -124,6 +127,62 @@ const FormBlock: React.FC<FormBlockProps> = ({ id, title, icon: Icon, isOpen, on
     )}
   </div>
 );
+
+interface CategoryGroupsEditorProps {
+  groups: string[];
+  categories: NonNullable<TournamentEvent['categories']>;
+  disabled: boolean;
+  onChange: (groups: string[], categories: NonNullable<TournamentEvent['categories']>) => void;
+}
+
+const CategoryGroupsEditor: React.FC<CategoryGroupsEditorProps> = ({ groups, categories, disabled, onChange }) => {
+  const [newGroup, setNewGroup] = useState('');
+  const addGroup = () => {
+    const name = newGroup.trim();
+    if (!name || groups.some((group) => group.trim().toLowerCase() === name.toLowerCase())) return;
+    onChange([...groups, name], categories);
+    setNewGroup('');
+  };
+
+  const removeGroup = (group: string) => {
+    onChange(
+      groups.filter((item) => item !== group),
+      categories.map((category) => category.categoryGroup === group ? { ...category, categoryGroup: undefined } : category)
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-bold text-slate-500">Categorias do mesmo grupo não poderão ser escolhidas juntas na inscrição do atleta.</p>
+      <div className="flex gap-2">
+        <input
+          value={newGroup}
+          disabled={disabled}
+          onChange={(event) => setNewGroup(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addGroup(); } }}
+          placeholder="Nome do grupo, ex.: Feminino"
+          className="min-w-0 flex-1 h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold outline-none focus:border-emerald-500 disabled:bg-slate-100"
+        />
+        <button type="button" disabled={disabled || !newGroup.trim()} onClick={addGroup} className="rounded-xl bg-emerald-600 px-4 text-xs font-black text-white disabled:opacity-50">Adicionar</button>
+      </div>
+      {groups.length === 0 ? (
+        <p className="rounded-xl bg-slate-50 p-3 text-xs font-bold text-slate-400">Nenhum grupo criado. Categorias sem grupo continuam sem restrição.</p>
+      ) : (
+        <div className="space-y-2">
+          {groups.map((group) => {
+            const assigned = categories.filter((category) => category.categoryGroup === group).length;
+            return (
+              <div key={group} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <span className="text-xs font-black text-slate-700">{group} <span className="font-bold text-slate-400">({assigned} {assigned === 1 ? 'categoria' : 'categorias'})</span></span>
+                <button type="button" disabled={disabled} onClick={() => removeGroup(group)} className="text-xs font-black text-rose-600 disabled:opacity-50">Remover</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -294,6 +353,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
     evento: initialBlock === 'evento',
     configuracoes: initialBlock === 'configuracoes',
     coadministradores: initialBlock === 'coadministradores',
+    gruposCategorias: initialBlock === 'gruposCategorias',
     juizes: initialBlock === 'juizes',
     valores: initialBlock === 'valores',
     informacoes: initialBlock === 'informacoes',
@@ -308,6 +368,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         evento: initialBlock === 'evento',
         configuracoes: initialBlock === 'configuracoes',
         coadministradores: initialBlock === 'coadministradores',
+        gruposCategorias: initialBlock === 'gruposCategorias',
         juizes: initialBlock === 'juizes',
         valores: initialBlock === 'valores',
         informacoes: initialBlock === 'informacoes',
@@ -341,6 +402,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
       evento: false,
       configuracoes: false,
       coadministradores: false,
+      gruposCategorias: false,
       juizes: false,
       valores: false,
       informacoes: false,
@@ -546,6 +608,22 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
             ))}
           </select>
         </div>
+      </FormBlock>
+
+      <FormBlock
+        id="event-block-gruposCategorias"
+        title="Grupos de categorias"
+        icon={Layers}
+        isOpen={openSections.gruposCategorias}
+        onToggle={() => toggleSection('gruposCategorias')}
+        isAdminOnly
+      >
+        <CategoryGroupsEditor
+          groups={editingEvent.categoryGroups || []}
+          categories={editingEvent.categories || []}
+          disabled={isReadOnlyRegistration}
+          onChange={(categoryGroups, categories) => handleProtectedChange({ ...editingEvent, categoryGroups, categories })}
+        />
       </FormBlock>
 
       {/* ══════════════════════════════════════════════════════════════════════ */}

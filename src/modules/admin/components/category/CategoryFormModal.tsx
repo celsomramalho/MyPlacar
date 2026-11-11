@@ -10,6 +10,8 @@ export interface CategoryFormModalProps {
   description: string;
   format: 'Simples' | 'Duplas';
   scoreTarget: 'Inscrito' | 'Time';
+  categoryGroup: string;
+  categoryGroups: string[];
   duplaType: 'Fixo' | 'Livre';
   phaseDuplaTypes: Partial<Record<'groups' | 'playoffs' | 'semifinal' | 'final', 'Fixo' | 'Livre'>>;
   requiresPartner: boolean;
@@ -24,6 +26,7 @@ export interface CategoryFormModalProps {
   onDescriptionChange: (val: string) => void;
   onFormatChange: (val: 'Simples' | 'Duplas') => void;
   onScoreTargetChange: (val: 'Inscrito' | 'Time') => void;
+  onCategoryGroupChange: (val: string) => void;
   onDuplaTypeChange: (val: 'Fixo' | 'Livre') => void;
   onPhaseDuplaTypeChange: (phase: 'groups' | 'playoffs' | 'semifinal' | 'final', val: 'Fixo' | 'Livre' | '') => void;
   onRequiresPartnerChange: (val: boolean) => void;
@@ -44,6 +47,8 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   description,
   format,
   scoreTarget,
+  categoryGroup,
+  categoryGroups,
   duplaType,
   phaseDuplaTypes,
   requiresPartner,
@@ -58,6 +63,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   onDescriptionChange,
   onFormatChange,
   onScoreTargetChange,
+  onCategoryGroupChange,
   onDuplaTypeChange,
   onPhaseDuplaTypeChange,
   onRequiresPartnerChange,
@@ -170,6 +176,16 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
             <option value="Duplas">Duplas</option>
             <option value="Simples">Simples</option>
           </select>
+        </div>
+
+        {/* Campo: Pontuação */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Grupo de categorias</label>
+          <select value={categoryGroup} onChange={(e) => onCategoryGroupChange(e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 cursor-pointer">
+            <option value="">Sem grupo</option>
+            {categoryGroups.map((group) => <option key={group} value={group}>{group}</option>)}
+          </select>
+          <p className="text-[10px] text-slate-500 ml-1">O atleta poderá se inscrever em apenas uma categoria deste grupo.</p>
         </div>
 
         {/* Campo: Pontuação */}

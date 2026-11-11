@@ -11,6 +11,7 @@ export interface CategorySelectionStepProps {
   pricing: PricingCalculationResult;
   readOnly?: boolean;
   conflictingCategoryIds?: string[];
+  groupConflictCategoryIds?: string[];
   nickname?: string;
 }
 
@@ -22,6 +23,7 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
   pricing,
   readOnly = false,
   conflictingCategoryIds = [],
+  groupConflictCategoryIds = [],
   nickname = '',
 }) => {
   return (
@@ -46,6 +48,7 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
             const isSelected = selectedCategoryIds.includes(cat.id);
             const vacancy = categoryVacancyMap[cat.id];
             const isFull = vacancy?.isFull ?? false;
+            const hasGroupConflict = groupConflictCategoryIds.includes(cat.id);
             const remaining = vacancy?.remaining ?? 0;
             const limit = vacancy?.limit ?? 8;
             const confirmedCount = vacancy?.confirmedCount ?? 0;
@@ -55,13 +58,14 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
                 key={cat.id}
                 onClick={() => {
                   if (readOnly) return;
+                  if (!isSelected && hasGroupConflict) return;
                   if (!isSelected && isFull) return;
                   toggleCategory(cat.id);
                 }}
                 className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between gap-3 ${
                   isSelected
                     ? 'bg-blue-50/50 border-blue-500 shadow-xs'
-                    : isFull
+                    : isFull || hasGroupConflict
                     ? 'bg-slate-50/70 border-slate-200 opacity-60 cursor-not-allowed'
                     : 'bg-white border-slate-200 hover:border-slate-300'
                 }`}
@@ -88,6 +92,12 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
                     <div className="mt-2.5 p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold flex items-center gap-1.5 animate-in fade-in">
                       <AlertTriangle size={13} className="text-amber-600 shrink-0" />
                       <span>Nome "{nickname}" já em uso nesta categoria</span>
+                    </div>
+                  )}
+                  {hasGroupConflict && (
+                    <div className="mt-2.5 p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold flex items-center gap-1.5">
+                      <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                      <span>{cat.categoryGroup ? `Já há outra categoria do grupo ${cat.categoryGroup} selecionada ou vinculada a esta inscrição.` : 'Já existe uma inscrição sua em outra categoria deste grupo.'}</span>
                     </div>
                   )}
                 </div>

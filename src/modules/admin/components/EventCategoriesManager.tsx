@@ -71,6 +71,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [description, setDescription] = useState('');
   const [format, setFormat] = useState<'Simples' | 'Duplas'>('Duplas');
   const [scoreTarget, setScoreTarget] = useState<'Inscrito' | 'Time'>('Inscrito');
+  const [categoryGroup, setCategoryGroup] = useState('');
   const [duplaType, setDuplaType] = useState<'Fixo' | 'Livre'>('Fixo');
   const [phaseDuplaTypes, setPhaseDuplaTypes] = useState<NonNullable<EventCategory['phaseDuplaTypes']>>({});
   const [requiresPartner, setRequiresPartner] = useState<boolean>(true);
@@ -115,6 +116,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setDescription('');
     setFormat('Duplas');
     setScoreTarget(isIndividualScoreEvent(event) ? 'Inscrito' : 'Time');
+    setCategoryGroup('');
     setDuplaType('Fixo');
     setPhaseDuplaTypes({});
     setPriority(categories.length + 1);
@@ -167,6 +169,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setDescription(cat.description || '');
     setFormat(cat.format);
     setScoreTarget(cat.scoreTarget ?? (cat.requiresPartner === false ? 'Inscrito' : (isIndividualScoreEvent(event) ? 'Inscrito' : 'Time')));
+    setCategoryGroup(cat.categoryGroup || '');
     setDuplaType(cat.duplaType ?? 'Fixo');
     setPhaseDuplaTypes(cat.phaseDuplaTypes ?? {});
     setPriority(cat.priority);
@@ -210,6 +213,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
               sportId,
               sportName,
               abbreviation: abbreviation.trim(),
+              categoryGroup: categoryGroup || undefined,
               gender1,
               gender2: format === 'Duplas' ? gender2 : undefined,
               maxPlayers: maxPlayers > 0 ? maxPlayers : 8,
@@ -230,6 +234,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
         sportId,
         sportName,
         abbreviation: abbreviation.trim(),
+        categoryGroup: categoryGroup || undefined,
         gender1,
         gender2: format === 'Duplas' ? gender2 : undefined,
         maxPlayers: maxPlayers > 0 ? maxPlayers : 8,
@@ -1038,6 +1043,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
           description={description}
           format={format}
           scoreTarget={scoreTarget}
+          categoryGroup={categoryGroup}
+          categoryGroups={event.categoryGroups || []}
           duplaType={duplaType}
           phaseDuplaTypes={phaseDuplaTypes}
           requiresPartner={requiresPartner}
@@ -1052,6 +1059,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
           onDescriptionChange={setDescription}
           onFormatChange={setFormat}
           onScoreTargetChange={handleScoreTargetChange}
+          onCategoryGroupChange={setCategoryGroup}
           onDuplaTypeChange={setDuplaType}
           onPhaseDuplaTypeChange={(phase, value) => setPhaseDuplaTypes((previous) => {
             const next = { ...previous };
@@ -1117,6 +1125,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     description={description}
                     format={format}
                     scoreTarget={scoreTarget}
+                    categoryGroup={categoryGroup}
+                    categoryGroups={event.categoryGroups || []}
                     duplaType={duplaType}
                     phaseDuplaTypes={phaseDuplaTypes}
                     requiresPartner={requiresPartner}
@@ -1131,6 +1141,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onDescriptionChange={setDescription}
                     onFormatChange={setFormat}
                     onScoreTargetChange={handleScoreTargetChange}
+                    onCategoryGroupChange={setCategoryGroup}
                     onDuplaTypeChange={setDuplaType}
                     onPhaseDuplaTypeChange={(phase, value) => setPhaseDuplaTypes((previous) => {
                       const next = { ...previous };

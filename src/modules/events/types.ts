@@ -246,6 +246,8 @@ export interface EventCategory {
   sportId: string;
   sportName?: string;
   abbreviation: string;
+  /** Grupo opcional para impedir que o mesmo atleta dispute categorias incompatíveis. */
+  categoryGroup?: string;
   gamesPerSet?: number;
   gender1?: 'M' | 'F';
   gender2?: 'M' | 'F';
@@ -352,6 +354,8 @@ export interface TournamentEvent {
   /** Número de grupos por chave no Super 8 duplas (padrão 2, ex: A1, A2 por chave) */
   groupsPerBracket?: number;
   categories?: EventCategory[];
+  /** Grupos de inscrição configurados pelo administrador do evento. */
+  categoryGroups?: string[];
   regulationUrl?: string;
   regulationFileName?: string;
   information?: string;

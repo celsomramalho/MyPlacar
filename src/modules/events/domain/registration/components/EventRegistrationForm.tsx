@@ -207,6 +207,10 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     }
 
     const currentEntry = form.getSubmissionEntry();
+    if (!(partnerEntry.categoryIds || []).includes(categoryId) || !(currentEntry.categoryIds || []).includes(categoryId)) {
+      setFeedback('Para formar dupla, os dois atletas precisam estar inscritos nesta mesma categoria.');
+      return;
+    }
     const pairs = event.pairs || [];
     const teamNumber =
       Math.max(
@@ -708,6 +712,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
               pricing={form.pricing}
               readOnly={readOnly}
               conflictingCategoryIds={form.conflictingCategoryIds}
+              groupConflictCategoryIds={form.groupConflictCategoryIds}
               nickname={form.formData.nickname}
             />
           </div>
