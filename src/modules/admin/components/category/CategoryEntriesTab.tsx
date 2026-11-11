@@ -7,6 +7,7 @@ import type { EventCategory, TournamentEntry, TournamentEvent, PlayerStanding, T
 import { ParticipantRow } from '@modules/events/components/registration/ParticipantRow';
 import { TechnicalTieDrawModal } from '@modules/events/components/TechnicalTieDrawModal';
 import { EventRegistrationForm } from '@modules/events/domain/registration';
+import { isEntryCheckedInToday, isTournamentPeriodActive, getTodayDateStr } from '@modules/events/services/eventRegistrationPeriod';
 
 export interface CategoryEntriesTabProps {
   category: EventCategory;
@@ -32,6 +33,7 @@ export interface CategoryEntriesTabProps {
   onDeleteAllCategoryEntries?: () => void;
   onGenerateTemporaryEntries?: () => void;
   onUpdateEvent: (event: TournamentEvent) => void;
+  onToggleCheckIn: (entry: TournamentEntry) => void;
 }
 
 export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
@@ -58,6 +60,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   onDeleteAllCategoryEntries,
   onGenerateTemporaryEntries,
   onUpdateEvent,
+  onToggleCheckIn,
 }) => {
   const isSuper8Like = isSuper8 || isSuper8Duplas;
   const isSuper8Rotating = isSuper8Like && category.scoreTarget !== 'Time';
@@ -66,6 +69,8 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   const [searchQuery, setSearchQuery] = React.useState('');
   const maxPlayers = category.maxPlayers && category.maxPlayers > 0 ? category.maxPlayers : 8;
   const canGenerateMore = entries.length < maxPlayers;
+  const today = getTodayDateStr();
+  const tournamentActive = isTournamentPeriodActive(event);
 
   const allStandings = React.useMemo(() => {
     const seen = new Set<string>();
@@ -280,6 +285,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                     onToggleSelect={onToggleEntrySelection}
                     onToggleExpanded={() => setExpandedStatsEmail(isStatsExpanded ? null : (entry.email || entry.pin))}
                     onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
+                    checkInStatus={{ checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: isReadOnly || !tournamentActive, onToggle: onToggleCheckIn }}
                   />
                   {isExpanded && (
                     <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
@@ -350,6 +356,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                   onToggleSelect={onToggleEntrySelection}
                   onToggleExpanded={() => setExpandedStatsEmail(isStatsExpanded ? null : (entry.email || entry.pin))}
                   onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
+                  checkInStatus={{ checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: isReadOnly || !tournamentActive, onToggle: onToggleCheckIn }}
                 />
                 {isExpanded && (
                   <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">

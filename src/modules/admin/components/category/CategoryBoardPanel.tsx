@@ -41,6 +41,7 @@ export interface CategoryBoardPanelProps {
   onDeleteAllCategoryEntries?: () => void;
   onGenerateTemporaryEntries?: () => void;
   onUpdateEvent: (event: TournamentEvent) => void;
+  onToggleCheckIn: (entry: TournamentEntry) => void;
 
   // Teams tab props
   categoryPairs: TournamentPair[];
@@ -107,6 +108,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   onDeleteAllCategoryEntries,
   onGenerateTemporaryEntries,
   onUpdateEvent,
+  onToggleCheckIn,
   categoryPairs,
   bracketOnePairs,
   bracketTwoPairs,
@@ -173,6 +175,7 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
           onDeleteAllCategoryEntries={onDeleteAllCategoryEntries}
           onGenerateTemporaryEntries={onGenerateTemporaryEntries}
           onUpdateEvent={onUpdateEvent}
+          onToggleCheckIn={onToggleCheckIn}
         />
       )}
 

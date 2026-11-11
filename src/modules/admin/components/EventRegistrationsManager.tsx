@@ -16,6 +16,7 @@ import {
 } from '@modules/events/services/eventRegistrationPeriod';
 import { EventRegistrationForm } from '@modules/events/domain/registration';
 import { useUI } from '@modules/ui';
+import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
 
 const formatPhone = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -1490,8 +1491,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                         }}
                         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-black transition-all ${
                           isCheckedIn
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 shadow-xs'
-                            : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100 hover:text-slate-600'
+                            ? 'bg-rose-100 text-rose-900 border-rose-300 hover:bg-rose-200 shadow-xs'
+                            : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
                         } ${isReadOnly ? 'cursor-default opacity-80' : 'cursor-pointer active:scale-95'}`}
                         title={
                           !isTournamentActive
@@ -1501,11 +1502,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                             : 'Marcar check-in'
                         }
                       >
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                          isCheckedIn ? 'bg-emerald-500 border-emerald-600 text-white' : 'border-slate-300 bg-white'
-                        }`}>
-                          {isCheckedIn && <Check size={11} className="stroke-[3]" />}
-                        </div>
+                        <CheckInPinIcon checked={isCheckedIn} size={19} />
                         <span className="text-[11px] hidden sm:inline font-bold">Check-in</span>
                       </button>
 

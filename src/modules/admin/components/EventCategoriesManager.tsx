@@ -21,8 +21,10 @@ import { isIndividualScoreCategory, isIndividualScoreEvent, isRankingEvent, isSu
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb, getAuthInstance } from '@infra/firebase';
 import { updateEvent, saveEventEntry, deleteEventEntry } from '@infra/firebase/events';
+import { saveAdminEventEntry } from '@infra/firebase/events';
 import type { Firestore } from 'firebase/firestore';
 import { useUI } from '@modules/ui';
+import { entryHasFinishedMatchOnDate, getTodayDateStr, isEntryCheckedInToday, isTournamentPeriodActive } from '@modules/events/services/eventRegistrationPeriod';
 
 import {
   CategoryAccordionItem,
@@ -65,6 +67,33 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'name' | 'team'>('team');
   const [expandedRegistrationEmail, setExpandedRegistrationEmail] = useState<string | null>(null);
+  const toggleCategoryCheckIn = async (entry: TournamentEntry) => {
+    const today = getTodayDateStr();
+    if (!isTournamentPeriodActive(event)) {
+      setModalConfig({ title: 'Check-in indisponível', message: 'O check-in só é permitido nos dias de realização do torneio (hoje). Não é possível fazer check-in no passado ou no futuro.', onConfirm: () => setModalConfig(null) });
+      return;
+    }
+    const checked = isEntryCheckedInToday(entry, event.matches, pairsById, today);
+    if (checked && entryHasFinishedMatchOnDate(entry, event.matches, pairsById, today)) {
+      setModalConfig({ title: 'Check-in confirmado', message: 'O participante possui partida finalizada hoje, portanto o check-in não pode ser desmarcado.', onConfirm: () => setModalConfig(null) });
+      return;
+    }
+    const updatedEntry: TournamentEntry = {
+      ...entry,
+      checkedIn: !checked,
+      checkInDate: checked ? undefined : today,
+      checkInDates: checked ? (entry.checkInDates || []).filter((date) => date !== today) : Array.from(new Set([...(entry.checkInDates || []), today])),
+    };
+    try {
+      const db = getDb();
+      if (db && event.pin) await saveAdminEventEntry(db, event.pin, updatedEntry, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+      const matches = (item: TournamentEntry) => (entry.registrationId && item.registrationId === entry.registrationId) || (entry.pin && item.pin?.toUpperCase() === entry.pin.toUpperCase()) || (entry.email && item.email?.toLowerCase() === entry.email.toLowerCase());
+      onUpdateEvent({ ...event, entries: (event.entries || []).map((item) => matches(item) ? updatedEntry : item) });
+    } catch (error) {
+      console.error('Erro ao atualizar check-in do participante:', error);
+      setModalConfig({ title: 'Erro no check-in', message: 'Não foi possível salvar o check-in. Tente novamente.', onConfirm: () => setModalConfig(null) });
+    }
+  };
 
   // Form State
   const [name, setName] = useState('');
@@ -1188,6 +1217,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onDeleteAllCategoryEntries={handleDeleteAllCategoryEntries}
                     onGenerateTemporaryEntries={handleGenerateTemporaryCategoryEntries}
                     onUpdateEvent={onUpdateEvent}
+                    onToggleCheckIn={toggleCategoryCheckIn}
                     categoryPairs={categoryPairs}
                     bracketOnePairs={bracketOnePairs}
                     bracketTwoPairs={bracketTwoPairs}

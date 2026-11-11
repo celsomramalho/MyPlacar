@@ -8,6 +8,7 @@ import { formatRegistrationId } from '../../types';
 import { RankingStandingStatsBlock } from '../RankingStandingStatsBlock';
 import { Super8StandingStatsBlock } from '../Super8StandingStatsBlock';
 import { ParticipantMatchHistory } from './ParticipantMatchHistory';
+import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
 
 export interface ParticipantRowProps {
   entry: TournamentEntry;
@@ -33,6 +34,7 @@ export interface ParticipantRowProps {
   isExpanded?: boolean;
   onToggleExpanded?: () => void;
   onEdit?: (entry: TournamentEntry) => void;
+  checkInStatus?: { checked: boolean; disabled: boolean; onToggle: (entry: TournamentEntry) => void };
 }
 
 export const ParticipantRow: React.FC<ParticipantRowProps> = ({
@@ -59,6 +61,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
   isExpanded = false,
   onToggleExpanded,
   onEdit,
+  checkInStatus,
 }) => {
   const partner = pair
     ? (pair.p1.email && entry.email && pair.p1.email.toLowerCase().trim() === entry.email.toLowerCase().trim()) ||
@@ -238,6 +241,26 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
                 Temporário
               </span>
             )}
+
+          {checkInStatus && (
+            <button
+              type="button"
+              disabled={checkInStatus.disabled}
+              onClick={(e) => {
+                e.stopPropagation();
+                checkInStatus.onToggle(entry);
+              }}
+              title={checkInStatus.checked ? 'Check-in confirmado (clique para desmarcar)' : 'Marcar check-in'}
+              aria-label={checkInStatus.checked ? 'Desmarcar check-in' : 'Marcar check-in'}
+              className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${
+                checkInStatus.checked
+                  ? 'bg-rose-100 border-rose-300 hover:bg-rose-200'
+                  : 'bg-rose-50 border-rose-200 hover:bg-rose-100'
+              } ${checkInStatus.disabled ? 'opacity-60 cursor-default' : 'cursor-pointer active:scale-95'}`}
+            >
+              <CheckInPinIcon checked={checkInStatus.checked} size={21} />
+            </button>
+          )}
 
           {onEdit && (
             <button
