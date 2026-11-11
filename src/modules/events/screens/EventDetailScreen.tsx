@@ -43,7 +43,7 @@ import type {
   MatchSetScore,
   EventCategory,
 } from '../types';
-import { minifyPairForStorage, resolveCategoryDuplaType } from '../types';
+import { minifyPairForStorage, resolveCategoryDuplaType, resolveTeamFormationMode } from '../types';
 import type { UserProfile } from '@modules/auth/types';
 import {
   getDb,
@@ -300,12 +300,14 @@ export const EventDetailScreen: React.FC<Props> = ({
   const isRanking = isRankingEvent(event);
   const isSuper8 = isSuper8Event(event);
   const isChaveEvent = !isRanking && !isSuper8;
+  const teamFormationMode = resolveTeamFormationMode(event);
+  const canFormTeamDuringEvent = teamFormationMode === 'event' || teamFormationMode === 'registration_and_event';
 
   // 1. Formar time a partir de 2 inscritos na aba Inscritos:
   // Só é permitido se a opção "Usuário forma time" estiver habilitada no evento (e não for Super 8)
   const canFormTeamFromEntries =
     !isReadOnly &&
-    event.allowUserTeamFormation === true &&
+    canFormTeamDuringEvent &&
     !isSuper8 &&
     (canManageEvent || hasActiveRegistration);
 
@@ -320,7 +322,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   // 3. Trocar chave do time:
   const canChangeTeamBracket =
     !isReadOnly &&
-    event.allowUserTeamFormation === true &&
+    canFormTeamDuringEvent &&
     !isSuper8 &&
     (canManageEvent || hasActiveRegistration);
 

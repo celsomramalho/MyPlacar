@@ -9,7 +9,6 @@ export interface PartnerSelectionStepProps {
   selectedCategoryIds: string[];
   categoryPartners: Record<string, CategoryPartnerInfo>;
   updateCategoryPartner: (categoryId: string, partner: CategoryPartnerInfo) => void;
-  isTeamDrawPreDefined?: boolean;
   allowUserTeamFormation?: boolean;
   readOnly?: boolean;
   /** Retorna o TournamentEntry do parceiro já inscrito no e-mail informado */
@@ -37,7 +36,6 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
   selectedCategoryIds,
   categoryPartners,
   updateCategoryPartner,
-  isTeamDrawPreDefined = true,
   allowUserTeamFormation = false,
   readOnly = false,
   getPartnerEntryForCategory,
@@ -172,6 +170,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
           // – o parceiro NÃO está em outro par na mesma categoria
           const canShowFormTeam = Boolean(
             !isSelfCancelled &&
+            allowUserTeamFormation &&
             onFormTeam &&
             partnerEntry &&
             !isPartnerCancelled &&

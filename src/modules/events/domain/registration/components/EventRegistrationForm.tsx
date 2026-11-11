@@ -14,6 +14,7 @@ import {
   orderPairEntriesForMixed,
   minifyEntryForPair,
   isSimplifiedRegistrationEvent,
+  resolveTeamFormationMode,
   type TournamentEvent,
   type TournamentEntry,
   type TournamentPair,
@@ -184,6 +185,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   }, [existingPayments, entry.paymentStatus]);
 
   const currentDueAmount = form.pricing.dueAmount;
+  const teamFormationMode = resolveTeamFormationMode(event);
+  const canFormTeamAtRegistration = teamFormationMode === 'registration' || teamFormationMode === 'registration_and_event';
   const pendingAmount = Math.max(0, currentDueAmount - totalPaid);
   const isFullyPaid = currentDueAmount > 0 && totalPaid >= currentDueAmount;
   const hasExistingReceipt = existingPayments.some((p) => Boolean(p.receiptUrl));
@@ -195,7 +198,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
   // ── Formação de Time ─────────────────────────────────────────────────────────
   const handleFormTeam = useCallback(async (categoryId: string, partnerEntry: TournamentEntry) => {
-    if (!onUpdateEvent || (!form.isTeamDrawPreDefined && event.allowUserTeamFormation !== true)) return;
+    if (!onUpdateEvent || !canFormTeamAtRegistration) return;
 
     const isSelfCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
     if (isSelfCancelled || partnerEntry.disabled || partnerEntry.paymentStatus === 'Cancelado') {
@@ -238,10 +241,10 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
     await (onSaveDraft || onSave)(currentEntry);
     onUpdateEvent({ ...event, entries: updatedEntries, pairs: [...pairs, newPair] });
-  }, [entry, event, form, onSave, onSaveDraft, onUpdateEvent]);
+  }, [canFormTeamAtRegistration, entry, event, form, onSave, onSaveDraft, onUpdateEvent]);
 
   const isStepBeforePayment =
-    (form.currentStep === 'categories' && !form.requiresPartnerDetails && event.allowUserTeamFormation !== true) ||
+    (form.currentStep === 'categories' && !form.requiresPartnerDetails && !canFormTeamAtRegistration) ||
     form.currentStep === 'partners';
 
   const isNextDisabled =
@@ -507,7 +510,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   };
 
   const isSelfCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
-  const registrationSteps = (form.requiresPartnerDetails || event.allowUserTeamFormation === true)
+  const registrationSteps = (form.requiresPartnerDetails || canFormTeamAtRegistration)
     ? ['identity', 'information', 'categories', 'partners', 'payment'] as const
     : ['identity', 'information', 'categories', 'payment'] as const;
   const stepLabels: Record<RegistrationStep, string> = {
@@ -716,8 +719,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             selectedCategoryIds={form.formData.categoryIds}
             categoryPartners={form.formData.categoryPartners}
             updateCategoryPartner={form.updateCategoryPartner}
-            isTeamDrawPreDefined={form.isTeamDrawPreDefined}
-            allowUserTeamFormation={event.allowUserTeamFormation === true}
+            allowUserTeamFormation={canFormTeamAtRegistration}
             readOnly={readOnly}
             getPartnerEntryForCategory={form.getPartnerEntryForCategory}
             getPairForCategory={form.getPairForCategory}

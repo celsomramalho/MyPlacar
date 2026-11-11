@@ -37,8 +37,10 @@ import {
   type EventPaymentTypeOption,
   type EventRegistrationTypeOption,
   type TechnicalTieBreakOption,
+  type TeamFormationMode,
   type TournamentEvent,
   isSimplifiedRegistrationEvent,
+  resolveTeamFormationMode,
 } from '@modules/events/types';
 import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
@@ -285,6 +287,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   // Blocos 1 (Evento), 2 (Configurações), Co-administradores, Juízes e Valores são exclusivos do admin global
   const isGlobalAdmin = adminEmail === 'celsomramalho@gmail.com';
   const isAdminOnlyDisabled = !isGlobalAdmin || isReadOnlyRegistration;
+  const teamFormationMode = resolveTeamFormationMode(editingEvent);
 
   // ── Estado das seções: inicialmente fechados (ou abre apenas o initialBlock) ─
   const [openSections, setOpenSections] = useState({
@@ -979,18 +982,31 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           </div>
         </div>
 
-        {/* Toggles */}
+        {/* Permissões */}
         <div className="grid grid-cols-1 gap-3">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
-            <Toggle
-              id="event-allow-user-team-formation"
-              label="Usuário forma time"
-              checked={editingEvent.allowUserTeamFormation === true}
+            <label htmlFor="event-team-formation-mode" className="mb-1 block text-xs font-black text-slate-700">Usuário forma time</label>
+            <select
+              id="event-team-formation-mode"
+              value={teamFormationMode}
               disabled={isAdminOnlyDisabled}
-              onChange={(checked) =>
-                handleProtectedChange({ ...editingEvent, allowUserTeamFormation: checked })
-              }
-            />
+              onChange={(changeEvent) => {
+                const mode = changeEvent.target.value as TeamFormationMode;
+                handleProtectedChange({
+                  ...editingEvent,
+                  teamFormationMode: mode,
+                  // Mantém compatibilidade com versões antigas do app.
+                  allowUserTeamFormation: mode !== 'none',
+                });
+              }}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+            >
+              <option value="none">Não permitir</option>
+              <option value="registration">Somente na inscrição</option>
+              <option value="event">Durante o evento</option>
+              <option value="registration_and_event">Na inscrição e durante o evento (atual)</option>
+            </select>
+            <p className="mt-1 text-[10px] font-semibold text-slate-400">A opção de inscrição também respeita a dupla fixa da categoria.</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
             <Toggle

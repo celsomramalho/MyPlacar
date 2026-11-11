@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X } from 'lucide-react';
 import { formatRegistrationId, type TournamentEvent, type TournamentEntry } from '@modules/events/types';
 
 interface Props {
@@ -46,6 +46,8 @@ const formatDateShort = (timestamp: number) => {
 };
 
 export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => {
+  const [searchName, setSearchName] = useState('');
+  const [paymentGroup, setPaymentGroup] = useState<'all' | 'confirmed' | 'awaiting' | 'pre' | 'inactive'>('all');
   const [isPaidExpanded, setIsPaidExpanded] = useState(true);
   const [isPendingExpanded, setIsPendingExpanded] = useState(true);
   const [isPreRegistrationExpanded, setIsPreRegistrationExpanded] = useState(true);
@@ -53,6 +55,30 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
 
   const categories = event.categories || [];
   const entries = event.entries || [];
+  const hasReceipt = (entry: TournamentEntry) => Boolean(entry.payments?.some((payment) => payment.receiptUrl));
+  const isConfirmedEntry = (entry: TournamentEntry) => entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || entry.paymentStatus === 'Isento';
+  const matchesSearch = (entry: TournamentEntry) => {
+    const term = searchName.trim().toLocaleLowerCase();
+    if (!term) return true;
+    const normalizedId = formatRegistrationId(entry.registrationId).toLocaleLowerCase();
+    return [entry.name, entry.nickname, entry.pin, entry.email, normalizedId, String(entry.registrationId ?? '')]
+      .some((value) => String(value || '').toLocaleLowerCase().includes(term));
+  };
+  const isInSelectedGroup = (entry: TournamentEntry) => {
+    if (paymentGroup === 'all') return true;
+    if (paymentGroup === 'inactive') return Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
+    if (entry.disabled || entry.paymentStatus === 'Cancelado') return false;
+    if (paymentGroup === 'confirmed') return isConfirmedEntry(entry);
+    if (paymentGroup === 'awaiting') return hasReceipt(entry) && !isConfirmedEntry(entry);
+    return !hasReceipt(entry) && !isConfirmedEntry(entry);
+  };
+  const visibleEntries = new Set(entries.filter((entry) => matchesSearch(entry) && isInSelectedGroup(entry)).map((entry) => entry.pin));
+  const paymentGroupCounts = {
+    confirmed: entries.filter((entry) => !entry.disabled && entry.paymentStatus !== 'Cancelado' && isConfirmedEntry(entry)).length,
+    awaiting: entries.filter((entry) => !entry.disabled && entry.paymentStatus !== 'Cancelado' && hasReceipt(entry) && !isConfirmedEntry(entry)).length,
+    pre: entries.filter((entry) => !entry.disabled && entry.paymentStatus !== 'Cancelado' && !hasReceipt(entry) && !isConfirmedEntry(entry)).length,
+    inactive: entries.filter((entry) => entry.disabled || entry.paymentStatus === 'Cancelado').length,
+  };
 
   // Helper para obter texto de categorias
   const getCategoriesText = (entry: TournamentEntry) => {
@@ -78,6 +104,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
   const preRegistrationEntries: TournamentEntry[] = [];
 
   entries.forEach((entry) => {
+    const showEntry = visibleEntries.has(entry.pin);
     const entryDue = entry.dueAmount ?? (event.registrationFee || 0);
     const isConfirmed = entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago';
     const isIsento = entry.paymentStatus === 'Isento';
@@ -90,7 +117,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
         const isLegacyConfirmed = !p.status && isConfirmed;
         if (isPaymentConfirmed || isLegacyConfirmed) {
           sumPayments += p.amount || 0;
-          paidPaymentsList.push({
+          if (showEntry) paidPaymentsList.push({
             paymentId: p.id,
             entryPin: entry.pin,
             participantName: entry.nickname || entry.name,
@@ -104,7 +131,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
       });
     } else if (isConfirmed && entry.paidAmount && entry.paidAmount > 0) {
       sumPayments = entry.paidAmount;
-      paidPaymentsList.push({
+      if (showEntry) paidPaymentsList.push({
         paymentId: `legacy-${entry.pin}`,
         entryPin: entry.pin,
         participantName: entry.nickname || entry.name,
@@ -115,7 +142,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
       });
     } else if (isConfirmed && entryDue > 0) {
       // Se está confirmado mas não tem lista de pagamentos explícita
-      paidPaymentsList.push({
+      if (showEntry) paidPaymentsList.push({
         paymentId: `conf-${entry.pin}`,
         entryPin: entry.pin,
         participantName: entry.nickname || entry.name,
@@ -147,6 +174,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
 
     const hasReceiptHistory = Boolean(entry.payments?.some((payment) => payment.receiptUrl));
     if (
+      showEntry &&
       (entry.paymentStatus === 'Aguardando Confirmação' || entry.paymentStatus === 'Recusado') &&
       hasReceiptHistory
     ) {
@@ -158,7 +186,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
         categoriesStr: catStr,
       });
     }
-    if (!entry.disabled && entry.paymentStatus !== 'Cancelado' && !hasReceiptHistory && !isConfirmed && !isIsento) {
+    if (showEntry && !entry.disabled && entry.paymentStatus !== 'Cancelado' && !hasReceiptHistory && !isConfirmed && !isIsento) {
       preRegistrationEntries.push(entry);
     }
   });
@@ -181,6 +209,21 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
 
   return (
     <div className="space-y-4 animate-in fade-in">
+      <div className="space-y-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
+        <div className="relative w-full">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Pesquisar por nome ou ID da inscrição..." className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400" />
+          {searchName && <button type="button" onClick={() => setSearchName('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg" title="Limpar pesquisa"><X size={14} /></button>}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            ['confirmed', 'Confirmados', paymentGroupCounts.confirmed, 'border-emerald-300 bg-emerald-100 text-emerald-800'],
+            ['awaiting', 'Ag. conf./recusados', paymentGroupCounts.awaiting, 'border-amber-300 bg-amber-100 text-amber-800'],
+            ['pre', 'Pré-inscritos', paymentGroupCounts.pre, 'border-sky-300 bg-sky-100 text-sky-800'],
+            ['inactive', 'Cancel./desat.', paymentGroupCounts.inactive, 'border-slate-300 bg-slate-200 text-slate-700'],
+          ] as const).map(([group, label, count, activeClasses]) => <button key={group} type="button" onClick={() => setPaymentGroup(paymentGroup === group ? 'all' : group)} aria-pressed={paymentGroup === group} className={`flex min-w-0 items-center justify-between gap-1 rounded-xl border px-2.5 py-2 text-[10px] font-black transition-colors ${paymentGroup === group ? activeClasses : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}><span className="truncate">{label}</span><span>{count}</span></button>)}
+        </div>
+      </div>
       {/* Modal simples de visualização de comprovante caso necessário */}
       {selectedReceipt && (
         <div
@@ -234,6 +277,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
       )}
 
       {/* Quadro 1: Valor Pago (Accordion conforme Imagem 2) */}
+      {(paymentGroup === 'all' || paymentGroup === 'confirmed') && (
       <div className="border-2 border-emerald-300/80 hover:border-emerald-400 bg-white rounded-3xl p-4 shadow-sm transition-all">
         <button
           type="button"
@@ -313,8 +357,10 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
           </div>
         )}
       </div>
+      )}
 
       {/* Quadro 2: Valor Pendente (Accordion) */}
+      {(paymentGroup === 'all' || paymentGroup === 'awaiting') && (
       <div className="border-2 border-amber-300/80 hover:border-amber-400 bg-white rounded-3xl p-4 shadow-sm transition-all">
         <button
           type="button"
@@ -416,7 +462,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
           </div>
         )}
       </div>
+      )}
 
+      {(paymentGroup === 'all' || paymentGroup === 'pre') && (
       <div className="border-2 border-sky-200 bg-white rounded-3xl p-4 shadow-sm">
         <button type="button" onClick={() => setIsPreRegistrationExpanded((prev) => !prev)} className="w-full flex items-center justify-between text-left select-none group">
           <span className="text-sm font-black text-slate-800">Pré-inscrição: {preRegistrationEntries.length}</span>
@@ -426,6 +474,11 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
           {preRegistrationEntries.length === 0 ? <p className="text-xs text-slate-400 font-bold text-center py-4">Nenhuma pré-inscrição sem comprovante.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-[11px] font-black text-slate-700 border-b border-slate-100"><th className="py-2.5 px-3">Participante</th><th className="py-2.5 px-3">Inscrição</th><th className="py-2.5 px-3">Categorias</th><th className="py-2.5 px-3 text-right">Anexo</th></tr></thead><tbody className="divide-y divide-slate-50 font-bold text-slate-700">{preRegistrationEntries.map((entry) => <tr key={entry.pin}><td className="py-3 px-3">{entry.nickname || entry.name}</td><td className="py-3 px-3">{formatRegistrationId(entry.registrationId) || '—'}</td><td className="py-3 px-3">{getCategoriesText(entry)}</td><td className="py-3 px-3 text-right"><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">Sem anexo</span></td></tr>)}</tbody></table></div>}
         </div>}
       </div>
+      )}
+      {paymentGroup === 'inactive' && <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="text-sm font-black text-slate-800">Cancelados/desativados: {paymentGroupCounts.inactive}</h3>
+        {entries.filter((entry) => visibleEntries.has(entry.pin) && (entry.disabled || entry.paymentStatus === 'Cancelado')).map((entry) => <div key={entry.pin} className="mt-3 flex justify-between border-t border-slate-100 pt-3 text-xs"><span className="font-bold">{entry.nickname || entry.name}<small className="block text-slate-500">Inscrição: {formatRegistrationId(entry.registrationId) || '—'}</small></span><span className="font-bold text-slate-500">{entry.disabled ? 'Desativado' : 'Cancelado'}</span></div>)}
+      </div>}
     </div>
   );
 };

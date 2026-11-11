@@ -16,6 +16,7 @@ import {
   type EventCategory,
   type CategoryPartnerInfo,
   isSimplifiedRegistrationEvent,
+  resolveTeamFormationMode,
 } from '@modules/events/types';
 import type {
   RegistrationStep,
@@ -180,18 +181,20 @@ export function useRegistrationForm({
     () => shouldRequirePartnerDetails(event.teamDrawType, event.categories || [], formData.categoryIds),
     [event.categories, event.teamDrawType, formData.categoryIds]
   );
+  const teamFormationMode = resolveTeamFormationMode(event);
+  const canFormTeamAtRegistration = teamFormationMode === 'registration' || teamFormationMode === 'registration_and_event';
   const stepOrder = useMemo<RegistrationStep[]>(
-    () => requiresPartnerDetails || event.allowUserTeamFormation === true
+    () => requiresPartnerDetails || canFormTeamAtRegistration
       ? ['identity', 'information', 'categories', 'partners', 'payment', 'confirmation']
       : ['identity', 'information', 'categories', 'payment', 'confirmation'],
-    [requiresPartnerDetails, event.allowUserTeamFormation]
+    [requiresPartnerDetails, canFormTeamAtRegistration]
   );
 
   useEffect(() => {
-    if (!requiresPartnerDetails && event.allowUserTeamFormation !== true && currentStep === 'partners') {
+    if (!requiresPartnerDetails && !canFormTeamAtRegistration && currentStep === 'partners') {
       setCurrentStep('payment');
     }
-  }, [currentStep, requiresPartnerDetails, event.allowUserTeamFormation]);
+  }, [currentStep, requiresPartnerDetails, canFormTeamAtRegistration]);
 
   // ─── Filtragem de Categorias por Gênero do Atleta ───────────────────────────
   const availableCategories = useMemo(() => {

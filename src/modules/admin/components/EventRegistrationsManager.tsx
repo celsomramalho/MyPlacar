@@ -47,6 +47,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const categories = event.categories || [];
 
   const [searchName, setSearchName] = useState('');
+  const [registrationGroup, setRegistrationGroup] = useState<'confirmed' | 'awaiting' | 'pre' | 'inactive'>('confirmed');
   const [isAdding, setIsAdding] = useState(false);
   const [editingPin, setEditingPin] = useState<string | null>(null);
   const [expandedRegistrationEmail, setExpandedRegistrationEmail] = useState<string | null>(
@@ -55,6 +56,21 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const [isSyncingMP, setIsSyncingMP] = useState(false);
   const [isFixingIds, setIsFixingIds] = useState(false);
 
+  const activeRegistrationEntries = useMemo(
+    () => entries.filter((entry) => !entry.disabled && entry.paymentStatus !== 'Cancelado'),
+    [entries],
+  );
+  const hasReceipt = (entry: TournamentEntry) => Boolean(entry.payments?.some((payment) => payment.receiptUrl));
+  const isConfirmedEntry = (entry: TournamentEntry) =>
+    entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || entry.paymentStatus === 'Isento' ||
+    ((event.registrationFee ?? 0) === 0 && (event.extraCategoryFee ?? 0) === 0 && entry.paymentStatus !== 'Cancelado');
+  const registrationGroupCounts = {
+    confirmed: activeRegistrationEntries.filter(isConfirmedEntry).length,
+    awaiting: activeRegistrationEntries.filter((entry) => !isConfirmedEntry(entry) && hasReceipt(entry)).length,
+    pre: activeRegistrationEntries.filter((entry) => !isConfirmedEntry(entry) && !hasReceipt(entry)).length,
+    inactive: entries.filter((entry) => entry.disabled || entry.paymentStatus === 'Cancelado').length,
+  };
+
   const pairsById = useMemo(() => {
     const map = new Map<string, TournamentPair>();
     (event.pairs || []).forEach((p) => map.set(p.id, p));
@@ -62,7 +78,14 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   }, [event.pairs]);
 
   const filteredEntries = useMemo(() => {
-    if (!searchName.trim()) return entries;
+    const groupEntries = entries.filter((entry) => {
+      if (registrationGroup === 'inactive') return entry.disabled || entry.paymentStatus === 'Cancelado';
+      if (entry.disabled || entry.paymentStatus === 'Cancelado') return false;
+      if (registrationGroup === 'confirmed') return isConfirmedEntry(entry);
+      if (registrationGroup === 'awaiting') return !isConfirmedEntry(entry) && hasReceipt(entry);
+      return !isConfirmedEntry(entry) && !hasReceipt(entry);
+    });
+    if (!searchName.trim()) return groupEntries;
     const term = searchName.toLowerCase().trim();
     const cleanNumericTerm = term.replace(/^[#0]+/, '') || term;
 
@@ -70,7 +93,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     const txidMatch = term.match(/i(\d+)p/i);
     const txidRegNum = txidMatch ? txidMatch[1].replace(/^0+/, '') : null;
 
-    return entries.filter((e) => {
+    return groupEntries.filter((e) => {
       const regId = e.registrationId;
       const regIdStr = regId != null ? String(regId) : '';
       const formattedRegId = formatRegistrationId(regId).toLowerCase();
@@ -94,7 +117,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         (e.partnerName || '').toLowerCase().includes(term)
       );
     });
-  }, [entries, searchName]);
+  }, [entries, searchName, registrationGroup, event.registrationFee, event.extraCategoryFee]);
 
   const handleToggleCheckIn = async (entry: TournamentEntry) => {
     if (isReadOnly) return;
@@ -937,6 +960,29 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                 </button>
               )}
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                ['confirmed', 'Confirmados', registrationGroupCounts.confirmed, 'border-emerald-300 bg-emerald-100 text-emerald-800'],
+                ['awaiting', 'Ag. confirmação', registrationGroupCounts.awaiting, 'border-amber-300 bg-amber-100 text-amber-800'],
+                ['pre', 'Pré-inscritos', registrationGroupCounts.pre, 'border-sky-300 bg-sky-100 text-sky-800'],
+                ['inactive', 'Cancel./desat.', registrationGroupCounts.inactive, 'border-slate-300 bg-slate-200 text-slate-700'],
+              ] as const).map(([group, label, count, activeClasses]) => (
+                <button
+                  key={group}
+                  type="button"
+                  onClick={() => setRegistrationGroup(group)}
+                  aria-pressed={registrationGroup === group}
+                  className={`flex min-w-0 items-center justify-between gap-1 rounded-xl border px-2.5 py-2 text-[10px] font-black transition-colors ${
+                    registrationGroup === group
+                      ? activeClasses
+                      : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="truncate">{label}</span>
+                  <span>{count}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1289,7 +1335,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         ) : filteredEntries.length === 0 ? (
           <div className="p-10 text-center space-y-2">
             <Search className="mx-auto text-slate-300" size={32} />
-            <p className="text-sm font-bold text-slate-400">Nenhum participante encontrado para "{searchName}".</p>
+            <p className="text-sm font-bold text-slate-400">{searchName ? `Nenhum participante encontrado para "${searchName}" nesta seção.` : 'Nenhuma inscrição nesta seção.'}</p>
             <button
               type="button"
               onClick={() => setSearchName('')}

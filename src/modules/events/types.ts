@@ -338,6 +338,8 @@ export interface TournamentEvent {
   bracketDrawType?: DrawTypeOption;
   matchDrawType?: DrawTypeOption;
   showRegisteredParticipants?: boolean;
+  /** Onde participantes podem formar duplas. Ausente em eventos antigos: usa allowUserTeamFormation legado. */
+  teamFormationMode?: 'none' | 'registration' | 'event' | 'registration_and_event';
   allowUserTeamFormation?: boolean;
   allowUserScoreEntry?: boolean;
   /** Permite que qualquer usuário inscrito inscreva parceiros não cadastrados (inscrição simplificada) */
@@ -354,6 +356,13 @@ export interface TournamentEvent {
   regulationFileName?: string;
   information?: string;
 }
+
+export type TeamFormationMode = NonNullable<TournamentEvent['teamFormationMode']>;
+
+/** Mantém eventos antigos funcionando até que o administrador escolha um modo novo. */
+export const resolveTeamFormationMode = (
+  event: Pick<TournamentEvent, 'teamFormationMode' | 'allowUserTeamFormation'>,
+): TeamFormationMode => event.teamFormationMode ?? (event.allowUserTeamFormation ? 'registration_and_event' : 'none');
 
 export interface PaymentItem {
   id: string;
