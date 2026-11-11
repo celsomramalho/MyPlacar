@@ -90,27 +90,28 @@ export const EventDashboardView: React.FC<Props> = ({
   entries.forEach((e) => {
     // b) a soma valor devido é a soma do valor devido de todos os inscritos
     const entryDue = e.dueAmount ?? (event.registrationFee || 0);
-    const isConfirmed = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
+    const isEntryConfirmed = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
     const isIsento = e.paymentStatus === 'Isento';
 
-    const sumPayments =
-      e.payments && e.payments.length > 0
-        ? e.payments.reduce((acc, p) => acc + (p.amount || 0), 0)
-        : e.paidAmount || 0;
+    const hasPaymentHistory = Boolean(e.payments?.length);
+    const hasExplicitPaymentStatuses = Boolean(e.payments?.some((p) => Boolean(p.status)));
+    const sumPayments = hasPaymentHistory
+      ? e.payments!.reduce((acc, p) => {
+          const isConfirmedPayment = p.status === 'Confirmado' || p.status === 'approved' || p.status === 'Pago';
+          const isLegacyConfirmedPayment = !p.status && isEntryConfirmed && !hasExplicitPaymentStatuses;
+          return acc + (isConfirmedPayment || isLegacyConfirmedPayment ? (p.amount || 0) : 0);
+        }, 0)
+      : e.paidAmount || 0;
 
     // c) a soma valor pago é a soma do valor pago com status confirmado
-    const entryPaid = isConfirmed
-      ? sumPayments > 0
-        ? sumPayments
-        : e.paidAmount ?? entryDue
-      : 0;
+    const entryPaid = hasPaymentHistory
+      ? sumPayments > 0 ? sumPayments : hasExplicitPaymentStatuses ? 0 : isEntryConfirmed ? e.paidAmount ?? entryDue : 0
+      : isEntryConfirmed ? e.paidAmount ?? entryDue : 0;
 
     // d) a soma valor pendente é a soma do valor pendente de todos os inscritos
     const entryPending = isIsento
       ? 0
-      : isConfirmed
-      ? Math.max(0, entryDue - entryPaid)
-      : entryDue;
+      : Math.max(0, entryDue - entryPaid);
 
     totalDue += entryDue;
     totalPaid += entryPaid;
@@ -125,7 +126,11 @@ export const EventDashboardView: React.FC<Props> = ({
     !entry.payments?.some((payment) => payment.receiptUrl) &&
     entry.paymentStatus !== 'Confirmado' && entry.paymentStatus !== 'Pago' && entry.paymentStatus !== 'Isento'
   ).length;
-  const refusedPaymentsCount = entries.filter((entry) => entry.paymentStatus === 'Recusado').length;
+  const refusedPaymentsCount = entries.filter((entry) =>
+    entry.paymentStatus === 'Recusado' || entry.payments?.some((payment) =>
+      Boolean(payment.receiptUrl) && (payment.status === 'Recusado' || payment.status === 'rejected' || payment.status === 'Cancelado' || payment.status === 'cancelled')
+    )
+  ).length;
 
   const todayStr = getTodayDateStr();
   const pairsById = React.useMemo(() => {

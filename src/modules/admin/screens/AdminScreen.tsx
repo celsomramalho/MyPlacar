@@ -3,6 +3,7 @@ import { Upload, Loader2, Sparkles, Plus, Trash2, ChevronDown, Save, Edit2, Data
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { deleteAdminEvent, fetchAdminEvents, saveAdminEvent } from '@infra/firebase/adminEvents';
+import { updateEventEntry } from '@infra/firebase/events';
 import {
   fetchAdminIconCatalog,
   type FirebaseAdminCategoryIcon,
@@ -752,6 +753,28 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const db = getDb();
     if (!db) return;
     try {
+      const previousEntries = selectedDashboardEvent?.pin === updatedEvent.pin
+        ? selectedDashboardEvent.entries || []
+        : [];
+      const previousByPin = new Map(previousEntries.map((entry) => [entry.pin, entry]));
+      const changedPaymentEntries = (updatedEvent.entries || []).filter((entry) => {
+        const previous = previousByPin.get(entry.pin);
+        return previous && (
+          previous.paymentStatus !== entry.paymentStatus ||
+          JSON.stringify(previous.payments || []) !== JSON.stringify(entry.payments || []) ||
+          previous.paidAmount !== entry.paidAmount
+        );
+      });
+
+      await Promise.all(changedPaymentEntries.map((entry) => {
+        if (!entry.email) throw new Error(`A inscrição ${entry.registrationId || entry.pin} não tem e-mail para localizar o cadastro no Firebase.`);
+        return updateEventEntry(db, updatedEvent.pin, entry.email, {
+          paymentStatus: entry.paymentStatus,
+          payments: entry.payments,
+          paidAmount: entry.paidAmount,
+        });
+      }));
+
       await saveAdminEvent(db, updatedEvent, userProfile?.email);
       // Update eventList without entries to keep the list clean
       const { entries: _entries, ...eventWithoutEntries } = updatedEvent;
