@@ -27,6 +27,7 @@ import type { FirebaseUserByPin } from '@infra/firebase/users';
 import type { Firestore } from 'firebase/firestore';
 import { useRegistrationForm } from '../hooks/useRegistrationForm';
 import { useRegistrationPayment } from '../hooks/useRegistrationPayment';
+import { reconcileLegacyPendingPaymentAmounts } from '../engine/pricingEngine';
 import { loadMercadoPagoSecurityScript } from '@modules/events/services/mercadoPagoCheckout';
 import { getRegistrationPeriodStatus } from '@modules/events/services/eventRegistrationPeriod';
 import type { RegistrationStep } from '../types';
@@ -153,14 +154,13 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
   // ─── Pagamentos e Comprovantes Anteriores ────────────────────────────────────
   const existingPayments: PaymentItem[] = useMemo(() => {
+    let payments: PaymentItem[];
     if (localPaymentsOverride) {
-      return localPaymentsOverride;
-    }
-    if (Array.isArray(entry.payments) && entry.payments.length > 0) {
-      return entry.payments;
-    }
-    if ((entry as any)?.receiptUrl) {
-      return [
+      payments = localPaymentsOverride;
+    } else if (Array.isArray(entry.payments) && entry.payments.length > 0) {
+      payments = entry.payments;
+    } else if ((entry as any)?.receiptUrl) {
+      payments = [
         {
           id: `legacy-${entry.pin || Date.now()}`,
           amount: entry.paidAmount || entry.dueAmount || 0,
@@ -171,9 +171,12 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
           status: entry.paymentStatus || 'pending',
         },
       ];
+    } else {
+      payments = [];
     }
-    return [];
-  }, [entry.payments, entry.paidAmount, entry.dueAmount, entry.joinedAt, entry.pin, entry.paymentStatus, localPaymentsOverride]);
+
+    return reconcileLegacyPendingPaymentAmounts(payments, form.pricing.dueAmount);
+  }, [entry.payments, entry.paidAmount, entry.dueAmount, entry.joinedAt, entry.pin, entry.paymentStatus, localPaymentsOverride, form.pricing.dueAmount]);
 
   const totalPaid = useMemo(() => {
     const entryIsConfirmed = entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago';
@@ -184,17 +187,24 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     }, 0);
   }, [existingPayments, entry.paymentStatus]);
 
+  // Pagamentos pendentes também representam valores que o atleta já enviou.
+  // Ao adicionar categorias, cobrar novamente o total devido duplicaria esses valores.
+  const totalSubmitted = useMemo(
+    () => existingPayments.reduce((acc, payment) => acc + (payment.amount || 0), 0),
+    [existingPayments]
+  );
+
   const currentDueAmount = form.pricing.dueAmount;
   const teamFormationMode = resolveTeamFormationMode(event);
   const canFormTeamAtRegistration = teamFormationMode === 'registration' || teamFormationMode === 'registration_and_event';
-  const pendingAmount = Math.max(0, currentDueAmount - totalPaid);
+  const pendingAmount = Math.max(0, currentDueAmount - totalSubmitted);
   const isFullyPaid = currentDueAmount > 0 && totalPaid >= currentDueAmount;
   const hasExistingReceipt = existingPayments.some((p) => Boolean(p.receiptUrl));
   const isManualPaymentEvent = String(event.paymentType || 'manual').trim().toLowerCase() === 'manual';
 
   // Comprovante é obrigatório se: o evento exige (requiresReceipt !== false), pagamento manual, não é gratuito e ainda há saldo pendente ou sem comprovante
   const eventRequiresReceipt = event.requiresReceipt !== false; // default true
-  const requiresReceipt = isManualPaymentEvent && eventRequiresReceipt && !form.pricing.isFree && (!isFullyPaid || !hasExistingReceipt);
+  const requiresReceipt = isManualPaymentEvent && eventRequiresReceipt && !form.pricing.isFree && (pendingAmount > 0 || !hasExistingReceipt);
 
   // ── Formação de Time ─────────────────────────────────────────────────────────
   const handleFormTeam = useCallback(async (categoryId: string, partnerEntry: TournamentEntry) => {
@@ -748,6 +758,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             hasExistingReceipt={hasExistingReceipt}
             existingPayments={existingPayments}
             totalPaid={totalPaid}
+            totalSubmitted={totalSubmitted}
             pendingAmount={pendingAmount}
             isAdmin={isAdmin}
             onUpdatePaymentItemStatus={!readOnly ? handleUpdatePaymentItemStatus : undefined}

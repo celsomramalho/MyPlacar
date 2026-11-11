@@ -15,6 +15,34 @@ import type {
   PendingBalanceResult,
 } from '../types';
 
+/** Corrige o valor duplicado gravado pelo fluxo antigo ao adicionar categorias. */
+export function reconcileLegacyPendingPaymentAmounts(
+  payments: PaymentItem[] = [],
+  dueAmount: number
+): PaymentItem[] {
+  const latestIndex = payments.length - 1;
+  const latest = payments[latestIndex];
+  const earlierSubmitted = payments
+    .slice(0, latestIndex)
+    .reduce((sum, payment) => sum + (payment.amount || 0), 0);
+
+  if (
+    latestIndex > 0 &&
+    latest &&
+    (latest.status === 'pending' || latest.status === 'Aguardando Confirmação') &&
+    latest.amount === dueAmount &&
+    earlierSubmitted > 0 &&
+    earlierSubmitted < dueAmount
+  ) {
+    return payments.map((payment, index) =>
+      index === latestIndex
+        ? { ...payment, amount: dueAmount - earlierSubmitted }
+        : payment
+    );
+  }
+  return payments;
+}
+
 /**
  * Calcula o valor devido para uma inscrição com base na quantidade de categorias
  * selecionadas e nas regras financeiras configuradas no evento.

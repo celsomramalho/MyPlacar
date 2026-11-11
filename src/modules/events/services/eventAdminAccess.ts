@@ -33,6 +33,19 @@ export const isCoAdminOfEvent = (
   return (event.coAdminPins || []).map(normalizePin).includes(pin);
 };
 
+export const isEventHelper = (
+  event: Pick<TournamentEvent, 'helperPins'>,
+  userPin?: string | null,
+) => {
+  const pin = normalizePin(userPin);
+  return Boolean(pin && (event.helperPins || []).map(normalizePin).includes(pin));
+};
+
+export const canUseEventOperationalAccess = (
+  event: Pick<TournamentEvent, 'coAdminPins' | 'helperPins'>,
+  userPin?: string | null,
+) => isCoAdminOfEvent(event, userPin) || isEventHelper(event, userPin);
+
 export const isJudgeOfEvent = (
   event: Pick<TournamentEvent, 'judgePins'>,
   userPin?: string | null,
@@ -43,12 +56,12 @@ export const isJudgeOfEvent = (
 };
 
 export const canUseEventAdminAccess = (
-  event: Pick<TournamentEvent, 'active' | 'coAdminPins' | 'startDate' | 'endDate'>,
+  event: Pick<TournamentEvent, 'active' | 'coAdminPins' | 'helperPins' | 'startDate' | 'endDate'>,
   userPin?: string | null,
 ) => {
   const pin = normalizePin(userPin);
   if (!pin) return false;
-  return (event.coAdminPins || []).map(normalizePin).includes(pin);
+  return canUseEventOperationalAccess(event, pin);
 };
 
 export const canEditTournamentEvent = (

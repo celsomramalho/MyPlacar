@@ -33,6 +33,8 @@ interface FirebaseTournamentEntry {
   joinedAt: number;
   gender?: 'M' | 'F';
   checkedIn?: boolean;
+  checkInDate?: string;
+  checkInDates?: string[];
   categoryIds?: string[];
   dueAmount?: number;
   paidAmount?: number;
@@ -97,6 +99,7 @@ export interface FirebaseTournamentEvent {
   matches?: FirebaseTournamentMatch[];
   interdictedCourts?: string[];
   coAdminPins?: string[];
+  helperPins?: string[];
   judgePins?: string[];
   regulationUrl?: string;
   regulationFileName?: string;
@@ -336,6 +339,25 @@ export const saveAdminEventEntry = async (
       console.error('Falha no fallback server-side de salvamento:', fetchErr);
       throw new Error(fetchErr instanceof Error ? fetchErr.message : 'Falha na conexão com o servidor ao salvar inscrição.');
     }
+  }
+};
+
+/** Atualiza exclusivamente os campos de check-in com validação do papel no servidor. */
+export const saveAdminEventCheckIn = async (
+  eventPin: string,
+  adminEmail: string,
+  adminPin: string,
+  entry: Pick<FirebaseTournamentEntry, 'email' | 'pin' | 'checkedIn' | 'checkInDate' | 'checkInDates'>,
+) => {
+  const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
+  const response = await fetch(`${baseUrl}/api/admin-entry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'check-in', eventPin, adminEmail, adminPin, entry }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Não foi possível salvar o check-in.');
   }
 };
 

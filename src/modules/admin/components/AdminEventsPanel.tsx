@@ -6,6 +6,7 @@ import { ensureEventEntriesRegistrationIds, fetchEventByPin, fetchEventEntries, 
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { EventDashboardView } from './EventDashboardView';
 import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
+import { canUseEventAdminAccess } from '@modules/events/services/eventAdminAccess';
 import { AdminEventCard, EventConfigForm } from './events';
 
 interface AdminEventsPanelProps {
@@ -19,6 +20,7 @@ interface AdminEventsPanelProps {
   bannerInputRef: RefObject<HTMLInputElement>;
   activeSports?: FirebaseAdminSportIcon[];
   adminEmail?: string;
+  adminPin?: string;
   onCreateEvent: () => void;
   onStartEditEvent?: (event: TournamentEvent) => void;
   onChangeEditingEvent: (event: TournamentEvent | null) => void;
@@ -38,6 +40,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   bannerInputRef,
   activeSports = [],
   adminEmail,
+  adminPin,
   onCreateEvent,
   onStartEditEvent,
   onChangeEditingEvent,
@@ -64,6 +67,9 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   const [judgeNamesByPin, setJudgeNamesByPin] = useState<Record<string, string>>({});
   const [initialConfigBlock, setInitialConfigBlock] = useState<string | undefined>(undefined);
   const isPrimaryAdmin = isPrimaryAdminEmail(adminEmail);
+  const visibleEventList = isPrimaryAdmin
+    ? eventList
+    : eventList.filter((event) => canUseEventAdminAccess(event, adminPin));
   const isReadOnlyRegistration = !isPrimaryAdmin;
   const canManageEventAdmins = isPrimaryAdmin;
 
@@ -121,6 +127,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             pairs: (freshEventDoc.pairs as any) || freshestEvent.pairs || [],
             matches: (freshEventDoc.matches as any) || freshestEvent.matches,
             coAdminPins: freshEventDoc.coAdminPins || freshestEvent.coAdminPins,
+            helperPins: freshEventDoc.helperPins || freshestEvent.helperPins,
             judgePins: freshEventDoc.judgePins || freshestEvent.judgePins,
             regulationUrl: freshEventDoc.regulationUrl || freshestEvent.regulationUrl,
             regulationFileName: freshEventDoc.regulationFileName || freshestEvent.regulationFileName,
@@ -157,6 +164,8 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           joinedAt: fe.joinedAt,
           gender: fe.gender,
           checkedIn: fe.checkedIn,
+          checkInDate: fe.checkInDate,
+          checkInDates: fe.checkInDates,
           categoryIds: fe.categoryIds || [],
           phone: fe.phone || '',
           shirtSize: fe.shirtSize || 'M',
@@ -309,6 +318,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         }}
         onUpdateEvent={handleUpdateDashboardEvent}
         adminEmail={adminEmail}
+        adminPin={adminPin}
       />
     );
   }
@@ -324,7 +334,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             </div>
             <h3 className="font-black text-black tracking-tight leading-none">Gestão de eventos</h3>
           </div>
-          <button
+          {isPrimaryAdmin && <button
             onClick={() => {
               setSelectedDashboardEvent(null);
               onCreateEvent();
@@ -332,7 +342,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             className="p-2 bg-amber-500 text-white rounded-xl active:scale-90 shadow-sm cursor-pointer"
           >
             <Plus size={20} />
-          </button>
+          </button>}
         </div>
 
         {/* Lista de Eventos */}
@@ -344,17 +354,17 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
                 {isLoadingEntries ? 'Carregando inscrições...' : 'Carregando eventos...'}
               </span>
             </div>
-          ) : eventList.length === 0 ? (
+          ) : visibleEventList.length === 0 ? (
             <div className="bg-slate-50 rounded-3xl p-10 text-center border-2 border-dashed border-slate-200">
               <p className="text-slate-400 font-bold text-sm">Nenhum evento criado ainda.</p>
             </div>
           ) : (
-            eventList.map((event) => (
+            visibleEventList.map((event) => (
               <AdminEventCard
                 key={event.pin}
                 event={event}
                 onSelect={handleSelectDashboardEvent}
-                onDelete={onDeleteEvent}
+                onDelete={isPrimaryAdmin ? onDeleteEvent : undefined}
               />
             ))
           )}

@@ -15,6 +15,7 @@ import {
   getTodayDateStr,
 } from '@modules/events/services/eventRegistrationPeriod';
 import { EventRegistrationForm } from '@modules/events/domain/registration';
+import { reconcileLegacyPendingPaymentAmounts } from '@modules/events/domain/registration/engine/pricingEngine';
 import { useUI } from '@modules/ui';
 import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
 
@@ -48,7 +49,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const categories = event.categories || [];
 
   const [searchName, setSearchName] = useState('');
-  const [registrationGroup, setRegistrationGroup] = useState<'confirmed' | 'awaiting' | 'pre' | 'inactive'>('confirmed');
+  const [registrationGroup, setRegistrationGroup] = useState<'all' | 'confirmed' | 'awaiting' | 'pre' | 'inactive'>('confirmed');
   const [isAdding, setIsAdding] = useState(false);
   const [editingPin, setEditingPin] = useState<string | null>(null);
   const [expandedRegistrationEmail, setExpandedRegistrationEmail] = useState<string | null>(
@@ -80,6 +81,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
   const filteredEntries = useMemo(() => {
     const groupEntries = entries.filter((entry) => {
+      if (registrationGroup === 'all') return true;
       if (registrationGroup === 'inactive') return entry.disabled || entry.paymentStatus === 'Cancelado';
       if (entry.disabled || entry.paymentStatus === 'Cancelado') return false;
       if (registrationGroup === 'confirmed') return isConfirmedEntry(entry);
@@ -946,7 +948,11 @@ export const EventRegistrationsManager: React.FC<Props> = ({
               <input
                 type="text"
                 value={searchName}
-                onChange={(e) => setSearchName(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSearchName(value);
+                  if (value.trim()) setRegistrationGroup('all');
+                }}
                 placeholder="Pesquisar por nome ou ID da inscrição..."
                 className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
               />
@@ -1351,7 +1357,13 @@ export const EventRegistrationsManager: React.FC<Props> = ({
               const entryCategories = categories.filter((c) =>
                 entry.categoryIds?.includes(c.id)
               );
-              const entryPaid = entry.payments?.reduce((acc, p) => acc + p.amount, 0) ?? (entry.paidAmount ?? 0);
+              const displayPayments = reconcileLegacyPendingPaymentAmounts(
+                entry.payments || [],
+                entry.dueAmount ?? event.registrationFee ?? 0
+              );
+              const entryPaid = displayPayments.length
+                ? displayPayments.reduce((acc, payment) => acc + (payment.amount || 0), 0)
+                : (entry.paidAmount ?? 0);
               const isExpanded = expandedRegistrationEmail === entry.email;
               const todayStr = getTodayDateStr();
               const isTournamentActive = isTournamentPeriodActive(event);
@@ -1480,8 +1492,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
                     {/* Lado Direito: Check-in + Inscrição_ID + Botão de Ação / Chevron */}
                     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                      {/* Check-in habilitado para o admin marcar */}
-                      <button
+                      {/* Check-in só aparece nos dias do torneio */}
+                      {isTournamentActive && <button
                         type="button"
                         disabled={isReadOnly}
                         onClick={async (e) => {
@@ -1504,7 +1516,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                       >
                         <CheckInPinIcon checked={isCheckedIn} size={19} />
                         <span className="text-[11px] hidden sm:inline font-bold">Check-in</span>
-                      </button>
+                      </button>}
 
                       <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
                         {formatRegistrationId(entry.registrationId)}

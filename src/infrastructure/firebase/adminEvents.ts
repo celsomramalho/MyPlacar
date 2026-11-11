@@ -56,6 +56,7 @@ export const saveAdminEvent = async (
   db: Firestore,
   event: FirebaseAdminTournamentEvent,
   adminEmail?: string,
+  adminPin?: string,
 ) => {
   // Strip entries array from main event document (entries are saved in events/{pin}/entries subcollection)
   const { entries: _entries, ...eventWithoutEntries } = event;
@@ -110,7 +111,7 @@ export const saveAdminEvent = async (
       const response = await fetch(`${baseUrl}/api/admin-save-event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event, adminEmail }),
+        body: JSON.stringify({ event, adminEmail, adminPin }),
       });
 
       if (!response.ok) {

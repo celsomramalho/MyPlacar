@@ -76,9 +76,58 @@ export default async function handler(req, res) {
 
   try {
     const db = admin.firestore();
-    const isAuthorized = await checkAdminAuthorization(db, adminEmail, eventPin);
+    let isAuthorized = await checkAdminAuthorization(db, adminEmail, eventPin);
+    let isHelperCheckIn = false;
+    if (!isAuthorized && action === "check-in") {
+      const cleanEmail = String(adminEmail).toLowerCase().trim();
+      const requestedPin = String(body.adminPin || "").toUpperCase().trim();
+      const [userSnap, eventSnap] = await Promise.all([
+        db.collection("users").doc(cleanEmail).get(),
+        db.collection("events").doc(eventPin).get(),
+      ]);
+      const storedPin = userSnap.exists ? String(userSnap.data()?.pin || "").toUpperCase().trim() : "";
+      const helperPins = eventSnap.exists ? (eventSnap.data()?.helperPins || []).map((pin) => String(pin).toUpperCase().trim()) : [];
+      isHelperCheckIn = Boolean(requestedPin && requestedPin === storedPin && helperPins.includes(requestedPin) && eventSnap.data()?.active === true);
+      isAuthorized = isHelperCheckIn;
+    }
     if (!isAuthorized) {
       return res.status(403).json({ error: "Acesso negado: usuário não é administrador deste evento" });
+    }
+
+    if (action === "check-in") {
+      const entry = body.entry || {};
+      const cleanEmail = String(entry.email || "").toLowerCase().trim();
+      if (!cleanEmail || typeof entry.checkedIn !== "boolean") {
+        return res.status(400).json({ error: "Dados de check-in inválidos" });
+      }
+      const eventSnap = await db.collection("events").doc(eventPin).get();
+      const eventData = eventSnap.exists ? eventSnap.data() : null;
+      const dateParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(new Date());
+      const datePart = (type) => dateParts.find((part) => part.type === type)?.value || "";
+      const today = `${datePart("year")}-${datePart("month")}-${datePart("day")}`;
+      const startDate = eventData?.tournamentStartDate;
+      const endDate = eventData?.tournamentEndDate;
+      const isWithinTournamentDates = startDate || endDate
+        ? (!startDate || today >= startDate) && (!endDate || today <= endDate)
+        : eventData?.eventStatus === "Pronto para check-in" || eventData?.eventStatus === "Em andamento";
+      if (!eventData || eventData.active === false || !isWithinTournamentDates) {
+        return res.status(403).json({ error: "Check-in indisponível fora do período do torneio" });
+      }
+      const entryRef = db.collection("events").doc(eventPin).collection("entries").doc(cleanEmail);
+      const existingEntry = await entryRef.get();
+      if (!existingEntry.exists) return res.status(404).json({ error: "Inscrição não localizada" });
+      const previousDates = Array.isArray(existingEntry.data()?.checkInDates) ? existingEntry.data().checkInDates : [];
+      const checkInDates = entry.checkedIn
+        ? Array.from(new Set([...previousDates.filter((date) => typeof date === "string"), today])).slice(-40)
+        : previousDates.filter((date) => typeof date === "string" && date !== today).slice(-40);
+      await entryRef.set({
+        checkedIn: entry.checkedIn,
+        checkInDate: entry.checkedIn ? today : null,
+        checkInDates,
+      }, { merge: true });
+      return res.status(200).json({ success: true });
     }
 
     // ───────────────────────────────────────────────

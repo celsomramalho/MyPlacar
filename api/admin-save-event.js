@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Firebase Admin não inicializado" });
   }
 
-  const { event, adminEmail } = req.body || {};
+  const { event, adminEmail, adminPin: suppliedAdminPin } = req.body || {};
 
   if (!event || !event.pin || !event.name) {
     return res.status(400).json({ error: "Dados do evento inválidos ou incompletos" });
@@ -72,17 +72,31 @@ export default async function handler(req, res) {
     // Validar se é admin global ou co-admin deste evento
     const existingEventDoc = await db.collection("events").doc(event.pin).get();
     const existingEventData = existingEventDoc.exists ? existingEventDoc.data() : null;
-
+    const cleanEmail = String(adminEmail).toLowerCase().trim();
+    const userDoc = await db.collection("users").doc(cleanEmail).get();
+    const isAdminUser = (userDoc.exists && userDoc.data()?.isAdmin === true) || cleanEmail === "celsomramalho@gmail.com";
     const userPin = (userDoc.exists && userDoc.data()?.pin ? String(userDoc.data().pin) : '').toUpperCase().trim();
     const coAdminPins = ((existingEventData?.coAdminPins) || []).map(p => String(p).toUpperCase().trim());
     const isCoAdmin = Boolean(userPin && coAdminPins.includes(userPin) && existingEventData?.active === true);
+    const helperPins = ((existingEventData?.helperPins) || []).map(p => String(p).toUpperCase().trim());
+    const requestPin = String(suppliedAdminPin || '').toUpperCase().trim();
+    const isHelper = Boolean(userPin && requestPin === userPin && helperPins.includes(userPin) && existingEventData?.active === true);
 
-    if (!isAdminUser && !isCoAdmin) {
+    if (!isAdminUser && !isCoAdmin && !isHelper) {
       return res.status(403).json({ error: "Acesso negado: usuário não é administrador do evento" });
     }
 
     // Remover entries do documento principal (salvo em subcoleção)
     let { entries: _entries, ...eventWithoutEntries } = event;
+
+    // Auxiliares podem salvar somente mudanças operacionais de partidas e quadras.
+    if (isHelper && !isAdminUser && !isCoAdmin && existingEventData) {
+      eventWithoutEntries = {
+        ...existingEventData,
+        matches: eventWithoutEntries.matches ?? existingEventData.matches,
+        pairs: eventWithoutEntries.pairs ?? existingEventData.pairs,
+      };
+    }
 
     // Se for co-admin (e não admin global), preserva blocos 1, 2 e 3 (edição exclusiva do admin global)
     if (isCoAdmin && !isAdminUser && existingEventData) {
@@ -110,6 +124,7 @@ export default async function handler(req, res) {
         rankingMatchesPerTeam: existingEventData.rankingMatchesPerTeam,
         groupsPerBracket: existingEventData.groupsPerBracket,
         coAdminPins: existingEventData.coAdminPins,
+        helperPins: eventWithoutEntries.helperPins ?? existingEventData.helperPins,
         showRegisteredParticipants: existingEventData.showRegisteredParticipants,
         // Bloco 3: Valores
         registrationFee: existingEventData.registrationFee,

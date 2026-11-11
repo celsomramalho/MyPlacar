@@ -34,6 +34,7 @@ export interface CategoryEntriesTabProps {
   onGenerateTemporaryEntries?: () => void;
   onUpdateEvent: (event: TournamentEvent) => void;
   onToggleCheckIn: (entry: TournamentEntry) => void;
+  canCheckInParticipants?: boolean;
 }
 
 export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
@@ -61,6 +62,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   onGenerateTemporaryEntries,
   onUpdateEvent,
   onToggleCheckIn,
+  canCheckInParticipants = true,
 }) => {
   const isSuper8Like = isSuper8 || isSuper8Duplas;
   const isSuper8Rotating = isSuper8Like && category.scoreTarget !== 'Time';
@@ -285,7 +287,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                     onToggleSelect={onToggleEntrySelection}
                     onToggleExpanded={() => setExpandedStatsEmail(isStatsExpanded ? null : (entry.email || entry.pin))}
                     onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
-                    checkInStatus={{ checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: isReadOnly || !tournamentActive, onToggle: onToggleCheckIn }}
+                    checkInStatus={canCheckInParticipants && tournamentActive ? { checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: false, onToggle: onToggleCheckIn } : undefined}
                   />
                   {isExpanded && (
                     <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
@@ -356,7 +358,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                   onToggleSelect={onToggleEntrySelection}
                   onToggleExpanded={() => setExpandedStatsEmail(isStatsExpanded ? null : (entry.email || entry.pin))}
                   onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
-                  checkInStatus={{ checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: isReadOnly || !tournamentActive, onToggle: onToggleCheckIn }}
+                  checkInStatus={canCheckInParticipants && tournamentActive ? { checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: false, onToggle: onToggleCheckIn } : undefined}
                 />
                 {isExpanded && (
                   <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">

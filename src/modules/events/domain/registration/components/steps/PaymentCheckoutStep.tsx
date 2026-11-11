@@ -50,6 +50,7 @@ export interface PaymentCheckoutStepProps {
   hasExistingReceipt?: boolean;
   existingPayments?: PaymentItem[];
   totalPaid?: number;
+  totalSubmitted?: number;
   pendingAmount?: number;
   isAdmin?: boolean;
   onUpdatePaymentItemStatus?: (
@@ -68,11 +69,13 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
   hasExistingReceipt = false,
   existingPayments = [],
   totalPaid = 0,
+  totalSubmitted = totalPaid,
   pendingAmount = 0,
   isAdmin = false,
   onUpdatePaymentItemStatus,
 }) => {
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
+  const isFullyPaid = pricing.dueAmount > 0 && totalPaid >= pricing.dueAmount;
 
   const handlePaymentStatusChange = async (
     paymentId: string,
@@ -155,17 +158,17 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-slate-400">
-              {totalPaid > 0 && pendingAmount > 0
+              {totalSubmitted > 0 && pendingAmount > 0
                 ? 'Diferença a pagar'
-                : totalPaid > 0 && pendingAmount === 0
+                : totalSubmitted > 0 && pendingAmount === 0
                 ? 'Saldo pendente'
                 : 'Total a pagar'}
             </span>
             <h4 className="text-2xl font-black text-slate-800">
               R${' '}
-              {(totalPaid > 0 && pendingAmount > 0
+              {(totalSubmitted > 0 && pendingAmount > 0
                 ? pendingAmount
-                : totalPaid > 0 && pendingAmount === 0
+                : totalSubmitted > 0 && pendingAmount === 0
                 ? 0
                 : pricing.dueAmount
               ).toFixed(2)}
@@ -339,7 +342,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
           event={event}
           entry={entry}
           amount={
-            totalPaid > 0 && pendingAmount > 0
+            totalSubmitted > 0
               ? pendingAmount
               : pricing.dueAmount
           }
@@ -441,7 +444,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
             : 'border-slate-200'
         }`}>
           <label className="text-xs font-black text-slate-700 block flex items-center gap-1">
-            {totalPaid > 0 && pendingAmount > 0
+            {totalSubmitted > 0 && pendingAmount > 0
               ? `Anexar comprovante da diferença (R$ ${pendingAmount.toFixed(2)})`
               : 'Anexar comprovante de pagamento'}
             {requiresReceipt && (
@@ -450,15 +453,22 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
           </label>
 
           {/* Se a inscrição está 100% quitada */}
-          {!requiresReceipt && hasExistingReceipt && !payment.manualReceiptFile && (
+          {!requiresReceipt && hasExistingReceipt && isFullyPaid && !payment.manualReceiptFile && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
               <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
               <span>Inscrição totalmente quitada pelos comprovantes anteriores. O envio de um novo arquivo é opcional.</span>
             </div>
           )}
 
+          {!requiresReceipt && hasExistingReceipt && !isFullyPaid && !payment.manualReceiptFile && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-800 flex items-center gap-2">
+              <AlertCircle size={16} className="text-amber-600 shrink-0" />
+              <span>Comprovantes enviados e aguardando confirmação do organizador.</span>
+            </div>
+          )}
+
           {/* Se precisa de comprovante da diferença */}
-          {requiresReceipt && pendingAmount > 0 && totalPaid > 0 && !payment.manualReceiptFile && (
+          {requiresReceipt && pendingAmount > 0 && totalSubmitted > 0 && !payment.manualReceiptFile && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-800 flex items-start gap-2">
               <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
               <div>
@@ -472,7 +482,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
           )}
 
           {/* Se é o primeiro comprovante obrigatório */}
-          {requiresReceipt && totalPaid === 0 && !payment.manualReceiptFile && (
+          {requiresReceipt && totalSubmitted === 0 && !payment.manualReceiptFile && (
             <p className="text-[11px] font-bold text-amber-700 flex items-center gap-1">
               <AlertCircle size={12} />
               Obrigatório para finalizar a inscrição

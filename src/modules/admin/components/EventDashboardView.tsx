@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ChevronDown,
@@ -19,6 +19,7 @@ import { EventRegistrationsManager } from './EventRegistrationsManager';
 import { EventFormedTeamsView } from './EventFormedTeamsView';
 import { EventSponsorsManager } from './EventSponsorsManager';
 import { EventPaymentsView } from './EventPaymentsView';
+import { EventHelpersManager } from './events/EventHelpersManager';
 import { calculateQueueState } from '@modules/events/domain/queue';
 import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 import { isEntryCheckedInToday, getTodayDateStr } from '@modules/events/services/eventRegistrationPeriod';
@@ -35,6 +36,7 @@ interface Props {
   event: TournamentEvent;
   activeSports: FirebaseAdminSportIcon[];
   adminEmail?: string;
+  adminPin?: string;
   onBackToEvents: () => void;
   onEditEventConfig: (initialBlock?: string) => void;
   onUpdateEvent: (updatedEvent: TournamentEvent) => void;
@@ -44,6 +46,7 @@ export const EventDashboardView: React.FC<Props> = ({
   event,
   activeSports,
   adminEmail,
+  adminPin,
   onBackToEvents,
   onEditEventConfig,
   onUpdateEvent,
@@ -142,25 +145,35 @@ export const EventDashboardView: React.FC<Props> = ({
   const checkedInCount = entries.filter((e) => isEntryCheckedInToday(e, event.matches, pairsById, todayStr)).length;
 
   const isPrimary = isPrimaryAdminEmail(adminEmail);
+  const isCoAdmin = !isPrimary && (event.coAdminPins || []).some((pin) => pin.toUpperCase().trim() === (adminPin || '').toUpperCase().trim());
+  const isHelper = !isPrimary && !isCoAdmin && (event.helperPins || []).some((pin) => pin.toUpperCase().trim() === (adminPin || '').toUpperCase().trim());
+  useEffect(() => {
+    if (isHelper && (activeTab === 'registrations' || activeTab === 'pending-payments')) setActiveTab('categories');
+  }, [isHelper, activeTab]);
   const isReadOnly = event.active !== true && !isPrimary;
 
   const safeUpdateEvent = (updated: TournamentEvent) => {
     if (isReadOnly) return;
+    if (isHelper) {
+      const allowedKeys = new Set(['matches', 'pairs', 'entries']);
+      const changedKeys = Object.keys(updated).filter((key) => (updated as any)[key] !== (event as any)[key]);
+      if (changedKeys.some((key) => !allowedKeys.has(key))) return;
+    }
     onUpdateEvent(updated);
   };
 
   const handleUpdateCategories = (newCategories: EventCategory[]) => {
-    if (isReadOnly) return;
+    if (isReadOnly || isHelper) return;
     onUpdateEvent({ ...event, categories: newCategories });
   };
 
   const handleUpdateEntries = (newEntries: TournamentEntry[]) => {
-    if (isReadOnly) return;
+    if (isReadOnly || isHelper) return;
     onUpdateEvent({ ...event, entries: newEntries });
   };
 
   const handleUpdateSponsors = (newSponsors: EventSponsor[]) => {
-    if (isReadOnly) return;
+    if (isReadOnly || isHelper) return;
     onUpdateEvent({ ...event, sponsors: newSponsors });
   };
 
@@ -191,6 +204,7 @@ export const EventDashboardView: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => setIsBlockMenuOpen((prev) => !prev)}
+                  disabled={isHelper}
                   className="w-10 h-10 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center hover:bg-slate-200 active:scale-95 transition-all cursor-pointer"
                   title="Acessar blocos do evento"
                 >
@@ -233,6 +247,7 @@ export const EventDashboardView: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => onEditEventConfig()}
+                disabled={isHelper}
                 className="w-10 h-10 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0 cursor-pointer"
                 title={isPrimaryAdminEmail(adminEmail) ? 'Editar cadastro do evento' : 'Visualizar cadastro do evento'}
               >
@@ -299,6 +314,7 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
           </button>
 
+          {!isHelper && <>
           {/* Card 2: Inscrições */}
           <button
             onClick={() => setActiveTab('registrations')}
@@ -330,6 +346,7 @@ export const EventDashboardView: React.FC<Props> = ({
               </p>
             </div>
           </button>
+          </>}
 
           {/* Card 3: Gerenciar fila */}
           <button
@@ -394,6 +411,7 @@ export const EventDashboardView: React.FC<Props> = ({
             </div>
           </button>
 
+          {!isHelper && <>
           {/* Card 4: Pagamentos */}
           <button
             onClick={() => setActiveTab('pending-payments')}
@@ -449,6 +467,7 @@ export const EventDashboardView: React.FC<Props> = ({
               </div>
             </div>
           </button>
+          </>}
 
           {/* Card 5: Check-ins Realizados */}
           <button
@@ -516,6 +535,16 @@ export const EventDashboardView: React.FC<Props> = ({
         </div>
       </div>
 
+      {(isPrimary || isCoAdmin) && (
+        <EventHelpersManager
+          helperPins={event.helperPins || []}
+          coAdminPins={event.coAdminPins || []}
+          canManage={!isReadOnly}
+          onAdd={(pin) => safeUpdateEvent({ ...event, helperPins: [...new Set([...(event.helperPins || []), pin])] })}
+          onRemove={(pin) => safeUpdateEvent({ ...event, helperPins: (event.helperPins || []).filter((item) => item.toUpperCase().trim() !== pin) })}
+        />
+      )}
+
       {/* Tab Content */}
       {activeTab === 'categories' && (
         <EventCategoriesManager
@@ -524,11 +553,13 @@ export const EventDashboardView: React.FC<Props> = ({
           onUpdateCategories={handleUpdateCategories}
           onUpdateEvent={safeUpdateEvent}
           adminEmail={adminEmail}
-          isReadOnly={isReadOnly}
+          isReadOnly={isReadOnly || isHelper}
+          canCheckInParticipants={!isReadOnly && (isPrimary || isCoAdmin || isHelper)}
+          adminPin={adminPin}
         />
       )}
 
-      {activeTab === 'registrations' && (
+      {!isHelper && activeTab === 'registrations' && (
         <EventRegistrationsManager
           event={event}
           onUpdateEntries={handleUpdateEntries}
@@ -544,7 +575,7 @@ export const EventDashboardView: React.FC<Props> = ({
           event={event}
           onUpdateSponsors={handleUpdateSponsors}
           onUpdateEvent={safeUpdateEvent}
-          isReadOnly={isReadOnly}
+          isReadOnly={isReadOnly || isHelper}
         />
       )}
 
@@ -556,7 +587,7 @@ export const EventDashboardView: React.FC<Props> = ({
         />
       )}
 
-      {activeTab === 'pending-payments' && (
+      {!isHelper && activeTab === 'pending-payments' && (
         <EventPaymentsView
           event={event}
           onUpdateEvent={safeUpdateEvent}
@@ -564,13 +595,10 @@ export const EventDashboardView: React.FC<Props> = ({
       )}
 
       {activeTab === 'checkins' && (
-        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center space-y-3">
-          <CheckCircle2 size={40} className="mx-auto text-indigo-500 opacity-80" />
-          <h3 className="text-lg font-black text-slate-800">Check-in dos Participantes</h3>
-          <p className="text-xs text-slate-400 font-bold max-w-md mx-auto">
-            Módulo de recepção e check-in presencial no evento. {checkedInCount} de {entries.length} participantes já efetuaram o check-in.
-          </p>
-        </div>
+        <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-slate-100 p-5"><CheckCircle2 size={24} className="text-indigo-500" /><div><h3 className="text-base font-black text-slate-800">Check-in dos Participantes</h3><p className="text-xs font-bold text-slate-400">{checkedInCount} de {entries.length} participantes com check-in hoje.</p></div></div>
+          <div className="divide-y divide-slate-100">{entries.map((entry) => { const checked = isEntryCheckedInToday(entry, event.matches, pairsById, todayStr); return <div key={entry.email || entry.pin || entry.name} className="flex items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="truncate text-sm font-black text-slate-800">{entry.nickname || entry.name}</p><p className="text-[10px] font-bold text-slate-400">{(entry.categoryIds || []).map((id) => categories.find((category) => category.id === id)?.name).filter(Boolean).join(', ')}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${checked ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{checked ? 'Check-in feito' : 'Pendente'}</span></div>; })}</div>
+        </section>
       )}
     </div>
   );

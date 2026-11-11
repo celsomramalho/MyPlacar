@@ -20,8 +20,7 @@ import { updateSuper8DuplasProgression } from '@modules/events/services/matchPro
 import { isIndividualScoreCategory, isIndividualScoreEvent, isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb, getAuthInstance } from '@infra/firebase';
-import { updateEvent, saveEventEntry, deleteEventEntry } from '@infra/firebase/events';
-import { saveAdminEventEntry } from '@infra/firebase/events';
+import { updateEvent, saveEventEntry, deleteEventEntry, saveAdminEventCheckIn } from '@infra/firebase/events';
 import type { Firestore } from 'firebase/firestore';
 import { useUI } from '@modules/ui';
 import { entryHasFinishedMatchOnDate, getTodayDateStr, isEntryCheckedInToday, isTournamentPeriodActive } from '@modules/events/services/eventRegistrationPeriod';
@@ -41,6 +40,8 @@ interface Props {
   onUpdateEvent: (event: TournamentEvent) => void;
   isReadOnly?: boolean;
   adminEmail?: string;
+  canCheckInParticipants?: boolean;
+  adminPin?: string;
 }
 
 export const EventCategoriesManager: React.FC<Props> = ({
@@ -50,6 +51,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
   onUpdateEvent,
   isReadOnly = false,
   adminEmail,
+  canCheckInParticipants = true,
+  adminPin,
 }) => {
   const { setModalConfig } = useUI();
   type CategoryPanelView = 'entries' | 'teams' | 'matches';
@@ -85,8 +88,9 @@ export const EventCategoriesManager: React.FC<Props> = ({
       checkInDates: checked ? (entry.checkInDates || []).filter((date) => date !== today) : Array.from(new Set([...(entry.checkInDates || []), today])),
     };
     try {
-      const db = getDb();
-      if (db && event.pin) await saveAdminEventEntry(db, event.pin, updatedEntry, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+      const effectiveEmail = adminEmail || getAuthInstance()?.currentUser?.email || '';
+      if (!canCheckInParticipants || !effectiveEmail || !event.pin) throw new Error('Acesso ao check-in indisponível.');
+      await saveAdminEventCheckIn(event.pin, effectiveEmail, adminPin || '', updatedEntry);
       const matches = (item: TournamentEntry) => (entry.registrationId && item.registrationId === entry.registrationId) || (entry.pin && item.pin?.toUpperCase() === entry.pin.toUpperCase()) || (entry.email && item.email?.toLowerCase() === entry.email.toLowerCase());
       onUpdateEvent({ ...event, entries: (event.entries || []).map((item) => matches(item) ? updatedEntry : item) });
     } catch (error) {
@@ -1218,6 +1222,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onGenerateTemporaryEntries={handleGenerateTemporaryCategoryEntries}
                     onUpdateEvent={onUpdateEvent}
                     onToggleCheckIn={toggleCategoryCheckIn}
+                    canCheckInParticipants={canCheckInParticipants}
                     categoryPairs={categoryPairs}
                     bracketOnePairs={bracketOnePairs}
                     bracketTwoPairs={bracketTwoPairs}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X } from 'lucide-react';
-import { formatRegistrationId, type TournamentEvent, type TournamentEntry } from '@modules/events/types';
+import { formatRegistrationId, type PaymentItem, type TournamentEvent, type TournamentEntry } from '@modules/events/types';
 
 interface Props {
   event: TournamentEvent;
@@ -54,6 +54,8 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
   const [selectedReceipt, setSelectedReceipt] = useState<{ url: string; title: string } | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{
     pin: string;
+    paymentId?: string;
+    paymentIndex?: number;
     name: string;
     status: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado';
   } | null>(null);
@@ -78,6 +80,11 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     if (latestReceipt?.status === 'Recusado' || latestReceipt?.status === 'rejected' || latestReceipt?.status === 'Cancelado' || latestReceipt?.status === 'cancelled') return 'Recusado';
     if (latestReceipt?.status === 'pending' || latestReceipt?.status === 'Aguardando Confirmação') return 'Aguardando Confirmação';
     return entry.paymentStatus === 'Recusado' ? 'Recusado' : entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' ? 'Confirmado' : 'Aguardando Confirmação';
+  };
+  const getPaymentReviewStatus = (payment: PaymentItem): 'Confirmado' | 'Aguardando Confirmação' | 'Recusado' => {
+    if (payment.status === 'Confirmado' || payment.status === 'approved' || payment.status === 'Pago') return 'Confirmado';
+    if (payment.status === 'Recusado' || payment.status === 'rejected' || payment.status === 'Cancelado' || payment.status === 'cancelled') return 'Recusado';
+    return 'Aguardando Confirmação';
   };
   const matchesSearch = (entry: TournamentEntry) => {
     const term = searchName.trim().toLocaleLowerCase();
@@ -118,6 +125,8 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
 
   const pendingEntriesList: {
     entry: TournamentEntry;
+    payment: PaymentItem;
+    paymentIndex: number;
     dueAmount: number;
     paidAmount: number;
     pendingAmount: number;
@@ -189,18 +198,34 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     totalPaidSum += entryPaid;
     totalPendingSum += entryPending;
 
-    const hasReceiptHistory = Boolean(entry.payments?.some((payment) => payment.receiptUrl));
+    const receiptPayments = (entry.payments || [])
+      .map((payment, paymentIndex) => ({ payment, paymentIndex }))
+      .filter(({ payment }) => Boolean(payment.receiptUrl));
+    const reviewPayments = receiptPayments.filter(({ payment }) =>
+      ['pending', 'Aguardando Confirmação', 'rejected', 'Recusado', 'cancelled', 'Cancelado'].includes(String(payment.status))
+    );
+    if (
+      reviewPayments.length === 0 &&
+      (entry.paymentStatus === 'Aguardando Confirmação' || entry.paymentStatus === 'Recusado') &&
+      receiptPayments.length > 0
+    ) {
+      reviewPayments.push(receiptPayments[receiptPayments.length - 1]);
+    }
+    const hasReceiptHistory = receiptPayments.length > 0;
     if (
       showEntry &&
-      (hasPendingReviewReceipt(entry) || entry.paymentStatus === 'Aguardando Confirmação' || entry.paymentStatus === 'Recusado') &&
       hasReceiptHistory
     ) {
-      pendingEntriesList.push({
-        entry,
-        dueAmount: entryDue,
-        paidAmount: entryPaid,
-        pendingAmount: entryPending,
-        categoriesStr: catStr,
+      reviewPayments.forEach(({ payment, paymentIndex }) => {
+        pendingEntriesList.push({
+          entry,
+          payment,
+          paymentIndex,
+          dueAmount: entryDue,
+          paidAmount: entryPaid,
+          pendingAmount: payment.amount || 0,
+          categoriesStr: catStr,
+        });
       });
     }
     if (showEntry && !entry.disabled && entry.paymentStatus !== 'Cancelado' && !hasReceiptHistory && !isConfirmed && !isIsento) {
@@ -210,6 +235,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
 
   // Ordenar pagamentos mais recentes primeiro
   paidPaymentsList.sort((a, b) => b.date - a.date);
+  const pendingRegistrationCount = new Set(pendingEntriesList.map((item) => item.entry.pin)).size;
   const paidRegistrationsList = Array.from(paidPaymentsList.reduce((byPin, payment) => {
     const current = byPin.get(payment.entryPin);
     if (current) {
@@ -245,10 +271,28 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
       entries: entries.map((entry) => {
         if (entry.pin !== pendingStatusChange.pin) return entry;
         const payments = [...(entry.payments || [])];
-        const receiptIndex = payments.map((payment, index) => ({ payment, index })).filter(({ payment }) => payment.receiptUrl).at(-1)?.index;
-        if (receiptIndex !== undefined) payments[receiptIndex] = { ...payments[receiptIndex], status: pendingStatusChange.status };
+        const receiptIndex = pendingStatusChange.paymentId
+          ? payments.findIndex((payment) => payment.id === pendingStatusChange.paymentId)
+          : pendingStatusChange.paymentIndex;
+        if (receiptIndex !== undefined && receiptIndex >= 0 && payments[receiptIndex]) {
+          payments[receiptIndex] = { ...payments[receiptIndex], status: pendingStatusChange.status };
+        }
         const paidAmount = payments.reduce((sum, payment) => sum + (payment.status === 'Confirmado' || payment.status === 'approved' || payment.status === 'Pago' ? (payment.amount || 0) : 0), 0);
-        return { ...entry, payments, paidAmount, paymentStatus: pendingStatusChange.status };
+        const hasAwaitingReview = payments.some((payment) =>
+          Boolean(payment.receiptUrl) && ['pending', 'Aguardando Confirmação'].includes(String(payment.status))
+        );
+        const hasRejected = payments.some((payment) =>
+          Boolean(payment.receiptUrl) && ['rejected', 'Recusado', 'cancelled', 'Cancelado'].includes(String(payment.status))
+        );
+        const dueAmount = entry.dueAmount ?? event.registrationFee ?? 0;
+        const paymentStatus = hasAwaitingReview
+          ? 'Aguardando Confirmação'
+          : hasRejected
+          ? 'Recusado'
+          : paidAmount >= dueAmount && dueAmount > 0
+          ? 'Confirmado'
+          : 'Pendente';
+        return { ...entry, payments, paidAmount, paymentStatus };
       }),
     });
     setPendingStatusChange(null);
@@ -259,7 +303,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
       <div className="space-y-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
         <div className="relative w-full">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Pesquisar por nome ou ID da inscrição..." className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400" />
+          <input type="text" value={searchName} onChange={(e) => { const value = e.target.value; setSearchName(value); if (value.trim()) setPaymentGroup('all'); }} placeholder="Pesquisar por nome ou ID da inscrição..." className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400" />
           {searchName && <button type="button" onClick={() => setSearchName('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg" title="Limpar pesquisa"><X size={14} /></button>}
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -430,7 +474,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
         >
           <div className="flex items-center gap-2">
             <span className="text-sm font-black text-slate-800 tracking-tight">
-              Valor pendente: R$ {totalPendingSum.toFixed(2)} · {pendingEntriesList.length} inscrições
+              Valor pendente: R$ {totalPendingSum.toFixed(2)} · {pendingEntriesList.length} comprovantes · {pendingRegistrationCount} inscrições
             </span>
           </div>
           <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors">
@@ -449,10 +493,10 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
               <>
               <div className="space-y-3 md:hidden">
                 {pendingEntriesList.map((item) => (
-                  <article key={item.entry.pin} className="rounded-2xl border border-amber-100 p-3 space-y-2">
-                    <div className="flex justify-between gap-3"><div><p className="font-black text-slate-800">{item.entry.nickname || item.entry.name}</p><p className="text-[10px] font-bold text-amber-600">Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'}</p></div><p className="text-right text-xs font-black text-amber-600">R$ {item.pendingAmount.toFixed(2)}<span className="block text-[9px] text-slate-400">pendente</span></p></div>
+                  <article key={`${item.entry.pin}-${item.payment.id || item.paymentIndex}`} className="rounded-2xl border border-amber-100 p-3 space-y-2">
+                    <div className="flex justify-between gap-3"><div><p className="font-black text-slate-800">{item.entry.nickname || item.entry.name}</p><p className="text-[10px] font-bold text-amber-600">Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.payment.date)}</p></div><p className="text-right text-xs font-black text-amber-600">R$ {item.pendingAmount.toFixed(2)}<span className="block text-[9px] text-slate-400">comprovante</span></p></div>
                     <div className="flex justify-between border-t pt-2 text-[10px] text-slate-500"><span>Devido R$ {item.dueAmount.toFixed(2)}</span><span>{item.categoriesStr}</span></div>
-                    <div className="flex flex-wrap gap-2 border-t pt-2"><button type="button" onClick={() => { const payment = item.entry.payments?.filter((p) => p.receiptUrl).at(-1); if (payment?.receiptUrl) handleOpenReceipt({ paymentId: payment.id, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: payment.date, amount: payment.amount, categoriesStr: item.categoriesStr, receiptUrl: payment.receiptUrl, receiptFileName: payment.receiptFileName }); }} className="rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700"><Eye size={14} className="mr-1 inline" />Ver comprovante</button><select aria-label={`Status do pagamento de ${item.entry.nickname || item.entry.name}`} value={getReceiptStatus(item.entry)} onChange={(changeEvent) => setPendingStatusChange({ pin: item.entry.pin, name: item.entry.nickname || item.entry.name, status: changeEvent.target.value as 'Confirmado' | 'Aguardando Confirmação' | 'Recusado' })} className="min-w-0 flex-1 rounded-xl border border-emerald-300 bg-emerald-100 px-2 py-2 text-[10px] font-bold text-emerald-900"><option value="Aguardando Confirmação">Aguardando confirmação</option><option value="Confirmado">Pagamento confirmado</option><option value="Recusado">Recusado</option></select></div>
+                    <div className="flex flex-wrap gap-2 border-t pt-2"><button type="button" onClick={() => item.payment.receiptUrl && handleOpenReceipt({ paymentId: item.payment.id || `payment-${item.paymentIndex}`, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: item.payment.date, amount: item.payment.amount || 0, categoriesStr: item.categoriesStr, receiptUrl: item.payment.receiptUrl, receiptFileName: item.payment.receiptFileName })} className="rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700"><Eye size={14} className="mr-1 inline" />Ver comprovante</button><select aria-label={`Status do comprovante de ${item.entry.nickname || item.entry.name}`} value={getPaymentReviewStatus(item.payment)} onChange={(changeEvent) => setPendingStatusChange({ pin: item.entry.pin, paymentId: item.payment.id, paymentIndex: item.paymentIndex, name: item.entry.nickname || item.entry.name, status: changeEvent.target.value as 'Confirmado' | 'Aguardando Confirmação' | 'Recusado' })} className="min-w-0 flex-1 rounded-xl border border-emerald-300 bg-emerald-100 px-2 py-2 text-[10px] font-bold text-emerald-900"><option value="Aguardando Confirmação">Aguardando confirmação</option><option value="Confirmado">Pagamento confirmado</option><option value="Recusado">Recusado</option></select></div>
                   </article>
                 ))}
               </div>
@@ -470,7 +514,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                   <tbody className="divide-y divide-slate-50 font-bold text-slate-700">
                     {pendingEntriesList.map((item) => (
                       <tr
-                        key={item.entry.pin}
+                        key={`${item.entry.pin}-${item.payment.id || item.paymentIndex}`}
                         className="hover:bg-amber-50/40 transition-colors"
                       >
                         <td className="py-3 px-3">
@@ -494,17 +538,14 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                           <div className="flex flex-col items-end gap-2">
                             <button
                               type="button"
-                              onClick={() => {
-                                const payment = item.entry.payments?.filter((p) => p.receiptUrl).at(-1);
-                                if (payment?.receiptUrl) handleOpenReceipt({ paymentId: payment.id, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: payment.date, amount: payment.amount, categoriesStr: item.categoriesStr, receiptUrl: payment.receiptUrl, receiptFileName: payment.receiptFileName });
-                              }}
+                              onClick={() => item.payment.receiptUrl && handleOpenReceipt({ paymentId: item.payment.id || `payment-${item.paymentIndex}`, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: item.payment.date, amount: item.payment.amount || 0, categoriesStr: item.categoriesStr, receiptUrl: item.payment.receiptUrl, receiptFileName: item.payment.receiptFileName })}
                               className="px-2 py-1 text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg inline-flex items-center gap-1 font-black text-xs"
                               title="Ver comprovante anexado"
                             ><Eye size={14} /> Ver</button>
                             <select
                               aria-label={`Status do pagamento de ${item.entry.nickname || item.entry.name}`}
-                              value={getReceiptStatus(item.entry)}
-                              onChange={(changeEvent) => setPendingStatusChange({ pin: item.entry.pin, name: item.entry.nickname || item.entry.name, status: changeEvent.target.value as 'Confirmado' | 'Aguardando Confirmação' | 'Recusado' })}
+                              value={getPaymentReviewStatus(item.payment)}
+                              onChange={(changeEvent) => setPendingStatusChange({ pin: item.entry.pin, paymentId: item.payment.id, paymentIndex: item.paymentIndex, name: item.entry.nickname || item.entry.name, status: changeEvent.target.value as 'Confirmado' | 'Aguardando Confirmação' | 'Recusado' })}
                               className="max-w-40 rounded-lg border border-emerald-300 bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-900"
                             >
                               <option value="Aguardando Confirmação">Aguardando confirmação</option>
@@ -545,7 +586,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
         </div>}
       </div>
       )}
-      {paymentGroup === 'inactive' && <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      {(paymentGroup === 'inactive' || (paymentGroup === 'all' && searchName.trim())) && <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-sm font-black text-slate-800">Cancelados/desativados: {paymentGroupCounts.inactive}</h3>
         {entries.filter((entry) => visibleEntries.has(entry.pin) && (entry.disabled || entry.paymentStatus === 'Cancelado')).map((entry) => <div key={entry.pin} className="mt-3 flex justify-between border-t border-slate-100 pt-3 text-xs"><span className="font-bold">{entry.nickname || entry.name}<small className="block text-slate-500">Inscrição: {formatRegistrationId(entry.registrationId) || '—'}</small></span><span className="font-bold text-slate-500">{entry.disabled ? 'Desativado' : 'Cancelado'}</span></div>)}
       </div>}

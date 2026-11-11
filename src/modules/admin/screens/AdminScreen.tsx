@@ -719,7 +719,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       return;
     }
     try {
-      await saveAdminEvent(db, editingEvent, userProfile?.email);
+      await saveAdminEvent(db, editingEvent, userProfile?.email, userProfile?.pin);
       setEventList((prev) => {
         const exists = prev.some((ev) => ev.pin === editingEvent.pin);
         if (exists) {
@@ -775,7 +775,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         });
       }));
 
-      await saveAdminEvent(db, updatedEvent, userProfile?.email);
+      await saveAdminEvent(db, updatedEvent, userProfile?.email, userProfile?.pin);
       // Update eventList without entries to keep the list clean
       const { entries: _entries, ...eventWithoutEntries } = updatedEvent;
       setEventList((prev) => prev.map((ev) => (ev.pin === updatedEvent.pin ? { ...eventWithoutEntries } : ev)));
@@ -1217,6 +1217,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             bannerInputRef={bannerInputRef}
             activeSports={sports.filter(s => s.isActive !== false)}
             adminEmail={userProfile?.email}
+            adminPin={userProfile?.pin}
             onCreateEvent={handleCreateNewEvent}
             onStartEditEvent={handleStartEditEvent}
             onChangeEditingEvent={(event) => {

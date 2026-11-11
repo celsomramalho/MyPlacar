@@ -1,13 +1,15 @@
 import { useMemo, useCallback } from 'react';
 import type { TournamentEvent, TournamentEntry } from '../../types';
 import type { UserProfile } from '@modules/auth/types';
-import { isPrimaryAdminEmail, canUseEventAdminAccess, isJudgeOfEvent } from '../../services/eventAdminAccess';
+import { isPrimaryAdminEmail, isCoAdminOfEvent, isEventHelper, isJudgeOfEvent } from '../../services/eventAdminAccess';
 
 export interface EventPermissions {
   /** Indica se o usuário autenticado é o administrador principal do sistema */
   isPrimaryAdmin: boolean;
   /** Indica se o usuário é co-administrador listado no evento */
   isCoAdmin: boolean;
+  /** Indica se o usuário é auxiliar operacional deste evento */
+  isHelper: boolean;
   /** Indica se o usuário é juiz listado no evento */
   isJudge: boolean;
   /** Indica se o usuário está inscrito como participante no evento */
@@ -30,6 +32,7 @@ export interface EventPermissions {
   hasActiveRegistration: boolean;
   /** Indica se o usuário tem permissão para visualizar categorias, inscritos, times e jogos do evento */
   canViewEventDetails: boolean;
+  canCheckInParticipants: boolean;
 }
 
 /**
@@ -49,8 +52,10 @@ export function useEventPermissions(
 
   const isCoAdmin = useMemo(() => {
     if (!userPin) return false;
-    return canUseEventAdminAccess(event, userPin);
+    return isCoAdminOfEvent(event, userPin);
   }, [event, userPin]);
+
+  const isHelper = useMemo(() => isEventHelper(event, userPin), [event, userPin]);
 
   const isJudge = useMemo(() => {
     if (!userPin) return false;
@@ -84,15 +89,15 @@ export function useEventPermissions(
 
   const canSubmitScore = useMemo(() => {
     if (isReadOnly) return false;
-    if (canManageEvent || isJudge) return true;
+    if (canManageEvent || isJudge || isHelper) return true;
     if (isCurrentEntryCancelled) return false;
     return event.allowUserScoreEntry === true;
-  }, [isReadOnly, canManageEvent, isJudge, isCurrentEntryCancelled, event.allowUserScoreEntry]);
+  }, [isReadOnly, canManageEvent, isJudge, isHelper, isCurrentEntryCancelled, event.allowUserScoreEntry]);
 
   const canViewParticipants = useMemo(() => {
-    if (canManageEvent) return true;
+    if (canManageEvent || isHelper) return true;
     return event.showRegisteredParticipants === true;
-  }, [canManageEvent, event.showRegisteredParticipants]);
+  }, [canManageEvent, isHelper, event.showRegisteredParticipants]);
 
   const canEditEntry = useCallback(
     (entry?: Partial<TournamentEntry> | null) => {
@@ -121,13 +126,14 @@ export function useEventPermissions(
   }, [currentUserEntry, isFreeEvent]);
 
   const canViewEventDetails = useMemo(() => {
-    if (canManageEvent || isJudge) return true;
+    if (canManageEvent || isJudge || isHelper) return true;
     return hasActiveRegistration;
   }, [canManageEvent, isJudge, hasActiveRegistration]);
 
   return {
     isPrimaryAdmin,
     isCoAdmin,
+    isHelper,
     isJudge,
     isParticipant,
     isEventActive,
@@ -139,5 +145,6 @@ export function useEventPermissions(
     currentUserEntry,
     hasActiveRegistration,
     canViewEventDetails,
+    canCheckInParticipants: (canManageEvent || isHelper) && !isReadOnly,
   };
 }

@@ -5,7 +5,7 @@ import type { TournamentEvent } from '@modules/events/types';
 export interface AdminEventCardProps {
   event: TournamentEvent;
   onSelect: (event: TournamentEvent) => void;
-  onDelete: (pin: string) => void;
+  onDelete?: (pin: string) => void;
 }
 
 export const AdminEventCard: React.FC<AdminEventCardProps> = ({
@@ -34,7 +34,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
-        <button
+        {onDelete && <button
           onClick={(e) => {
             e.stopPropagation();
             onDelete(event.pin);
@@ -43,7 +43,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
           title="Excluir evento"
         >
           <Trash2 size={16} />
-        </button>
+        </button>}
         <ChevronRight size={18} className="text-slate-300 group-hover:text-amber-500 transition-colors" />
       </div>
     </div>
