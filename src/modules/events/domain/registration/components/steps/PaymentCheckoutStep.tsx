@@ -12,6 +12,7 @@ import {
   ExternalLink,
   X,
   ChevronDown,
+  Trash2,
 } from 'lucide-react';
 import type { PaymentItem, TournamentEvent, TournamentEntry } from '@modules/events/types';
 import type { PricingCalculationResult } from '../../types';
@@ -57,6 +58,7 @@ export interface PaymentCheckoutStepProps {
     paymentId: string,
     newStatus: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
   ) => Promise<void> | void;
+  onDeletePaymentItem?: (paymentId: string) => Promise<void> | void;
 }
 
 export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
@@ -73,8 +75,10 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
   pendingAmount = 0,
   isAdmin = false,
   onUpdatePaymentItemStatus,
+  onDeletePaymentItem,
 }) => {
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
+  const [pendingPaymentDeletion, setPendingPaymentDeletion] = useState<{ paymentId: string; payment: PaymentItem } | null>(null);
   const isFullyPaid = pricing.dueAmount > 0 && totalPaid >= pricing.dueAmount;
 
   const handlePaymentStatusChange = async (
@@ -89,6 +93,21 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
       setUpdatingPaymentId(null);
     }
   };
+
+  const confirmPaymentDeletion = async () => {
+    if (!pendingPaymentDeletion || !onDeletePaymentItem) return;
+    setUpdatingPaymentId(pendingPaymentDeletion.paymentId);
+    try {
+      await onDeletePaymentItem(pendingPaymentDeletion.paymentId);
+      setPendingPaymentDeletion(null);
+    } finally {
+      setUpdatingPaymentId(null);
+    }
+  };
+
+  const isPaymentConfirmed = (item: PaymentItem) =>
+    item.status === 'Confirmado' || item.status === 'approved' || item.status === 'Pago' ||
+    (!item.status && (entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'));
 
   // Se o tipo de pagamento do evento é manual, inicia sempre no modo manual
   const eventPaymentType = String(event.paymentType ?? 'manual').trim().toLowerCase();
@@ -235,7 +254,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
                 </div>
 
                 {/* Linha inferior: Botão Ver e Status */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {p.receiptUrl ? (
                     <button
                       type="button"
@@ -255,6 +274,19 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
                     <span className="text-xs font-bold text-slate-400 px-2 py-1">
                       Sem anexo
                     </span>
+                  )}
+
+                  {onDeletePaymentItem && p.receiptUrl && (isAdmin || !isPaymentConfirmed(p)) && (
+                    <button
+                      type="button"
+                      aria-label="Excluir comprovante"
+                      title="Excluir comprovante"
+                      onClick={() => setPendingPaymentDeletion({ paymentId: p.id || `payment-${idx}`, payment: p })}
+                      disabled={updatingPaymentId === (p.id || `payment-${idx}`)}
+                      className="rounded-xl bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100 disabled:opacity-50"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   )}
 
                   {isAdmin && !readOnly && onUpdatePaymentItemStatus ? (
@@ -509,6 +541,20 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
       )}
 
       {/* Modal de visualização de comprovante */}
+      {pendingPaymentDeletion && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={() => setPendingPaymentDeletion(null)}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 className="text-base font-black text-slate-800">Excluir comprovante?</h3>
+              <p className="mt-2 text-sm text-slate-600">O comprovante de <strong>R$ {(pendingPaymentDeletion.payment.amount || 0).toFixed(2)}</strong>, de {formatDateShort(pendingPaymentDeletion.payment.date)}, será removido do histórico da inscrição.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setPendingPaymentDeletion(null)} className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-200">Cancelar</button>
+              <button type="button" onClick={() => void confirmPaymentDeletion()} disabled={updatingPaymentId === pendingPaymentDeletion.paymentId} className="rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-black text-white hover:bg-rose-700 disabled:opacity-60">{updatingPaymentId === pendingPaymentDeletion.paymentId ? 'Excluindo...' : 'Excluir comprovante'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {selectedReceipt && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in"

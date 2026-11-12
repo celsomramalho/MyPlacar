@@ -343,10 +343,10 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         setAdminTab('events');
         const db = getDb();
         if (db) {
-          import('@infra/firebase/events').then(({ fetchEventByPin }) => {
-            fetchEventByPin(db, targetPin).then((ev) => {
+          import('@infra/firebase/events').then(({ fetchEventByPin, fetchEventEntries }) => {
+            Promise.all([fetchEventByPin(db, targetPin), fetchEventEntries(db, targetPin)]).then(([ev, entries]) => {
               if (ev) {
-                setSelectedDashboardEvent(ev as TournamentEvent);
+                setSelectedDashboardEvent({ ...(ev as TournamentEvent), entries: (entries || []) as any });
                 sessionStorage.removeItem('admin_target_event_pin');
               } else if (!isPrimary) {
                 onBack();

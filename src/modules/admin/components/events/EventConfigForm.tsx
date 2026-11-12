@@ -49,6 +49,7 @@ import { isRankingEvent, isSuper8DuplasEvent } from '@modules/events/services/ev
 import { openPdfOrUrl } from '@modules/events/services/openRegulationPdf';
 import { EventCoAdminsManager } from './EventCoAdminsManager';
 import { EventJudgesManager } from './EventJudgesManager';
+import { EventHelpersManager } from './EventHelpersManager';
 import { EventMatchRulesEditor } from './EventMatchRulesEditor';
 import { SPORT_GROUPS, SPORT_LIST } from '../../../../constants';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
@@ -63,6 +64,7 @@ export type EventConfigBlockKey =
   | 'coadministradores'
   | 'gruposCategorias'
   | 'juizes'
+  | 'auxiliares'
   | 'valores'
   | 'informacoes'
   | 'localizacao'
@@ -87,6 +89,7 @@ export const EVENT_CONFIG_BLOCKS: EventBlockMenuItem[] = [
   { key: 'datas', label: 'Datas', icon: CalendarDays, isAdminOnly: false },
   { key: 'esporte', label: 'Esporte', icon: Activity, isAdminOnly: false },
   { key: 'juizes', label: 'Juízes', icon: Gavel, isAdminOnly: false },
+  { key: 'auxiliares', label: 'Auxiliares do evento', icon: ShieldCheck, isAdminOnly: false },
 ];
 
 interface FormBlockProps {
@@ -190,6 +193,7 @@ export interface EventConfigFormProps {
   editingEvent: TournamentEvent;
   isReadOnlyRegistration: boolean;
   canManageEventAdmins: boolean;
+  canManageEventHelpers: boolean;
   isSavingEvent: boolean;
   bannerInputRef: React.RefObject<HTMLInputElement>;
   coAdminNamesByPin: Record<string, string>;
@@ -199,6 +203,7 @@ export interface EventConfigFormProps {
   activeSports?: FirebaseAdminSportIcon[];
   onChangeEditingEvent: (event: TournamentEvent | null) => void;
   onSaveEvent: () => void;
+  onUpdateEvent?: (event: TournamentEvent) => void;
   onClose: () => void;
 }
 
@@ -208,6 +213,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   editingEvent,
   isReadOnlyRegistration,
   canManageEventAdmins,
+  canManageEventHelpers,
   isSavingEvent,
   bannerInputRef,
   coAdminNamesByPin,
@@ -217,11 +223,14 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   activeSports,
   onChangeEditingEvent,
   onSaveEvent,
+  onUpdateEvent,
   onClose,
 }) => {
   const regulationInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [helperPins, setHelperPins] = useState(editingEvent.helperPins || []);
+  useEffect(() => setHelperPins(editingEvent.helperPins || []), [editingEvent.pin, editingEvent.helperPins]);
 
   // ── Esporte e Categoria do Esporte ──────────────────────────────────────────
   const allSports = React.useMemo(() => {
@@ -355,6 +364,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
     coadministradores: initialBlock === 'coadministradores',
     gruposCategorias: initialBlock === 'gruposCategorias',
     juizes: initialBlock === 'juizes',
+    auxiliares: initialBlock === 'auxiliares',
     valores: initialBlock === 'valores',
     informacoes: initialBlock === 'informacoes',
     localizacao: initialBlock === 'localizacao',
@@ -370,6 +380,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         coadministradores: initialBlock === 'coadministradores',
         gruposCategorias: initialBlock === 'gruposCategorias',
         juizes: initialBlock === 'juizes',
+        auxiliares: initialBlock === 'auxiliares',
         valores: initialBlock === 'valores',
         informacoes: initialBlock === 'informacoes',
         localizacao: initialBlock === 'localizacao',
@@ -404,6 +415,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
       coadministradores: false,
       gruposCategorias: false,
       juizes: false,
+      auxiliares: false,
       valores: false,
       informacoes: false,
       localizacao: false,
@@ -483,6 +495,16 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         (p) => p.toUpperCase().trim() !== pin.toUpperCase().trim()
       ),
     });
+  };
+
+  const handleChangeHelperPins = (nextPins: string[]) => {
+    const updated = { ...editingEvent, helperPins: nextPins };
+    setHelperPins(nextPins);
+    if (isReadOnlyRegistration) {
+      onUpdateEvent?.(updated);
+    } else {
+      onChangeEditingEvent(updated);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1542,6 +1564,25 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           isReadOnlyRegistration={isReadOnlyRegistration}
           onAddJudge={handleAddJudge}
           onRemoveJudge={handleRemoveJudge}
+        />
+      </FormBlock>
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* 9. AUXILIARES DO EVENTO — gestão operacional delegada                  */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <FormBlock
+        id="event-block-auxiliares"
+        title="Auxiliares do evento"
+        icon={ShieldCheck}
+        isOpen={openSections.auxiliares}
+        onToggle={() => toggleSection('auxiliares')}
+      >
+        <EventHelpersManager
+          helperPins={helperPins}
+          coAdminPins={editingEvent.coAdminPins || []}
+          canManage={canManageEventHelpers && editingEvent.active === true}
+          onAdd={(pin) => handleChangeHelperPins([...new Set([...helperPins, pin])])}
+          onRemove={(pin) => handleChangeHelperPins(helperPins.filter((item) => item.toUpperCase().trim() !== pin.toUpperCase().trim()))}
         />
       </FormBlock>
 

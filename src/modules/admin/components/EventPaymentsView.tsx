@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X, Trash2 } from 'lucide-react';
 import { formatRegistrationId, type PaymentItem, type TournamentEvent, type TournamentEntry } from '@modules/events/types';
 
 interface Props {
@@ -58,6 +58,14 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     paymentIndex?: number;
     name: string;
     status: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado';
+  } | null>(null);
+  const [pendingReceiptDeletion, setPendingReceiptDeletion] = useState<{
+    pin: string;
+    paymentId?: string;
+    paymentIndex: number;
+    name: string;
+    amount: number;
+    date: number;
   } | null>(null);
 
   const categories = event.categories || [];
@@ -298,6 +306,36 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     setPendingStatusChange(null);
   };
 
+  const confirmReceiptDeletion = () => {
+    if (!pendingReceiptDeletion) return;
+    onUpdateEvent({
+      ...event,
+      entries: entries.map((entry) => {
+        if (entry.pin !== pendingReceiptDeletion.pin) return entry;
+        const payments = (entry.payments || []).filter((payment, index) =>
+          pendingReceiptDeletion.paymentId
+            ? payment.id !== pendingReceiptDeletion.paymentId
+            : index !== pendingReceiptDeletion.paymentIndex
+        );
+        const paidAmount = payments.reduce((sum, payment) =>
+          sum + (payment.status === 'Confirmado' || payment.status === 'approved' || payment.status === 'Pago' ? (payment.amount || 0) : 0), 0);
+        const receiptPayments = payments.filter((payment) => Boolean(payment.receiptUrl));
+        const hasAwaitingReview = receiptPayments.some((payment) => ['pending', 'Aguardando Confirmação'].includes(String(payment.status)));
+        const hasRejected = receiptPayments.some((payment) => ['rejected', 'Recusado', 'cancelled', 'Cancelado'].includes(String(payment.status)));
+        const dueAmount = entry.dueAmount ?? event.registrationFee ?? 0;
+        const paymentStatus = hasAwaitingReview
+          ? 'Aguardando Confirmação'
+          : hasRejected
+          ? 'Recusado'
+          : paidAmount >= dueAmount && dueAmount > 0
+          ? 'Confirmado'
+          : 'Pendente';
+        return { ...entry, payments, paidAmount, paymentStatus };
+      }),
+    });
+    setPendingReceiptDeletion(null);
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in">
       <div className="space-y-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -325,6 +363,20 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setPendingStatusChange(null)} className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-200">Cancelar</button>
               <button type="button" onClick={confirmPaymentStatusChange} className="rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-black text-white hover:bg-emerald-600">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pendingReceiptDeletion && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={() => setPendingReceiptDeletion(null)}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 className="text-base font-black text-slate-800">Excluir comprovante?</h3>
+              <p className="mt-2 text-sm text-slate-600">O comprovante de <strong>{pendingReceiptDeletion.name}</strong>, no valor de <strong>R$ {pendingReceiptDeletion.amount.toFixed(2)}</strong> ({formatDateShort(pendingReceiptDeletion.date)}), será removido do histórico da inscrição.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setPendingReceiptDeletion(null)} className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-200">Cancelar</button>
+              <button type="button" onClick={confirmReceiptDeletion} className="rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-black text-white hover:bg-rose-700">Excluir comprovante</button>
             </div>
           </div>
         </div>
@@ -496,7 +548,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                   <article key={`${item.entry.pin}-${item.payment.id || item.paymentIndex}`} className="rounded-2xl border border-amber-100 p-3 space-y-2">
                     <div className="flex justify-between gap-3"><div><p className="font-black text-slate-800">{item.entry.nickname || item.entry.name}</p><p className="text-[10px] font-bold text-amber-600">Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.payment.date)}</p></div><p className="text-right text-xs font-black text-amber-600">R$ {item.pendingAmount.toFixed(2)}<span className="block text-[9px] text-slate-400">comprovante</span></p></div>
                     <div className="flex justify-between border-t pt-2 text-[10px] text-slate-500"><span>Devido R$ {item.dueAmount.toFixed(2)}</span><span>{item.categoriesStr}</span></div>
-                    <div className="flex flex-wrap gap-2 border-t pt-2"><button type="button" onClick={() => item.payment.receiptUrl && handleOpenReceipt({ paymentId: item.payment.id || `payment-${item.paymentIndex}`, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: item.payment.date, amount: item.payment.amount || 0, categoriesStr: item.categoriesStr, receiptUrl: item.payment.receiptUrl, receiptFileName: item.payment.receiptFileName })} className="rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700"><Eye size={14} className="mr-1 inline" />Ver comprovante</button><select aria-label={`Status do comprovante de ${item.entry.nickname || item.entry.name}`} value={getPaymentReviewStatus(item.payment)} onChange={(changeEvent) => setPendingStatusChange({ pin: item.entry.pin, paymentId: item.payment.id, paymentIndex: item.paymentIndex, name: item.entry.nickname || item.entry.name, status: changeEvent.target.value as 'Confirmado' | 'Aguardando Confirmação' | 'Recusado' })} className="min-w-0 flex-1 rounded-xl border border-emerald-300 bg-emerald-100 px-2 py-2 text-[10px] font-bold text-emerald-900"><option value="Aguardando Confirmação">Aguardando confirmação</option><option value="Confirmado">Pagamento confirmado</option><option value="Recusado">Recusado</option></select></div>
+                    <div className="flex flex-nowrap items-center gap-2 border-t pt-2"><button type="button" onClick={() => item.payment.receiptUrl && handleOpenReceipt({ paymentId: item.payment.id || `payment-${item.paymentIndex}`, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: item.payment.date, amount: item.payment.amount || 0, categoriesStr: item.categoriesStr, receiptUrl: item.payment.receiptUrl, receiptFileName: item.payment.receiptFileName })} className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700"><Eye size={14} className="mr-1 inline" />Ver</button><button type="button" aria-label="Excluir comprovante" title="Excluir comprovante" onClick={() => setPendingReceiptDeletion({ pin: item.entry.pin, paymentId: item.payment.id, paymentIndex: item.paymentIndex, name: item.entry.nickname || item.entry.name, amount: item.payment.amount || 0, date: item.payment.date })} className="shrink-0 rounded-xl bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"><Trash2 size={16} /></button><select aria-label={`Status do comprovante de ${item.entry.nickname || item.entry.name}`} value={getPaymentReviewStatus(item.payment)} onChange={(changeEvent) => setPendingStatusChange({ pin: item.entry.pin, paymentId: item.payment.id, paymentIndex: item.paymentIndex, name: item.entry.nickname || item.entry.name, status: changeEvent.target.value as 'Confirmado' | 'Aguardando Confirmação' | 'Recusado' })} className="min-w-0 flex-1 rounded-xl border border-emerald-300 bg-emerald-100 px-2 py-2 text-[10px] font-bold text-emerald-900"><option value="Aguardando Confirmação">Aguardando confirmação</option><option value="Confirmado">Pagamento confirmado</option><option value="Recusado">Recusado</option></select></div>
                   </article>
                 ))}
               </div>
@@ -535,13 +587,20 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                         </td>
                         <td className="py-3 px-3 text-slate-600">{item.categoriesStr}</td>
                         <td className="py-3 px-3 text-right">
-                          <div className="flex flex-col items-end gap-2">
+                          <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => item.payment.receiptUrl && handleOpenReceipt({ paymentId: item.payment.id || `payment-${item.paymentIndex}`, entryPin: item.entry.pin, participantName: item.entry.nickname || item.entry.name, date: item.payment.date, amount: item.payment.amount || 0, categoriesStr: item.categoriesStr, receiptUrl: item.payment.receiptUrl, receiptFileName: item.payment.receiptFileName })}
                               className="px-2 py-1 text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg inline-flex items-center gap-1 font-black text-xs"
                               title="Ver comprovante anexado"
                             ><Eye size={14} /> Ver</button>
+                            <button
+                              type="button"
+                              aria-label="Excluir comprovante"
+                              title="Excluir comprovante"
+                              onClick={() => setPendingReceiptDeletion({ pin: item.entry.pin, paymentId: item.payment.id, paymentIndex: item.paymentIndex, name: item.entry.nickname || item.entry.name, amount: item.payment.amount || 0, date: item.payment.date })}
+                              className="rounded-lg bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100"
+                            ><Trash2 size={15} /></button>
                             <select
                               aria-label={`Status do pagamento de ${item.entry.nickname || item.entry.name}`}
                               value={getPaymentReviewStatus(item.payment)}

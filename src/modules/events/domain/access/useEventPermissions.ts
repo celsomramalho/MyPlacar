@@ -95,9 +95,9 @@ export function useEventPermissions(
   }, [isReadOnly, canManageEvent, isJudge, isHelper, isCurrentEntryCancelled, event.allowUserScoreEntry]);
 
   const canViewParticipants = useMemo(() => {
-    if (canManageEvent || isHelper) return true;
+    if (canManageEvent || isHelper || isJudge) return true;
     return event.showRegisteredParticipants === true;
-  }, [canManageEvent, isHelper, event.showRegisteredParticipants]);
+  }, [canManageEvent, isHelper, isJudge, event.showRegisteredParticipants]);
 
   const canEditEntry = useCallback(
     (entry?: Partial<TournamentEntry> | null) => {

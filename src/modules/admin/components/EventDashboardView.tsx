@@ -19,7 +19,6 @@ import { EventRegistrationsManager } from './EventRegistrationsManager';
 import { EventFormedTeamsView } from './EventFormedTeamsView';
 import { EventSponsorsManager } from './EventSponsorsManager';
 import { EventPaymentsView } from './EventPaymentsView';
-import { EventHelpersManager } from './events/EventHelpersManager';
 import { calculateQueueState } from '@modules/events/domain/queue';
 import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 import { isEntryCheckedInToday, getTodayDateStr } from '@modules/events/services/eventRegistrationPeriod';
@@ -534,16 +533,6 @@ export const EventDashboardView: React.FC<Props> = ({
           </button>
         </div>
       </div>
-
-      {(isPrimary || isCoAdmin) && (
-        <EventHelpersManager
-          helperPins={event.helperPins || []}
-          coAdminPins={event.coAdminPins || []}
-          canManage={!isReadOnly}
-          onAdd={(pin) => safeUpdateEvent({ ...event, helperPins: [...new Set([...(event.helperPins || []), pin])] })}
-          onRemove={(pin) => safeUpdateEvent({ ...event, helperPins: (event.helperPins || []).filter((item) => item.toUpperCase().trim() !== pin) })}
-        />
-      )}
 
       {/* Tab Content */}
       {activeTab === 'categories' && (

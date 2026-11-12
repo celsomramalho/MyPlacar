@@ -293,6 +293,7 @@ export const EventDetailScreen: React.FC<Props> = ({
     canSubmitScore,
     canViewParticipants,
     isHelper,
+    isJudge,
     currentUserEntry,
     isParticipant,
     hasActiveRegistration,
@@ -909,13 +910,13 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   const userCategories = useMemo(() => {
     const all = event.categories || [];
-    if (canManageEvent || isHelper || isRanking) {
+    if (canManageEvent || isHelper || isJudge || isRanking) {
       return [...all].sort((a, b) => a.priority - b.priority);
     }
     return all
       .filter((c) => userCategoryIds.has(c.id))
       .sort((a, b) => a.priority - b.priority);
-  }, [event.categories, canManageEvent, isHelper, isRanking, userCategoryIds]);
+  }, [event.categories, canManageEvent, isHelper, isJudge, isRanking, userCategoryIds]);
 
   // Fila de espera global
   const orderedQueue = useMemo(() => {

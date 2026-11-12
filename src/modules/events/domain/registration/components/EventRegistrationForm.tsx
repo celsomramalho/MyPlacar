@@ -405,6 +405,70 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     }
   };
 
+  const handleDeletePaymentItem = async (paymentId: string) => {
+    setFeedback(null);
+    const currentSubmission = form.getSubmissionEntry();
+    const currentPayments: PaymentItem[] =
+      Array.isArray(currentSubmission.payments) && currentSubmission.payments.length > 0
+        ? [...currentSubmission.payments]
+        : Array.isArray(entry.payments) && entry.payments.length > 0
+        ? [...entry.payments]
+        : [...existingPayments];
+    const paymentIndex = currentPayments.findIndex((payment, index) =>
+      payment.id === paymentId ||
+      `payment-${index}` === paymentId ||
+      `legacy-${payment.date || index}` === paymentId
+    );
+    if (paymentIndex < 0) return;
+    const paymentToDelete = currentPayments[paymentIndex];
+    const isPaymentConfirmed = paymentToDelete.status === 'Confirmado' || paymentToDelete.status === 'approved' || paymentToDelete.status === 'Pago';
+    const isLegacyConfirmedPayment = !paymentToDelete.status && (entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago');
+    if (!isAdmin && (isPaymentConfirmed || isLegacyConfirmedPayment)) return;
+
+    const updatedPayments = currentPayments.filter((_, index) => index !== paymentIndex);
+    const hasExplicitStatuses = updatedPayments.some((payment) => Boolean(payment.status));
+    const confirmedTotal = updatedPayments.reduce((sum, payment) => {
+      const isConfirmed = payment.status === 'Confirmado' || payment.status === 'approved' || payment.status === 'Pago';
+      const isLegacyConfirmed = !payment.status && !hasExplicitStatuses && (entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago');
+      return sum + (isConfirmed || isLegacyConfirmed ? (payment.amount || 0) : 0);
+    }, 0);
+    const receiptPayments = updatedPayments.filter((payment) => Boolean(payment.receiptUrl));
+    const hasAwaitingReview = receiptPayments.some((payment) =>
+      ['pending', 'Aguardando Confirmação'].includes(String(payment.status)) ||
+      (!payment.status && entry.paymentStatus === 'Aguardando Confirmação')
+    );
+    const hasRejected = receiptPayments.some((payment) =>
+      ['rejected', 'Recusado', 'cancelled', 'Cancelado'].includes(String(payment.status))
+    );
+    const dueAmount = currentSubmission.dueAmount ?? entry.dueAmount ?? form.pricing.dueAmount ?? 0;
+    const paymentStatus: TournamentEntry['paymentStatus'] = hasAwaitingReview
+      ? 'Aguardando Confirmação'
+      : hasRejected
+      ? 'Recusado'
+      : confirmedTotal >= dueAmount && dueAmount > 0
+      ? 'Confirmado'
+      : 'Pendente';
+    const updatedEntry: TournamentEntry = {
+      ...entry,
+      ...currentSubmission,
+      payments: updatedPayments,
+      paidAmount: confirmedTotal,
+      paymentStatus,
+    };
+
+    if (onSave) await onSave(updatedEntry);
+    else if (onSaveDraft) await onSaveDraft(updatedEntry);
+    setLocalPaymentsOverride(updatedPayments);
+    if (onUpdateEvent) {
+      const updatedEntries = (event.entries || []).map((item) =>
+        (item.pin && item.pin === updatedEntry.pin) || (item.email && item.email === updatedEntry.email)
+          ? updatedEntry
+          : item
+      );
+      onUpdateEvent({ ...event, entries: updatedEntries });
+    }
+  };
+
   const handleSubmit = async () => {
     setFeedback(null);
     const identityValidation = form.isStepValid('identity');
@@ -762,6 +826,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             pendingAmount={pendingAmount}
             isAdmin={isAdmin}
             onUpdatePaymentItemStatus={!readOnly ? handleUpdatePaymentItemStatus : undefined}
+            onDeletePaymentItem={!readOnly ? handleDeletePaymentItem : undefined}
           />
         )}
       </div>

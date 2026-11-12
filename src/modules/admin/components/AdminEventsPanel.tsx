@@ -5,8 +5,7 @@ import { findUsersByPins, getDb } from '@infra/firebase';
 import { ensureEventEntriesRegistrationIds, fetchEventByPin, fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { EventDashboardView } from './EventDashboardView';
-import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
-import { canUseEventAdminAccess } from '@modules/events/services/eventAdminAccess';
+import { canUseEventAdminAccess, isCoAdminOfEvent, isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 import { AdminEventCard, EventConfigForm } from './events';
 
 interface AdminEventsPanelProps {
@@ -279,6 +278,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         editingEvent={editingEvent}
         isReadOnlyRegistration={isReadOnlyRegistration}
         canManageEventAdmins={canManageEventAdmins}
+        canManageEventHelpers={isPrimaryAdmin || isCoAdminOfEvent(editingEvent, adminPin)}
         isSavingEvent={isSavingEvent}
         bannerInputRef={bannerInputRef}
         coAdminNamesByPin={coAdminNamesByPin}
@@ -288,6 +288,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         activeSports={activeSports}
         onChangeEditingEvent={onChangeEditingEvent}
         onSaveEvent={handleSaveEventAndSyncDashboard}
+        onUpdateEvent={handleUpdateDashboardEvent}
         onClose={() => {
           setInitialConfigBlock(undefined);
           onChangeEditingEvent(null);

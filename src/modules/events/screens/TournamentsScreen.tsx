@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X, Bell, ShieldCheck } from 'lucide-react';
+import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X, Bell, ShieldCheck, Gavel, ClipboardCheck } from 'lucide-react';
 import { getDb, updateEvent, saveEventEntry } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { fetchActiveEvents } from '../services/fetchActiveEvents';
@@ -7,7 +7,7 @@ import { fetchEventByPin, fetchEventEntry } from '@infra/firebase/events';
 import type { EventRegistration, TournamentEntry, TournamentEvent } from '../types';
 import type { UserProfile } from '@modules/auth/types';
 import { EventRegistrationForm } from '../domain/registration';
-import { canUseEventAdminAccess, isPrimaryAdminEmail } from '../services/eventAdminAccess';
+import { canUseEventAdminAccess, isCoAdminOfEvent, isEventHelper, isJudgeOfEvent, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
 import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
 
@@ -15,7 +15,7 @@ interface Props {
   registrations: EventRegistration[];
   onBack: () => void;
   onJoin: (pin: string, entryData: Partial<TournamentEntry>) => void;
-  onSelectEvent: (event: EventRegistration) => void;
+  onSelectEvent: (event: EventRegistration | TournamentEvent) => void;
   onSelectAdminEvent?: (event: TournamentEvent | EventRegistration) => void;
   onOpenMenu: () => void;
   userProfile?: UserProfile;
@@ -253,7 +253,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     const isPrimary = isPrimaryAdminEmail(userProfile?.email);
     return new Set(
       activeEvents
-        .filter((event) => isPrimary || canUseEventAdminAccess(event, userPin))
+        .filter((event) => isPrimary || canUseEventAdminAccess(event, userPin) || isJudgeOfEvent(event, userPin))
         .map((event) => event.pin.trim().toUpperCase())
     );
   }, [activeEvents, userProfile?.pin, userProfile?.email]);
@@ -286,14 +286,15 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     return activeEvents.filter((ev) => {
       const eventPin = ev.pin.trim().toUpperCase();
       const isNotRegistered = !registeredPins.has(eventPin);
+      const isNotAlreadyListed = !adminEventPins.has(eventPin);
       const isRegistrationOpen = getRegistrationPeriodStatus(ev).isOpen;
-      if (!isNotRegistered || !isRegistrationOpen) return false;
+      if (!isNotRegistered || !isNotAlreadyListed || !isRegistrationOpen) return false;
       if (!normalizedSearch) return true;
       const matchName = ev.name?.toLowerCase().includes(normalizedSearch);
       const matchPin = ev.pin?.toLowerCase().includes(normalizedSearch);
       return matchName || matchPin;
     });
-  }, [activeEvents, registeredPins, normalizedSearch]);
+  }, [activeEvents, registeredPins, adminEventPins, normalizedSearch]);
 
   // Mapa de eventos ativos por PIN
   const activeEventsMap = useMemo(() => {
@@ -515,9 +516,20 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                 const { pin, name, joinedAt, paymentStatus } = reg;
                 // Usa o evento completo do mapa ativo; se não estiver lá, usa o mapa de inscrições (eventos inativos)
                 const eventObj = activeEventsMap.get(pin.toUpperCase()) ?? registeredEventsMap.get(pin.toUpperCase());
-                const isUserAdmin =
-                  isPrimaryAdminEmail(userProfile?.email) ||
-                  (eventObj ? canUseEventAdminAccess(eventObj, userProfile?.pin) : false);
+                const isPrimaryAdmin = isPrimaryAdminEmail(userProfile?.email);
+                const isCoAdmin = Boolean(eventObj && isCoAdminOfEvent(eventObj, userProfile?.pin));
+                const isHelper = Boolean(eventObj && isEventHelper(eventObj, userProfile?.pin) && !isCoAdmin);
+                const isJudge = Boolean(eventObj && isJudgeOfEvent(eventObj, userProfile?.pin));
+                const canOpenEventAdmin = isPrimaryAdmin || isCoAdmin || isHelper;
+                const accessLabel = isPrimaryAdmin
+                  ? 'Administrador do evento'
+                  : isCoAdmin
+                  ? 'Co-administrador do evento'
+                  : isHelper
+                  ? 'Auxiliar do evento'
+                  : isJudge
+                  ? 'Juiz do evento'
+                  : null;
                 const isActualRegistration =
                   directRegistrationPins.has(pin.toUpperCase()) ||
                   (!activeEventsMap.has(pin.toUpperCase()) &&
@@ -557,7 +569,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                             <p className="text-[10px] font-bold">
                               {isActualRegistration
                                 ? `Inscrito em ${new Date(joinedAt).toLocaleDateString('pt-BR')}`
-                                : 'Administrador do evento'}
+                                : accessLabel || 'Administrador do evento'}
                             </p>
                           </div>
                           {statusInfo && (
@@ -569,7 +581,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {isUserAdmin && (
+                      {canOpenEventAdmin && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -579,9 +591,22 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                             }
                           }}
                           className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-600 hover:text-white flex items-center justify-center transition-all active:scale-90 shadow-sm"
-                          title="Acessar como administrador do evento"
+                          title={isHelper ? 'Acessar como auxiliar do evento' : 'Acessar como administrador do evento'}
                         >
-                          <ShieldCheck size={20} />
+                          {isHelper ? <ClipboardCheck size={20} /> : <ShieldCheck size={20} />}
+                        </button>
+                      )}
+                      {isJudge && eventObj && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectEvent(eventObj);
+                          }}
+                          className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-all active:scale-90 shadow-sm"
+                          title="Acessar como juiz do evento"
+                        >
+                          <Gavel size={20} />
                         </button>
                       )}
                       <ChevronRight size={20} className="text-gray-300 group-hover:text-amber-500 transition-colors" />

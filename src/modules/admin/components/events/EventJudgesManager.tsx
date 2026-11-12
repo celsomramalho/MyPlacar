@@ -84,8 +84,8 @@ export const EventJudgesManager: React.FC<EventJudgesManagerProps> = ({
               value={judgePin}
               disabled={isReadOnlyRegistration}
               onChange={(e) => setJudgePin(e.target.value.toUpperCase())}
-              placeholder="PIN do usuário (5 dígitos)"
-              className="flex-1 h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-mono font-black text-xs uppercase placeholder:normal-case outline-none"
+              placeholder="PIN do usuário"
+              className="w-1/3 max-w-[33.333%] min-w-0 flex-none h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-mono font-black text-xs uppercase placeholder:normal-case outline-none"
             />
             <button
               type="button"
