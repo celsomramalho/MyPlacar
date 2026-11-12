@@ -459,7 +459,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
               </p>
             ) : (
               <>
-              <div className="space-y-3 md:hidden">
+              <div className="space-y-3">
                 {paidRegistrationsList.map((pay, idx) => (
                   <article key={`${pay.entryPin}-${idx}`} className="rounded-2xl border border-emerald-100 bg-white p-3 flex items-center justify-between gap-3">
                     <div className="min-w-0"><p className="truncate font-black text-slate-800">{pay.participantName}</p><p className="text-[10px] font-bold text-slate-500">{formatDateShort(pay.date)} · {pay.categoriesStr}</p></div>
@@ -467,7 +467,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                   </article>
                 ))}
               </div>
-              <div className="hidden overflow-x-auto md:block">
+              <div className="hidden">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="text-[11px] font-black text-slate-700 border-b border-slate-100">
@@ -543,7 +543,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
               </div>
             ) : (
               <>
-              <div className="space-y-3 md:hidden">
+              <div className="space-y-3">
                 {pendingEntriesList.map((item) => (
                   <article key={`${item.entry.pin}-${item.payment.id || item.paymentIndex}`} className="rounded-2xl border border-amber-100 p-3 space-y-2">
                     <div className="flex justify-between gap-3"><div><p className="font-black text-slate-800">{item.entry.nickname || item.entry.name}</p><p className="text-[10px] font-bold text-amber-600">Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.payment.date)}</p></div><p className="text-right text-xs font-black text-amber-600">R$ {item.pendingAmount.toFixed(2)}<span className="block text-[9px] text-slate-400">comprovante</span></p></div>
@@ -552,7 +552,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                   </article>
                 ))}
               </div>
-              <div className="hidden overflow-x-auto md:block">
+              <div className="hidden">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="text-[11px] font-black text-slate-700 border-b border-slate-100">

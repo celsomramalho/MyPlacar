@@ -24,7 +24,7 @@ import type {
   PricingCalculationResult,
 } from '../types';
 import { calculateRegistrationPrice } from '../engine/pricingEngine';
-import { calculateCategoryVacancy, buildCategoryConfirmedCountMap } from '../engine/vacancyCalculator';
+import { calculateCategoryVacancy, buildCategoryOccupancyCountMap } from '../engine/vacancyCalculator';
 import { isPreDefinedTeamDraw, requiresPartnerDetails as shouldRequirePartnerDetails } from '../engine/partnerRequirements';
 
 export interface UseRegistrationFormOptions {
@@ -238,9 +238,9 @@ export function useRegistrationForm({
   );
 
   // ─── Vagas e Confirmações por Categoria ────────────────────────────────────
-  const confirmedCountMap = useMemo(
-    () => buildCategoryConfirmedCountMap(liveEntries, pricing.isFree),
-    [liveEntries, pricing.isFree]
+  const occupancyCountMap = useMemo(
+    () => buildCategoryOccupancyCountMap(liveEntries),
+    [liveEntries]
   );
 
   const categoryVacancyMap = useMemo(() => {
@@ -248,11 +248,11 @@ export function useRegistrationForm({
     const categories = event.categories || [];
     for (const cat of categories) {
       const isAlreadyInEntry = (entry.categoryIds || []).includes(cat.id);
-      const confirmed = confirmedCountMap[cat.id] || 0;
-      map[cat.id] = calculateCategoryVacancy(cat, confirmed, isAlreadyInEntry);
+      const occupied = occupancyCountMap[cat.id] || 0;
+      map[cat.id] = calculateCategoryVacancy(cat, occupied, isAlreadyInEntry);
     }
     return map;
-  }, [event, entry.categoryIds, confirmedCountMap]);
+  }, [event, entry.categoryIds, occupancyCountMap]);
 
   const groupConflictCategoryIds = useMemo(() => {
     const categories = event.categories || [];

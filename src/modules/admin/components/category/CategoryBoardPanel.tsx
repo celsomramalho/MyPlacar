@@ -1,4 +1,5 @@
 import React from 'react';
+import { Trash2 } from 'lucide-react';
 import type {
   EventCategory,
   PlayerStanding,
@@ -40,6 +41,8 @@ export interface CategoryBoardPanelProps {
   onDeleteEntry: (targetPin: string) => void;
   onDeleteAllCategoryEntries?: () => void;
   onGenerateTemporaryEntries?: () => void;
+  temporaryDataCounts: { entries: number; pairs: number; matches: number };
+  onDeleteTemporaryData: () => void;
   onUpdateEvent: (event: TournamentEvent) => void;
   onToggleCheckIn: (entry: TournamentEntry) => void;
   canCheckInParticipants?: boolean;
@@ -108,6 +111,8 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   onDeleteEntry,
   onDeleteAllCategoryEntries,
   onGenerateTemporaryEntries,
+  temporaryDataCounts,
+  onDeleteTemporaryData,
   onUpdateEvent,
   onToggleCheckIn,
   canCheckInParticipants = true,
@@ -148,6 +153,23 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
 }) => {
   return (
     <div className="mt-2 space-y-4">
+      {!isReadOnly && (temporaryDataCounts.entries + temporaryDataCounts.pairs + temporaryDataCounts.matches > 0) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-xs font-bold text-amber-800">
+            Temporários encontrados: {temporaryDataCounts.entries} inscritos, {temporaryDataCounts.pairs} times e {temporaryDataCounts.matches} partidas.
+          </p>
+          <button
+            type="button"
+            onClick={onDeleteTemporaryData}
+            className="flex items-center justify-center gap-2 rounded-xl border-2 border-red-500 bg-white px-3.5 py-2 text-xs font-black text-red-600 transition-all hover:bg-red-50 active:scale-95"
+            title="Excluir inscrições com PIN TEMP e seus times e partidas vinculados"
+          >
+            <Trash2 size={15} />
+            Excluir temporários
+          </button>
+        </div>
+      )}
+
       {categoryPanelView === 'entries' && (
         <CategoryEntriesTab
           category={category}

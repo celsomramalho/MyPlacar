@@ -852,6 +852,83 @@ export const EventCategoriesManager: React.FC<Props> = ({
     });
   };
 
+  const temporaryPin = (pin?: string) => Boolean(pin?.trim().toUpperCase().startsWith('TEMP'));
+  const temporaryEntry = (entry?: Partial<TournamentEntry>) => temporaryPin(entry?.pin);
+  const temporaryPair = (pair?: Partial<TournamentPair>) => temporaryEntry(pair?.p1) || temporaryEntry(pair?.p2);
+
+  const temporaryCategoryEntries = categoryEntries.filter(temporaryEntry);
+  const temporaryCategoryPairs = categoryPairs.filter(temporaryPair);
+  const temporaryPairIds = new Set(temporaryCategoryPairs.map((pair) => pair.id));
+  const temporaryCategoryMatches = categoryMatches.filter((match) =>
+    temporaryPairIds.has(match.pair1Id || '') ||
+    temporaryPairIds.has(match.pair2Id || '') ||
+    temporaryPairIds.has(match.winnerPairId || '') ||
+    temporaryPairIds.has(match.loserPairId || '') ||
+    temporaryPair(match.pair1) ||
+    temporaryPair(match.pair2)
+  );
+
+  const handleDeleteTemporaryCategoryData = () => {
+    if (!selectedCategory) return;
+    const tempEntryPins = new Set(temporaryCategoryEntries.map((entry) => entry.pin?.toUpperCase().trim()).filter(Boolean));
+    const tempPairs = new Set(temporaryCategoryPairs.map((pair) => pair.id));
+    const tempMatches = new Set(temporaryCategoryMatches.map((match) => match.id));
+    const total = tempEntryPins.size + tempPairs.size + tempMatches.size;
+    if (total === 0) return;
+
+    setModalConfig({
+      title: 'Excluir dados temporários?',
+      message: `Serão removidos ${tempEntryPins.size} inscrição(ões), ${tempPairs.size} time(s) e ${tempMatches.size} partida(s) desta categoria. Inscrições temporárias são identificadas pelo PIN iniciado por TEMP.`,
+      confirmLabel: 'Excluir temporários',
+      variant: 'danger',
+      onConfirm: async () => {
+        setModalConfig(null);
+        const categoryId = selectedCategory.id;
+        const tempEntries = categoryEntries.filter(temporaryEntry);
+        const nextEntries = entries.flatMap((entry) => {
+          if (!temporaryPin(entry.pin) || !entry.categoryIds?.includes(categoryId)) return [entry];
+          const remainingCategoryIds = (entry.categoryIds || []).filter((id) => id !== categoryId);
+          return remainingCategoryIds.length > 0 ? [{ ...entry, categoryIds: remainingCategoryIds }] : [];
+        });
+        const nextPairs = pairs.filter((pair) => !tempPairs.has(pair.id));
+        const nextMatches = matches.filter((match) => !tempMatches.has(match.id));
+
+        const db = getDb();
+        if (db && event.pin) {
+          try {
+            const { deleteAdminEventEntry, deleteUserEventRegistration, saveAdminEventEntry } = await import('@infra/firebase/events');
+            await Promise.all(tempEntries.map(async (entry) => {
+              const remaining = nextEntries.find((candidate) => candidate.pin === entry.pin);
+              if (remaining) {
+                await saveAdminEventEntry(db as Firestore, event.pin, remaining as any, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+              } else {
+                await deleteAdminEventEntry(db as Firestore, event.pin, entry.email || '', entry.pin, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+                if (entry.email) await deleteUserEventRegistration(db as Firestore, entry.email, event.pin).catch(() => {});
+              }
+            }));
+            await updateEvent(db as Firestore, event.pin, {
+              pairs: nextPairs.map(minifyPairForStorage),
+              matches: nextMatches,
+            });
+          } catch (err) {
+            console.error('Erro ao excluir dados temporários da categoria:', err);
+            setModalConfig({
+              title: 'Erro ao excluir temporários',
+              message: 'Não foi possível concluir a limpeza no servidor. Atualize os dados e tente novamente.',
+              onConfirm: () => setModalConfig(null),
+            });
+            return;
+          }
+        }
+
+        setSelectedEntries(new Set());
+        setSelectedTeamIds(new Set());
+        onUpdateEvent({ ...event, entries: nextEntries, pairs: nextPairs, matches: nextMatches });
+      },
+      onCancel: () => setModalConfig(null),
+    });
+  };
+
   const handleGenerateTemporaryCategoryEntries = () => {
     if (!selectedCategory) return;
     const limit = selectedCategory.maxPlayers && selectedCategory.maxPlayers > 0 ? selectedCategory.maxPlayers : 8;
@@ -1050,7 +1127,9 @@ export const EventCategoriesManager: React.FC<Props> = ({
             .sort((a, b) => a.priority - b.priority)
             .map((cat) => {
               const isSelected = selectedCategoryId === cat.id;
-              const inscritosCount = entries.filter((entry) => entry.categoryIds?.includes(cat.id)).length;
+              const inscritosCount = entries.filter(
+                (entry) => !entry.disabled && entry.paymentStatus !== 'Cancelado' && entry.categoryIds?.includes(cat.id)
+              ).length;
               const categoryLimit = cat.maxPlayers && cat.maxPlayers > 0 ? cat.maxPlayers : 8;
               return (
                 <button
@@ -1225,6 +1304,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onDeleteEntry={handleDeleteEntry}
                     onDeleteAllCategoryEntries={handleDeleteAllCategoryEntries}
                     onGenerateTemporaryEntries={handleGenerateTemporaryCategoryEntries}
+                    temporaryDataCounts={{ entries: temporaryCategoryEntries.length, pairs: temporaryCategoryPairs.length, matches: temporaryCategoryMatches.length }}
+                    onDeleteTemporaryData={handleDeleteTemporaryCategoryData}
                     onUpdateEvent={onUpdateEvent}
                     onToggleCheckIn={toggleCategoryCheckIn}
                     canCheckInParticipants={canCheckInParticipants}

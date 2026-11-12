@@ -21,45 +21,32 @@ import type { CategoryVacancyResult } from '../types';
  */
 export function calculateCategoryVacancy(
   category: Pick<EventCategory, 'maxPlayers'>,
-  confirmedEntriesCount: number,
+  occupiedEntriesCount: number,
   isAlreadyEnrolled = false
 ): CategoryVacancyResult {
-  const limit = category.maxPlayers ?? 8;
-  const isFull = !isAlreadyEnrolled && confirmedEntriesCount >= limit;
-  const remaining = Math.max(0, limit - confirmedEntriesCount);
+  const limit = category.maxPlayers && category.maxPlayers > 0 ? category.maxPlayers : 8;
+  const isFull = !isAlreadyEnrolled && occupiedEntriesCount >= limit;
+  const remaining = Math.max(0, limit - occupiedEntriesCount);
 
   return {
     limit,
-    confirmedCount: confirmedEntriesCount,
+    confirmedCount: occupiedEntriesCount,
     remaining,
     isFull,
   };
 }
 
 /**
- * Mapeia a contagem de inscrições confirmadas (ou com pagamento aprovado)
- * para cada ID de categoria do evento.
- *
- * Em eventos gratuitos (isFreeEvent = true), todas as inscrições válidas
- * (não canceladas e não desativadas) são consideradas confirmadas.
+ * Mapeia as inscrições que ocupam vaga para cada ID de categoria do evento.
+ * Pagamento pendente também ocupa vaga; apenas inscrições canceladas ou
+ * desativadas deixam de contar.
  */
-export function buildCategoryConfirmedCountMap(
-  entries: TournamentEntry[],
-  isFreeEvent = false
-): Record<string, number> {
+export function buildCategoryOccupancyCountMap(entries: TournamentEntry[]): Record<string, number> {
   const countMap: Record<string, number> = {};
 
   for (const entry of entries) {
     if (entry.disabled || entry.paymentStatus === 'Cancelado') continue;
-
-    // Em eventos gratuitos ou quando o pagamento foi confirmado/pago/isento
-    const isConfirmed =
-      isFreeEvent ||
-      entry.paymentStatus === 'Confirmado' ||
-      entry.paymentStatus === 'Pago' ||
-      entry.paymentStatus === 'Isento';
-
-    if (isConfirmed && entry.categoryIds) {
+    if (entry.categoryIds) {
       for (const catId of entry.categoryIds) {
         countMap[catId] = (countMap[catId] || 0) + 1;
       }
