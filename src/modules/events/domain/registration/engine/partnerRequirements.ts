@@ -16,11 +16,11 @@ export const isPreDefinedTeamDraw = (teamDrawType?: string): boolean => {
 };
 
 export const requiresPartnerDetails = (
-  _teamDrawType: string | undefined,
+  teamDrawType: string | undefined,
   categories: EventCategory[],
   selectedCategoryIds: string[],
 ): boolean =>
-  selectedCategoryIds.some((categoryId) => {
+  isPreDefinedTeamDraw(teamDrawType) && selectedCategoryIds.some((categoryId) => {
     const cat = categories.find((c) => c.id === categoryId);
     return cat?.format === 'Duplas' && cat?.requiresPartner !== false;
   });

@@ -29,6 +29,7 @@ export {
 export {
   calculateCategoryVacancy,
   buildCategoryOccupancyCountMap,
+  buildCategoryConfirmedCountMap,
 } from './engine/vacancyCalculator';
 
 export {

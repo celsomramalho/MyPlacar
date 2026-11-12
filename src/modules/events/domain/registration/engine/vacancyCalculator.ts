@@ -55,3 +55,23 @@ export function buildCategoryOccupancyCountMap(entries: TournamentEntry[]): Reco
 
   return countMap;
 }
+
+/** Mantém o contrato legado de contagem confirmada usado por relatórios e testes. */
+export function buildCategoryConfirmedCountMap(
+  entries: TournamentEntry[],
+  isFreeEvent = false
+): Record<string, number> {
+  const countMap: Record<string, number> = {};
+  for (const entry of entries) {
+    if (entry.disabled || entry.paymentStatus === 'Cancelado') continue;
+    const isConfirmed = isFreeEvent ||
+      entry.paymentStatus === 'Confirmado' ||
+      entry.paymentStatus === 'Pago' ||
+      entry.paymentStatus === 'Isento';
+    if (!isConfirmed) continue;
+    for (const catId of entry.categoryIds || []) {
+      countMap[catId] = (countMap[catId] || 0) + 1;
+    }
+  }
+  return countMap;
+}

@@ -4,7 +4,7 @@ import { MatchSettings, VoiceCommands, SportDefinition } from './types.ts';
 // Versão exibida e usada pelos controles de compatibilidade do sistema.
 // Atualizações publicadas do PWA são detectadas pelo identificador de cada build,
 // sem depender de alterar este número ou a versão cadastrada no Admin.
-export const APP_VERSION = '2.5.28'; 
+export const APP_VERSION = '2.5.28a'; 
 
 export const SPORT_GROUPS = [
   { id: 'raquetes',  name: 'Raquetes',  icon: '🎾', isActive: true  },
