@@ -9,9 +9,12 @@ import { fileURLToPath } from 'url';
 const constantsRaw = readFileSync(resolve(__dirname, 'src/constants.ts'), 'utf-8');
 const versionMatch  = constantsRaw.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
 const APP_VERSION   = versionMatch ? versionMatch[1] : Date.now().toString();
-const CACHE_NAME    = `myplacar-v${APP_VERSION}`;
+// Cada build publicado recebe um identificador próprio para que o navegador
+// detecte mudanças mesmo quando APP_VERSION e a versão do Admin não mudarem.
+const BUILD_ID      = Date.now().toString(36);
+const CACHE_NAME    = `myplacar-build-${BUILD_ID}`;
 
-console.log(`\n🔖 MyPlacar build — versão: ${APP_VERSION} | cache: ${CACHE_NAME}\n`);
+console.log(`\n🔖 MyPlacar build — versão: ${APP_VERSION} | build: ${BUILD_ID} | cache: ${CACHE_NAME}\n`);
 
 // ── Plugin: gera dist/sw.js (build) e public/sw.js (dev) a partir do template ──
 // O public/sw.js gerado aqui NÃO deve ser commitado (.gitignore).

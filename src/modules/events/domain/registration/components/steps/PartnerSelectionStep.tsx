@@ -305,7 +305,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                 <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
                   <UserCheck size={16} className="mt-0.5 shrink-0 text-blue-600" />
                   <div>
-                    <p className="font-black">{partnerEntry.name || partnerEntry.nickname} já possui inscrição neste evento.</p>
+                    <p className="font-black">{partnerEntry.name || partnerEntry.nickname} já possui inscrição nesta categoria.</p>
                     <p className="mt-0.5 font-bold text-blue-700">
                       {partnerEntry.email}{partnerEntry.phone ? ` · ${formatPhone(partnerEntry.phone)}` : ''}
                     </p>

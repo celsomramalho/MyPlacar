@@ -1050,18 +1050,23 @@ export const EventCategoriesManager: React.FC<Props> = ({
             .sort((a, b) => a.priority - b.priority)
             .map((cat) => {
               const isSelected = selectedCategoryId === cat.id;
+              const inscritosCount = entries.filter((entry) => entry.categoryIds?.includes(cat.id)).length;
+              const categoryLimit = cat.maxPlayers && cat.maxPlayers > 0 ? cat.maxPlayers : 8;
               return (
                 <button
                   key={cat.id}
                   type="button"
                   onClick={() => openCategoryPanel(cat.id, 'entries')}
-                  className={`min-h-[44px] rounded-xl border px-3 py-2 text-xs font-black transition-all active:scale-[0.98] ${
+                  className={`min-h-[68px] rounded-xl border px-3 py-2.5 text-xs font-black transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1 ${
                     isSelected
                       ? 'border-slate-900 bg-slate-900 text-white shadow-md'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
-                  {cat.name}{cat.abbreviation ? ` (${cat.abbreviation})` : ''}
+                  <span className="leading-tight">{cat.name}{cat.abbreviation ? ` (${cat.abbreviation})` : ''}</span>
+                  <span className={`text-[11px] font-black ${isSelected ? 'text-emerald-300' : 'text-emerald-600'}`}>
+                    {inscritosCount} / {categoryLimit}
+                  </span>
                 </button>
               );
             })}

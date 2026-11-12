@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { AuthScreen } from '@modules/auth';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
+import { checkForServiceWorkerUpdate } from '@pwa/registerServiceWorker';
 
 interface AuthRouteProps {
   appUrl: string;
@@ -39,6 +40,7 @@ export function AuthRoute({
         }
         setUserProfile(p);
         setCurrentScreen('home');
+        void checkForServiceWorkerUpdate(true);
       }}
       onCheckUpdate={() => handleCheckUpdate(true).then(v => v ?? false)}
       setIsUpdatingVersion={setIsUpdatingVersion}

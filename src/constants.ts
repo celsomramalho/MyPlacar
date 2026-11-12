@@ -1,8 +1,9 @@
 
 import { MatchSettings, VoiceCommands, SportDefinition } from './types.ts';
 
-// ATENÇÃO: Esta é a versão deste arquivo de código. 
-// Se você mudar no Admin para um número DIFERENTE deste, todos os usuários serão forçados a atualizar.
+// Versão exibida e usada pelos controles de compatibilidade do sistema.
+// Atualizações publicadas do PWA são detectadas pelo identificador de cada build,
+// sem depender de alterar este número ou a versão cadastrada no Admin.
 export const APP_VERSION = '2.5.27'; 
 
 export const SPORT_GROUPS = [

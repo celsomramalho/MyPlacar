@@ -18,6 +18,7 @@ export interface ParticipantRowProps {
   isSimplified?: boolean;
   canViewHistory?: boolean;
   pair?: TournamentPair | null;
+  pairHighlightClassName?: string;
   standing?: PlayerStanding | null;
   isIndividualRanking?: boolean;
   isRanking?: boolean;
@@ -45,6 +46,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
   isSimplified = false,
   canViewHistory,
   pair,
+  pairHighlightClassName,
   standing,
   isIndividualRanking = false,
   isRanking = false,
@@ -96,6 +98,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
           ? 'bg-sky-50/40 hover:bg-sky-50/70 border-l-4 border-l-sky-400'
           : isRanking && !pair
           ? 'bg-emerald-50/25 hover:bg-emerald-50/60 border-l-4 border-l-emerald-400'
+          : pairHighlightClassName
+          ? `${pairHighlightClassName} hover:brightness-[0.98]`
           : 'odd:bg-white even:bg-slate-50/40 hover:bg-slate-50'
       } ${canSelect && !isCancelled ? 'cursor-pointer' : isCancelled ? 'cursor-not-allowed' : ''}`}
     >
@@ -156,11 +160,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
                 </span>
               )}
 
-              {pair ? (
-                <span className="font-mono text-sky-800 bg-sky-100 border border-sky-300 px-2 py-0.5 rounded-lg text-[10px] font-black inline-flex items-center gap-1">
-                  <Users size={11} /> {pair.teamCode || 'Time formado'}
-                </span>
-              ) : entry.registrationId && !isSuper8 && !isRanking ? (
+              {!pair && entry.registrationId && !isSuper8 && !isRanking ? (
                 <span className="font-mono text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-lg text-[10px] font-black">
                   {formatRegistrationId(entry.registrationId)}
                 </span>
@@ -178,10 +178,19 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
               </p>
             )}
 
-            {category && (
-              <span className="inline-flex bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60">
-                {category.abbreviation || category.name}
-              </span>
+            {(category || pair) && (
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                {category ? (
+                  <span className="inline-flex min-w-0 truncate bg-slate-100 text-slate-700 font-black px-2.5 py-0.5 rounded-lg text-[10px] border border-slate-200/60">
+                    {category.abbreviation || category.name}
+                  </span>
+                ) : <span />}
+                {pair && (
+                  <span className="ml-auto shrink-0 font-mono text-sky-800 bg-sky-100 border border-sky-300 px-2 py-0.5 rounded-lg text-[10px] font-black inline-flex items-center gap-1">
+                    <Users size={11} /> {pair.teamCode || 'Time formado'}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

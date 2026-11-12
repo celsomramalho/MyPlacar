@@ -131,6 +131,27 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   };
 
   const visibleEntries = filterEntriesByParticipantSearch(entries, searchQuery);
+  const pairHighlightColors = [
+    'bg-amber-100/80 border-l-4 border-l-amber-400',
+    'bg-green-200/80 border-l-4 border-l-green-500',
+  ];
+  const getPairHighlightClass = (pair: TournamentPair | null) => {
+    if (!pair) return undefined;
+    const orderedPairIds: string[] = [];
+    entries.forEach((entry) => {
+      const entryEmail = entry.email?.toLowerCase().trim();
+      const entryPin = entry.pin?.toUpperCase().trim();
+      const entryPair = (event.pairs || []).find((candidate) =>
+        candidate.categoryId === category.id && (
+          (entryEmail && (candidate.p1?.email?.toLowerCase().trim() === entryEmail || candidate.p2?.email?.toLowerCase().trim() === entryEmail)) ||
+          (entryPin && (candidate.p1?.pin?.toUpperCase().trim() === entryPin || candidate.p2?.pin?.toUpperCase().trim() === entryPin))
+        )
+      );
+      if (entryPair && !orderedPairIds.includes(entryPair.id)) orderedPairIds.push(entryPair.id);
+    });
+    const pairIndex = orderedPairIds.indexOf(pair.id);
+    return pairIndex < 0 ? undefined : pairHighlightColors[pairIndex % pairHighlightColors.length];
+  };
 
   return (
     <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
@@ -271,6 +292,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                     category={category}
                     categories={event.categories}
                     pair={pair}
+                    pairHighlightClassName={getPairHighlightClass(pair)}
                     standing={standing}
                     isIndividualRanking={isIndividualRanking}
                     isRanking={isRanking}
@@ -342,6 +364,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                   category={category}
                   categories={event.categories}
                   pair={pair}
+                  pairHighlightClassName={getPairHighlightClass(pair)}
                   standing={standing}
                   isIndividualRanking={isIndividualRanking}
                   isRanking={isRanking}
