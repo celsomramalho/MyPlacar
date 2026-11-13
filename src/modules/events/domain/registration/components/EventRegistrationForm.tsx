@@ -10,7 +10,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Check, Trash2, X, AlertCircle, Loader2 } from 'lucide-react';
 import {
-  getNextRegistrationId,
   orderPairEntriesForMixed,
   minifyEntryForPair,
   isSimplifiedRegistrationEvent,
@@ -22,7 +21,7 @@ import {
   type PaymentItem,
 } from '@modules/events/types';
 import { getDb } from '@infra/firebase';
-import { fetchEventEntries } from '@infra/firebase/events';
+import { fetchEventEntries, reserveNextRegistrationId } from '@infra/firebase/events';
 import type { FirebaseUserByPin } from '@infra/firebase/users';
 import type { Firestore } from 'firebase/firestore';
 import { useRegistrationForm } from '../hooks/useRegistrationForm';
@@ -278,9 +277,10 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       setIsSubmitting(true);
       try {
         const submission = form.getSubmissionEntry();
-        if (!submission.registrationId) {
-          submission.registrationId = entry.registrationId || getNextRegistrationId(liveEntries);
-        }
+        const db = getDb();
+        if (!db) throw new Error('Não foi possível conectar ao Firebase para reservar o ID da inscrição. Tente novamente.');
+        submission.registrationId = await reserveNextRegistrationId(db as Firestore, event.pin, submission.email);
+        form.updateField('registrationId', submission.registrationId);
         submission.paymentStatus = submission.paymentStatus || 'Pendente';
         submission.dueAmount = form.pricing.dueAmount;
 
@@ -316,6 +316,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
         }
       } catch (err) {
         console.warn('Erro ao salvar pré-inscrição:', err);
+        setFeedback(err instanceof Error ? err.message : 'Não foi possível reservar o ID da inscrição. Tente novamente.');
+        return;
       } finally {
         setIsSubmitting(false);
       }
@@ -500,7 +502,18 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     }
 
     if (!submission.registrationId) {
-      submission.registrationId = getNextRegistrationId(liveEntries);
+      const db = getDb();
+      if (!db) {
+        setFeedback('Não foi possível conectar ao Firebase para reservar o ID da inscrição. Tente novamente.');
+        return;
+      }
+      try {
+        submission.registrationId = await reserveNextRegistrationId(db as Firestore, event.pin, submission.email);
+        form.updateField('registrationId', submission.registrationId);
+      } catch (err) {
+        setFeedback(err instanceof Error ? err.message : 'Não foi possível reservar o ID da inscrição. Tente novamente.');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -811,10 +824,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
         {form.currentStep === 'payment' && (
           <PaymentCheckoutStep
             event={event}
-            entry={{
-              ...entry,
-              registrationId: entry.registrationId || getNextRegistrationId(liveEntries),
-            }}
+            entry={{ ...entry, registrationId: form.formData.registrationId ?? entry.registrationId }}
             pricing={form.pricing}
             payment={payment}
             readOnly={readOnly}

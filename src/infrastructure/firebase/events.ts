@@ -9,6 +9,7 @@ import {
   getDocsFromServer,
   onSnapshot,
   query,
+  runTransaction,
   setDoc,
   updateDoc,
   type Firestore,
@@ -302,6 +303,64 @@ export const saveEventEntry = (
 ) => {
   const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(entry)));
   return setDoc(doc(db, 'events', eventPin, 'entries', entry.email.toLowerCase().trim()), sanitized);
+};
+
+/**
+ * Reserva um ID de inscrição sem colisões, inclusive quando várias inscrições
+ * são iniciadas ao mesmo tempo. A reserva é estável por e-mail para que uma
+ * repetição após falha de rede recupere o mesmo número.
+ */
+export const reserveNextRegistrationId = async (
+  db: Firestore,
+  eventPin: string,
+  entryEmail: string,
+): Promise<number> => {
+  const cleanEmail = entryEmail.toLowerCase().trim();
+  if (!eventPin || !cleanEmail) throw new Error('Evento e e-mail são necessários para reservar o ID da inscrição.');
+
+  const entriesCollection = collection(db, 'events', eventPin, 'entries');
+  const entriesSnapshot = await getDocsFromServer(query(entriesCollection));
+  const idCounts = new Map<number, number>();
+  let maxExistingId = 0;
+  entriesSnapshot.forEach((entryDoc) => {
+    const data = entryDoc.data() as FirebaseTournamentEntry;
+    const id = Number(data.registrationId);
+    if (Number.isInteger(id) && id > 0) {
+      idCounts.set(id, (idCounts.get(id) || 0) + 1);
+      maxExistingId = Math.max(maxExistingId, id);
+    }
+  });
+
+  const counterRef = doc(db, 'events', eventPin, 'registration_counters', 'sequence');
+  const entryRef = doc(db, 'events', eventPin, 'entries', cleanEmail);
+  const reservationRef = doc(db, 'events', eventPin, 'registration_reservations', encodeURIComponent(cleanEmail));
+
+  return runTransaction(db, async (transaction) => {
+    const [counterSnapshot, entrySnapshot, reservationSnapshot] = await Promise.all([
+      transaction.get(counterRef),
+      transaction.get(entryRef),
+      transaction.get(reservationRef),
+    ]);
+    const counterLastIssued = Number(counterSnapshot.data()?.lastIssued) || 0;
+    const currentEntryId = Number(entrySnapshot.data()?.registrationId);
+    const reservedId = Number(reservationSnapshot.data()?.registrationId);
+    const entryHasUniqueId = Number.isInteger(currentEntryId) && currentEntryId > 0 && idCounts.get(currentEntryId) === 1;
+    const reservationHasUniqueId = Number.isInteger(reservedId) && reservedId > 0 &&
+      (!idCounts.has(reservedId) || (entryHasUniqueId && currentEntryId === reservedId));
+
+    let registrationId: number;
+    if (entryHasUniqueId) {
+      registrationId = currentEntryId;
+    } else if (reservationHasUniqueId) {
+      registrationId = reservedId;
+    } else {
+      registrationId = Math.max(counterLastIssued, maxExistingId) + 1;
+    }
+
+    transaction.set(counterRef, { lastIssued: Math.max(counterLastIssued, maxExistingId, registrationId), updatedAt: Date.now() }, { merge: true });
+    transaction.set(reservationRef, { email: cleanEmail, registrationId, reservedAt: reservationSnapshot.data()?.reservedAt || Date.now() }, { merge: true });
+    return registrationId;
+  });
 };
 
 /**

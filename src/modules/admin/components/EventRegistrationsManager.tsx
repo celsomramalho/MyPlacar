@@ -562,10 +562,15 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
   const handleSaveSharedEntry = async (entryData: TournamentEntry, resetAfterSave = true) => {
     const db = getDb();
-    const finalEntry: TournamentEntry = {
-      ...entryData,
-      registrationId: entryData.registrationId || getNextRegistrationId(entries),
-    };
+    let registrationId = entryData.registrationId;
+    if (!registrationId) {
+      if (!db || !event.pin || !entryData.email) {
+        throw new Error('Não foi possível reservar o ID da inscrição. Verifique o evento e o e-mail do participante.');
+      }
+      const { reserveNextRegistrationId } = await import('@infra/firebase/events');
+      registrationId = await reserveNextRegistrationId(db, event.pin, entryData.email);
+    }
+    const finalEntry: TournamentEntry = { ...entryData, registrationId };
     if (db && event.pin) {
       const { saveAdminEventEntry, saveUserEventRegistration, deleteAdminEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
       if (editingPin) {

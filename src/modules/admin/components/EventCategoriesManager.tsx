@@ -1004,7 +1004,16 @@ export const EventCategoriesManager: React.FC<Props> = ({
         const isOnlyMale =
           selectedCategory.gender1 === 'M' && (!selectedCategory.gender2 || selectedCategory.gender2 === 'M');
 
-        let nextRegistrationIdSeq = getNextRegistrationId(entries);
+        const db = getDb();
+        if (!db || !event.pin) {
+          setModalConfig({
+            title: 'Não foi possível gerar inscrições',
+            message: 'Conecte-se ao Firebase para reservar IDs únicos para essas inscrições.',
+            onConfirm: () => setModalConfig(null),
+          });
+          return;
+        }
+        const { reserveNextRegistrationId } = await import('@infra/firebase/events');
         const newEntries: TournamentEntry[] = [];
         let maleAssigned = 0;
 
@@ -1046,8 +1055,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
             paymentStatus: 'Confirmado',
             payments: [],
             isSimplified: true,
-            registrationId: nextRegistrationIdSeq++,
           };
+          entry.registrationId = await reserveNextRegistrationId(db as Firestore, event.pin, entry.email);
 
           newEntries.push(entry);
         }
@@ -1055,7 +1064,6 @@ export const EventCategoriesManager: React.FC<Props> = ({
         const updatedEntries = [...entries, ...newEntries];
         onUpdateEvent({ ...event, entries: updatedEntries });
 
-        const db = getDb();
         if (db && event.pin) {
           try {
             const { saveEventEntry: persistSaveEntry } = await import('@infra/firebase/events');
