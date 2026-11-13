@@ -21,6 +21,7 @@ import {
   UserCheck,
   AlertCircle,
   Bell,
+  Search,
 } from 'lucide-react';
 import type { Communication, Reply } from '@modules/communications/types';
 import type { UserProfile } from '@modules/auth';
@@ -176,6 +177,7 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
   const [showRepliesFor, setShowRepliesFor] = useState<string | null>(null);
   const [adminReply, setAdminReply] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<CommunicationFilterType>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -203,7 +205,7 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
       }
     });
     if (!adminProfile?.email) return;
-    return subscribeRecentCommunications(db, 50, setRecentComms);
+    return subscribeRecentCommunications(db, 200, setRecentComms);
   }, [adminProfile?.email]);
 
   const handleToggleSupport = async (val: boolean) => {
@@ -379,6 +381,237 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
   const filteredComms = selectedCategory === 'all'
     ? deduplicatedComms
     : deduplicatedComms.filter(comm => getCommunicationCategory(comm) === selectedCategory);
+
+  const searchResults = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+
+    const cleanQ = q.replace(/^#/, '');
+
+    return deduplicatedComms.filter(comm => {
+      const title = (comm.title || '').toLowerCase();
+      const content = (comm.content || '').toLowerCase();
+      const author = (comm.authorName || '').toLowerCase();
+      const eventPin = (comm.eventPin || '').toLowerCase();
+      const targetUser = (comm.targetUserId || '').toLowerCase();
+      const targetPin = (comm.targetUserPin || '').toLowerCase();
+      const targetEmail = (comm.targetUserEmail || '').toLowerCase();
+      const regId = String((comm as any).registrationId || '').toLowerCase();
+      const payId = String(comm.paymentId || '').toLowerCase();
+      const catId = String(comm.categoryId || '').toLowerCase();
+      const formattedRegId = regId ? regId.padStart(4, '0') : '';
+
+      return (
+        title.includes(q) ||
+        content.includes(q) ||
+        author.includes(q) ||
+        eventPin.includes(q) ||
+        targetUser.includes(q) ||
+        targetPin.includes(q) ||
+        targetEmail.includes(q) ||
+        (cleanQ && regId.includes(cleanQ)) ||
+        (cleanQ && formattedRegId.includes(cleanQ)) ||
+        payId.includes(q) ||
+        catId.includes(q)
+      );
+    });
+  }, [deduplicatedComms, searchQuery]);
+
+  const renderCommCard = (comm: Communication) => {
+    const commCat = getCommunicationCategory(comm);
+    const catCfg = CATEGORY_CONFIG[commCat];
+    return (
+      <div key={comm.id} className="bg-white rounded-3xl p-5 border-2 border-slate-100 shadow-sm">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${catCfg.iconBg} ${catCfg.iconColor}`}>
+              {commCat === 'remocao_partida' ? (
+                <AlertCircle size={16} />
+              ) : commCat === 'pagamento' ? (
+                <DollarSign size={16} />
+              ) : commCat === 'inscricao' ? (
+                <UserCheck size={16} />
+              ) : commCat === 'nps' ? (
+                <TrendingUp size={16} />
+              ) : comm.type === 'poll' ? (
+                <PieChart size={16} />
+              ) : comm.type === 'support' ? (
+                <LifeBuoy size={16} />
+              ) : (
+                <MessageSquare size={16} />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-black text-slate-900">{comm.title}</h4>
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${catCfg.badgeStyle}`}>
+                  {catCfg.label}
+                </span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                {comm.eventPin ? (
+                  `Evento • ${comm.authorName}`
+                ) : comm.targetUserId === 'all' ? (
+                  'Todos'
+                ) : comm.targetUserId === 'admin' ? (
+                  `Enviado por ${comm.authorName}`
+                ) : (
+                  'Individual'
+                )} • {new Date(comm.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+          <button onClick={() => handleDeleteComm(comm.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Excluir comunicado">
+            <Trash2 size={16} />
+          </button>
+        </div>
+
+        <p className="text-xs text-slate-600 whitespace-pre-line mb-4 leading-relaxed">{comm.content}</p>
+
+        {/* Reactions View for Admin */}
+        {comm.reactions && Object.keys(comm.reactions).length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4 p-2 bg-slate-50 rounded-xl">
+            {Object.entries(comm.reactions).map(([emoji, pins]) => (
+              (pins as string[]).length > 0 && (
+                <div key={emoji} className="flex items-center gap-1.5 px-2 py-1 bg-white rounded-lg border border-slate-100 shadow-sm">
+                  <span className="text-sm">{emoji}</span>
+                  <span className="text-[10px] font-black text-slate-500">{(pins as string[]).length}</span>
+                </div>
+              )
+            ))}
+          </div>
+        )}
+
+        {comm.type === 'poll' && comm.poll && (
+          <div className="space-y-2 mb-4">
+            {comm.poll.options.map(opt => (
+              <div key={opt.id} className="space-y-1">
+                <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                  <span>{opt.text}</span>
+                  <span>{opt.votes} votos ({comm.poll!.totalVotes > 0 ? Math.round((opt.votes / comm.poll!.totalVotes) * 100) : 0}%)</span>
+                </div>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-amber-500 transition-all duration-500" 
+                    style={{ width: `${comm.poll!.totalVotes > 0 ? (opt.votes / comm.poll!.totalVotes) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* NPS Analytics Section */}
+        {comm.type === 'nps' && (() => {
+          const scores = Object.values(comm.nps?.scores || {}) as number[];
+          const total = scores.length;
+          const promoters = scores.filter(s => s >= 9).length;
+          const passives = scores.filter(s => s >= 7 && s <= 8).length;
+          const detractors = scores.filter(s => s <= 6).length;
+          const npsScore = total > 0 ? Math.round(((promoters - detractors) / total) * 100) : 0;
+          const zoneLabel = npsScore >= 75 ? 'Excelente' : npsScore >= 50 ? 'Muito bom' : npsScore >= 0 ? 'Razoável' : 'Crítico';
+          const zoneColor = npsScore >= 75 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : npsScore >= 50 ? 'bg-green-100 text-green-800 border-green-200' : npsScore >= 0 ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-red-100 text-red-800 border-red-200';
+          const commentsList = Object.entries(comm.nps?.comments || {});
+
+          return (
+            <div className="space-y-3 mb-4 p-4 bg-indigo-50/50 rounded-2xl border-2 border-indigo-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Resultado NPS</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-2xl font-black text-slate-900">{total > 0 ? (npsScore > 0 ? `+${npsScore}` : npsScore) : '—'}</span>
+                    {total > 0 && (
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${zoneColor}`}>
+                        Zona ${zoneLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{total} {total === 1 ? 'avaliação' : 'avaliações'}</span>
+                </div>
+              </div>
+
+              {total > 0 && (
+                <div>
+                  <div className="h-3 bg-slate-200 rounded-full overflow-hidden flex">
+                    <div style={{ width: `${(detractors / total) * 100}%` }} className="bg-red-500 transition-all" title={`Detratores: ${detractors}`} />
+                    <div style={{ width: `${(passives / total) * 100}%` }} className="bg-amber-400 transition-all" title={`Neutros: ${passives}`} />
+                    <div style={{ width: `${(promoters / total) * 100}%` }} className="bg-emerald-500 transition-all" title={`Promotores: ${promoters}`} />
+                  </div>
+                  <div className="grid grid-cols-3 text-center text-[10px] font-bold mt-2 gap-1">
+                    <span className="text-red-600 bg-red-50 py-0.5 rounded">🔴 {Math.round((detractors / total) * 100)}% Detratores ({detractors})</span>
+                    <span className="text-amber-600 bg-amber-50 py-0.5 rounded">🟡 {Math.round((passives / total) * 100)}% Neutros ({passives})</span>
+                    <span className="text-emerald-700 bg-emerald-50 py-0.5 rounded">🟢 {Math.round((promoters / total) * 100)}% Promotores ({promoters})</span>
+                  </div>
+                </div>
+              )}
+
+              {commentsList.length > 0 && (
+                <div className="pt-2 border-t border-indigo-100/60 space-y-1.5">
+                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Comentários dos usuários ({commentsList.length})</span>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {commentsList.map(([key, item]) => (
+                      <div key={key} className="bg-white p-2.5 rounded-xl border border-indigo-100 text-xs">
+                        <div className="flex justify-between text-[10px] font-black text-slate-500">
+                          <span>{item.authorName}</span>
+                          <span className="text-indigo-600 font-black">Nota: {comm.nps?.scores?.[key] ?? '—'}</span>
+                        </div>
+                        <p className="text-slate-700 font-medium mt-0.5 text-xs">{item.comment}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Replies Section for Admin */}
+        <div className="space-y-3">
+          <button 
+            onClick={() => setShowRepliesFor(showRepliesFor === comm.id ? null : comm.id)}
+            className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest"
+          >
+            {showRepliesFor === comm.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {comm.replies?.length || 0} Respostas
+          </button>
+
+          {showRepliesFor === comm.id && (
+            <div className="space-y-4 pt-2 border-t border-slate-50">
+              <div className="space-y-3 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                {comm.replies?.map(reply => (
+                  <div key={reply.id} className={`flex flex-col ${reply.authorPin === adminProfile.pin ? 'items-end' : 'items-start'}`}>
+                    <div className={`max-w-[90%] p-2.5 rounded-xl text-xs ${reply.authorPin === adminProfile.pin ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                      <p className="font-bold mb-0.5">{reply.authorName}</p>
+                      <p className="font-medium">{reply.content}</p>
+                    </div>
+                  </div>
+                ))}
+                {(!comm.replies || comm.replies.length === 0) && (
+                  <p className="text-center text-[10px] font-bold text-slate-300 py-2 uppercase tracking-widest">Nenhuma mensagem ainda</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="Responder..." 
+                  value={adminReply} 
+                  onChange={(e) => setAdminReply(e.target.value)}
+                  className="text-xs py-1.5"
+                />
+                <button 
+                  onClick={() => handleSendAdminReply(comm.id)}
+                  className="p-2.5 bg-blue-600 text-white rounded-xl active:scale-90 transition-all shadow-md shadow-blue-100"
+                >
+                  <Send size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -678,6 +911,77 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
         </div>
       </div>
 
+      {/* Search Section */}
+      <div className="bg-white rounded-3xl p-4 border-2 border-slate-100 shadow-sm">
+        <div className="relative">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Pesquisar por nome ou ID da inscrição..."
+            className="w-full h-11 pl-10 pr-10 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-xs outline-none focus:border-brand-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-all"
+              title="Limpar pesquisa"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Resultados da Pesquisa (exibidos acima dos comunicados recentes se houver busca ativa) */}
+      {searchQuery.trim() && (
+        <div className="bg-blue-50/50 rounded-3xl p-5 border-2 border-blue-200/80 shadow-sm space-y-4 animate-in fade-in">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                <Search size={14} />
+              </div>
+              <div>
+                <h3 className="text-xs font-black text-slate-900">
+                  Resultado(s) da pesquisa
+                </h3>
+                <p className="text-[10px] font-bold text-slate-400">
+                  Buscando por "{searchQuery.trim()}"
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
+                {searchResults.length} {searchResults.length === 1 ? 'aviso encontrado' : 'avisos encontrados'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-slate-400 hover:text-slate-600 p-1"
+                title="Fechar pesquisa"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+
+          {searchResults.length === 0 ? (
+            <div className="bg-white rounded-2xl p-6 border border-blue-100 text-center space-y-1">
+              <p className="text-xs font-black text-slate-700">Nenhum aviso encontrado</p>
+              <p className="text-[11px] font-bold text-slate-400">
+                Não encontramos nenhum comunicado correspondente a "{searchQuery}".
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {searchResults.map(comm => renderCommCard(comm))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* History Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
@@ -852,202 +1156,8 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
             )}
           </div>
         ) : (
-          filteredComms.map(comm => {
-            const commCat = getCommunicationCategory(comm);
-            const catCfg = CATEGORY_CONFIG[commCat];
-            return (
-              <div key={comm.id} className="bg-white rounded-3xl p-5 border-2 border-slate-100 shadow-sm">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${catCfg.iconBg} ${catCfg.iconColor}`}>
-                      {commCat === 'remocao_partida' ? (
-                        <AlertCircle size={16} />
-                      ) : commCat === 'pagamento' ? (
-                        <DollarSign size={16} />
-                      ) : commCat === 'inscricao' ? (
-                        <UserCheck size={16} />
-                      ) : commCat === 'nps' ? (
-                        <TrendingUp size={16} />
-                      ) : comm.type === 'poll' ? (
-                        <PieChart size={16} />
-                      ) : comm.type === 'support' ? (
-                        <LifeBuoy size={16} />
-                      ) : (
-                        <MessageSquare size={16} />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-black text-slate-900">{comm.title}</h4>
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${catCfg.badgeStyle}`}>
-                          {catCfg.label}
-                        </span>
-                      </div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                        {comm.eventPin ? (
-                          `Evento • ${comm.authorName}`
-                        ) : comm.targetUserId === 'all' ? (
-                          'Todos'
-                        ) : comm.targetUserId === 'admin' ? (
-                          `Enviado por ${comm.authorName}`
-                        ) : (
-                          'Individual'
-                        )} • {new Date(comm.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  <button onClick={() => handleDeleteComm(comm.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-
-                <p className="text-xs text-slate-600 whitespace-pre-line mb-4 leading-relaxed">{comm.content}</p>
-
-            {/* Reactions View for Admin */}
-            {comm.reactions && Object.keys(comm.reactions).length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4 p-2 bg-slate-50 rounded-xl">
-                {Object.entries(comm.reactions).map(([emoji, pins]) => (
-                  (pins as string[]).length > 0 && (
-                    <div key={emoji} className="flex items-center gap-1.5 px-2 py-1 bg-white rounded-lg border border-slate-100 shadow-sm">
-                      <span className="text-sm">{emoji}</span>
-                      <span className="text-[10px] font-black text-slate-500">{(pins as string[]).length}</span>
-                    </div>
-                  )
-                ))}
-              </div>
-            )}
-
-            {comm.type === 'poll' && comm.poll && (
-              <div className="space-y-2 mb-4">
-                {comm.poll.options.map(opt => (
-                  <div key={opt.id} className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase tracking-wider">
-                      <span>{opt.text}</span>
-                      <span>{opt.votes} votos ({comm.poll!.totalVotes > 0 ? Math.round((opt.votes / comm.poll!.totalVotes) * 100) : 0}%)</span>
-                    </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-amber-500 transition-all duration-500" 
-                        style={{ width: `${comm.poll!.totalVotes > 0 ? (opt.votes / comm.poll!.totalVotes) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* NPS Analytics Section */}
-            {comm.type === 'nps' && (() => {
-              const scores = Object.values(comm.nps?.scores || {}) as number[];
-              const total = scores.length;
-              const promoters = scores.filter(s => s >= 9).length;
-              const passives = scores.filter(s => s >= 7 && s <= 8).length;
-              const detractors = scores.filter(s => s <= 6).length;
-              const npsScore = total > 0 ? Math.round(((promoters - detractors) / total) * 100) : 0;
-              const zoneLabel = npsScore >= 75 ? 'Excelente' : npsScore >= 50 ? 'Muito bom' : npsScore >= 0 ? 'Razoável' : 'Crítico';
-              const zoneColor = npsScore >= 75 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : npsScore >= 50 ? 'bg-green-100 text-green-800 border-green-200' : npsScore >= 0 ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-red-100 text-red-800 border-red-200';
-              const commentsList = Object.entries(comm.nps?.comments || {});
-
-              return (
-                <div className="space-y-3 mb-4 p-4 bg-indigo-50/50 rounded-2xl border-2 border-indigo-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Resultado NPS</span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-2xl font-black text-slate-900">{total > 0 ? (npsScore > 0 ? `+${npsScore}` : npsScore) : '—'}</span>
-                        {total > 0 && (
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${zoneColor}`}>
-                            Zona ${zoneLabel}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{total} {total === 1 ? 'avaliação' : 'avaliações'}</span>
-                    </div>
-                  </div>
-
-                  {total > 0 && (
-                    <div>
-                      <div className="h-3 bg-slate-200 rounded-full overflow-hidden flex">
-                        <div style={{ width: `${(detractors / total) * 100}%` }} className="bg-red-500 transition-all" title={`Detratores: ${detractors}`} />
-                        <div style={{ width: `${(passives / total) * 100}%` }} className="bg-amber-400 transition-all" title={`Neutros: ${passives}`} />
-                        <div style={{ width: `${(promoters / total) * 100}%` }} className="bg-emerald-500 transition-all" title={`Promotores: ${promoters}`} />
-                      </div>
-                      <div className="grid grid-cols-3 text-center text-[10px] font-bold mt-2 gap-1">
-                        <span className="text-red-600 bg-red-50 py-0.5 rounded">🔴 {Math.round((detractors / total) * 100)}% Detratores ({detractors})</span>
-                        <span className="text-amber-600 bg-amber-50 py-0.5 rounded">🟡 {Math.round((passives / total) * 100)}% Neutros ({passives})</span>
-                        <span className="text-emerald-700 bg-emerald-50 py-0.5 rounded">🟢 {Math.round((promoters / total) * 100)}% Promotores ({promoters})</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {commentsList.length > 0 && (
-                    <div className="pt-2 border-t border-indigo-100/60 space-y-1.5">
-                      <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Comentários dos usuários ({commentsList.length})</span>
-                      <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                        {commentsList.map(([key, item]) => (
-                          <div key={key} className="bg-white p-2.5 rounded-xl border border-indigo-100 text-xs">
-                            <div className="flex justify-between text-[10px] font-black text-slate-500">
-                              <span>{item.authorName}</span>
-                              <span className="text-indigo-600 font-black">Nota: {comm.nps?.scores?.[key] ?? '—'}</span>
-                            </div>
-                            <p className="text-slate-700 font-medium mt-0.5 text-xs">{item.comment}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Replies Section for Admin */}
-            <div className="space-y-3">
-              <button 
-                onClick={() => setShowRepliesFor(showRepliesFor === comm.id ? null : comm.id)}
-                className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest"
-              >
-                {showRepliesFor === comm.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                {comm.replies?.length || 0} Respostas
-              </button>
-
-              {showRepliesFor === comm.id && (
-                <div className="space-y-4 pt-2 border-t border-slate-50">
-                  <div className="space-y-3 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                    {comm.replies?.map(reply => (
-                      <div key={reply.id} className={`flex flex-col ${reply.authorPin === adminProfile.pin ? 'items-end' : 'items-start'}`}>
-                        <div className={`max-w-[90%] p-2.5 rounded-xl text-xs ${reply.authorPin === adminProfile.pin ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                          <p className="font-bold mb-0.5">{reply.authorName}</p>
-                          <p className="font-medium">{reply.content}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {(!comm.replies || comm.replies.length === 0) && (
-                      <p className="text-center text-[10px] font-bold text-slate-300 py-2 uppercase tracking-widest">Nenhuma mensagem ainda</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Input 
-                      placeholder="Responder..." 
-                      value={adminReply} 
-                      onChange={(e) => setAdminReply(e.target.value)}
-                      className="text-xs py-1.5"
-                    />
-                    <button 
-                      onClick={() => handleSendAdminReply(comm.id)}
-                      className="p-2.5 bg-blue-600 text-white rounded-xl active:scale-90 transition-all shadow-md shadow-blue-100"
-                    >
-                      <Send size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })
-    )}
+          filteredComms.map(comm => renderCommCard(comm))
+        )}
       </div>
     </div>
   );
