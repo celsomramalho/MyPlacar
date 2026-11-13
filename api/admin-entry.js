@@ -116,18 +116,109 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: "Check-in indisponível fora do período do torneio" });
       }
       const entryRef = db.collection("events").doc(eventPin).collection("entries").doc(cleanEmail);
-      const existingEntry = await entryRef.get();
-      if (!existingEntry.exists) return res.status(404).json({ error: "Inscrição não localizada" });
-      const previousDates = Array.isArray(existingEntry.data()?.checkInDates) ? existingEntry.data().checkInDates : [];
-      const checkInDates = entry.checkedIn
-        ? Array.from(new Set([...previousDates.filter((date) => typeof date === "string"), today])).slice(-40)
-        : previousDates.filter((date) => typeof date === "string" && date !== today).slice(-40);
-      await entryRef.set({
-        checkedIn: entry.checkedIn,
-        checkInDate: entry.checkedIn ? today : null,
-        checkInDates,
-      }, { merge: true });
+      const auditRef = db.collection("events").doc(eventPin).collection("audit_logs").doc();
+      let entryNotFound = false;
+      await db.runTransaction(async (transaction) => {
+        const existingEntry = await transaction.get(entryRef);
+        if (!existingEntry.exists) {
+          entryNotFound = true;
+          return;
+        }
+        const data = existingEntry.data();
+        const previousDates = Array.isArray(data.checkInDates) ? data.checkInDates : [];
+        const checkInDates = entry.checkedIn
+          ? Array.from(new Set([...previousDates.filter((date) => typeof date === "string"), today])).slice(-40)
+          : previousDates.filter((date) => typeof date === "string" && date !== today).slice(-40);
+        transaction.set(entryRef, {
+          checkedIn: entry.checkedIn,
+          checkInDate: entry.checkedIn ? today : null,
+          checkInDates,
+        }, { merge: true });
+        transaction.set(auditRef, {
+          id: auditRef.id,
+          eventPin,
+          registrationEmail: cleanEmail,
+          registrationId: data.registrationId ?? null,
+          participantName: data.name || data.nickname || null,
+          actorEmail: String(adminEmail).toLowerCase().trim(),
+          actorRole: isHelperCheckIn ? "event_helper" : "admin_or_coadmin",
+          action: "checkin_changed",
+          changedFields: ["checkedIn", "checkInDate"],
+          before: { checkedIn: Boolean(data.checkedIn), checkInDate: data.checkInDate || null },
+          after: { checkedIn: entry.checkedIn, checkInDate: entry.checkedIn ? today : null },
+          source: "live",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      if (entryNotFound) return res.status(404).json({ error: "Inscrição não localizada" });
       return res.status(200).json({ success: true });
+    }
+
+    if (action === "backfill-audit-notices") {
+      const eventRef = db.collection("events").doc(eventPin);
+      const migrationRef = eventRef.collection("audit_migrations").doc("communications_v1");
+      const migrationSnap = await migrationRef.get();
+      if (migrationSnap.exists) return res.status(200).json({ success: true, migrated: 0, alreadyDone: true });
+
+      const [entriesSnap, noticesSnap] = await Promise.all([
+        eventRef.collection("entries").get(),
+        db.collection("communications").where("eventPin", "==", eventPin).get(),
+      ]);
+      const entries = entriesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const legacyNoticeTypes = new Set(["event_registration_created", "registration_confirmed", "pre_registration", "event_payment_created", "payment_created", "new_category", "registration_deleted", "pending_payment"]);
+      const notices = noticesSnap.docs.filter((doc) => {
+        const type = String(doc.data()?.notificationType || "");
+        return legacyNoticeTypes.has(type);
+      });
+      let batch = db.batch();
+      let writes = 0;
+      let migrated = 0;
+      const flush = async () => {
+        if (writes) await batch.commit();
+        batch = db.batch();
+        writes = 0;
+      };
+      for (const noticeDoc of notices) {
+        const notice = noticeDoc.data();
+        const targetEmail = String(notice.targetUserEmail || "").trim().toLowerCase();
+        const targetPin = String(notice.targetUserPin || "").trim().toUpperCase();
+        const registrationId = notice.registrationId ?? null;
+        const useRecipientAsParticipant = !/event_(registration|payment)_created/i.test(String(notice.notificationType || ""));
+        const entry = entries.find((item) =>
+          (registrationId && String(item.registrationId) === String(registrationId)) ||
+          (useRecipientAsParticipant && targetEmail && String(item.email || "").toLowerCase() === targetEmail) ||
+          (useRecipientAsParticipant && targetPin && String(item.pin || "").toUpperCase() === targetPin)
+        );
+        const auditRef = eventRef.collection("audit_logs").doc(`legacy_${noticeDoc.id}`);
+        batch.set(auditRef, {
+          id: auditRef.id,
+          eventPin,
+          registrationEmail: entry?.email ? String(entry.email).toLowerCase() : null,
+          registrationId: registrationId ?? entry?.registrationId ?? null,
+          participantName: entry?.name || entry?.nickname || null,
+          actorEmail: null,
+          actorRole: "unknown",
+          action: notice.notificationType || "legacy_notice",
+          changedFields: [],
+          before: null,
+          after: null,
+          summary: String(notice.content || notice.title || "Aviso histórico"),
+          originalTitle: notice.title || null,
+          originalCreatedAt: notice.createdAt || null,
+          source: "legacy_notice",
+          reconstructed: true,
+          confidence: entry ? "matched" : "event_only",
+          sourceCommunicationId: noticeDoc.id,
+          createdAt: notice.createdAt || Date.now(),
+        }, { merge: true });
+        migrated++;
+        writes++;
+        if (writes >= 400) await flush();
+      }
+      batch.set(migrationRef, { completedAt: Date.now(), migrated, source: "communications" });
+      writes++;
+      await flush();
+      return res.status(200).json({ success: true, migrated });
     }
 
     // ───────────────────────────────────────────────
@@ -158,7 +249,28 @@ export default async function handler(req, res) {
 
       const batch = db.batch();
       for (const docId of docsToDelete) {
-        batch.delete(entriesRef.doc(docId));
+        const entryRef = entriesRef.doc(docId);
+        const existingEntry = await entryRef.get();
+        if (existingEntry.exists) {
+          const data = existingEntry.data();
+          const auditRef = db.collection("events").doc(eventPin).collection("audit_logs").doc();
+          batch.set(auditRef, {
+            id: auditRef.id,
+            eventPin,
+            registrationEmail: String(data.email || "").toLowerCase() || null,
+            registrationId: data.registrationId ?? null,
+            participantName: data.name || data.nickname || null,
+            actorEmail: String(adminEmail).toLowerCase().trim(),
+            actorRole: "admin_or_coadmin",
+            action: "registration_deleted",
+            changedFields: ["$registration"],
+            before: { categoryIds: data.categoryIds || [], paymentStatus: data.paymentStatus || null, payments: (data.payments || []).map((payment) => ({ id: payment.id || null, amount: payment.amount ?? null, date: payment.date ?? null, status: payment.status ?? null, receipt: Boolean(payment.receiptUrl), receiptName: payment.receiptFileName || payment.receiptName || null })) },
+            after: null,
+            source: "live",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        batch.delete(entryRef);
       }
 
       if (cleanEmail) {
@@ -279,12 +391,77 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Dados da inscrição incompletos para salvamento" });
     }
 
-    await db
-      .collection("events")
-      .doc(eventPin)
-      .collection("entries")
-      .doc(entry.email.toLowerCase().trim())
-      .set(sanitize(entry));
+    const eventRef = db.collection("events").doc(eventPin);
+    const entryRef = eventRef.collection("entries").doc(entry.email.toLowerCase().trim());
+    const auditRef = eventRef.collection("audit_logs").doc();
+    await db.runTransaction(async (transaction) => {
+      const [eventSnapshot, current] = await Promise.all([transaction.get(eventRef), transaction.get(entryRef)]);
+      const eventData = eventSnapshot.data() || {};
+      const categories = Array.isArray(eventData.categories) ? eventData.categories : [];
+      const selectedCategoryIds = Array.isArray(entry.categoryIds) ? entry.categoryIds : [];
+      const beforeData = current.exists ? current.data() : {};
+      const categorySelectionChanged = !current.exists || JSON.stringify(beforeData.categoryIds || []) !== JSON.stringify(selectedCategoryIds);
+      if (categories.length && categorySelectionChanged && (!selectedCategoryIds.length || selectedCategoryIds.some((id) => !categories.some((category) => category.id === id)))) {
+        throw new Error("A inscrição precisa ter ao menos uma categoria válida do evento.");
+      }
+      const normalizedDrawType = String(eventData.teamDrawType || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const requiresPartner = categorySelectionChanged && normalizedDrawType.includes("pre") && selectedCategoryIds.some((id) => categories.some((category) => category.id === id && category.format === "Duplas" && category.requiresPartner !== false));
+      if (requiresPartner && selectedCategoryIds.some((id) => {
+        const category = categories.find((item) => item.id === id);
+        if (!category || category.format !== "Duplas" || category.requiresPartner === false) return false;
+        const partner = entry.categoryPartners?.[id];
+        return !(partner?.name && partner?.email && partner?.phone);
+      })) throw new Error("Informe os dados do parceiro para cada categoria de duplas pré-definidas.");
+      const tracked = ["categoryIds", "categoryPartners", "partnerName", "partnerEmail", "partnerPhone", "paymentStatus", "payments", "dueAmount", "paidAmount", "checkedIn", "checkInDate", "checkInDates", "disabled", "disabledReason"];
+      const cleanForAudit = (value, field) => field === "payments" && Array.isArray(value)
+        ? value.map((payment) => ({ id: payment.id || null, amount: payment.amount ?? null, date: payment.date ?? null, status: payment.status ?? null, provider: payment.provider ?? null, receipt: Boolean(payment.receiptUrl), receiptName: payment.receiptFileName || payment.receiptName || null }))
+        : value ?? null;
+      const changedFields = tracked.filter((field) => JSON.stringify(cleanForAudit(beforeData[field], field)) !== JSON.stringify(cleanForAudit(entry[field], field)));
+      if (!current.exists) changedFields.unshift("$registration");
+      transaction.set(entryRef, sanitize(entry));
+      if (changedFields.length) {
+        transaction.set(auditRef, {
+          id: auditRef.id,
+          eventPin,
+          registrationEmail: String(entry.email).toLowerCase().trim(),
+          registrationId: entry.registrationId ?? beforeData.registrationId ?? null,
+          participantName: entry.name || entry.nickname || beforeData.name || beforeData.nickname || null,
+          actorEmail: String(adminEmail).toLowerCase().trim(),
+          actorRole: "admin_or_coadmin",
+          action: current.exists ? "registration_updated" : "registration_created",
+          changedFields,
+          before: Object.fromEntries(changedFields.filter((field) => tracked.includes(field)).map((field) => [field, cleanForAudit(beforeData[field], field)])),
+          after: Object.fromEntries(changedFields.filter((field) => tracked.includes(field)).map((field) => [field, cleanForAudit(entry[field], field)])),
+          source: "live",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const oldPaymentIds = new Set((beforeData.payments || []).map((payment) => payment.id).filter(Boolean));
+        const hasNewPayment = (entry.payments || []).some((payment) => payment.id && !oldPaymentIds.has(payment.id));
+        const important = changedFields.some((field) => ["categoryIds", "categoryPartners", "partnerName", "partnerEmail", "partnerPhone", "paymentStatus"].includes(field) || (field === "payments" && !hasNewPayment));
+        if (important && current.exists && !String(entry.email).toLowerCase().includes("@simplificada.local")) {
+          const categoryNames = selectedCategoryIds.map((id) => categories.find((category) => category.id === id)?.name).filter(Boolean);
+          const communicationRef = db.collection("communications").doc();
+          const hasCategoryChange = changedFields.some((field) => ["categoryIds", "categoryPartners"].includes(field));
+          transaction.set(communicationRef, {
+            type: "message",
+            title: hasCategoryChange ? "Inscrição atualizada pela organização" : "Pagamento atualizado pela organização",
+            content: `A organização atualizou ${hasCategoryChange ? "categorias/parceiro" : "o pagamento"} da sua inscrição no evento ${eventData.name || eventPin}${categoryNames.length ? `. Categorias atuais: ${categoryNames.join(", ")}` : ""}.`,
+            authorId: "system",
+            authorName: eventData.name || "Organização",
+            createdAt: Date.now(),
+            targetUserId: String(entry.email).toLowerCase().trim(),
+            targetUserEmail: String(entry.email).toLowerCase().trim(),
+            targetUserPin: entry.pin || "",
+            isPinned: false,
+            readBy: [],
+            eventPin,
+            notificationType: "event_registration_updated_by_admin",
+            registrationId: entry.registrationId || null,
+            auditId: auditRef.id,
+          });
+        }
+      }
+    });
 
     return res.status(200).json({ success: true });
   } catch (error) {

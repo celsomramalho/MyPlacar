@@ -31,6 +31,16 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.email == userEmail;
     }
 
+    function isEventAdmin(eventPin) {
+      return isAdmin() || (isAuthenticated() && request.auth.token.email != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.token.email)) &&
+        exists(/databases/$(database)/documents/events/$(eventPin)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.pin != null &&
+        get(/databases/$(database)/documents/events/$(eventPin)).data.get('coAdminPins', []).hasAny([
+          get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.pin
+        ]));
+    }
+
     match /communications/{commId} {
       allow read: if true;
       allow create: if isAdmin() 
@@ -81,6 +91,14 @@ service cloud.firestore {
       match /entries/{entryEmail} {
         allow read: if true;
         allow write: if isEmailOwner(entryEmail) || isAdmin() || isAuthenticated();
+      }
+      match /audit_logs/{auditId} {
+        allow read: if isEventAdmin(eventPin);
+        allow create: if isAuthenticated() &&
+          request.resource.data.actorEmail == request.auth.token.email &&
+          (isEventAdmin(eventPin) || request.resource.data.registrationEmail == request.auth.token.email ||
+            request.resource.data.action in ['team_formed', 'team_dissolved', 'team_updated']);
+        allow update, delete: if false;
       }
       match /registration_counters/{counterId} {
         allow read, write: if isAuthenticated();

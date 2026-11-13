@@ -1,5 +1,6 @@
 import {
   collection,
+  serverTimestamp,
   deleteDoc,
   deleteField,
   doc,
@@ -16,6 +17,124 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { minifyPairForStorage, type PaymentStatus, type TournamentPair } from '@modules/events/types';
+import { getAuthInstance } from './authClient';
+
+const auditValue = (value: unknown, field: string): unknown => {
+  if (field !== 'payments' || !Array.isArray(value)) return value;
+  return value.map((payment: any) => ({
+    id: payment?.id || null,
+    amount: payment?.amount ?? null,
+    date: payment?.date ?? null,
+    status: payment?.status ?? null,
+    provider: payment?.provider ?? null,
+    receipt: Boolean(payment?.receiptUrl),
+    receiptName: payment?.receiptFileName || payment?.receiptName || null,
+  }));
+};
+
+const trackedEntryFields = [
+  'categoryIds', 'categoryPartners', 'partnerName', 'partnerEmail', 'partnerPhone',
+  'paymentStatus', 'payments', 'dueAmount', 'paidAmount', 'checkedIn', 'checkInDate',
+  'checkInDates', 'disabled', 'disabledReason',
+] as const;
+
+const auditSnapshot = (entry: Record<string, any> | undefined) => Object.fromEntries(
+  trackedEntryFields
+    .filter((field) => JSON.stringify(auditValue(entry?.[field], field)) !== undefined)
+    .map((field) => [field, auditValue(entry?.[field] ?? null, field)]),
+);
+
+const appendEntryAudit = async (
+  db: Firestore,
+  eventPin: string,
+  entry: FirebaseTournamentEntry,
+  sanitized: Record<string, unknown>,
+) => {
+  const cleanEmail = entry.email.toLowerCase().trim();
+  const entryRef = doc(db, 'events', eventPin, 'entries', cleanEmail);
+  const eventRef = doc(db, 'events', eventPin);
+  const auditRef = doc(collection(db, 'events', eventPin, 'audit_logs'));
+  const authEmail = getAuthInstance()?.currentUser?.email?.toLowerCase().trim() || null;
+  await runTransaction(db, async (transaction) => {
+    const [eventSnapshot, current] = await Promise.all([transaction.get(eventRef), transaction.get(entryRef)]);
+    const categories = (eventSnapshot.data()?.categories || []) as Array<{ id: string; format?: string; requiresPartner?: boolean }>;
+    const selectedCategoryIds = entry.categoryIds || [];
+    const currentData = current.exists() ? current.data() : undefined;
+    const categorySelectionChanged = !currentData || JSON.stringify(currentData.categoryIds || []) !== JSON.stringify(selectedCategoryIds);
+    if (categories.length && categorySelectionChanged && (!selectedCategoryIds.length || selectedCategoryIds.some((id) => !categories.some((category) => category.id === id)))) {
+      throw new Error('A inscrição precisa ter ao menos uma categoria válida do evento.');
+    }
+    const eventData = eventSnapshot.data() as { teamDrawType?: string } | undefined;
+    const requiresPartner = String(eventData?.teamDrawType || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes('pre') &&
+      selectedCategoryIds.some((id) => categories.some((category) => category.id === id && category.format === 'Duplas' && category.requiresPartner !== false));
+    if (requiresPartner && categorySelectionChanged) {
+      const missingPartner = selectedCategoryIds.some((id) => {
+        const category = categories.find((item) => item.id === id);
+        if (!category || category.format !== 'Duplas' || category.requiresPartner === false) return false;
+        const partner = (entry as any).categoryPartners?.[id];
+        return !(partner?.name && partner?.email && partner?.phone);
+      });
+      if (missingPartner) throw new Error('Informe os dados do parceiro para cada categoria de duplas pré-definidas.');
+    }
+    const oldData = currentData;
+    const before = auditSnapshot(oldData);
+    const after = auditSnapshot(entry as unknown as Record<string, any>);
+    const changedFields: string[] = trackedEntryFields.filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]));
+    if (!current.exists()) changedFields.unshift('$registration');
+    transaction.set(entryRef, sanitized);
+    if (changedFields.length) {
+      transaction.set(auditRef, {
+        id: auditRef.id,
+        eventPin,
+        registrationEmail: cleanEmail,
+        registrationId: entry.registrationId ?? oldData?.registrationId ?? null,
+        participantName: entry.name || entry.nickname || oldData?.name || oldData?.nickname || null,
+        actorEmail: authEmail,
+        actorRole: authEmail && authEmail === cleanEmail ? 'athlete' : authEmail ? 'admin_or_coadmin' : 'system',
+        action: current.exists() ? 'registration_updated' : 'registration_created',
+        changedFields,
+        before: sanitizeForFirestore(Object.fromEntries(changedFields.map((field) => [field, before[field]]))),
+        after: sanitizeForFirestore(Object.fromEntries(changedFields.map((field) => [field, after[field]]))),
+        source: 'live',
+        createdAt: serverTimestamp(),
+      });
+      const importantFields = ['categoryIds', 'categoryPartners', 'partnerName', 'partnerEmail', 'partnerPhone', 'paymentStatus'];
+      const isAthleteChange = authEmail === cleanEmail;
+      const oldPaymentIds = new Set((oldData?.payments || []).map((payment: any) => payment.id).filter(Boolean));
+      const hasNewPayment = (entry.payments || []).some((payment: any) => payment.id && !oldPaymentIds.has(payment.id));
+      const notifyFields = changedFields.filter((field) => importantFields.includes(field) || (field === 'payments' && (isAthleteChange || !hasNewPayment)));
+      const eventData = eventSnapshot.data() as any;
+      if (notifyFields.length && authEmail && current.exists()) {
+        const communicationRef = doc(collection(db, 'communications'));
+        const categories = (entry.categoryIds || []).map((id) => eventData?.categories?.find((category: any) => category.id === id)?.name).filter(Boolean);
+        const actionText = notifyFields.some((field) => field === 'categoryIds' || field === 'categoryPartners')
+          ? 'categorias/parceiro'
+          : 'pagamento';
+        transaction.set(communicationRef, {
+          type: 'message',
+          title: isAthleteChange ? 'Inscrição atualizada pelo atleta' : 'Inscrição atualizada pela organização',
+          content: isAthleteChange
+            ? `${entry.name || entry.nickname || cleanEmail} atualizou ${actionText} no evento ${eventData?.name || eventPin}${categories.length ? `. Categorias atuais: ${categories.join(', ')}` : ''}.`
+            : `A organização atualizou ${actionText} da sua inscrição no evento ${eventData?.name || eventPin}${categories.length ? `. Categorias atuais: ${categories.join(', ')}` : ''}.`,
+          authorId: 'system',
+          authorName: eventData?.name || 'Organização',
+          createdAt: Date.now(),
+          targetUserId: isAthleteChange ? 'admin' : cleanEmail,
+          targetUserEmail: isAthleteChange ? 'celsomramalho@gmail.com' : cleanEmail,
+          targetUserPin: isAthleteChange ? '' : entry.pin || '',
+          targetUserPins: isAthleteChange ? eventData?.coAdminPins || [] : [],
+          targetUserEmails: isAthleteChange ? [eventData?.organizerEmail].filter(Boolean) : [cleanEmail],
+          isPinned: false,
+          readBy: [],
+          eventPin,
+          notificationType: isAthleteChange ? 'event_registration_updated_by_athlete' : 'event_registration_updated_by_admin',
+          registrationId: entry.registrationId || null,
+          auditId: auditRef.id,
+        });
+      }
+    }
+  });
+};
 
 interface FirebaseEventRegistration {
   pin: string;
@@ -302,7 +421,7 @@ export const saveEventEntry = (
   entry: FirebaseTournamentEntry,
 ) => {
   const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(entry)));
-  return setDoc(doc(db, 'events', eventPin, 'entries', entry.email.toLowerCase().trim()), sanitized);
+  return appendEntryAudit(db, eventPin, entry, sanitized);
 };
 
 /**
@@ -434,7 +553,33 @@ export const deleteEventEntry = (
   db: Firestore,
   eventPin: string,
   email: string,
-) => deleteDoc(doc(db, 'events', eventPin, 'entries', email.toLowerCase().trim()));
+) => {
+  const cleanEmail = email.toLowerCase().trim();
+  const entryRef = doc(db, 'events', eventPin, 'entries', cleanEmail);
+  const auditRef = doc(collection(db, 'events', eventPin, 'audit_logs'));
+  const actorEmail = getAuthInstance()?.currentUser?.email?.toLowerCase().trim() || null;
+  return runTransaction(db, async (transaction) => {
+    const current = await transaction.get(entryRef);
+    if (!current.exists()) return;
+    const data = current.data();
+    transaction.delete(entryRef);
+    transaction.set(auditRef, {
+      id: auditRef.id,
+      eventPin,
+      registrationEmail: cleanEmail,
+      registrationId: data.registrationId ?? null,
+      participantName: data.name || data.nickname || null,
+      actorEmail,
+      actorRole: actorEmail === cleanEmail ? 'athlete' : actorEmail ? 'admin_or_coadmin' : 'system',
+      action: 'registration_deleted',
+      changedFields: ['$registration'],
+      before: auditSnapshot(data),
+      after: null,
+      source: 'live',
+      createdAt: serverTimestamp(),
+    });
+  });
+};
 
 export const deleteUserEventRegistration = (
   db: Firestore,
@@ -539,6 +684,106 @@ export const updateEvent = async (
     toSave.pairs = (toSave.pairs as TournamentPair[]).map(minifyPairForStorage);
   }
   const sanitized = sanitizeForFirestore(JSON.parse(JSON.stringify(toSave)));
+  if (Array.isArray(toSave.pairs)) {
+    const eventRef = doc(db, 'events', eventPin);
+    const actorEmail = getAuthInstance()?.currentUser?.email?.toLowerCase().trim() || null;
+    return runTransaction(db, async (transaction) => {
+      const current = await transaction.get(eventRef);
+      const oldPairs = (current.data()?.pairs || []) as TournamentPair[];
+      const nextPairs = (sanitized as any).pairs as TournamentPair[];
+      const oldById = new Map(oldPairs.map((pair) => [pair.id, pair]));
+      const nextById = new Map(nextPairs.map((pair) => [pair.id, pair]));
+      const candidatePairs = [
+        ...nextPairs.filter((pair) => !oldById.has(pair.id)),
+        ...nextPairs.filter((pair) => oldById.has(pair.id) && JSON.stringify(oldById.get(pair.id)) !== JSON.stringify(pair)),
+      ];
+      const eventData = current.data() as any;
+      const eventCategories = (eventData?.categories || []) as Array<{ id: string; format?: string; gender1?: string; gender2?: string }>;
+      const memberReads = await Promise.all(candidatePairs.flatMap((pair) => [pair.p1, pair.p2]
+        .filter((person) => Boolean(person?.email))
+        .map((person) => transaction.get(doc(db, 'events', eventPin, 'entries', person.email.toLowerCase().trim())))));
+      const memberByEmail = new Map<string, Record<string, any>>();
+      let memberReadIndex = 0;
+      for (const pair of candidatePairs) {
+        for (const person of [pair.p1, pair.p2].filter((item) => Boolean(item?.email))) {
+          const member = memberReads[memberReadIndex++];
+          if (member?.exists()) memberByEmail.set(person.email.toLowerCase().trim(), member.data());
+        }
+      }
+      for (const pair of candidatePairs) {
+        const category = eventCategories.find((item) => item.id === pair.categoryId);
+        if (eventCategories.length && !category) throw new Error('Não foi possível validar a categoria do time. Atualize a tela e tente novamente.');
+        if (category?.format === 'Duplas') {
+          const participants = [pair.p1, pair.p2];
+          for (const person of participants) {
+            const email = person.email?.toLowerCase().trim();
+            const registered = email ? memberByEmail.get(email) : undefined;
+            const memberCategoryIds = registered?.categoryIds || person.categoryIds || [];
+            if (!memberCategoryIds.includes(category.id)) throw new Error('Um dos atletas não está inscrito nesta categoria. Revise os participantes do time.');
+          }
+          const expectedGenders = [category.gender1, category.gender2].filter(Boolean).sort();
+          const actualGenders = participants.map((person) => memberByEmail.get(person.email?.toLowerCase().trim() || '')?.gender || person.gender).filter(Boolean).sort();
+          if (expectedGenders.length === 2 && actualGenders.length === 2 && expectedGenders.join('|') !== actualGenders.join('|')) {
+            throw new Error('Os gêneros dos participantes não correspondem aos requisitos desta categoria.');
+          }
+        }
+      }
+      const changes = [
+        ...nextPairs.filter((pair) => !oldById.has(pair.id)).map((pair) => ({ action: 'team_formed', pair, before: null })),
+        ...oldPairs.filter((pair) => !nextById.has(pair.id)).map((pair) => ({ action: 'team_dissolved', pair, before: pair })),
+        ...nextPairs.filter((pair) => oldById.has(pair.id) && JSON.stringify(oldById.get(pair.id)) !== JSON.stringify(pair)).map((pair) => ({ action: 'team_updated', pair, before: oldById.get(pair.id) })),
+      ];
+      transaction.update(eventRef, { ...sanitized, entries: deleteField() });
+      for (const change of changes) {
+        const participants = [change.pair.p1, change.pair.p2].filter(Boolean);
+        for (const person of participants) {
+          const auditRef = doc(collection(db, 'events', eventPin, 'audit_logs'));
+          transaction.set(auditRef, {
+            id: auditRef.id,
+            eventPin,
+            registrationEmail: person.email?.toLowerCase().trim() || null,
+            registrationPin: person.pin?.toUpperCase().trim() || null,
+            registrationId: person.registrationId || null,
+            participantName: person.name || person.nickname || null,
+            categoryId: change.pair.categoryId || null,
+            actorEmail,
+            actorRole: actorEmail && actorEmail === person.email?.toLowerCase().trim() ? 'athlete' : actorEmail ? 'admin_or_coadmin' : 'system',
+            action: change.action,
+            changedFields: ['pair'],
+            before: change.before,
+            after: change.action === 'team_dissolved' ? null : change.pair,
+            source: 'live',
+            createdAt: serverTimestamp(),
+          });
+          if (actorEmail) {
+            const shouldNotifyPerson = actorEmail !== person.email?.toLowerCase().trim();
+            if (shouldNotifyPerson && person.email && !person.email.toLowerCase().includes('@simplificada.local')) {
+              const communicationRef = doc(collection(db, 'communications'));
+              const verb = change.action === 'team_formed' ? 'foi formado' : change.action === 'team_dissolved' ? 'foi desfeito' : 'foi atualizado';
+              const categoryName = eventData?.categories?.find((category: any) => category.id === change.pair.categoryId)?.name || 'do evento';
+              transaction.set(communicationRef, {
+                type: 'message',
+                title: change.action === 'team_dissolved' ? 'Time desfeito' : 'Time atualizado',
+                content: `Um time da categoria ${categoryName} ${verb} pela organização no evento ${eventData?.name || eventPin}.`,
+                authorId: 'system',
+                authorName: eventData?.name || 'Organização',
+                createdAt: Date.now(),
+                targetUserId: person.email.toLowerCase().trim(),
+                targetUserEmail: person.email.toLowerCase().trim(),
+                targetUserPin: person.pin || '',
+                isPinned: false,
+                readBy: [],
+                eventPin,
+                categoryId: change.pair.categoryId || null,
+                notificationType: 'event_team_updated',
+                auditId: auditRef.id,
+              });
+            }
+          }
+        }
+      }
+    });
+  }
   try {
     return await updateDoc(doc(db, 'events', eventPin), {
       ...sanitized,

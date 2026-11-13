@@ -12,6 +12,8 @@ interface FlattenedPayment {
   paymentId: string;
   entryPin: string;
   participantName: string;
+  registrationId?: number | string;
+  dueAmount?: number;
   date: number;
   amount: number;
   categoriesStr: string;
@@ -167,7 +169,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
             paidPaymentsList.push({
               paymentId: p.id || `p-${entry.pin}-${idx}`,
               entryPin: entry.pin,
-              participantName: entry.nickname || entry.name,
+              participantName: entry.name || entry.nickname,
+              registrationId: entry.registrationId,
+              dueAmount: entryDue,
               date: p.date,
               amount: amt,
               categoriesStr: catStr,
@@ -233,7 +237,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
           paidPaymentsList.push({
             paymentId: `legacy-${entry.pin}`,
             entryPin: entry.pin,
-            participantName: entry.nickname || entry.name,
+            participantName: entry.name || entry.nickname,
+            registrationId: entry.registrationId,
+            dueAmount: entryDue,
             date: entry.joinedAt || Date.now(),
             amount: legacyPaid,
             categoriesStr: catStr,
@@ -301,6 +307,8 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
           current.date = payment.date;
           current.receiptUrl = payment.receiptUrl;
           current.receiptFileName = payment.receiptFileName;
+          if (payment.registrationId) current.registrationId = payment.registrationId;
+          if (payment.dueAmount) current.dueAmount = payment.dueAmount;
         }
       } else {
         byPin.set(payment.entryPin, { ...payment });
@@ -754,7 +762,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                   >
                     <div className="flex justify-between gap-3">
                       <div>
-                        <p className="font-black text-slate-800">{item.entry.nickname || item.entry.name}</p>
+                        <p className="font-black text-slate-800">{item.entry.name || item.entry.nickname}</p>
                         <p className="text-[10px] font-bold text-amber-600">
                           Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.payment.date)}
                         </p>
@@ -779,7 +787,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                           handleOpenReceipt({
                             paymentId: item.payment.id || `payment-${item.paymentIndex}`,
                             entryPin: item.entry.pin,
-                            participantName: item.entry.nickname || item.entry.name,
+                            participantName: item.entry.name || item.entry.nickname,
+                            registrationId: item.entry.registrationId,
+                            dueAmount: item.dueAmount,
                             date: item.payment.date,
                             amount: item.payment.amount || 0,
                             categoriesStr: item.categoriesStr,
@@ -801,7 +811,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                             pin: item.entry.pin,
                             paymentId: item.payment.id,
                             paymentIndex: item.paymentIndex,
-                            name: item.entry.nickname || item.entry.name,
+                            name: item.entry.name || item.entry.nickname,
                             amount: item.payment.amount || 0,
                             date: item.payment.date,
                           })
@@ -812,14 +822,14 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                       </button>
 
                       <select
-                        aria-label={`Status do comprovante de ${item.entry.nickname || item.entry.name}`}
+                        aria-label={`Status do comprovante de ${item.entry.name || item.entry.nickname}`}
                         value={getPaymentReviewStatus(item.payment)}
                         onChange={(e) =>
                           setPendingStatusChange({
                             pin: item.entry.pin,
                             paymentId: item.payment.id,
                             paymentIndex: item.paymentIndex,
-                            name: item.entry.nickname || item.entry.name,
+                            name: item.entry.name || item.entry.nickname,
                             status: e.target.value as PaymentReviewStatus,
                           })
                         }
@@ -867,22 +877,22 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                 preRegistrationEntries.map((entry) => {
                   const dueAmount = entry.dueAmount ?? (event.registrationFee || 0);
                   return (
-                    <article key={entry.pin} className="rounded-2xl border border-sky-100 bg-white p-3 space-y-2">
+                    <article key={entry.pin} className="rounded-2xl border border-sky-200 bg-sky-50/20 p-3 space-y-2">
                       <div className="flex justify-between gap-3">
                         <div>
-                          <p className="font-black text-slate-800">{entry.nickname || entry.name}</p>
+                          <p className="font-black text-slate-800">{entry.name || entry.nickname}</p>
                           <p className="text-[10px] font-bold text-sky-700">
-                            Inscrição: {formatRegistrationId(entry.registrationId) || '—'}
+                            Inscrição: {formatRegistrationId(entry.registrationId) || '—'} · {formatDateShort(entry.joinedAt)}
                           </p>
                         </div>
-                        <p className="text-right text-xs font-black text-sky-700">
-                          R$ {dueAmount.toFixed(2)}
+                        <div className="text-right">
+                          <p className="text-xs font-black text-sky-700">R$ {dueAmount.toFixed(2)}</p>
                           <span className="block text-[9px] text-slate-400">pendente</span>
-                        </p>
+                        </div>
                       </div>
-                      <div className="flex justify-between gap-2 border-t pt-2 text-[10px] text-slate-500">
+                      <div className="flex justify-between border-t border-sky-100 pt-2 text-[10px] text-slate-500">
                         <span>Devido R$ {dueAmount.toFixed(2)}</span>
-                        <span className="text-right">{getCategoriesText(entry)}</span>
+                        <span>{getCategoriesText(entry)}</span>
                       </div>
                     </article>
                   );
@@ -926,7 +936,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                     <div className="flex justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <p className="font-black text-slate-800">{item.entry.nickname || item.entry.name}</p>
+                          <p className="font-black text-slate-800">{item.entry.name || item.entry.nickname}</p>
                           {item.entry.disabled || item.entry.paymentStatus === 'Cancelado' ? (
                             <span className="text-[9px] font-black bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-md">Cancelada</span>
                           ) : (
@@ -937,14 +947,14 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                           Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.payment.date)}
                         </p>
                       </div>
-                      <p className="text-right text-xs font-black text-purple-700">
-                        R$ {item.refundAmount.toFixed(2)}
-                        <span className="block text-[9px] text-purple-500">a devolver</span>
-                      </p>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-purple-700">R$ {item.refundAmount.toFixed(2)}</p>
+                        <span className="block text-[9px] text-slate-400">a devolver</span>
+                      </div>
                     </div>
 
                     <div className="flex justify-between border-t border-purple-100 pt-2 text-[10px] text-slate-500">
-                      <span>Devido: R$ {(item.entry.dueAmount ?? event.registrationFee ?? 0).toFixed(2)}</span>
+                      <span>Devido R$ {(item.entry.dueAmount ?? event.registrationFee ?? 0).toFixed(2)}</span>
                       <span>{item.categoriesStr}</span>
                     </div>
 
@@ -957,7 +967,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                               handleOpenReceipt({
                                 paymentId: item.payment.id || `payment-${item.paymentIndex}`,
                                 entryPin: item.entry.pin,
-                                participantName: item.entry.nickname || item.entry.name,
+                                participantName: item.entry.name || item.entry.nickname,
+                                registrationId: item.entry.registrationId,
+                                dueAmount: item.entry.dueAmount ?? event.registrationFee ?? 0,
                                 date: item.payment.date,
                                 amount: item.refundAmount,
                                 categoriesStr: item.categoriesStr,
@@ -971,14 +983,14 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                           </button>
                         )}
                         <select
-                          aria-label={`Alterar status de devolução de ${item.entry.nickname || item.entry.name}`}
+                          aria-label={`Alterar status de devolução de ${item.entry.name || item.entry.nickname}`}
                           value={getPaymentReviewStatus(item.payment)}
                           onChange={(e) =>
                             setPendingStatusChange({
                               pin: item.entry.pin,
                               paymentId: item.payment.id,
                               paymentIndex: item.paymentIndex,
-                              name: item.entry.nickname || item.entry.name,
+                              name: item.entry.name || item.entry.nickname,
                               status: e.target.value as PaymentReviewStatus,
                             })
                           }
@@ -1001,7 +1013,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                             pin: item.entry.pin,
                             paymentId: item.payment.id,
                             paymentIndex: item.paymentIndex,
-                            name: item.entry.nickname || item.entry.name,
+                            name: item.entry.name || item.entry.nickname,
                             status: 'Devolvido',
                           })
                         }
@@ -1050,15 +1062,15 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                   >
                     <div className="flex justify-between gap-3">
                       <div>
-                        <p className="font-black text-slate-800">{item.entry.nickname || item.entry.name}</p>
+                        <p className="font-black text-slate-800">{item.entry.name || item.entry.nickname}</p>
                         <p className="text-[10px] font-bold text-rose-600">
                           Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.payment.date)}
                         </p>
                       </div>
-                      <p className="text-right text-xs font-black text-rose-600">
-                        R$ {(item.payment.amount || 0).toFixed(2)}
-                        <span className="block text-[9px] text-rose-400">recusado</span>
-                      </p>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-rose-600">R$ {(item.payment.amount || 0).toFixed(2)}</p>
+                        <span className="block text-[9px] text-slate-400">recusado</span>
+                      </div>
                     </div>
 
                     <div className="flex justify-between border-t border-rose-100 pt-2 text-[10px] text-slate-500">
@@ -1074,7 +1086,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                             handleOpenReceipt({
                               paymentId: item.payment.id || `payment-${item.paymentIndex}`,
                               entryPin: item.entry.pin,
-                              participantName: item.entry.nickname || item.entry.name,
+                              participantName: item.entry.name || item.entry.nickname,
+                              registrationId: item.entry.registrationId,
+                              dueAmount: item.dueAmount,
                               date: item.payment.date,
                               amount: item.payment.amount || 0,
                               categoriesStr: item.categoriesStr,
@@ -1097,7 +1111,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                             pin: item.entry.pin,
                             paymentId: item.payment.id,
                             paymentIndex: item.paymentIndex,
-                            name: item.entry.nickname || item.entry.name,
+                            name: item.entry.name || item.entry.nickname,
                             amount: item.payment.amount || 0,
                             date: item.payment.date,
                           })
@@ -1108,14 +1122,14 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                       </button>
 
                       <select
-                        aria-label={`Status do comprovante de ${item.entry.nickname || item.entry.name}`}
+                        aria-label={`Status do comprovante de ${item.entry.name || item.entry.nickname}`}
                         value={getPaymentReviewStatus(item.payment)}
                         onChange={(e) =>
                           setPendingStatusChange({
                             pin: item.entry.pin,
                             paymentId: item.payment.id,
                             paymentIndex: item.paymentIndex,
-                            name: item.entry.nickname || item.entry.name,
+                            name: item.entry.name || item.entry.nickname,
                             status: e.target.value as PaymentReviewStatus,
                           })
                         }
@@ -1161,24 +1175,59 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                 <p className="text-xs text-slate-400 font-bold text-center py-4">Nenhum pagamento confirmado registrado.</p>
               ) : (
                 paidRegistrationsList.map((pay, idx) => (
-                  <article key={`${pay.entryPin}-${idx}`} className="rounded-2xl border border-emerald-100 bg-white p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-black text-slate-800">{pay.participantName}</p>
-                      <p className="text-[10px] font-bold text-slate-500">
-                        {formatDateShort(pay.date)} · {pay.categoriesStr}
-                      </p>
+                  <article
+                    key={`${pay.entryPin}-${idx}`}
+                    className="rounded-2xl border border-emerald-200 bg-emerald-50/20 p-3 space-y-2"
+                  >
+                    <div className="flex justify-between gap-3">
+                      <div>
+                        <p className="font-black text-slate-800">{pay.participantName}</p>
+                        <p className="text-[10px] font-bold text-emerald-700">
+                          Inscrição: {formatRegistrationId(pay.registrationId) || '—'} · {formatDateShort(pay.date)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-emerald-700">R$ {pay.amount.toFixed(2)}</p>
+                        <span className="block text-[9px] text-slate-400">pago</span>
+                      </div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p className="mb-1 text-xs font-black text-emerald-700">R$ {pay.amount.toFixed(2)}</p>
+
+                    <div className="flex justify-between border-t border-emerald-100 pt-2 text-[10px] text-slate-500">
+                      <span>Devido R$ {(pay.dueAmount ?? 0).toFixed(2)}</span>
+                      <span>{pay.categoriesStr}</span>
+                    </div>
+
+                    <div className="flex flex-nowrap items-center gap-2 border-t border-emerald-100 pt-2">
                       {pay.receiptUrl && (
                         <button
                           type="button"
                           onClick={() => handleOpenReceipt(pay)}
-                          className="px-2.5 py-1.5 text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg inline-flex items-center gap-1 font-black text-xs cursor-pointer"
+                          className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 hover:bg-sky-100 transition-colors cursor-pointer"
                         >
-                          <Eye size={14} /> Ver
+                          <Eye size={14} className="mr-1 inline" /> Ver
                         </button>
                       )}
+
+                      <select
+                        aria-label={`Status do pagamento de ${pay.participantName}`}
+                        value="Confirmado"
+                        onChange={(e) =>
+                          setPendingStatusChange({
+                            pin: pay.entryPin,
+                            paymentId: pay.paymentId,
+                            name: pay.participantName,
+                            status: e.target.value as PaymentReviewStatus,
+                          })
+                        }
+                        className="min-w-0 flex-1 rounded-xl border border-emerald-300 bg-emerald-100 px-2 py-2 text-[10px] font-bold text-emerald-900 focus:outline-none cursor-pointer"
+                      >
+                        <option value="Confirmado">Pagamento confirmado</option>
+                        <option value="A devolver">A devolver</option>
+                        <option value="Devolvido">Devolvido</option>
+                        <option value="Aguardando Confirmação">A confirmar</option>
+                        <option value="Recusado">Pagamento recusado</option>
+                        <option value="Isento">Isento</option>
+                      </select>
                     </div>
                   </article>
                 ))
@@ -1215,18 +1264,29 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                 exemptEntriesList.map((entry) => {
                   const receiptPayment = entry.payments?.find((p) => p.receiptUrl);
                   return (
-                    <article key={entry.pin} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-3 flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate font-black text-slate-800">{entry.nickname || entry.name}</p>
-                          <span className="text-[9px] font-black bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-md">Isento</span>
+                    <article key={entry.pin} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+                      <div className="flex justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-black text-slate-800">{entry.name || entry.nickname}</p>
+                            <span className="text-[9px] font-black bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-md">Isento</span>
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-500">
+                            Inscrição: {formatRegistrationId(entry.registrationId) || '—'} · {formatDateShort(receiptPayment?.date || entry.joinedAt)}
+                          </p>
                         </div>
-                        <p className="text-[10px] font-bold text-slate-500">
-                          Inscrição: {formatRegistrationId(entry.registrationId) || '—'} · {getCategoriesText(entry)}
-                        </p>
+                        <div className="text-right">
+                          <p className="text-xs font-black text-slate-600">R$ 0.00</p>
+                          <span className="block text-[9px] text-slate-400">isento</span>
+                        </div>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <p className="mb-1 text-xs font-black text-slate-600">R$ 0,00</p>
+
+                      <div className="flex justify-between border-t border-slate-200 pt-2 text-[10px] text-slate-500">
+                        <span>Devido R$ 0.00</span>
+                        <span>{getCategoriesText(entry)}</span>
+                      </div>
+
+                      <div className="flex flex-nowrap items-center gap-2 border-t border-slate-200 pt-2">
                         {receiptPayment?.receiptUrl && (
                           <button
                             type="button"
@@ -1234,18 +1294,41 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                               handleOpenReceipt({
                                 paymentId: receiptPayment.id || 'exempt',
                                 entryPin: entry.pin,
-                                participantName: entry.nickname || entry.name,
+                                participantName: entry.name || entry.nickname,
+                                registrationId: entry.registrationId,
+                                dueAmount: 0,
                                 date: receiptPayment.date,
                                 amount: 0,
                                 categoriesStr: getCategoriesText(entry),
                                 receiptUrl: receiptPayment.receiptUrl,
                               })
                             }
-                            className="px-2.5 py-1.5 text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg inline-flex items-center gap-1 font-black text-xs cursor-pointer"
+                            className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 hover:bg-sky-100 transition-colors cursor-pointer"
                           >
-                            <Eye size={14} /> Ver
+                            <Eye size={14} className="mr-1 inline" /> Ver
                           </button>
                         )}
+
+                        <select
+                          aria-label={`Status de ${entry.name || entry.nickname}`}
+                          value="Isento"
+                          onChange={(e) =>
+                            setPendingStatusChange({
+                              pin: entry.pin,
+                              paymentId: receiptPayment?.id,
+                              name: entry.name || entry.nickname,
+                              status: e.target.value as PaymentReviewStatus,
+                            })
+                          }
+                          className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-slate-100 px-2 py-2 text-[10px] font-bold text-slate-800 focus:outline-none cursor-pointer"
+                        >
+                          <option value="Isento">Isento</option>
+                          <option value="Confirmado">Pagamento confirmado</option>
+                          <option value="Aguardando Confirmação">A confirmar</option>
+                          <option value="Recusado">Pagamento recusado</option>
+                          <option value="A devolver">A devolver</option>
+                          <option value="Devolvido">Devolvido</option>
+                        </select>
                       </div>
                     </article>
                   );
@@ -1283,19 +1366,52 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                 refundedEntriesList.map((item) => (
                   <article
                     key={`${item.entry.pin}-${item.payment.id || item.paymentIndex}`}
-                    className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-3 flex items-center justify-between gap-3"
+                    className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-3 space-y-2"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate font-black text-slate-800">{item.entry.nickname || item.entry.name}</p>
-                      <p className="text-[10px] font-bold text-slate-500">
-                        Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.payment.date)} ·{' '}
-                        {item.categoriesStr}
-                      </p>
+                    <div className="flex justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-black text-slate-800">{item.entry.name || item.entry.nickname}</p>
+                          <span className="text-[9px] font-black bg-zinc-200 text-zinc-700 px-1.5 py-0.5 rounded-md">Devolvido</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-zinc-600">
+                          Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.payment.date)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-zinc-700">R$ {item.refundedAmount.toFixed(2)}</p>
+                        <span className="block text-[9px] text-slate-400">devolvido</span>
+                      </div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p className="mb-1 text-xs font-black text-slate-700">R$ {item.refundedAmount.toFixed(2)}</p>
-                      <span className="text-[9px] font-black bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded-md">Devolvido</span>
+
+                    <div className="flex justify-between border-t border-zinc-200 pt-2 text-[10px] text-slate-500">
+                      <span>Devido R$ {(item.entry.dueAmount ?? event.registrationFee ?? 0).toFixed(2)}</span>
+                      <span>{item.categoriesStr}</span>
                     </div>
+
+                    {item.payment.receiptUrl && (
+                      <div className="flex justify-end border-t border-zinc-200 pt-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleOpenReceipt({
+                              paymentId: item.payment.id || `payment-${item.paymentIndex}`,
+                              entryPin: item.entry.pin,
+                              participantName: item.entry.name || item.entry.nickname,
+                              registrationId: item.entry.registrationId,
+                              dueAmount: item.entry.dueAmount ?? event.registrationFee ?? 0,
+                              date: item.payment.date,
+                              amount: item.refundedAmount,
+                              categoriesStr: item.categoriesStr,
+                              receiptUrl: item.payment.receiptUrl,
+                            })
+                          }
+                          className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 hover:bg-sky-100 transition-colors cursor-pointer"
+                        >
+                          <Eye size={14} className="mr-1 inline" /> Ver
+                        </button>
+                      </div>
+                    )}
                   </article>
                 ))
               )}

@@ -43,6 +43,7 @@ import { compressImageToDataUrl } from '@shared/utils/imageResize';
 import { buildPixTxid } from '@shared/utils/pixTxid';
 import { buildPixBrCode } from '@shared/utils/pixBrCode';
 import { eventNotificationService } from '@modules/events/services/eventNotificationService';
+import { RegistrationActivityPanel } from './RegistrationActivityPanel';
 
 export interface EventRegistrationFormProps {
   event: TournamentEvent;
@@ -840,6 +841,10 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
           />
         )}
       </div>
+
+      {isAdmin && !isNew && event.pin && entry.email && (
+        <RegistrationActivityPanel eventPin={event.pin} entry={entry} categories={event.categories || []} />
+      )}
 
       {/* Barra Inferior de Navegação e Ações */}
       <div className="flex items-center justify-between pt-4 border-t border-slate-100 flex-wrap gap-2">

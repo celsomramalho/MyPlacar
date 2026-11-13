@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react';
+import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search, History } from 'lucide-react';
 import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem, type TournamentPair, type PaymentStatus } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
@@ -57,6 +57,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   );
   const [isSyncingMP, setIsSyncingMP] = useState(false);
   const [isFixingIds, setIsFixingIds] = useState(false);
+  const [isBackfillingAudit, setIsBackfillingAudit] = useState(false);
 
   const activeRegistrationEntries = useMemo(
     () => entries.filter((entry) => !entry.disabled && entry.paymentStatus !== 'Cancelado'),
@@ -263,6 +264,29 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       });
     } finally {
       setIsFixingIds(false);
+    }
+  };
+
+  const handleBackfillAuditNotices = async () => {
+    if (isBackfillingAudit || !event.pin || !adminEmail) return;
+    setIsBackfillingAudit(true);
+    try {
+      const response = await fetch('/api/admin-entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'backfill-audit-notices', eventPin: event.pin, adminEmail }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Não foi possível reconstruir o histórico.');
+      setModalConfig({
+        title: data.alreadyDone ? 'Histórico antigo já importado' : 'Importação concluída',
+        message: data.alreadyDone ? 'Os avisos antigos deste evento já foram importados anteriormente.' : `${data.migrated || 0} aviso(s) foram adicionados como atividade histórica parcial.`,
+        onConfirm: () => setModalConfig(null),
+      });
+    } catch (error) {
+      setModalConfig({ title: 'Erro ao importar histórico', message: error instanceof Error ? error.message : 'Não foi possível reconstruir o histórico a partir dos avisos.', onConfirm: () => setModalConfig(null) });
+    } finally {
+      setIsBackfillingAudit(false);
     }
   };
 
@@ -938,6 +962,18 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                 >
                   <RefreshCw size={14} className={isFixingIds ? 'animate-spin text-amber-600' : 'text-amber-600'} />
                   <span>{isFixingIds ? 'Corrigindo...' : 'Corrigir IDs'}</span>
+                </button>
+              )}
+              {adminEmail && (
+                <button
+                  type="button"
+                  onClick={() => void handleBackfillAuditNotices()}
+                  disabled={isBackfillingAudit}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-xs px-3 py-2.5 rounded-2xl shadow-xs transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
+                  title="Importa avisos anteriores como histórico parcial, sem inventar dados ausentes"
+                >
+                  <History size={14} className={isBackfillingAudit ? 'animate-pulse text-sky-600' : 'text-sky-600'} />
+                  <span>{isBackfillingAudit ? 'Importando histórico...' : 'Importar histórico antigo'}</span>
                 </button>
               )}
             </div>
