@@ -22,6 +22,10 @@ export interface Communication {
   authorName: string;
   createdAt: number;
   targetUserId?: string; // 'all' or specific PIN
+  targetUserEmail?: string;
+  targetUserPin?: string;
+  targetUserPins?: string[];
+  targetUserEmails?: string[];
   isPinned?: boolean;
   expiresAt?: number;
   poll?: {

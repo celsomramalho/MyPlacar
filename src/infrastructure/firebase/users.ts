@@ -191,22 +191,82 @@ export const updateUserProfileFields = (
   },
 ) => updateDoc(doc(db, 'users', email.toLowerCase().trim()), data);
 
-export const searchUserProfilesByEmailPrefix = async (
+export const searchUserProfiles = async (
   db: Firestore,
-  emailPrefix: string,
+  searchTerm: string,
 ): Promise<UserProfile[]> => {
-  const normalizedPrefix = emailPrefix.toLowerCase().trim();
-  if (!normalizedPrefix) return [];
+  const term = searchTerm.toLowerCase().trim();
+  if (!term) return [];
 
-  const usersQuery = query(
-    collection(db, 'users'),
-    where('email', '>=', normalizedPrefix),
-    where('email', '<=', `${normalizedPrefix}\uf8ff`),
-  );
-  const snapshot = await getDocs(usersQuery);
+  const stripAccents = (str: string) =>
+    str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-  return snapshot.docs.map(docSnapshot => docSnapshot.data() as UserProfile);
+  const normalizedTerm = stripAccents(term);
+  const cleanPhoneSearch = term.replace(/\D/g, '');
+
+  try {
+    const snapshot = await getDocs(collection(db, 'users'));
+    const results: UserProfile[] = [];
+
+    snapshot.docs.forEach(docSnapshot => {
+      const data = docSnapshot.data() as Partial<UserProfile> & Record<string, any>;
+      const docId = docSnapshot.id.toLowerCase();
+      const rawEmail = (data.email || (docSnapshot.id.includes('@') ? docSnapshot.id : '')).toString();
+      const email = rawEmail.toLowerCase();
+      const name = data.name ? stripAccents(String(data.name)) : '';
+      const nickname = data.nickname ? stripAccents(String(data.nickname)) : '';
+      const pin = (data.pin || (!docSnapshot.id.includes('@') ? docSnapshot.id : '')).toString().toLowerCase();
+      const phone = (data.phone ? String(data.phone) : '').replace(/\D/g, '');
+
+      const matches =
+        email.includes(term) ||
+        docId.includes(term) ||
+        name.includes(normalizedTerm) ||
+        nickname.includes(normalizedTerm) ||
+        pin.includes(term) ||
+        (cleanPhoneSearch.length >= 4 && phone.includes(cleanPhoneSearch));
+
+      if (matches) {
+        let userCreatedAtMs = 0;
+        if (data.createdAt?.toMillis) {
+          userCreatedAtMs = data.createdAt.toMillis();
+        } else if (typeof data.createdAt === 'number') {
+          userCreatedAtMs = data.createdAt;
+        } else if (typeof data.createdAt === 'string') {
+          const parsed = Date.parse(data.createdAt);
+          if (!isNaN(parsed)) userCreatedAtMs = parsed;
+        } else if (data.updatedAt?.toMillis) {
+          userCreatedAtMs = data.updatedAt.toMillis();
+        } else if (typeof data.updatedAt === 'number') {
+          userCreatedAtMs = data.updatedAt;
+        } else if (typeof data.updatedAt === 'string') {
+          const parsed = Date.parse(data.updatedAt);
+          if (!isNaN(parsed)) userCreatedAtMs = parsed;
+        } else {
+          userCreatedAtMs = getUserAddedAt(data);
+        }
+
+        results.push({
+          ...(data as UserProfile),
+          email: data.email || (docSnapshot.id.includes('@') ? docSnapshot.id : ''),
+          name: data.name || '',
+          nickname: data.nickname || data.name || '',
+          phone: data.phone || '',
+          pin: data.pin || (!docSnapshot.id.includes('@') ? docSnapshot.id : ''),
+          isProfileComplete: Boolean(data.isProfileComplete),
+          createdAt: userCreatedAtMs || data.createdAt,
+        });
+      }
+    });
+
+    return results;
+  } catch (error) {
+    console.error('Erro ao pesquisar usuários no Firestore:', error);
+    return [];
+  }
 };
+
+export const searchUserProfilesByEmailPrefix = searchUserProfiles;
 
 export const updateUserPlanType = (
   db: Firestore,

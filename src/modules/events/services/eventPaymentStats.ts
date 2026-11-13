@@ -21,6 +21,7 @@ export interface EventPaymentStats {
   refundedReceiptsCount: number;
   refundedCount: number;
 
+  totalReceiptsCount: number;
   actionablePendingCount: number;
 }
 
@@ -75,6 +76,7 @@ export const getEventPaymentStats = (event: TournamentEvent): EventPaymentStats 
   let refusedReceiptsCount = 0;
   let toRefundReceiptsCount = 0;
   let refundedReceiptsCount = 0;
+  let totalReceiptsCount = 0;
 
   entries.forEach((entry) => {
     const isCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
@@ -95,6 +97,9 @@ export const getEventPaymentStats = (event: TournamentEvent): EventPaymentStats 
 
     if (payments.length > 0) {
       payments.forEach((p) => {
+        if (p.receiptUrl) {
+          totalReceiptsCount++;
+        }
         const revStatus = getPaymentReviewStatus(p);
         const amt = p.amount || 0;
 
@@ -174,6 +179,7 @@ export const getEventPaymentStats = (event: TournamentEvent): EventPaymentStats 
     refundedReceiptsCount,
     refundedCount: refundedPins.size,
 
+    totalReceiptsCount,
     actionablePendingCount: awaitingReceiptsCount + toRefundReceiptsCount,
   };
 };

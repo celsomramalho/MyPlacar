@@ -72,10 +72,21 @@ export const subscribeUserCommunications = (
         const t = (comm.targetUserId || '').trim();
         const tEmail = ((comm as unknown as { targetUserEmail?: string }).targetUserEmail || '').trim().toLowerCase();
         const tPin = ((comm as unknown as { targetUserPin?: string }).targetUserPin || '').trim();
+        const tPins = ((comm as unknown as { targetUserPins?: string[] }).targetUserPins || []).map(p => String(p).trim().toUpperCase());
+        const tEmails = ((comm as unknown as { targetUserEmails?: string[] }).targetUserEmails || []).map(e => String(e).trim().toLowerCase());
+
         if (t === 'all') return true;
         if (isAdmin && t === 'admin') return true;
-        if (pin && (t.toUpperCase() === pin.toUpperCase() || tPin.toUpperCase() === pin.toUpperCase())) return true;
-        if (email && (t.toLowerCase() === email || tEmail === email)) return true;
+        if (pin && (
+          t.toUpperCase() === pin.toUpperCase() ||
+          tPin.toUpperCase() === pin.toUpperCase() ||
+          tPins.includes(pin.toUpperCase())
+        )) return true;
+        if (email && (
+          t.toLowerCase() === email ||
+          tEmail === email ||
+          tEmails.includes(email)
+        )) return true;
         return false;
       });
       onCommunications(filtered);
@@ -105,16 +116,23 @@ export const subscribeUnreadCommunicationsCount = (
     communicationsQuery,
     snapshot => {
       const unreadCount = snapshot.docs.filter(docSnapshot => {
-        const comm = docSnapshot.data() as Partial<Communication> & { targetUserEmail?: string; targetUserPin?: string };
+        const comm = docSnapshot.data() as Partial<Communication> & {
+          targetUserEmail?: string;
+          targetUserPin?: string;
+          targetUserPins?: string[];
+          targetUserEmails?: string[];
+        };
         const t = (comm.targetUserId || '').trim();
         const tEmail = (comm.targetUserEmail || '').trim().toLowerCase();
         const tPin = (comm.targetUserPin || '').trim();
+        const tPins = (comm.targetUserPins || []).map(p => String(p).trim().toUpperCase());
+        const tEmails = (comm.targetUserEmails || []).map(e => String(e).trim().toLowerCase());
         
         const isForUser = 
           t === 'all' || 
           (isAdmin && t === 'admin') ||
-          (pin && (t.toUpperCase() === pin.toUpperCase() || tPin.toUpperCase() === pin.toUpperCase())) ||
-          (email && (t.toLowerCase() === email || tEmail === email));
+          (pin && (t.toUpperCase() === pin.toUpperCase() || tPin.toUpperCase() === pin.toUpperCase() || tPins.includes(pin.toUpperCase()))) ||
+          (email && (t.toLowerCase() === email || tEmail === email || tEmails.includes(email)));
 
         if (!isForUser) return false;
         const readList = comm.readBy || [];

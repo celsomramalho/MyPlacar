@@ -12,7 +12,7 @@ import {
 import { deleteLiveMatchesByIds, fetchLiveMatchesStats as fetchFirebaseLiveMatchesStats } from '@infra/firebase/liveMatches';
 import { linkLegacyMatchesToOwnerEmail } from '@infra/firebase/matches';
 import { fetchSystemConfig, saveSystemConfigPatch } from '@infra/firebase/systemConfig';
-import { countUserProfiles, fetchUsersByDateRange, migrateUsersCreatedAtToTimestamp, searchUserProfilesByEmailPrefix, type FirebaseUserWithCreatedAt } from '@infra/firebase/users';
+import { countUserProfiles, fetchUsersByDateRange, migrateUsersCreatedAtToTimestamp, searchUserProfiles, type FirebaseUserWithCreatedAt } from '@infra/firebase/users';
 import { AdminConfirmModals, type AdminDeleteConfirm } from '@modules/admin/components/AdminConfirmModals';
 import { AdminEventsPanel } from '@modules/admin/components/AdminEventsPanel';
 import { AdminHeader } from '@modules/admin/components/AdminHeader';
@@ -113,6 +113,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
   const [userSearch, setUserSearch] = useState('');
   const [foundUsers, setFoundUsers] = useState<UserProfile[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [hasSearchedUsers, setHasSearchedUsers] = useState(false);
   const [userCount, setUserCount] = useState<number | null>(null);
   const [isLoadingUserCount, setIsLoadingUserCount] = useState(false);
 
@@ -527,19 +528,52 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     }
   };
 
-  const handleSearchUsers = async () => {
-    if (!userSearch.trim()) return;
+  const handleSearchUsers = async (searchOverride?: string) => {
+    const term = (typeof searchOverride === 'string' ? searchOverride : userSearch).trim();
+    if (!term) {
+      setFoundUsers([]);
+      setHasSearchedUsers(false);
+      setIsSearchingUsers(false);
+      return;
+    }
     setIsSearchingUsers(true);
+    setHasSearchedUsers(true);
     const db = getDb();
     if (!db) {
       setIsSearchingUsers(false);
       return;
     }
     try {
-      const list = await searchUserProfilesByEmailPrefix(db, userSearch);
+      const list = await searchUserProfiles(db, term);
       setFoundUsers(list);
-    } catch (e) { console.error(e); } finally { setIsSearchingUsers(false); }
+    } catch (e) {
+      console.error('Falha ao buscar usuários:', e);
+    } finally {
+      setIsSearchingUsers(false);
+    }
   };
+
+  const handleClearUserSearch = () => {
+    setUserSearch('');
+    setFoundUsers([]);
+    setHasSearchedUsers(false);
+    setIsSearchingUsers(false);
+  };
+
+  useEffect(() => {
+    if (adminTab !== 'users') return;
+    const term = userSearch.trim();
+    if (!term) {
+      setFoundUsers([]);
+      setHasSearchedUsers(false);
+      setIsSearchingUsers(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      handleSearchUsers(term);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userSearch, adminTab]);
 
   const toggleUserPremium = async (user: UserProfile) => {
     const db = getDb();
@@ -1047,8 +1081,10 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             userCount={userCount}
             isLoadingUserCount={isLoadingUserCount}
             isSearchingUsers={isSearchingUsers}
+            hasSearchedUsers={hasSearchedUsers}
             onUserSearchChange={setUserSearch}
-            onSearchUsers={handleSearchUsers}
+            onSearchUsers={() => handleSearchUsers()}
+            onClearUserSearch={handleClearUserSearch}
             onToggleUserPremium={toggleUserPremium}
             periodFrom={periodFrom}
             periodTo={periodTo}

@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Search, Star, User } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Search, Star, User, X } from 'lucide-react';
 import type { UserProfile } from '@modules/auth/types';
 import type { FirebaseUserWithCreatedAt } from '@infra/firebase/users';
 import { applyGoldenRule } from '@shared/utils/formatters';
@@ -9,8 +9,10 @@ interface AdminUsersPanelProps {
   userCount: number | null;
   isLoadingUserCount: boolean;
   isSearchingUsers: boolean;
+  hasSearchedUsers?: boolean;
   onUserSearchChange: (value: string) => void;
   onSearchUsers: () => void;
+  onClearUserSearch?: () => void;
   onToggleUserPremium: (user: UserProfile) => void;
   // Inscrições por período
   periodFrom?: string;
@@ -30,9 +32,18 @@ interface AdminUsersPanelProps {
   migrationFeedback?: string | null;
 }
 
-const formatDateBR = (ts: number) => {
-  if (!ts) return 'Data não registrada';
-  return new Date(ts).toLocaleDateString('pt-BR', {
+const formatDateBR = (ts?: any) => {
+  if (!ts) return '';
+  const ms =
+    typeof ts === 'number'
+      ? ts
+      : ts?.toMillis
+      ? ts.toMillis()
+      : typeof ts === 'string'
+      ? Date.parse(ts)
+      : 0;
+  if (!ms || isNaN(ms)) return '';
+  return new Date(ms).toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -47,8 +58,10 @@ export const AdminUsersPanel = ({
   userCount,
   isLoadingUserCount,
   isSearchingUsers,
+  hasSearchedUsers = false,
   onUserSearchChange,
   onSearchUsers,
+  onClearUserSearch,
   onToggleUserPremium,
   periodFrom = '',
   periodTo = '',
@@ -81,47 +94,125 @@ export const AdminUsersPanel = ({
           </p>
         </div>
       </div>
+
       <div className="relative">
         <input
           type="text"
           value={userSearch}
           onChange={(event) => onUserSearchChange(event.target.value)}
           onKeyDown={(event) => event.key === 'Enter' && onSearchUsers()}
-          placeholder="Buscar por e-mail..."
-          className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 pr-12 text-sm font-bold outline-none text-black"
+          placeholder="Buscar por nome, apelido, e-mail ou PIN..."
+          className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 pr-20 text-sm font-bold outline-none text-black placeholder:text-slate-400 focus:border-blue-500 focus:bg-white transition-all"
         />
-        <button onClick={onSearchUsers} className="absolute right-3 top-1/2 -translate-y-1/2 text-black">
-          {isSearchingUsers ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
-        </button>
-      </div>
-    </div>
-
-    <div className="space-y-3">
-      {foundUsers.map((user) => (
-        <div key={user.email} className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-between">
-          <div className="flex-1 min-w-0 pr-4">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-black text-black truncate">{user.nickname || user.name}</span>
-              {user.planType === 'premium' && (
-                <div className="bg-blue-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                  <Star size={6} fill="currentColor" /> Premium
-                </div>
-              )}
-            </div>
-            <span className="text-[10px] font-bold text-black block truncate">{applyGoldenRule(user.email, true)}</span>
-          </div>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-black">
+          {userSearch && (
+            <button
+              type="button"
+              onClick={onClearUserSearch || (() => onUserSearchChange(''))}
+              className="w-6 h-6 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-black transition-colors"
+              title="Limpar busca"
+            >
+              <X size={14} />
+            </button>
+          )}
           <button
-            onClick={() => onToggleUserPremium(user)}
-            className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all border ${
-              user.planType === 'premium'
-                ? 'bg-red-50 border-red-100 text-red-500'
-                : 'bg-slate-50 border-slate-100 text-black'
-            }`}
+            type="button"
+            onClick={onSearchUsers}
+            className="w-7 h-7 rounded-lg hover:bg-slate-200 flex items-center justify-center text-black transition-colors"
+            title="Buscar"
           >
-            {user.planType === 'premium' ? 'Revogar premium' : 'Ativar premium'}
+            {isSearchingUsers ? <Loader2 className="animate-spin text-blue-600" size={18} /> : <Search size={18} />}
           </button>
         </div>
-      ))}
+      </div>
+
+      {/* Feedback durante a busca */}
+      {isSearchingUsers && (
+        <div className="py-4 flex items-center justify-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 rounded-2xl">
+          <Loader2 className="animate-spin text-blue-600" size={16} />
+          <span>Pesquisando usuários...</span>
+        </div>
+      )}
+
+      {/* Nenhum usuário encontrado */}
+      {hasSearchedUsers && !isSearchingUsers && foundUsers.length === 0 && (
+        <div className="py-5 px-3 text-center bg-slate-50 rounded-2xl border border-slate-100">
+          <p className="text-xs font-bold text-slate-700">Nenhum usuário encontrado para &quot;{userSearch}&quot;</p>
+          <p className="text-[10px] font-medium text-slate-400 mt-0.5">Tente buscar por nome, apelido, e-mail ou PIN.</p>
+        </div>
+      )}
+
+      {/* Resultados da busca abaixo do campo de pesquisa */}
+      {foundUsers.length > 0 && (
+        <div className="space-y-2.5 pt-1">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[11px] font-bold text-slate-400">
+              {foundUsers.length} {foundUsers.length === 1 ? 'usuário encontrado' : 'usuários encontrados'}
+            </span>
+          </div>
+          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            {foundUsers.map((user) => (
+              <div
+                key={user.email || user.pin || user.name}
+                className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between gap-3 hover:bg-slate-100/70 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="font-black text-black text-sm truncate">
+                      {user.name || user.nickname || 'Usuário sem nome'}
+                    </span>
+                    {user.nickname && user.name && user.nickname.toLowerCase() !== user.name.toLowerCase() && (
+                      <span className="text-[11px] font-bold text-slate-500">
+                        ({user.nickname})
+                      </span>
+                    )}
+                    {user.planType === 'premium' ? (
+                      <div className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Star size={7} fill="currentColor" /> Premium
+                      </div>
+                    ) : (
+                      <div className="bg-slate-200 text-slate-600 text-[9px] font-black px-2 py-0.5 rounded-full">
+                        Free
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-500 flex-wrap">
+                    <span className="text-black font-bold truncate">
+                      {applyGoldenRule(user.email, true)}
+                    </span>
+                    {user.pin && (
+                      <span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-600">
+                        PIN: {user.pin}
+                      </span>
+                    )}
+                    {user.phone && (
+                      <span className="text-slate-400 text-[10px]">
+                        Tel: {user.phone}
+                      </span>
+                    )}
+                    {formatDateBR(user.createdAt) && (
+                      <span className="text-slate-500 text-[10px] flex items-center gap-1 font-medium bg-white border border-slate-200 px-1.5 py-0.5 rounded">
+                        <CalendarDays size={11} className="text-slate-400 shrink-0" />
+                        <span>Inscrição: {formatDateBR(user.createdAt)}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onToggleUserPremium(user)}
+                  className={`px-3.5 py-2 rounded-xl text-[11px] font-black transition-all border shrink-0 active:scale-95 ${
+                    user.planType === 'premium'
+                      ? 'bg-red-50 border-red-100 text-red-500 hover:bg-red-100'
+                      : 'bg-white border-slate-200 text-black hover:bg-slate-100'
+                  }`}
+                >
+                  {user.planType === 'premium' ? 'Revogar premium' : 'Ativar premium'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
 
     {/* Inscrições por período */}
@@ -213,7 +304,7 @@ export const AdminUsersPanel = ({
                   <span className="text-[10px] font-bold text-slate-500 block truncate">{applyGoldenRule(user.email ?? user.id, true)}</span>
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="text-[10px] font-bold text-slate-500 block">{formatDateBR(user.createdAt)}</span>
+                  <span className="text-[10px] font-bold text-slate-500 block">{formatDateBR(user.createdAt) || 'Data não registrada'}</span>
                   {user.phone && <span className="text-[9px] font-semibold text-slate-400 block">{user.phone}</span>}
                 </div>
               </div>

@@ -324,18 +324,61 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
   const handleDeleteComm = async (id: string) => {
     const db = getDb();
     if (!db) return;
+    const targetComm = recentComms.find(c => c.id === id);
     await deleteCommunication(db, id);
+
+    // Se for aviso de evento com cópias legadas duplicadas, remove também as cópias irmãs
+    if (targetComm && targetComm.eventPin && (targetComm.notificationType || targetComm.paymentId)) {
+      const regId = (targetComm as unknown as { registrationId?: string }).registrationId || '';
+      const payId = targetComm.paymentId || '';
+      const key = `${targetComm.eventPin}_${targetComm.title}_${(targetComm.content || '').trim()}_${regId}_${payId}`;
+      const sisterComms = recentComms.filter(c => {
+        if (c.id === id) return false;
+        const cRegId = (c as unknown as { registrationId?: string }).registrationId || '';
+        const cPayId = c.paymentId || '';
+        const cKey = `${c.eventPin || ''}_${c.title || ''}_${(c.content || '').trim()}_${cRegId}_${cPayId}`;
+        return cKey === key;
+      });
+      for (const sister of sisterComms) {
+        await deleteCommunication(db, sister.id);
+      }
+    }
   };
 
-  const categoryCounts = recentComms.reduce<Record<string, number>>((acc, comm) => {
+  // Deduplica comunicados de sistema/evento para não exibir repetições ao admin
+  const deduplicatedComms = React.useMemo(() => {
+    const seen = new Set<string>();
+    return recentComms.filter(comm => {
+      const isAutoEventNotif = Boolean(
+        comm.eventPin || 
+        comm.notificationType || 
+        comm.paymentId || 
+        comm.categoryId || 
+        comm.title?.includes('Inscrição') || 
+        comm.title?.includes('Pagamento')
+      );
+      if (!isAutoEventNotif) return true;
+
+      const regId = (comm as unknown as { registrationId?: string }).registrationId || '';
+      const payId = comm.paymentId || '';
+      const key = `${comm.eventPin || ''}_${comm.title || ''}_${(comm.content || '').trim()}_${regId}_${payId}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [recentComms]);
+
+  const categoryCounts = deduplicatedComms.reduce<Record<string, number>>((acc, comm) => {
     const cat = getCommunicationCategory(comm);
     acc[cat] = (acc[cat] || 0) + 1;
     return acc;
   }, {});
 
   const filteredComms = selectedCategory === 'all'
-    ? recentComms
-    : recentComms.filter(comm => getCommunicationCategory(comm) === selectedCategory);
+    ? deduplicatedComms
+    : deduplicatedComms.filter(comm => getCommunicationCategory(comm) === selectedCategory);
 
   return (
     <div className="space-y-6">
@@ -713,7 +756,7 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold">
-                        {recentComms.length}
+                        {deduplicatedComms.length}
                       </span>
                       {selectedCategory === 'all' && <Check size={14} className="text-blue-600" />}
                     </div>
@@ -804,7 +847,7 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
                 onClick={() => setSelectedCategory('all')}
                 className="mt-2 text-xs font-black text-blue-600 hover:underline inline-block"
               >
-                Limpar filtro e ver todos ({recentComms.length})
+                Limpar filtro e ver todos ({deduplicatedComms.length})
               </button>
             )}
           </div>
@@ -841,7 +884,15 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
                         </span>
                       </div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                        {comm.targetUserId === 'all' ? 'Todos' : comm.targetUserId === 'admin' ? `Enviado por ${comm.authorName}` : 'Individual'} • {new Date(comm.createdAt).toLocaleDateString()}
+                        {comm.eventPin ? (
+                          `Evento • ${comm.authorName}`
+                        ) : comm.targetUserId === 'all' ? (
+                          'Todos'
+                        ) : comm.targetUserId === 'admin' ? (
+                          `Enviado por ${comm.authorName}`
+                        ) : (
+                          'Individual'
+                        )} • {new Date(comm.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>

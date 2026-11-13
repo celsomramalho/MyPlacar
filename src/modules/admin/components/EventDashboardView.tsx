@@ -102,10 +102,11 @@ export const EventDashboardView: React.FC<Props> = ({
     toRefundReceiptsCount,
     refundedReceiptsCount,
     exemptCount,
+    totalReceiptsCount,
   } = paymentStats;
 
-  // Conforme Imagem 2: o número em destaque é a quantidade de comprovantes a confirmar
-  const pendingPaymentsCount = awaitingReceiptsCount;
+  // Opção 1: Quantidade total de comprovantes anexados no evento
+  const pendingPaymentsCount = totalReceiptsCount;
 
   const todayStr = getTodayDateStr();
   const pairsById = React.useMemo(() => {

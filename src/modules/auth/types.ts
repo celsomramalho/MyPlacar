@@ -22,4 +22,5 @@ export interface UserProfile {
   mercadoPagoUserId?: string;
   mercadoPagoConnectedAt?: number;
   mercadoPagoTokenExpiresAt?: number;
+  createdAt?: number | string | any;
 }

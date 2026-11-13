@@ -2,7 +2,7 @@ import { addDoc, collection, getDocs, query, where, type Firestore } from 'fireb
 import { formatRegistrationId, type EventCategory, type PaymentItem, type TournamentEntry, type TournamentEvent } from '../types';
 
 export const eventNotificationService = {
-  /** Cria avisos direcionados ao administrador principal e aos co-administradores do evento. */
+  /** Cria avisos direcionados ao administrador principal e aos co-administradores do evento em um único registro. */
   notifyEventAdmins: async (
     db: Firestore,
     event: TournamentEvent,
@@ -12,6 +12,23 @@ export const eventNotificationService = {
     metadata: Record<string, unknown> = {},
   ) => {
     try {
+      // Evita duplicação se o aviso recente já existe para o mesmo evento e item (paymentId ou registrationId)
+      if (event.pin && notificationType) {
+        const idKey = metadata.paymentId ? 'paymentId' : metadata.registrationId ? 'registrationId' : null;
+        if (idKey && metadata[idKey]) {
+          const dupQuery = query(
+            collection(db, 'communications'),
+            where('eventPin', '==', event.pin),
+            where('notificationType', '==', notificationType),
+            where(idKey, '==', metadata[idKey]),
+          );
+          const dupSnap = await getDocs(dupQuery);
+          if (!dupSnap.empty) {
+            return;
+          }
+        }
+      }
+
       const coAdminPins = Array.from(new Set((event.coAdminPins || [])
         .map((pin) => pin.trim().toUpperCase())
         .filter(Boolean)));
@@ -21,25 +38,30 @@ export const eventNotificationService = {
       const coAdmins = (usersSnapshot?.docs || [])
         .map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() as Record<string, unknown>) }))
         .filter((user) => coAdminPins.includes(String(user['pin'] || '').trim().toUpperCase()));
-      const recipients = [
-        { targetUserId: 'admin', targetUserEmail: 'celsomramalho@gmail.com', targetUserPin: '' },
-        ...coAdmins.map((user) => ({
-          targetUserId: String(user['pin'] || '').trim().toUpperCase(),
-          targetUserEmail: String(user['email'] || '').trim().toLowerCase(),
-          targetUserPin: String(user['pin'] || '').trim().toUpperCase(),
-        })),
-      ];
-      const seen = new Set<string>();
-      for (const recipient of recipients) {
-        const key = recipient.targetUserEmail || recipient.targetUserPin;
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        await addDoc(collection(db, 'communications'), {
-          type: 'message', title, content,
-          authorId: 'system', authorName: event.name || 'Organização', createdAt: Date.now(),
-          ...recipient, isPinned: false, readBy: [], eventPin: event.pin, notificationType, ...metadata,
-        });
-      }
+
+      const coAdminEmails = Array.from(new Set([
+        event.organizerEmail ? event.organizerEmail.trim().toLowerCase() : '',
+        ...coAdmins.map((user) => String(user['email'] || '').trim().toLowerCase())
+      ].filter(Boolean)));
+
+      await addDoc(collection(db, 'communications'), {
+        type: 'message',
+        title,
+        content,
+        authorId: 'system',
+        authorName: event.name || 'Organização',
+        createdAt: Date.now(),
+        targetUserId: 'admin',
+        targetUserEmail: 'celsomramalho@gmail.com',
+        targetUserPin: '',
+        targetUserPins: coAdminPins,
+        targetUserEmails: coAdminEmails,
+        isPinned: false,
+        readBy: [],
+        eventPin: event.pin,
+        notificationType,
+        ...metadata,
+      });
     } catch (err) {
       console.warn(`Erro ao criar aviso ${notificationType} para administradores do evento:`, err);
     }
