@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react';
-import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem, type TournamentPair } from '@modules/events/types';
+import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem, type TournamentPair, type PaymentStatus } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
 import { updateUserProfileFields } from '@infra/firebase/users';
