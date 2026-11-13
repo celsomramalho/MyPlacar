@@ -9,6 +9,8 @@ export type PaymentStatus =
   | 'Pago'
   | 'Isento'
   | 'Recusado'
+  | 'A devolver'
+  | 'Devolvido'
   | 'Cancelado';
 
 export interface TournamentPair {

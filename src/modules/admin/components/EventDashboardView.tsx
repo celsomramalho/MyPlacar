@@ -22,6 +22,7 @@ import { EventPaymentsView } from './EventPaymentsView';
 import { calculateQueueState } from '@modules/events/domain/queue';
 import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 import { isEntryCheckedInToday, getTodayDateStr } from '@modules/events/services/eventRegistrationPeriod';
+import { getEventPaymentStats } from '@modules/events/services/eventPaymentStats';
 
 export type EventDashboardTab =
   | 'categories'
@@ -85,54 +86,26 @@ export const EventDashboardView: React.FC<Props> = ({
   const queueState = calculateQueueState(event);
   const { freeCourtsCount, busyCourtsCount, interdictedCourtsCount } = queueState;
 
-  let totalDue = 0;
-  let totalPaid = 0;
-  let totalPending = 0;
+  const paymentStats = getEventPaymentStats(event);
+  const {
+    totalDue,
+    totalPaid,
+    totalAwaiting,
+    totalPre,
+    totalRefused,
+    totalToRefund,
+    totalRefunded,
+    paidCount,
+    awaitingReceiptsCount,
+    preCount: preRegistrationCount,
+    refusedReceiptsCount,
+    toRefundReceiptsCount,
+    refundedReceiptsCount,
+    exemptCount,
+  } = paymentStats;
 
-  entries.forEach((e) => {
-    // b) a soma valor devido é a soma do valor devido de todos os inscritos
-    const entryDue = e.dueAmount ?? (event.registrationFee || 0);
-    const isEntryConfirmed = e.paymentStatus === 'Confirmado' || e.paymentStatus === 'Pago';
-    const isIsento = e.paymentStatus === 'Isento';
-
-    const hasPaymentHistory = Boolean(e.payments?.length);
-    const hasExplicitPaymentStatuses = Boolean(e.payments?.some((p) => Boolean(p.status)));
-    const sumPayments = hasPaymentHistory
-      ? e.payments!.reduce((acc, p) => {
-          const isConfirmedPayment = p.status === 'Confirmado' || p.status === 'approved' || p.status === 'Pago';
-          const isLegacyConfirmedPayment = !p.status && isEntryConfirmed && !hasExplicitPaymentStatuses;
-          return acc + (isConfirmedPayment || isLegacyConfirmedPayment ? (p.amount || 0) : 0);
-        }, 0)
-      : e.paidAmount || 0;
-
-    // c) a soma valor pago é a soma do valor pago com status confirmado
-    const entryPaid = hasPaymentHistory
-      ? sumPayments > 0 ? sumPayments : hasExplicitPaymentStatuses ? 0 : isEntryConfirmed ? e.paidAmount ?? entryDue : 0
-      : isEntryConfirmed ? e.paidAmount ?? entryDue : 0;
-
-    // d) a soma valor pendente é a soma do valor pendente de todos os inscritos
-    const entryPending = isIsento
-      ? 0
-      : Math.max(0, entryDue - entryPaid);
-
-    totalDue += entryDue;
-    totalPaid += entryPaid;
-    totalPending += entryPending;
-  });
-
-  const pendingPaymentsCount = entries.filter(
-    (e) => !e.paymentStatus || e.paymentStatus === 'Pendente'
-  ).length;
-  const preRegistrationCount = entries.filter((entry) =>
-    !entry.disabled && entry.paymentStatus !== 'Cancelado' &&
-    !entry.payments?.some((payment) => payment.receiptUrl) &&
-    entry.paymentStatus !== 'Confirmado' && entry.paymentStatus !== 'Pago' && entry.paymentStatus !== 'Isento'
-  ).length;
-  const refusedPaymentsCount = entries.filter((entry) =>
-    entry.paymentStatus === 'Recusado' || entry.payments?.some((payment) =>
-      Boolean(payment.receiptUrl) && (payment.status === 'Recusado' || payment.status === 'rejected' || payment.status === 'Cancelado' || payment.status === 'cancelled')
-    )
-  ).length;
+  // Conforme Imagem 2: o número em destaque é a quantidade de comprovantes a confirmar
+  const pendingPaymentsCount = awaitingReceiptsCount;
 
   const todayStr = getTodayDateStr();
   const pairsById = React.useMemo(() => {
@@ -430,7 +403,7 @@ export const EventDashboardView: React.FC<Props> = ({
               >
                 <DollarSign size={18} />
               </div>
-              <span className="text-xl font-black leading-none">{pendingPaymentsCount}</span>
+              <span className="text-2xl font-black leading-none">{pendingPaymentsCount}</span>
             </div>
             <div className="space-y-1">
               <p
@@ -439,12 +412,6 @@ export const EventDashboardView: React.FC<Props> = ({
                 }`}
               >
                 Pagamentos
-              </p>
-              <p className={`text-[9px] font-black ${activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-500'}`}>
-                Pré-inscritos: {preRegistrationCount} · Sem anexo
-              </p>
-              <p className={`text-[9px] font-black ${activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-500'}`}>
-                Recusados: {refusedPaymentsCount}
               </p>
               <div
                 className={`text-[9px] font-bold leading-tight space-y-0.5 ${
@@ -456,13 +423,62 @@ export const EventDashboardView: React.FC<Props> = ({
                   <span className="font-black">R$ {totalDue.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between gap-1">
-                  <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Pago:</span>
+                  <span>
+                    <span className="font-mono opacity-90">[{paidCount}]</span>{' '}
+                    <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Pago:</span>
+                  </span>
                   <span className="font-black">R$ {totalPaid.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between gap-1">
-                  <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Pendente:</span>
-                  <span className="font-black">R$ {totalPending.toFixed(2)}</span>
+                  <span>
+                    <span className="font-mono opacity-90">[{awaitingReceiptsCount}]</span>{' '}
+                    <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>A confirmar:</span>
+                  </span>
+                  <span className="font-black">R$ {totalAwaiting.toFixed(2)}</span>
                 </div>
+                <div className="flex justify-between gap-1">
+                  <span>
+                    <span className="font-mono opacity-90">[{preRegistrationCount}]</span>{' '}
+                    <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Aguardando pgto:</span>
+                  </span>
+                  <span className="font-black">R$ {totalPre.toFixed(2)}</span>
+                </div>
+                {totalToRefund > 0 && (
+                  <div className="flex justify-between gap-1">
+                    <span>
+                      <span className="font-mono opacity-90">[{toRefundReceiptsCount}]</span>{' '}
+                      <span className={activeTab === 'pending-payments' ? 'text-purple-200' : 'text-purple-600'}>A devolver:</span>
+                    </span>
+                    <span className="font-black">R$ {totalToRefund.toFixed(2)}</span>
+                  </div>
+                )}
+                {totalRefused > 0 && (
+                  <div className="flex justify-between gap-1">
+                    <span>
+                      <span className="font-mono opacity-90">[{refusedReceiptsCount}]</span>{' '}
+                      <span className={activeTab === 'pending-payments' ? 'text-rose-200' : 'text-rose-500'}>Recusados:</span>
+                    </span>
+                    <span className="font-black">R$ {totalRefused.toFixed(2)}</span>
+                  </div>
+                )}
+                {exemptCount > 0 && (
+                  <div className="flex justify-between gap-1">
+                    <span>
+                      <span className="font-mono opacity-90">[{exemptCount}]</span>{' '}
+                      <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Isentos:</span>
+                    </span>
+                    <span className="font-black">R$ 0.00</span>
+                  </div>
+                )}
+                {totalRefunded > 0 && (
+                  <div className="flex justify-between gap-1">
+                    <span>
+                      <span className="font-mono opacity-90">[{refundedReceiptsCount}]</span>{' '}
+                      <span className={activeTab === 'pending-payments' ? 'text-slate-200' : 'text-slate-500'}>Devolvidos:</span>
+                    </span>
+                    <span className="font-black">R$ {totalRefunded.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </button>
