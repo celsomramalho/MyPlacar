@@ -98,7 +98,7 @@ export const RegistrationActivityPanel: React.FC<{ eventPin: string; entry: Tour
   }, [eventPin, entry.email]);
 
   return (
-    <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <button type="button" onClick={() => setExpanded((value) => !value)} className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-slate-50">
         <span className="flex items-center gap-2 text-xs font-black text-slate-700"><History size={15} /> Atividades <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{activities.length}</span></span>
         {expanded ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}

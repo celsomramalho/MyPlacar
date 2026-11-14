@@ -56,7 +56,7 @@ service cloud.firestore {
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['poll']) || 
            request.resource.data.poll.totalVotes == resource.data.poll.totalVotes + 1) &&
           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['replies']) || 
-           request.resource.data.replies.size() == (resource.data.keys().contains('replies') ? resource.data.replies.size() : 0) + 1)
+           request.resource.data.replies.size() == (resource.data.keys().hasAny(['replies']) ? resource.data.replies.size() : 0) + 1)
         )
       );
     }

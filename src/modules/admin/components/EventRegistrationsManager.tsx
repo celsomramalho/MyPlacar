@@ -271,10 +271,10 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     if (isBackfillingAudit || !event.pin || !adminEmail) return;
     setIsBackfillingAudit(true);
     try {
-      const response = await fetch('/api/admin-entry', {
+      const response = await fetch('/api/admin-audit-backfill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'backfill-audit-notices', eventPin: event.pin, adminEmail }),
+        body: JSON.stringify({ eventPin: event.pin, adminEmail }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Não foi possível reconstruir o histórico.');

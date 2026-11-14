@@ -721,6 +721,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   };
 
   return (
+    <>
     <div className="space-y-6 max-w-2xl mx-auto p-4 sm:p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
       {/* Barra de Progresso dos Steps */}
       <div className="flex items-start gap-2 border-b border-slate-100 pb-3">
@@ -842,10 +843,6 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
         )}
       </div>
 
-      {isAdmin && !isNew && event.pin && entry.email && (
-        <RegistrationActivityPanel eventPin={event.pin} entry={entry} categories={event.categories || []} />
-      )}
-
       {/* Barra Inferior de Navegação e Ações */}
       <div className="flex items-center justify-between pt-4 border-t border-slate-100 flex-wrap gap-2">
         <div>
@@ -914,5 +911,11 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
         </div>
       </div>
     </div>
+    {isAdmin && !isNew && event.pin && entry.email && (
+      <div className="max-w-2xl mx-auto mt-3">
+        <RegistrationActivityPanel eventPin={event.pin} entry={entry} categories={event.categories || []} />
+      </div>
+    )}
+    </>
   );
 };
