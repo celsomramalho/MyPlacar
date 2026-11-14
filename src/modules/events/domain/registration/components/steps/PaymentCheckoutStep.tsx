@@ -15,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { PaymentItem, TournamentEvent, TournamentEntry } from '@modules/events/types';
+import { getPaymentReviewStatus, type PaymentReviewStatus } from '@modules/events/services/eventPaymentStats';
 import type { PricingCalculationResult } from '../../types';
 import type { UseRegistrationPaymentResult } from '../../hooks/useRegistrationPayment';
 import { PixPaymentView } from './PixPaymentView';
@@ -56,7 +57,7 @@ export interface PaymentCheckoutStepProps {
   isAdmin?: boolean;
   onUpdatePaymentItemStatus?: (
     paymentId: string,
-    newStatus: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
+    newStatus: PaymentReviewStatus
   ) => Promise<void> | void;
   onDeletePaymentItem?: (paymentId: string) => Promise<void> | void;
 }
@@ -83,7 +84,7 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
 
   const handlePaymentStatusChange = async (
     paymentId: string,
-    newStatus: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
+    newStatus: PaymentReviewStatus
   ) => {
     if (!onUpdatePaymentItemStatus) return;
     setUpdatingPaymentId(paymentId);
@@ -299,39 +300,34 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
                       ) : (
                         <>
                           <select
-                            value={
-                              p.status === 'Confirmado' ||
-                              p.status === 'approved' ||
-                              p.status === 'Pago'
-                                ? 'Confirmado'
-                                : p.status === 'Recusado' ||
-                                  p.status === 'rejected' ||
-                                  p.status === 'Cancelado'
-                                ? 'Recusado'
-                                : 'Aguardando Confirmação'
-                            }
+                            value={getPaymentReviewStatus(p)}
                             onChange={(e) =>
                               void handlePaymentStatusChange(
                                 p.id || `payment-${idx}`,
-                                e.target.value as 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
+                                e.target.value as PaymentReviewStatus
                               )
                             }
                             className={`text-xs font-black pl-3 pr-7 py-1.5 rounded-xl border appearance-none cursor-pointer transition-all shadow-xs ${
-                              p.status === 'Confirmado' ||
-                              p.status === 'approved' ||
-                              p.status === 'Pago'
+                              getPaymentReviewStatus(p) === 'Confirmado'
                                 ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
-                                : p.status === 'Recusado' ||
-                                  p.status === 'rejected' ||
-                                  p.status === 'Cancelado'
+                                : getPaymentReviewStatus(p) === 'Aguardando Confirmação'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                                : getPaymentReviewStatus(p) === 'Recusado'
                                 ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
-                                : 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                                : getPaymentReviewStatus(p) === 'A devolver'
+                                ? 'bg-orange-100 text-orange-900 border-orange-300 hover:bg-orange-200'
+                                : getPaymentReviewStatus(p) === 'Devolvido'
+                                ? 'bg-zinc-100 text-zinc-800 border-zinc-300 hover:bg-zinc-200'
+                                : 'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200'
                             }`}
                             title="Alterar status deste pagamento"
                           >
-                            <option value="Aguardando Confirmação">Aguardando confirmação</option>
+                            <option value="Isento">Isento</option>
                             <option value="Confirmado">Pagamento confirmado</option>
-                            <option value="Recusado">Recusado</option>
+                            <option value="Aguardando Confirmação">A confirmar</option>
+                            <option value="Recusado">Pagamento recusado</option>
+                            <option value="A devolver">A devolver</option>
+                            <option value="Devolvido">Devolvido</option>
                           </select>
                           <ChevronDown
                             size={14}

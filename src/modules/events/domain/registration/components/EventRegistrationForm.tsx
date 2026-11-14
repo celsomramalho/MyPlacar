@@ -43,6 +43,7 @@ import { compressImageToDataUrl } from '@shared/utils/imageResize';
 import { buildPixTxid } from '@shared/utils/pixTxid';
 import { buildPixBrCode } from '@shared/utils/pixBrCode';
 import { eventNotificationService } from '@modules/events/services/eventNotificationService';
+import type { PaymentReviewStatus } from '@modules/events/services/eventPaymentStats';
 import { RegistrationActivityPanel } from './RegistrationActivityPanel';
 
 export interface EventRegistrationFormProps {
@@ -329,7 +330,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
   const handleUpdatePaymentItemStatus = async (
     paymentId: string,
-    newStatus: 'Confirmado' | 'Aguardando Confirmação' | 'Recusado'
+    newStatus: PaymentReviewStatus
   ) => {
     setFeedback(null);
     const currentSubmission = form.getSubmissionEntry();
@@ -375,7 +376,13 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     const totalDue = currentSubmission.dueAmount ?? entry.dueAmount ?? form.pricing.dueAmount ?? 0;
 
     let nextPaymentStatus: TournamentEntry['paymentStatus'] = entry.paymentStatus;
-    if (newStatus === 'Confirmado') {
+    if (newStatus === 'Isento') {
+      nextPaymentStatus = 'Isento';
+    } else if (newStatus === 'A devolver') {
+      nextPaymentStatus = 'A devolver';
+    } else if (newStatus === 'Devolvido') {
+      nextPaymentStatus = 'Devolvido';
+    } else if (newStatus === 'Confirmado') {
       nextPaymentStatus = confirmedTotal >= totalDue || totalDue <= 0 ? 'Confirmado' : 'Pendente';
     } else if (newStatus === 'Recusado') {
       nextPaymentStatus = confirmedTotal > 0 ? 'Pendente' : 'Recusado';
