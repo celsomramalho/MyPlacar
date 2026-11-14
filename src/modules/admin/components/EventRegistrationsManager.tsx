@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search, History } from 'lucide-react';
+import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search, History, FileSpreadsheet } from 'lucide-react';
+import { collection, getDocs, type Firestore } from 'firebase/firestore';
+import * as XLSX from 'xlsx';
 import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem, type TournamentPair, type PaymentStatus } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
@@ -25,6 +27,74 @@ const formatPhone = (value: string) => {
   if (digits.length <= 2) return `(${digits}`;
   if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+const auditActionNames: Record<string, string> = {
+  registration_created: 'Inscrição criada',
+  registration_updated: 'Inscrição alterada',
+  registration_deleted: 'Inscrição excluída',
+  team_formed: 'Time formado',
+  team_dissolved: 'Time desfeito',
+  team_updated: 'Time alterado',
+  checkin_changed: 'Check-in alterado',
+};
+
+const auditFieldNames: Record<string, string> = {
+  '$registration': 'Inscrição', categoryIds: 'Categorias', categoryPartners: 'Parceiros por categoria',
+  partnerName: 'Parceiro', partnerEmail: 'E-mail do parceiro', partnerPhone: 'Telefone do parceiro',
+  paymentStatus: 'Status do pagamento', payments: 'Pagamentos/anexos', dueAmount: 'Valor devido',
+  paidAmount: 'Valor pago', checkedIn: 'Check-in', checkInDate: 'Data do check-in',
+  checkInDates: 'Datas de check-in', disabled: 'Inscrição ativa', disabledReason: 'Motivo da desativação', pair: 'Time/parceiro',
+};
+
+const auditDate = (value: any): Date | null => {
+  if (typeof value === 'number') return new Date(value);
+  if (value instanceof Date) return value;
+  if (value && typeof value.toDate === 'function') return value.toDate();
+  return null;
+};
+
+const paymentStatusLabel = (value: unknown): string => {
+  const status = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (['approved', 'confirmado', 'pago'].includes(status)) return 'Confirmado';
+  if (['pending', 'pendente', 'aguardando confirmacao'].includes(status)) return 'Pendente';
+  if (['rejected', 'recusado'].includes(status)) return 'Recusado';
+  if (['cancelled', 'canceled', 'cancelado'].includes(status)) return 'Cancelado';
+  if (['refunded', 'devolvido'].includes(status)) return 'Devolvido';
+  if (status === 'isento') return 'Isento';
+  return value ? String(value) : 'Não informado';
+};
+
+const auditPersonName = (person: any) => person?.name || person?.nickname || person?.email || person?.pin || 'Atleta';
+
+const auditExportValue = (field: string, value: any, categories: EventCategory[]): string => {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+  if (field === 'categoryIds' && Array.isArray(value)) {
+    return value.map((id) => categories.find((category) => category.id === id)?.name || String(id)).join(', ') || '—';
+  }
+  if (field === 'categoryPartners' && typeof value === 'object') {
+    return Object.entries(value).map(([categoryId, partner]: [string, any]) => {
+      const category = categories.find((item) => item.id === categoryId)?.name || categoryId;
+      const details = [partner?.name, partner?.email, partner?.phone].filter(Boolean).join(' / ');
+      return `${category}: ${details || 'parceiro não identificado'}`;
+    }).join('; ') || '—';
+  }
+  if (field === 'payments' && Array.isArray(value)) {
+    return value.map((payment: any) => {
+      const date = payment?.date ? new Date(payment.date).toLocaleDateString('pt-BR') : 'data não informada';
+      const receipt = payment?.receipt ? `comprovante: ${payment.receiptName || 'anexado'}` : 'sem comprovante';
+      return `R$ ${Number(payment?.amount || 0).toFixed(2)} (${date}; ${payment?.status || 'status não informado'}; ${receipt})`;
+    }).join('; ') || '—';
+  }
+  if (field === 'pair' && typeof value === 'object') {
+    const team = [value.p1, value.p2].filter(Boolean).map(auditPersonName).join(' + ');
+    const category = categories.find((item) => item.id === value.categoryId)?.name;
+    return [team || JSON.stringify(value), category].filter(Boolean).join(' · ');
+  }
+  if (Array.isArray(value)) return value.map((item) => typeof item === 'object' ? JSON.stringify(item) : String(item)).join(', ') || '—';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
 };
 
 interface Props {
@@ -58,6 +128,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   const [isSyncingMP, setIsSyncingMP] = useState(false);
   const [isFixingIds, setIsFixingIds] = useState(false);
   const [isBackfillingAudit, setIsBackfillingAudit] = useState(false);
+  const [isExportingActivities, setIsExportingActivities] = useState(false);
+  const [isExportingRegistrationData, setIsExportingRegistrationData] = useState(false);
 
   const activeRegistrationEntries = useMemo(
     () => entries.filter((entry) => !entry.disabled && entry.paymentStatus !== 'Cancelado'),
@@ -287,6 +359,175 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       setModalConfig({ title: 'Erro ao importar histórico', message: error instanceof Error ? error.message : 'Não foi possível reconstruir o histórico a partir dos avisos.', onConfirm: () => setModalConfig(null) });
     } finally {
       setIsBackfillingAudit(false);
+    }
+  };
+
+  const handleExportActivities = async () => {
+    if (isExportingActivities || !event.pin) return;
+    setIsExportingActivities(true);
+    try {
+      const db = getDb() as Firestore | null;
+      if (!db) throw new Error('O banco de dados não está disponível.');
+
+      const snapshot = await getDocs(collection(db, 'events', event.pin, 'audit_logs'));
+      if (snapshot.empty) {
+        setModalConfig({
+          title: 'Nenhuma atividade encontrada',
+          message: 'Ainda não há atividades registradas para exportar neste evento.',
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
+
+      const entryByEmail = new Map(entries.map((entry) => [entry.email?.toLowerCase().trim() || '', entry]));
+      const logs = snapshot.docs.map((item) => ({ id: item.id, ...item.data() as Record<string, any> }));
+      logs.sort((a, b) => (auditDate(a.createdAt)?.getTime() || 0) - (auditDate(b.createdAt)?.getTime() || 0));
+
+      const rows = logs.map((activity) => {
+        const email = String(activity.registrationEmail || '').toLowerCase().trim();
+        const entry = entryByEmail.get(email);
+        const changedFields = Array.isArray(activity.changedFields) ? activity.changedFields as string[] : [];
+        const details = changedFields.map((field) => {
+          const label = auditFieldNames[field] || field;
+          const before = auditExportValue(field, activity.before?.[field], categories);
+          const after = auditExportValue(field, activity.after?.[field], categories);
+          if (field === '$registration') return `${label}: ${auditActionNames[activity.action] || activity.action || 'alterada'}`;
+          return `${label}: ${before} → ${after}`;
+        });
+        const eventDate = auditDate(activity.createdAt);
+        return {
+          'Data e hora': eventDate ? eventDate.toLocaleString('pt-BR') : 'Data indisponível',
+          'Inscrição ID': activity.registrationId ?? entry?.registrationId ?? '',
+          Atleta: activity.participantName || entry?.name || entry?.nickname || '',
+          'E-mail do atleta': activity.registrationEmail || entry?.email || '',
+          Atividade: activity.summary || auditActionNames[activity.action] || activity.action || 'Alteração na inscrição',
+          Responsável: activity.actorEmail || (activity.source === 'legacy_notice' ? 'Não identificado (aviso antigo)' : 'Sistema'),
+          'Perfil do responsável': activity.actorRole === 'admin_or_coadmin' ? 'Admin/co-admin' : activity.actorRole === 'event_helper' ? 'Auxiliar do evento' : activity.actorRole === 'athlete' ? 'Atleta' : 'Sistema/não identificado',
+          'Campos e alterações': details.join(' | ') || activity.summary || 'Detalhes não registrados',
+          Origem: activity.source === 'legacy_notice' ? 'Aviso antigo (histórico parcial)' : activity.source || 'Não identificada',
+          'ID do registro': activity.id,
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      worksheet['!cols'] = [
+        { wch: 20 }, { wch: 14 }, { wch: 28 }, { wch: 32 }, { wch: 28 },
+        { wch: 32 }, { wch: 25 }, { wch: 80 }, { wch: 30 }, { wch: 34 },
+      ];
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Atividades');
+      const eventFileName = (event.name || event.pin).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+      XLSX.writeFile(workbook, `${eventFileName || event.pin}_atividades_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (error) {
+      console.error('Erro ao exportar atividades das inscrições:', error);
+      setModalConfig({
+        title: 'Erro ao exportar atividades',
+        message: error instanceof Error ? error.message : 'Não foi possível gerar a planilha das atividades.',
+        onConfirm: () => setModalConfig(null),
+      });
+    } finally {
+      setIsExportingActivities(false);
+    }
+  };
+
+  const handleExportRegistrationData = async () => {
+    if (isExportingRegistrationData || !event.pin) return;
+    setIsExportingRegistrationData(true);
+    try {
+      const db = getDb() as Firestore | null;
+      if (!db) throw new Error('O banco de dados não está disponível.');
+      const snapshot = await getDocs(collection(db, 'events', event.pin, 'entries'));
+      const registrations = snapshot.docs.map((entryDoc) => ({
+        ...entryDoc.data() as TournamentEntry,
+        email: entryDoc.data().email || entryDoc.id,
+      }));
+
+      if (!registrations.length) {
+        setModalConfig({
+          title: 'Nenhuma inscrição encontrada',
+          message: 'Não há inscrições registradas neste evento para exportar.',
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
+
+      const sortedRegistrations = [...registrations].sort((a, b) =>
+        String(a.name || a.nickname || '').localeCompare(String(b.name || b.nickname || ''), 'pt-BR'),
+      );
+      const getRegistrationCategories = (entry: TournamentEntry) =>
+        (entry.categoryIds || []).map((categoryId) =>
+          categories.find((category) => category.id === categoryId)?.name || categoryId,
+        );
+
+      const registrationRows = sortedRegistrations.map((entry) => ({
+        'Inscrição ID': entry.registrationId ?? '',
+        Atleta: entry.name || entry.nickname || '',
+        'E-mail do atleta': entry.email || '',
+        Categorias: getRegistrationCategories(entry).join(', ') || 'Sem categoria registrada',
+      }));
+
+      const receiptRows = sortedRegistrations.flatMap((entry) => {
+        const categoriesForEntry = getRegistrationCategories(entry).join(', ') || 'Sem categoria registrada';
+        const storedPayments = Array.isArray(entry.payments) ? entry.payments : [];
+        const payments = storedPayments.length > 0
+          ? storedPayments
+          : (entry as any).receiptUrl
+            ? [{
+                id: `legacy-${entry.registrationId || entry.email}`,
+                date: entry.joinedAt || undefined,
+                amount: entry.paidAmount ?? entry.dueAmount ?? 0,
+                receiptUrl: (entry as any).receiptUrl,
+              }]
+            : [];
+
+        return payments
+          .filter((payment) => Boolean(payment.receiptUrl))
+          .map((payment) => {
+            const date = auditDate(payment.date);
+            return {
+              'Inscrição ID': entry.registrationId ?? '',
+              Atleta: entry.name || entry.nickname || '',
+              'E-mail do atleta': entry.email || '',
+              Categorias: categoriesForEntry,
+              Data: date ? date.toLocaleDateString('pt-BR') : 'Data indisponível',
+              Hora: date ? date.toLocaleTimeString('pt-BR') : 'Hora indisponível',
+              Valor: Number(payment.amount || 0),
+              'Status do pagamento': paymentStatusLabel(payment.status || entry.paymentStatus),
+            };
+          });
+      });
+
+      const workbook = XLSX.utils.book_new();
+      const registrationsSheet = XLSX.utils.json_to_sheet(registrationRows);
+      registrationsSheet['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 34 }, { wch: 50 }];
+      XLSX.utils.book_append_sheet(workbook, registrationsSheet, 'Inscritos e categorias');
+
+      const receiptHeaders = ['Inscrição ID', 'Atleta', 'E-mail do atleta', 'Categorias', 'Data', 'Hora', 'Valor', 'Status do pagamento'];
+      const receiptsSheet = XLSX.utils.aoa_to_sheet([
+        receiptHeaders,
+        ...receiptRows.map((row) => receiptHeaders.map((header) => row[header as keyof typeof row] ?? '')),
+      ]);
+      receiptsSheet['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 34 }, { wch: 50 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 24 }];
+      if (receiptRows.length) {
+        const valueColumn = 6;
+        for (let row = 1; row <= receiptRows.length; row += 1) {
+          const cell = XLSX.utils.encode_cell({ r: row, c: valueColumn });
+          if (receiptsSheet[cell]) receiptsSheet[cell].z = 'R$ #,##0.00';
+        }
+      }
+      XLSX.utils.book_append_sheet(workbook, receiptsSheet, 'Comprovantes (dados)');
+
+      const eventFileName = (event.name || event.pin).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+      XLSX.writeFile(workbook, `${eventFileName || event.pin}_inscritos_comprovantes_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (error) {
+      console.error('Erro ao exportar inscritos e comprovantes:', error);
+      setModalConfig({
+        title: 'Erro ao exportar inscrições',
+        message: error instanceof Error ? error.message : 'Não foi possível gerar a planilha de inscritos e comprovantes.',
+        onConfirm: () => setModalConfig(null),
+      });
+    } finally {
+      setIsExportingRegistrationData(false);
     }
   };
 
@@ -977,6 +1218,26 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                 </button>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => void handleExportActivities()}
+              disabled={isExportingActivities}
+              className="w-full flex items-center justify-center gap-2 bg-sky-50 hover:bg-sky-100 active:scale-[0.99] text-sky-800 border border-sky-200 font-black text-xs px-4 py-2.5 rounded-2xl transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
+              title="Baixa uma planilha Excel com todas as atividades registradas nas inscrições deste evento"
+            >
+              <FileSpreadsheet size={15} className={isExportingActivities ? 'animate-pulse' : ''} />
+              <span>{isExportingActivities ? 'Preparando planilha...' : 'Exportar atividades'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleExportRegistrationData()}
+              disabled={isExportingRegistrationData}
+              className="w-full flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 active:scale-[0.99] text-emerald-800 border border-emerald-200 font-black text-xs px-4 py-2.5 rounded-2xl transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
+              title="Exporta os inscritos, categorias e os dados de data, hora e valor dos comprovantes, sem incluir os arquivos"
+            >
+              <FileSpreadsheet size={15} className={isExportingRegistrationData ? 'animate-pulse' : ''} />
+              <span>{isExportingRegistrationData ? 'Preparando planilha...' : 'Exportar inscritos e comprovantes'}</span>
+            </button>
             <button
               onClick={handleStartAdd}
               className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-4 py-2.5 rounded-2xl shadow-sm transition-all cursor-pointer whitespace-nowrap"
