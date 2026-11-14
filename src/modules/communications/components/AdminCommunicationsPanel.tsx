@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 import {
   Send,
   MessageSquare,
@@ -912,28 +913,33 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
       </div>
 
       {/* Search Section */}
-      <div className="bg-white rounded-3xl p-4 border-2 border-slate-100 shadow-sm">
-        <div className="relative">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Pesquisar por nome ou ID da inscrição..."
-            className="w-full h-11 pl-10 pr-10 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-xs outline-none focus:border-brand-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-all"
-              title="Limpar pesquisa"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      </div>
+      {(() => {
+        const searchStyles = getSearchInputStyles({ query: searchQuery, resultCount: searchResults.length });
+        return (
+          <div className="bg-white rounded-3xl p-4 border-2 border-slate-100 shadow-sm">
+            <div className="relative">
+              <Search size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Pesquisar por nome ou ID da inscrição..."
+                className={`w-full h-11 pl-10 pr-10 border rounded-2xl font-bold text-xs outline-none transition-all ${searchStyles.inputClasses}`}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-all"
+                  title="Limpar pesquisa"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Resultados da Pesquisa (exibidos acima dos comunicados recentes se houver busca ativa) */}
       {searchQuery.trim() && (

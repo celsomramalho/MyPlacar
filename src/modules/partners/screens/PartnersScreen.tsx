@@ -19,6 +19,7 @@ import { getDocFromServer, doc, setDoc, getDoc, onSnapshot, Firestore } from 'fi
 import { LiveIndicator } from '@modules/live'; 
 import { formatPortugueseName, maskPin } from '@shared/utils/formatters';
 import { copyToClipboard } from '@shared/utils/clipboard';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 import { Toggle } from '@shared/components/Toggle';
 import { ScoreboardIcon } from '@shared/components/ScoreboardIcon';
 
@@ -817,7 +818,33 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
                    <button onClick={() => { setPendingQueueIndex(null); setActiveTab('queue'); }} className="text-[10px] font-black text-red-500 px-3 py-1 bg-red-50 rounded-lg border border-red-100">Cancelar vínculo</button>
                 )}
               </div>
-              <div className="relative"><input placeholder="Procurar na lista..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-14 pl-12 pr-12 bg-white border border-gray-100 rounded-3xl shadow-sm text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" /><Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" /></div>
+              {(() => {
+                const searchStyles = getSearchInputStyles({
+                  query: searchQuery,
+                  resultCount: filteredPartners.length,
+                });
+                return (
+                  <div className="relative">
+                    <input
+                      placeholder="Procurar na lista..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className={`w-full h-14 pl-12 pr-12 border rounded-3xl shadow-sm text-sm font-bold outline-none transition-all ${searchStyles.inputClasses}`}
+                    />
+                    <Search size={20} className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full transition-colors"
+                        title="Limpar pesquisa"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
               <div id="partners-list" className="space-y-3 pt-2">
                 {filteredPartners.map(p => {
                   const team = selections[p.id];

@@ -20,6 +20,7 @@ import { updateSuper8DuplasProgression } from '@modules/events/services/matchPro
 import { isIndividualScoreCategory, isIndividualScoreEvent, isRankingEvent, isSuper8Event, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { getDb, getAuthInstance } from '@infra/firebase';
+import { updateUserProfileFields } from '@infra/firebase/users';
 import { updateEvent, saveEventEntry, deleteEventEntry, saveAdminEventCheckIn } from '@infra/firebase/events';
 import type { Firestore } from 'firebase/firestore';
 import { useUI } from '@modules/ui';
@@ -529,6 +530,17 @@ export const EventCategoriesManager: React.FC<Props> = ({
           finalEntry,
           adminEmail || getAuthInstance()?.currentUser?.email || undefined
         );
+
+        if (isRealAthlete && newEmail) {
+          try {
+            await updateUserProfileFields(db as Firestore, newEmail, {
+              phone: (finalEntry.phone || '').replace(/\D/g, ''),
+              ...(finalEntry.gender ? { gender: finalEntry.gender } : {}),
+            });
+          } catch (profileError) {
+            console.warn('Inscrição salva, mas não foi possível atualizar telefone/gênero no perfil do atleta:', profileError);
+          }
+        }
 
         if (newEmail && !newEmail.includes('@simplificada.local')) {
           await saveUserEventRegistration(db as Firestore, newEmail, event.pin, {

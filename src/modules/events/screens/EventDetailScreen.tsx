@@ -35,6 +35,7 @@ import {
   EVENT_DETAIL_RANKING_STEPS,
   RANKING_ILLUSTRATIVE_HELPS,
 } from '@shared/onboarding';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 import type {
   TournamentEvent,
   TournamentEntry,
@@ -2581,44 +2582,92 @@ export const EventDetailScreen: React.FC<Props> = ({
 
                       </div>
 
-                    {userCategoryView === 'entries' && (
-                      <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-slate-400 focus-within:border-blue-400 focus-within:bg-white">
-                        <Search size={16} className="shrink-0" />
-                        <input
-                          type="search"
-                          value={participantSearch}
-                          onChange={(e) => setParticipantSearch(e.target.value)}
-                          placeholder="Pesquisar participante por nome..."
-                          className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                      </label>
-                    )}
+                    {userCategoryView === 'entries' && (() => {
+                      const searchStyles = getSearchInputStyles({
+                        query: participantSearch,
+                        resultCount: visibleCategoryEntries.length,
+                      });
+                      return (
+                        <label className={`flex h-11 items-center gap-2 rounded-xl border px-3.5 transition-all ${searchStyles.inputClasses}`}>
+                          <Search size={16} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
+                          <input
+                            type="search"
+                            value={participantSearch}
+                            onChange={(e) => setParticipantSearch(e.target.value)}
+                            placeholder="Pesquisar participante por nome..."
+                            className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-inherit"
+                          />
+                          {participantSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setParticipantSearch('')}
+                              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                              title="Limpar pesquisa"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </label>
+                      );
+                    })()}
 
-                    {userCategoryView === 'teams' && (
-                      <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-slate-400 focus-within:border-blue-400 focus-within:bg-white">
-                        <Search size={16} className="shrink-0" />
-                        <input
-                          type="search"
-                          value={teamSearch}
-                          onChange={(e) => setTeamSearch(e.target.value)}
-                          placeholder="Pesquisar time por nome..."
-                          className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                      </label>
-                    )}
+                    {userCategoryView === 'teams' && (() => {
+                      const searchStyles = getSearchInputStyles({
+                        query: teamSearch,
+                        resultCount: visibleCategoryPairs.length,
+                      });
+                      return (
+                        <label className={`flex h-11 items-center gap-2 rounded-xl border px-3.5 transition-all ${searchStyles.inputClasses}`}>
+                          <Search size={16} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
+                          <input
+                            type="search"
+                            value={teamSearch}
+                            onChange={(e) => setTeamSearch(e.target.value)}
+                            placeholder="Pesquisar time por nome..."
+                            className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-inherit"
+                          />
+                          {teamSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setTeamSearch('')}
+                              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                              title="Limpar pesquisa"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </label>
+                      );
+                    })()}
 
-                    {userCategoryView === 'matches' && (
-                      <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-slate-400 focus-within:border-blue-400 focus-within:bg-white">
-                        <Search size={16} className="shrink-0" />
-                        <input
-                          type="search"
-                          value={matchSearch}
-                          onChange={(e) => setMatchSearch(e.target.value)}
-                          placeholder="Pesquisar partida por nome..."
-                          className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                      </label>
-                    )}
+                    {userCategoryView === 'matches' && (() => {
+                      const searchStyles = getSearchInputStyles({
+                        query: matchSearch,
+                        resultCount: visibleCategoryMatches.length,
+                      });
+                      return (
+                        <label className={`flex h-11 items-center gap-2 rounded-xl border px-3.5 transition-all ${searchStyles.inputClasses}`}>
+                          <Search size={16} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
+                          <input
+                            type="search"
+                            value={matchSearch}
+                            onChange={(e) => setMatchSearch(e.target.value)}
+                            placeholder="Pesquisar partida por nome..."
+                            className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-inherit"
+                          />
+                          {matchSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setMatchSearch('')}
+                              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                              title="Limpar pesquisa"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </label>
+                      );
+                    })()}
 
                     {/* Botão Nova inscrição: visível apenas dentro do período de inscrição + inscrição simplificada + allowUserPartnerRegistration + usuário inscrito (ou admin) */}
                     {userCategoryView === 'entries' &&

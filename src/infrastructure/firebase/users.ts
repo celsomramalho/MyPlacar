@@ -185,6 +185,7 @@ export const updateUserProfileFields = (
   data: {
     authMethod?: 'pin' | 'password';
     gender?: 'M' | 'F';
+    phone?: string;
     nickname?: string;
     passkeyCredentialId?: string;
     passkeyPublicKey?: string;

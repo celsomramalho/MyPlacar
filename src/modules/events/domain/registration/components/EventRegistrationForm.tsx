@@ -21,6 +21,7 @@ import {
   type PaymentItem,
 } from '@modules/events/types';
 import { getDb } from '@infra/firebase';
+import { updateUserProfileFields } from '@infra/firebase/users';
 import { fetchEventEntries, reserveNextRegistrationId } from '@infra/firebase/events';
 import type { FirebaseUserByPin } from '@infra/firebase/users';
 import type { Firestore } from 'firebase/firestore';
@@ -582,17 +583,33 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
       await onSave(submission);
       // Sincroniza WhatsApp e Gênero de volta ao perfil do usuário se tiver mudado
-      if (onProfileSync && userProfile) {
+      const isOwnUserRegistration = Boolean(
+        mode === 'user' &&
+        !isPartnerRegistration &&
+        userProfile?.email &&
+        submission.email?.toLowerCase().trim() === userProfile.email.toLowerCase().trim(),
+      );
+      if (isOwnUserRegistration && userProfile) {
         const updates: { phone?: string; gender?: 'M' | 'F' } = {};
-        if (submission.phone && submission.phone !== userProfile.phone) {
-          updates.phone = submission.phone;
+        const submittedPhone = submission.phone?.replace(/\D/g, '') || '';
+        const profilePhone = userProfile.phone?.replace(/\D/g, '') || '';
+        if (submittedPhone && submittedPhone !== profilePhone) {
+          updates.phone = submittedPhone;
         }
         const submissionGender = submission.gender as 'M' | 'F' | undefined;
         if (submissionGender && submissionGender !== userProfile.gender) {
           updates.gender = submissionGender;
         }
         if (Object.keys(updates).length > 0) {
-          onProfileSync(updates);
+          const db = getDb();
+          if (db) {
+            try {
+              await updateUserProfileFields(db, userProfile.email, updates);
+            } catch (profileError) {
+              console.warn('[EventRegistrationForm] Inscrição salva, mas não foi possível atualizar o perfil do atleta:', profileError);
+            }
+          }
+          onProfileSync?.(updates);
         }
       }
       // No modo admin, o formulário expandido é fechado pelo pai (via onCancel).

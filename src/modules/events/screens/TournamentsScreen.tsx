@@ -10,6 +10,7 @@ import { EventRegistrationForm } from '../domain/registration';
 import { canUseEventAdminAccess, isCoAdminOfEvent, isEventHelper, isJudgeOfEvent, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
 import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 
 interface Props {
   registrations: EventRegistration[];
@@ -385,26 +386,34 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
             <Search size={18} className="text-amber-500" />
             <h3 className="text-sm font-black text-black tracking-tight">Localizar torneios</h3>
           </div>
-          <div className="bg-white rounded-[2rem] p-2.5 px-4 shadow-sm border border-gray-100 flex items-center gap-3">
-            <Search size={20} className="text-amber-500 shrink-0" />
-            <input
-              type="text"
-              placeholder="Digite o PIN ou nome do evento"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              className="flex-1 h-12 bg-transparent font-black text-sm outline-none placeholder:text-slate-400 placeholder:font-bold"
-            />
-            {pinInput && (
-              <button
-                type="button"
-                onClick={() => setPinInput('')}
-                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
-                title="Limpar busca"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
+          {(() => {
+            const searchStyles = getSearchInputStyles({
+              query: pinInput,
+              resultCount: availableEvents.length + filteredRegistrations.length,
+            });
+            return (
+              <div className={`rounded-[2rem] p-2.5 px-4 shadow-sm border flex items-center gap-3 transition-all ${searchStyles.inputClasses}`}>
+                <Search size={20} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
+                <input
+                  type="text"
+                  placeholder="Digite o PIN ou nome do evento"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="flex-1 h-12 bg-transparent font-black text-sm outline-none placeholder:text-inherit placeholder:font-bold"
+                />
+                {pinInput && (
+                  <button
+                    type="button"
+                    onClick={() => setPinInput('')}
+                    className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+                    title="Limpar busca"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* TORNEIOS DISPONÍVEIS */}

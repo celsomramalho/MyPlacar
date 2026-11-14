@@ -131,6 +131,46 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   };
 
   const visibleEntries = filterEntriesByParticipantSearch(entries, searchQuery);
+  const firstSelectedPartner = selectedEntries.size === 1
+    ? entries.find((entry) =>
+        Boolean((entry.email && selectedEntries.has(entry.email)) || (entry.pin && selectedEntries.has(entry.pin))),
+      )
+    : undefined;
+  const shouldFilterSuper8MixedPairCandidates = Boolean(
+    firstSelectedPartner &&
+    firstSelectedPartner.gender &&
+    isSuper8Like &&
+    !isSuper8Rotating &&
+    category.format === 'Duplas' &&
+    category.gender1 &&
+    category.gender2 &&
+    category.gender1 !== category.gender2,
+  );
+  const hasPairInCurrentCategory = (entry: TournamentEntry) =>
+    (event.pairs || []).some((pair) => {
+      if (pair.categoryId !== category.id) return false;
+      return [pair.p1, pair.p2].some((member) => {
+        if (!member) return false;
+        const sameEmail = Boolean(entry.email && member.email && entry.email.toLowerCase().trim() === member.email.toLowerCase().trim());
+        const samePin = Boolean(entry.pin && member.pin && entry.pin.toUpperCase().trim() === member.pin.toUpperCase().trim());
+        const sameRegistrationId = Boolean(entry.registrationId && member.registrationId && entry.registrationId === member.registrationId);
+        return sameEmail || samePin || sameRegistrationId;
+      });
+    });
+  const partnerCandidates = shouldFilterSuper8MixedPairCandidates && firstSelectedPartner
+    ? visibleEntries.filter((candidate) => {
+        const isFirstPartner = Boolean(
+          (candidate.email && firstSelectedPartner.email && candidate.email.toLowerCase().trim() === firstSelectedPartner.email.toLowerCase().trim()) ||
+          (candidate.pin && firstSelectedPartner.pin && candidate.pin.toUpperCase().trim() === firstSelectedPartner.pin.toUpperCase().trim()),
+        );
+        const requiredGender = firstSelectedPartner.gender === 'F' ? 'M' : 'F';
+        const hasOppositeGender = candidate.gender === requiredGender;
+        return !isFirstPartner && hasOppositeGender && !hasPairInCurrentCategory(candidate);
+      })
+    : visibleEntries;
+  const selectableEntries = shouldFilterSuper8MixedPairCandidates && firstSelectedPartner
+    ? [firstSelectedPartner, ...partnerCandidates]
+    : visibleEntries;
   const pairHighlightColors = [
     'bg-amber-100/80 border-l-4 border-l-amber-400',
     'bg-green-200/80 border-l-4 border-l-green-500',
@@ -198,6 +238,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
           <ParticipantSearchInput
             value={searchQuery}
             onChange={setSearchQuery}
+            resultCount={visibleEntries.length}
             placeholder="Pesquisar inscrito por nome..."
           />
         )}
@@ -336,9 +377,13 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
-          {visibleEntries.length === 0 ? (
-            <div className="p-8 text-center text-xs font-bold text-slate-400">Nenhum inscrito encontrado.</div>
-          ) : visibleEntries.map((entry) => {
+          {selectableEntries.length === 0 ? (
+            <div className="p-8 text-center text-xs font-bold text-slate-400">
+              {shouldFilterSuper8MixedPairCandidates
+                ? 'Nenhum parceiro disponível sem time formado nesta categoria.'
+                : 'Nenhum inscrito encontrado.'}
+            </div>
+          ) : selectableEntries.map((entry, entryIndex) => {
             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
             const standing = isIndividualRanking
               ? playerStandingsMap.get(standingKey) || (entry.registrationId ? playerStandingsMap.get(`reg_${entry.registrationId}`) : null)
@@ -398,6 +443,17 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                         readOnly={isReadOnly}
                       />
                     </div>
+                  </div>
+                )}
+                {shouldFilterSuper8MixedPairCandidates && entryIndex === 0 && (
+                  <div className="border-t border-sky-100 bg-sky-50/70 px-4 py-2.5">
+                    <p className="text-[10px] font-black text-sky-800">Parceiro selecionado acima</p>
+                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                      Opções abaixo: gênero oposto e sem time formado nesta categoria.
+                    </p>
+                    {partnerCandidates.length === 0 && (
+                      <p className="mt-1 text-[10px] font-bold text-amber-700">Nenhum parceiro disponível no momento.</p>
+                    )}
                   </div>
                 )}
               </div>

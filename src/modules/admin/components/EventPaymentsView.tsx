@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X, Trash2, RotateCcw, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { formatRegistrationId, type PaymentItem, type TournamentEvent, type TournamentEntry, type PaymentStatus } from '@modules/events/types';
 import { getPaymentReviewStatus, type PaymentReviewStatus } from '@modules/events/services/eventPaymentStats';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 
 interface Props {
   event: TournamentEvent;
@@ -527,24 +528,29 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     },
   ];
 
+  const searchStyles = getSearchInputStyles({
+    query: searchName,
+    resultCount: entries.filter(matchesSearch).length,
+  });
+
   return (
     <div className="space-y-4 animate-in fade-in">
       {/* Barra de Pesquisa e Filtros */}
       <div className="space-y-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
         <div className="relative w-full">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
           <input
             type="text"
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
             placeholder="Pesquisar por nome ou ID da inscrição..."
-            className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
+            className={`w-full h-10 pl-9 pr-8 border rounded-xl font-bold text-xs outline-none transition-all ${searchStyles.inputClasses}`}
           />
           {searchName && (
             <button
               type="button"
               onClick={() => setSearchName('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
               title="Limpar pesquisa"
             >
               <X size={14} />

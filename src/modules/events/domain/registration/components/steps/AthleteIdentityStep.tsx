@@ -30,6 +30,7 @@ const formatPhone = (value: string) => {
 export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
   formData,
   updateField,
+  isAdmin = false,
   readOnly = false,
   isSimplified = false,
   nameConflictWarning = null,
@@ -211,7 +212,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
         </div>
 
         {/* WhatsApp */}
-        <div className="space-y-1.5">
+        <div className={`space-y-1.5 ${isAdmin ? 'sm:col-start-1' : ''}`}>
           <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
             <Phone size={14} className="text-slate-400" />
             WhatsApp {!isSimplified && <span className="text-rose-500">*</span>}

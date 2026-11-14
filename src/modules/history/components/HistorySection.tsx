@@ -1,6 +1,7 @@
 import { copyToClipboard } from '@shared/utils/clipboard';
 import React, { useMemo, useState } from 'react';
-import { Search, Loader2, Clock, Trophy, ChevronDown, ChevronUp, MapPin, Cloud, Trash2, CloudUpload, CloudDownload, Calendar, Smartphone, Share2 } from 'lucide-react';
+import { Search, Loader2, Clock, Trophy, ChevronDown, ChevronUp, MapPin, Cloud, Trash2, CloudUpload, CloudDownload, Calendar, Smartphone, Share2, X } from 'lucide-react';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 import { Input } from '@shared/components/Input';
 import { LazySportIcon } from '@shared/components/LazySportIcon';
 import { MatchTimeline } from '@shared/components/MatchTimeline';
@@ -132,15 +133,34 @@ export const HistorySection: React.FC<Props> = ({
             </div>
           </div>
         </div>
-        <div id="history-search" className="relative">
-          <Input
-            placeholder="Buscar por nome ou resultado..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-12 h-[60px] text-base bg-gray-50/50 border-gray-100 rounded-3xl shadow-none"
-          />
-          <Search size={22} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-        </div>
+        {(() => {
+          const searchStyles = getSearchInputStyles({
+            query: searchQuery,
+            resultCount: filtered.length,
+          });
+          return (
+            <div id="history-search" className="relative">
+              <input
+                type="text"
+                placeholder="Buscar por nome ou resultado..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`w-full pl-12 pr-10 h-[60px] text-base border rounded-3xl outline-none transition-all font-medium ${searchStyles.inputClasses}`}
+              />
+              <Search size={22} className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full transition-colors"
+                  title="Limpar busca"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {filtered.length === 0 ? (

@@ -4,6 +4,7 @@ import type { UserProfile } from '@modules/auth/types';
 import type { FirebaseUserWithCreatedAt } from '@infra/firebase/users';
 import { applyGoldenRule } from '@shared/utils/formatters';
 import { copyToClipboard } from '@shared/utils/clipboard';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 
 interface AdminUsersPanelProps {
   userSearch: string;
@@ -109,36 +110,46 @@ export const AdminUsersPanel = ({
         </div>
       </div>
 
-      <div className="relative">
-        <input
-          type="text"
-          value={userSearch}
-          onChange={(event) => onUserSearchChange(event.target.value)}
-          onKeyDown={(event) => event.key === 'Enter' && onSearchUsers()}
-          placeholder="Buscar por nome, apelido, e-mail ou PIN..."
-          className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 pr-20 text-sm font-bold outline-none text-black placeholder:text-slate-400 focus:border-blue-500 focus:bg-white transition-all"
-        />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-black">
-          {userSearch && (
-            <button
-              type="button"
-              onClick={onClearUserSearch || (() => onUserSearchChange(''))}
-              className="w-6 h-6 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-black transition-colors"
-              title="Limpar busca"
-            >
-              <X size={14} />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onSearchUsers}
-            className="w-7 h-7 rounded-lg hover:bg-slate-200 flex items-center justify-center text-black transition-colors"
-            title="Buscar"
-          >
-            {isSearchingUsers ? <Loader2 className="animate-spin text-blue-600" size={18} /> : <Search size={18} />}
-          </button>
-        </div>
-      </div>
+      {(() => {
+        const searchStyles = getSearchInputStyles({
+          query: userSearch,
+          resultCount: foundUsers.length,
+          hasSearched: hasSearchedUsers,
+          isSearching: isSearchingUsers,
+        });
+        return (
+          <div className="relative">
+            <input
+              type="text"
+              value={userSearch}
+              onChange={(event) => onUserSearchChange(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && onSearchUsers()}
+              placeholder="Buscar por nome, apelido, e-mail ou PIN..."
+              className={`w-full h-12 border rounded-xl px-4 pr-20 text-sm font-bold outline-none transition-all ${searchStyles.inputClasses}`}
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-black">
+              {userSearch && (
+                <button
+                  type="button"
+                  onClick={onClearUserSearch || (() => onUserSearchChange(''))}
+                  className="w-6 h-6 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-black transition-colors"
+                  title="Limpar busca"
+                >
+                  <X size={14} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onSearchUsers}
+                className="w-7 h-7 rounded-lg hover:bg-slate-200 flex items-center justify-center text-black transition-colors"
+                title="Buscar"
+              >
+                {isSearchingUsers ? <Loader2 className="animate-spin text-blue-600" size={18} /> : <Search size={18} className={searchStyles.iconClasses} />}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Feedback durante a busca */}
       {isSearchingUsers && (

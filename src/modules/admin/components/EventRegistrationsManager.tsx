@@ -21,6 +21,7 @@ import { reconcileLegacyPendingPaymentAmounts } from '@modules/events/domain/reg
 import { createRegistrationCancellationRequest, getRegistrationCancellationRefundPercent, hasRegistrationReceiptAttachment } from '@modules/events/services/registrationCancellation';
 import { useUI } from '@modules/ui';
 import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 
 const formatPhone = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -467,6 +468,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         'Inscrição ID': entry.registrationId ?? '',
         Atleta: entry.name || entry.nickname || '',
         'E-mail do atleta': entry.email || '',
+        Telefone: entry.phone || '',
+        Gênero: entry.gender === 'F' ? 'Feminino' : entry.gender === 'M' ? 'Masculino' : 'Não informado',
         Categorias: getRegistrationCategories(entry).join(', ') || 'Sem categoria registrada',
       }));
 
@@ -504,7 +507,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
       const workbook = XLSX.utils.book_new();
       const registrationsSheet = XLSX.utils.json_to_sheet(registrationRows);
-      registrationsSheet['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 34 }, { wch: 50 }];
+      registrationsSheet['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 34 }, { wch: 20 }, { wch: 18 }, { wch: 50 }];
       XLSX.utils.book_append_sheet(workbook, registrationsSheet, 'Inscritos e categorias');
 
       const receiptHeaders = ['Inscrição ID', 'Atleta', 'E-mail do atleta', 'Categorias', 'Data', 'Hora', 'Valor', 'Status do pagamento'];
@@ -758,13 +761,6 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     const cleanEmail = email.trim() || `${cleanPin.toLowerCase()}@myplacar.app`;
 
     const db = getDb();
-    if (db && cleanPin) {
-      try {
-        await updateUserProfileFields(db, cleanPin, { gender });
-      } catch (err) {
-        console.warn("Could not update user profile gender directly:", err);
-      }
-    }
 
     const calculatedPaidAmount = payments.reduce((acc, curr) => acc + curr.amount, 0);
 
@@ -795,6 +791,16 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       try {
         const { saveAdminEventEntry, saveUserEventRegistration } = await import('@infra/firebase/events');
         await saveAdminEventEntry(db, event.pin, entryData, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+        if (!cleanEmail.includes('@simplificada.local') && !cleanPin.startsWith('TEMP')) {
+          try {
+            await updateUserProfileFields(db, cleanEmail, {
+              phone: phone.replace(/\D/g, ''),
+              gender,
+            });
+          } catch (profileError) {
+            console.warn('Inscrição salva, mas não foi possível atualizar telefone/gênero no perfil do atleta:', profileError);
+          }
+        }
         await saveUserEventRegistration(db, cleanEmail, event.pin, {
           pin: event.pin,
           name: event.name,
@@ -853,6 +859,16 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         }
       }
       await saveAdminEventEntry(db, event.pin, finalEntry, adminEmail || getAuthInstance()?.currentUser?.email || undefined);
+      if (finalEntry.email && !finalEntry.email.includes('@simplificada.local') && !finalEntry.pin?.toUpperCase().startsWith('TEMP')) {
+        try {
+          await updateUserProfileFields(db, finalEntry.email, {
+            phone: (finalEntry.phone || '').replace(/\D/g, ''),
+            ...(finalEntry.gender ? { gender: finalEntry.gender } : {}),
+          });
+        } catch (profileError) {
+          console.warn('Inscrição salva, mas não foi possível atualizar telefone/gênero no perfil do atleta:', profileError);
+        }
+      }
       // O registro auxiliar não pode impedir a persistência principal da inscrição.
       try {
         await saveUserEventRegistration(db, finalEntry.email, event.pin, { pin: event.pin, name: event.name, joinedAt: finalEntry.joinedAt, bannerUrl: event.bannerUrl || null });
@@ -921,6 +937,17 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         finalEntry,
         adminEmail || getAuthInstance()?.currentUser?.email || undefined
       );
+
+      if (isRealAthlete && newEmail) {
+        try {
+          await updateUserProfileFields(db, newEmail, {
+            phone: (finalEntry.phone || '').replace(/\D/g, ''),
+            ...(finalEntry.gender ? { gender: finalEntry.gender } : {}),
+          });
+        } catch (profileError) {
+          console.warn('Inscrição salva, mas não foi possível atualizar telefone/gênero no perfil do atleta:', profileError);
+        }
+      }
 
       try {
         await saveUserEventRegistration(db, finalEntry.email, event.pin, {
@@ -1289,30 +1316,38 @@ export const EventRegistrationsManager: React.FC<Props> = ({
               Nova inscrição
             </button>
             {/* Campo de pesquisa de participante por nome */}
-            <div className="relative w-full">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchName}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setSearchName(value);
-                  if (value.trim()) setRegistrationGroup('all');
-                }}
-                placeholder="Pesquisar por nome ou ID da inscrição..."
-                className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
-              />
-              {searchName && (
-                <button
-                  type="button"
-                  onClick={() => setSearchName('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
-                  title="Limpar pesquisa"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
+            {(() => {
+              const searchStyles = getSearchInputStyles({
+                query: searchName,
+                resultCount: filteredEntries.length,
+              });
+              return (
+                <div className="relative w-full">
+                  <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                  <input
+                    type="text"
+                    value={searchName}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSearchName(value);
+                      if (value.trim()) setRegistrationGroup('all');
+                    }}
+                    placeholder="Pesquisar por nome ou ID da inscrição..."
+                    className={`w-full h-10 pl-9 pr-8 border rounded-xl font-bold text-xs outline-none transition-all ${searchStyles.inputClasses}`}
+                  />
+                  {searchName && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchName('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                      title="Limpar pesquisa"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-2 gap-2">
               {([
                 ['confirmed', 'Confirmados', registrationGroupCounts.confirmed, 'border-emerald-300 bg-emerald-100 text-emerald-800'],

@@ -175,6 +175,7 @@ export const CategoryTeamsTab: React.FC<CategoryTeamsTabProps> = ({
           <ParticipantSearchInput
             value={searchQuery}
             onChange={setSearchQuery}
+            resultCount={isSuper8Duplas ? (visibleBracketOne.length + visibleBracketTwo.length) : visiblePairs.length}
             placeholder="Pesquisar time por nome..."
           />
         </div>
