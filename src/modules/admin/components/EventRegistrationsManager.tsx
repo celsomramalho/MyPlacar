@@ -380,7 +380,10 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       }
 
       const entryByEmail = new Map(entries.map((entry) => [entry.email?.toLowerCase().trim() || '', entry]));
-      const logs = snapshot.docs.map((item) => ({ id: item.id, ...item.data() as Record<string, any> }));
+      const logs = snapshot.docs.map((item): Record<string, any> & { id: string } => ({
+        id: item.id,
+        ...item.data(),
+      }));
       logs.sort((a, b) => (auditDate(a.createdAt)?.getTime() || 0) - (auditDate(b.createdAt)?.getTime() || 0));
 
       const rows = logs.map((activity) => {
@@ -469,7 +472,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       const receiptRows = sortedRegistrations.flatMap((entry) => {
         const categoriesForEntry = getRegistrationCategories(entry).join(', ') || 'Sem categoria registrada';
         const storedPayments = Array.isArray(entry.payments) ? entry.payments : [];
-        const payments = storedPayments.length > 0
+        const payments: Array<{ id?: string; date?: number; amount?: number; receiptUrl?: string; status?: string }> = storedPayments.length > 0
           ? storedPayments
           : (entry as any).receiptUrl
             ? [{
@@ -477,6 +480,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                 date: entry.joinedAt || undefined,
                 amount: entry.paidAmount ?? entry.dueAmount ?? 0,
                 receiptUrl: (entry as any).receiptUrl,
+                status: entry.paymentStatus,
               }]
             : [];
 
