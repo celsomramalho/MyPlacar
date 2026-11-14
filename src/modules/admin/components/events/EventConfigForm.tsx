@@ -1225,7 +1225,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         onToggle={() => toggleSection('valores')}
         isAdminOnly
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 ml-1">Valor inscrição (R$)</label>
             <input
@@ -1261,6 +1261,41 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
               placeholder="0,00"
               className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
             />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Cancelamento período inscrição</label>
+            <select
+              disabled={isAdminOnlyDisabled}
+              value={editingEvent.registrationCancellationRefundPercent ?? 100}
+              onChange={(e) =>
+                handleProtectedChange({
+                  ...editingEvent,
+                  registrationCancellationRefundPercent: Number(e.target.value) as 100 | 50,
+                })
+              }
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+            >
+              <option value={100}>Reembolso 100%</option>
+              <option value={50}>Reembolso 50%</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Cancelamento fora do período</label>
+            <select
+              disabled={isAdminOnlyDisabled}
+              value={editingEvent.outsideRegistrationCancellationRefundPercent ?? 50}
+              onChange={(e) =>
+                handleProtectedChange({
+                  ...editingEvent,
+                  outsideRegistrationCancellationRefundPercent: Number(e.target.value) as 100 | 75 | 50,
+                })
+              }
+              className="w-full h-12 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-3 font-black text-xs outline-none"
+            >
+              <option value={100}>Reembolso 100%</option>
+              <option value={75}>Reembolso 75%</option>
+              <option value={50}>Reembolso 50%</option>
+            </select>
           </div>
         </div>
       </FormBlock>

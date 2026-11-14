@@ -314,6 +314,10 @@ export interface TournamentEvent {
   interdictedCourts?: string[];
   registrationFee?: number;
   extraCategoryFee?: number;
+  /** Percentual devolvido quando o cancelamento é solicitado no período de inscrição. */
+  registrationCancellationRefundPercent?: 100 | 50;
+  /** Percentual devolvido quando o cancelamento é solicitado fora do período de inscrição. */
+  outsideRegistrationCancellationRefundPercent?: 100 | 75 | 50;
   /** Limite de jogadores com pagamento confirmado por categoria (padrão 8) */
   paymentType?: EventPaymentTypeOption;
   /** Chave Pix do recebedor para pagamento manual via Pix Estático. */
@@ -376,6 +380,7 @@ export interface PaymentItem {
   id: string;
   date: number;
   amount: number;
+  refundAmount?: number;
   receiptUrl?: string;
   receiptFileName?: string;
   provider?: 'manual' | 'mercadopago';
@@ -418,6 +423,9 @@ export interface TournamentEntry {
   dueAmount?: number;
   paymentStatus?: PaymentStatus;
   paidAmount?: number;
+  refundAmount?: number;
+  refundRate?: number;
+  refundRequestedAt?: number;
   payments?: PaymentItem[];
   mercadoPagoCheckout?: MercadoPagoCheckoutInfo;
   categoryIds?: string[];

@@ -18,6 +18,7 @@ import {
 } from '@modules/events/services/eventRegistrationPeriod';
 import { EventRegistrationForm } from '@modules/events/domain/registration';
 import { reconcileLegacyPendingPaymentAmounts } from '@modules/events/domain/registration/engine/pricingEngine';
+import { createRegistrationCancellationRequest, getRegistrationCancellationRefundPercent, hasRegistrationReceiptAttachment } from '@modules/events/services/registrationCancellation';
 import { useUI } from '@modules/ui';
 import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
 
@@ -1086,10 +1087,15 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     );
     if (!targetEntry) return;
 
+    const hasReceiptAttachment = hasRegistrationReceiptAttachment(targetEntry);
+    const refundPercent = getRegistrationCancellationRefundPercent(event);
+
     setModalConfig({
-      title: 'Excluir inscrição?',
-      message: `Deseja excluir a inscrição de "${targetEntry.name}"?`,
-      confirmLabel: 'Excluir',
+      title: hasReceiptAttachment ? 'Solicitar cancelamento?' : 'Excluir inscrição?',
+      message: hasReceiptAttachment
+        ? `Esta inscrição possui comprovante. Ela não será excluída: será cancelada e os pagamentos confirmados ficarão para reembolso de ${refundPercent}% (${refundPercent === 100 ? 'dentro' : 'fora'} do período de inscrição). Deseja continuar?`
+        : `Deseja excluir a inscrição de "${targetEntry.name}"?`,
+      confirmLabel: hasReceiptAttachment ? 'Cancelar inscrição' : 'Excluir',
       variant: 'danger',
       onConfirm: async () => {
         setModalConfig(null);
@@ -1100,6 +1106,40 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         const db = getDb();
         const targetEmailLower = targetEntry.email?.toLowerCase().trim();
         const targetPinUpper = targetEntry.pin?.toUpperCase().trim();
+
+        if (hasReceiptAttachment) {
+          if (!db || !event.pin) return;
+          try {
+            const { saveAdminEventEntry } = await import('@infra/firebase/events');
+            const cancellation = createRegistrationCancellationRequest(targetEntry, event);
+            await saveAdminEventEntry(
+              db,
+              event.pin,
+              cancellation as any,
+              adminEmail || getAuthInstance()?.currentUser?.email || undefined
+            );
+            const updatedList = entries.map((entry) =>
+              entry.pin === targetEntry.pin ? cancellation : entry
+            );
+            onUpdateEntries(updatedList);
+            onUpdateEvent({ ...event, entries: updatedList });
+            setModalConfig({
+              title: 'Inscrição cancelada',
+              message: `A inscrição foi cancelada. O reembolso de ${refundPercent}% está registrado na aba Pagamentos para processamento.`,
+              variant: 'success',
+              onConfirm: () => setModalConfig(null),
+            });
+          } catch (err) {
+            console.error('Erro ao cancelar inscrição:', err);
+            setModalConfig({
+              title: 'Erro ao cancelar inscrição',
+              message: err instanceof Error ? err.message : 'Não foi possível registrar o cancelamento.',
+              variant: 'danger',
+              onConfirm: () => setModalConfig(null),
+            });
+          }
+          return;
+        }
 
         // Filtrar e desfazer duplas que continham esse participante
         const currentPairs = event.pairs || [];

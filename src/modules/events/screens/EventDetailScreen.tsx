@@ -106,6 +106,7 @@ import {
 import { isIndividualScoreCategory, isIndividualScoreEvent, isRankingEvent, isSuper8Event } from '../services/eventTypeHelpers';
 import { isSimplifiedRegistrationEvent, isSimplifiedEntry } from '../types';
 import { openPdfOrUrl } from '../services/openRegulationPdf';
+import { createRegistrationCancellationRequest, getRegistrationCancellationRefundPercent, hasRegistrationReceiptAttachment } from '../services/registrationCancellation';
 
 interface Props {
   event: TournamentEvent;
@@ -1695,21 +1696,48 @@ export const EventDetailScreen: React.FC<Props> = ({
   };
 
   const handleConfirmExitTournament = () => {
+    const entry = currentUserEntry;
+    if (!entry) return;
+    const hasReceiptAttachment = hasRegistrationReceiptAttachment(entry);
+    const refundPercent = getRegistrationCancellationRefundPercent(event);
     setModalConfig({
-      title: 'Sair do torneio',
-      message: `Tem certeza que deseja cancelar sua participação no evento "${event.name}"?`,
+      title: hasReceiptAttachment ? 'Solicitar cancelamento?' : 'Excluir inscrição?',
+      message: hasReceiptAttachment
+        ? `Sua inscrição possui comprovante e não pode ser excluída. Ela será cancelada e os pagamentos confirmados ficarão para reembolso de ${refundPercent}% (${refundPercent === 100 ? 'dentro' : 'fora'} do período de inscrição). Deseja continuar?`
+        : `Tem certeza que deseja excluir sua inscrição no evento "${event.name}"?`,
+      confirmLabel: hasReceiptAttachment ? 'Solicitar cancelamento' : 'Excluir inscrição',
+      variant: 'danger',
       onConfirm: async () => {
         setModalConfig(null);
         const db = getDb();
-        if (db) {
-          try {
-            await deleteUserEventRegistration(db as Firestore, userProfile.email, event.pin);
-            await deleteEventEntry(db as Firestore, event.pin, userProfile.email);
-          } catch (e) {
-            console.error('Erro ao sair do evento:', e);
+        if (!db || !event.pin) return;
+        try {
+          if (hasReceiptAttachment) {
+            await saveEventEntry(db as Firestore, event.pin, createRegistrationCancellationRequest(entry, event) as any);
+          } else {
+            await deleteUserEventRegistration(db as Firestore, entry.email || userProfile.email, event.pin);
+            await deleteEventEntry(db as Firestore, event.pin, entry.email || userProfile.email);
           }
+          await refreshEntries();
+          if (!hasReceiptAttachment) {
+            try {
+              const stored = JSON.parse(localStorage.getItem('myPlacarRegisteredEvents') || '[]');
+              if (Array.isArray(stored)) {
+                localStorage.setItem('myPlacarRegisteredEvents', JSON.stringify(stored.filter((r: any) => r.pin?.toUpperCase() !== event.pin.toUpperCase())));
+              }
+            } catch {}
+          }
+          setShowMyRegistrationModal(false);
+          if (!canManageEvent) onExitTournament();
+        } catch (e) {
+          console.error('Erro ao sair do evento:', e);
+          setModalConfig({
+            title: 'Não foi possível concluir',
+            message: 'Ocorreu um erro ao processar sua inscrição. Tente novamente.',
+            variant: 'danger',
+            onConfirm: () => setModalConfig(null),
+          });
         }
-        onExitTournament();
       },
       onCancel: () => setModalConfig(null),
     });
@@ -3042,7 +3070,10 @@ export const EventDetailScreen: React.FC<Props> = ({
                 onClick={handleConfirmExitTournament}
                 className="flex items-center gap-2 text-rose-500 hover:text-rose-700 text-xs font-black py-3 px-6 rounded-2xl bg-rose-50 border border-rose-100 active:scale-95 transition-all cursor-pointer"
               >
-                <LogOut size={16} /> Sair do torneio
+                <LogOut size={16} />
+                {currentUserEntry && hasRegistrationReceiptAttachment(currentUserEntry)
+                  ? 'Solicitar cancelamento'
+                  : 'Excluir inscrição'}
               </button>
             </div>
           )}
@@ -3187,29 +3218,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                     : currentEvent);
                   void updateEvent(db as Firestore, updatedEvent.pin, { pairs: updatedEvent.pairs });
                 }}
-                onDelete={async () => {
-                  const db = getDb();
-                  const targetEmail = (currentUserEntry?.email || userProfile.email || '').toLowerCase().trim();
-                  if (db && event.pin && targetEmail) {
-                    const { deleteEventEntry, deleteUserEventRegistration } = await import('@infra/firebase/events');
-                    await deleteEventEntry(db as Firestore, event.pin, targetEmail);
-                    await deleteUserEventRegistration(db as Firestore, targetEmail, event.pin).catch(() => {});
-
-                    try {
-                      const stored = JSON.parse(localStorage.getItem('myPlacarRegisteredEvents') || '[]');
-                      if (Array.isArray(stored)) {
-                        const updated = stored.filter((r: any) => r.pin?.toUpperCase() !== event.pin.toUpperCase());
-                        localStorage.setItem('myPlacarRegisteredEvents', JSON.stringify(updated));
-                      }
-                    } catch {}
-                  }
-                  await refreshEntries();
-                  setShowMyRegistrationModal(false);
-
-                  if (!canManageEvent) {
-                    onExitTournament();
-                  }
-                }}
+                onDelete={handleConfirmExitTournament}
                 onCancel={async () => {
                   await refreshEntries();
                   setShowMyRegistrationModal(false);

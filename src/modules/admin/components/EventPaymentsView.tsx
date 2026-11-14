@@ -160,7 +160,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     if (payments.length > 0) {
       payments.forEach((p, idx) => {
         const revStatus = getPaymentReviewStatus(p);
-        const amt = p.amount || 0;
+        const amt = revStatus === 'A devolver' || revStatus === 'Devolvido'
+          ? p.refundAmount ?? p.amount ?? 0
+          : p.amount || 0;
 
         if (revStatus === 'Confirmado') {
           entryPaid += amt;
@@ -258,7 +260,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
           });
         }
       } else if (entry.paymentStatus === 'A devolver') {
-        const refundAmt = entry.paidAmount ?? entryDue;
+        const refundAmt = entry.refundAmount ?? entry.paidAmount ?? entryDue;
         totalToRefundSum += refundAmt;
         if (showEntry) {
           toRefundEntriesList.push({
@@ -270,7 +272,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
           });
         }
       } else if (entry.paymentStatus === 'Devolvido') {
-        const refundedAmt = entry.paidAmount ?? entryDue;
+        const refundedAmt = entry.refundAmount ?? entry.paidAmount ?? entryDue;
         totalRefundedSum += refundedAmt;
         if (showEntry) {
           refundedEntriesList.push({

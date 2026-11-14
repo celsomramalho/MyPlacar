@@ -861,7 +861,11 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
               className="px-3.5 py-2 rounded-xl text-xs font-black text-rose-600 hover:bg-rose-50 border border-rose-200 flex items-center gap-1.5 transition-all"
             >
               <Trash2 size={14} />
-              Excluir inscrição
+              {mode === 'user' && hasExistingReceipt
+                ? 'Solicitar cancelamento'
+                : mode === 'admin' && hasExistingReceipt
+                ? 'Cancelar inscrição'
+                : 'Excluir inscrição'}
             </button>
           )}
         </div>

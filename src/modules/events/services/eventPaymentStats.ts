@@ -101,7 +101,9 @@ export const getEventPaymentStats = (event: TournamentEvent): EventPaymentStats 
           totalReceiptsCount++;
         }
         const revStatus = getPaymentReviewStatus(p);
-        const amt = p.amount || 0;
+        const amt = revStatus === 'A devolver' || revStatus === 'Devolvido'
+          ? p.refundAmount ?? p.amount ?? 0
+          : p.amount || 0;
 
         if (revStatus === 'Confirmado') {
           entryPaid += amt;
