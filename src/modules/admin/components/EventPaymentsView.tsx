@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X, Trash2, RotateCcw, AlertTriangle, ShieldCheck, Copy, Check, Share2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X, Trash2, RotateCcw, AlertTriangle, ShieldCheck, Copy, Check, Share2, Upload, Loader2 } from 'lucide-react';
 import { formatRegistrationId, type PaymentItem, type TournamentEvent, type TournamentEntry, type PaymentStatus } from '@modules/events/types';
 import { getPaymentReviewStatus, type PaymentReviewStatus } from '@modules/events/services/eventPaymentStats';
 import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 import { buildPixBrCode } from '@shared/utils/pixBrCode';
 import { buildPixTxid } from '@shared/utils/pixTxid';
 import { copyToClipboard } from '@shared/utils/clipboard';
+import { compressImageToDataUrl } from '@shared/utils/imageResize';
 
 interface Props {
   event: TournamentEvent;
@@ -67,6 +68,8 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
   const [isExemptExpanded, setIsExemptExpanded] = useState(false);
   const [isRefundedExpanded, setIsRefundedExpanded] = useState(false);
   const [copiedPixPin, setCopiedPixPin] = useState<string | null>(null);
+  const [selectedReceiptFilesByPin, setSelectedReceiptFilesByPin] = useState<Record<string, File>>({});
+  const [uploadingReceiptPin, setUploadingReceiptPin] = useState<string | null>(null);
 
   const [selectedReceipt, setSelectedReceipt] = useState<{ url: string; title: string } | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{
@@ -564,6 +567,79 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
         ? `https://api.whatsapp.com/send?phone=${phoneParam}&text=${encodeURIComponent(message)}`
         : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
       window.open(waUrl, '_blank');
+    }
+  };
+
+  const handleReceiptFileSelect = (pin: string, file: File | null) => {
+    setSelectedReceiptFilesByPin((prev) => {
+      const next = { ...prev };
+      if (!file) {
+        delete next[pin];
+      } else {
+        next[pin] = file;
+      }
+      return next;
+    });
+  };
+
+  const handleAttachReceipt = async (item: {
+    entry: TournamentEntry;
+    dueAmount: number;
+    paidAmount: number;
+    uncoveredDue: number;
+    isDifference: boolean;
+    categoriesStr: string;
+  }) => {
+    const file = selectedReceiptFilesByPin[item.entry.pin];
+    if (!file) return;
+
+    setUploadingReceiptPin(item.entry.pin);
+    try {
+      let receiptDataUrl = '';
+      if (file.type.startsWith('image/')) {
+        receiptDataUrl = await compressImageToDataUrl(file, {
+          maxWidth: 1200,
+          maxHeight: 1200,
+          quality: 0.7,
+        });
+      } else {
+        receiptDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(String(e.target?.result || ''));
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const newPayment: PaymentItem = {
+        id: `manual-${Date.now()}`,
+        amount: item.uncoveredDue,
+        date: Date.now(),
+        receiptUrl: receiptDataUrl,
+        receiptFileName: file.name,
+        provider: 'manual',
+        status: 'Aguardando Confirmação',
+      };
+
+      onUpdateEvent({
+        ...event,
+        entries: entries.map((entry) => {
+          if (entry.pin !== item.entry.pin) return entry;
+          const payments = [...(entry.payments || []), newPayment];
+          return {
+            ...entry,
+            payments,
+            paymentStatus: 'Aguardando Confirmação',
+          };
+        }),
+      });
+
+      handleReceiptFileSelect(item.entry.pin, null);
+    } catch (err) {
+      console.error('[EventPaymentsView] Erro ao anexar comprovante:', err);
+      alert('Erro ao processar o comprovante selecionado. Tente novamente.');
+    } finally {
+      setUploadingReceiptPin(null);
     }
   };
 
@@ -1092,6 +1168,59 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                           Chave Pix não configurada no evento.
                         </div>
                       )}
+
+                      {/* Anexar comprovante do atleta pelo admin */}
+                      <div className="border-t border-sky-100 pt-2 space-y-1.5">
+                        <label className="block text-[10px] font-bold text-slate-500">
+                          Anexar comprovante do atleta:
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          disabled={uploadingReceiptPin === item.entry.pin}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            handleReceiptFileSelect(item.entry.pin, file);
+                          }}
+                          className="w-full text-xs font-bold text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+                        />
+                        {selectedReceiptFilesByPin[item.entry.pin] && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 bg-emerald-50/60 p-2 rounded-xl border border-emerald-100">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                              <span className="text-[11px] font-bold text-emerald-800 truncate">
+                                Arquivo: {selectedReceiptFilesByPin[item.entry.pin].name}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleReceiptFileSelect(item.entry.pin, null)}
+                                className="text-slate-400 hover:text-rose-500 p-0.5 rounded cursor-pointer"
+                                title="Cancelar seleção"
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleAttachReceipt(item)}
+                              disabled={uploadingReceiptPin === item.entry.pin}
+                              className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-1.5 px-3 rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0 ml-auto"
+                            >
+                              {uploadingReceiptPin === item.entry.pin ? (
+                                <>
+                                  <Loader2 size={13} className="animate-spin" />
+                                  <span>Anexando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload size={13} />
+                                  <span>Salvar comprovante</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </div>
 
                       {previousReceipt?.receiptUrl && (
                         <div className="flex justify-end border-t border-sky-100 pt-2">
