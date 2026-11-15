@@ -134,29 +134,45 @@ export const HistorySection: React.FC<Props> = ({
           </div>
         </div>
         {(() => {
+          const hasQuery = searchQuery.trim().length > 0;
+          const hasResults = filtered.length > 0;
           const searchStyles = getSearchInputStyles({
             query: searchQuery,
             resultCount: filtered.length,
           });
+          const wrapperBorder = !hasQuery
+            ? 'border-blue-200 bg-blue-50/40'
+            : hasResults
+              ? 'border-emerald-400 bg-emerald-50/40'
+              : 'border-rose-400 bg-rose-50/40';
           return (
-            <div id="history-search" className="relative">
-              <input
-                type="text"
-                placeholder="Buscar por nome ou resultado..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full pl-12 pr-10 h-[60px] text-base border rounded-3xl outline-none transition-all font-medium ${searchStyles.inputClasses}`}
-              />
-              <Search size={22} className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full transition-colors"
-                  title="Limpar busca"
-                >
-                  <X size={18} />
-                </button>
+            <div id="history-search" className={`rounded-2xl border-2 p-2.5 transition-all shadow-sm ${wrapperBorder}`}>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar por nome ou resultado..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`w-full pl-11 pr-10 h-12 text-sm border-2 rounded-xl outline-none transition-all font-bold ${searchStyles.inputClasses}`}
+                />
+                <Search size={18} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors cursor-pointer"
+                    title="Limpar busca"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              {hasQuery && (
+                <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  {hasResults
+                    ? `${filtered.length} ${filtered.length === 1 ? 'partida encontrada' : 'partidas encontradas'}`
+                    : `Nenhuma partida encontrada para "${searchQuery}"`}
+                </p>
               )}
             </div>
           );

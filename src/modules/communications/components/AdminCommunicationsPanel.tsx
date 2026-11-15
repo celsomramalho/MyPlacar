@@ -914,23 +914,30 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
 
       {/* Search Section */}
       {(() => {
+        const hasQuery = searchQuery.trim().length > 0;
+        const hasResults = searchResults.length > 0;
         const searchStyles = getSearchInputStyles({ query: searchQuery, resultCount: searchResults.length });
+        const wrapperBorder = !hasQuery
+          ? 'border-blue-200 bg-blue-50/40'
+          : hasResults
+            ? 'border-emerald-400 bg-emerald-50/40'
+            : 'border-rose-400 bg-rose-50/40';
         return (
-          <div className="bg-white rounded-3xl p-4 border-2 border-slate-100 shadow-sm">
+          <div className={`rounded-2xl border-2 p-2.5 transition-all shadow-sm ${wrapperBorder}`}>
             <div className="relative">
-              <Search size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+              <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Pesquisar por nome ou ID da inscrição..."
-                className={`w-full h-11 pl-10 pr-10 border rounded-2xl font-bold text-xs outline-none transition-all ${searchStyles.inputClasses}`}
+                className={`w-full h-11 pl-9 pr-9 border-2 rounded-xl font-bold text-sm outline-none transition-all ${searchStyles.inputClasses}`}
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-all"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
                   title="Limpar pesquisa"
                 >
                   <X size={14} />

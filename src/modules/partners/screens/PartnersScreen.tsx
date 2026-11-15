@@ -819,28 +819,44 @@ export const PartnersScreen: React.FC<Props> = ({ playerQueue, setPlayerQueue, o
                 )}
               </div>
               {(() => {
+                const hasQuery = searchQuery.trim().length > 0;
+                const hasResults = filteredPartners.length > 0;
                 const searchStyles = getSearchInputStyles({
                   query: searchQuery,
                   resultCount: filteredPartners.length,
                 });
+                const wrapperBorder = !hasQuery
+                  ? 'border-blue-200 bg-blue-50/40'
+                  : hasResults
+                    ? 'border-emerald-400 bg-emerald-50/40'
+                    : 'border-rose-400 bg-rose-50/40';
                 return (
-                  <div className="relative">
-                    <input
-                      placeholder="Procurar na lista..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className={`w-full h-14 pl-12 pr-12 border rounded-3xl shadow-sm text-sm font-bold outline-none transition-all ${searchStyles.inputClasses}`}
-                    />
-                    <Search size={20} className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full transition-colors"
-                        title="Limpar pesquisa"
-                      >
-                        <X size={16} />
-                      </button>
+                  <div className={`rounded-2xl border-2 p-2.5 transition-all shadow-sm ${wrapperBorder}`}>
+                    <div className="relative">
+                      <input
+                        placeholder="Procurar na lista..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className={`w-full h-11 pl-11 pr-10 border-2 rounded-xl text-sm font-bold outline-none transition-all ${searchStyles.inputClasses}`}
+                      />
+                      <Search size={18} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors cursor-pointer"
+                          title="Limpar pesquisa"
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
+                    </div>
+                    {hasQuery && (
+                      <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {hasResults
+                          ? `${filteredPartners.length} ${filteredPartners.length === 1 ? 'parceiro encontrado' : 'parceiros encontrados'}`
+                          : `Nenhum parceiro encontrado para "${searchQuery}"`}
+                      </p>
                     )}
                   </div>
                 );

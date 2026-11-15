@@ -2583,89 +2583,137 @@ export const EventDetailScreen: React.FC<Props> = ({
                       </div>
 
                     {userCategoryView === 'entries' && (() => {
+                      const hasQuery = participantSearch.trim().length > 0;
+                      const hasResults = visibleCategoryEntries.length > 0;
                       const searchStyles = getSearchInputStyles({
                         query: participantSearch,
                         resultCount: visibleCategoryEntries.length,
                       });
+                      const wrapperBorder = !hasQuery
+                        ? 'border-blue-200 bg-blue-50/40'
+                        : hasResults
+                          ? 'border-emerald-400 bg-emerald-50/40'
+                          : 'border-rose-400 bg-rose-50/40';
                       return (
-                        <label className={`flex h-11 items-center gap-2 rounded-xl border px-3.5 transition-all ${searchStyles.inputClasses}`}>
-                          <Search size={16} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
-                          <input
-                            type="search"
-                            value={participantSearch}
-                            onChange={(e) => setParticipantSearch(e.target.value)}
-                            placeholder="Pesquisar participante por nome..."
-                            className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-inherit"
-                          />
-                          {participantSearch && (
-                            <button
-                              type="button"
-                              onClick={() => setParticipantSearch('')}
-                              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
-                              title="Limpar pesquisa"
-                            >
-                              <X size={14} />
-                            </button>
+                        <div className={`rounded-2xl border-2 p-2.5 transition-all shadow-sm ${wrapperBorder}`}>
+                          <div className="relative w-full">
+                            <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                            <input
+                              type="search"
+                              value={participantSearch}
+                              onChange={(e) => setParticipantSearch(e.target.value)}
+                              placeholder="Pesquisar participante por nome..."
+                              className={`w-full h-11 pl-9 pr-8 border-2 rounded-xl font-bold text-sm outline-none transition-all ${searchStyles.inputClasses}`}
+                            />
+                            {participantSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setParticipantSearch('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                                title="Limpar pesquisa"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                          {hasQuery && (
+                            <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                              {hasResults
+                                ? `${visibleCategoryEntries.length} ${visibleCategoryEntries.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+                                : `Nenhum resultado para "${participantSearch}"`}
+                            </p>
                           )}
-                        </label>
+                        </div>
                       );
                     })()}
 
                     {userCategoryView === 'teams' && (() => {
+                      const hasQuery = teamSearch.trim().length > 0;
+                      const hasResults = visibleCategoryPairs.length > 0;
                       const searchStyles = getSearchInputStyles({
                         query: teamSearch,
                         resultCount: visibleCategoryPairs.length,
                       });
+                      const wrapperBorder = !hasQuery
+                        ? 'border-blue-200 bg-blue-50/40'
+                        : hasResults
+                          ? 'border-emerald-400 bg-emerald-50/40'
+                          : 'border-rose-400 bg-rose-50/40';
                       return (
-                        <label className={`flex h-11 items-center gap-2 rounded-xl border px-3.5 transition-all ${searchStyles.inputClasses}`}>
-                          <Search size={16} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
-                          <input
-                            type="search"
-                            value={teamSearch}
-                            onChange={(e) => setTeamSearch(e.target.value)}
-                            placeholder="Pesquisar time por nome..."
-                            className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-inherit"
-                          />
-                          {teamSearch && (
-                            <button
-                              type="button"
-                              onClick={() => setTeamSearch('')}
-                              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
-                              title="Limpar pesquisa"
-                            >
-                              <X size={14} />
-                            </button>
+                        <div className={`rounded-2xl border-2 p-2.5 transition-all shadow-sm ${wrapperBorder}`}>
+                          <div className="relative w-full">
+                            <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                            <input
+                              type="search"
+                              value={teamSearch}
+                              onChange={(e) => setTeamSearch(e.target.value)}
+                              placeholder="Pesquisar time por nome..."
+                              className={`w-full h-11 pl-9 pr-8 border-2 rounded-xl font-bold text-sm outline-none transition-all ${searchStyles.inputClasses}`}
+                            />
+                            {teamSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setTeamSearch('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                                title="Limpar pesquisa"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                          {hasQuery && (
+                            <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                              {hasResults
+                                ? `${visibleCategoryPairs.length} ${visibleCategoryPairs.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+                                : `Nenhum resultado para "${teamSearch}"`}
+                            </p>
                           )}
-                        </label>
+                        </div>
                       );
                     })()}
 
                     {userCategoryView === 'matches' && (() => {
+                      const hasQuery = matchSearch.trim().length > 0;
+                      const hasResults = visibleCategoryMatches.length > 0;
                       const searchStyles = getSearchInputStyles({
                         query: matchSearch,
                         resultCount: visibleCategoryMatches.length,
                       });
+                      const wrapperBorder = !hasQuery
+                        ? 'border-blue-200 bg-blue-50/40'
+                        : hasResults
+                          ? 'border-emerald-400 bg-emerald-50/40'
+                          : 'border-rose-400 bg-rose-50/40';
                       return (
-                        <label className={`flex h-11 items-center gap-2 rounded-xl border px-3.5 transition-all ${searchStyles.inputClasses}`}>
-                          <Search size={16} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
-                          <input
-                            type="search"
-                            value={matchSearch}
-                            onChange={(e) => setMatchSearch(e.target.value)}
-                            placeholder="Pesquisar partida por nome..."
-                            className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none placeholder:text-inherit"
-                          />
-                          {matchSearch && (
-                            <button
-                              type="button"
-                              onClick={() => setMatchSearch('')}
-                              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
-                              title="Limpar pesquisa"
-                            >
-                              <X size={14} />
-                            </button>
+                        <div className={`rounded-2xl border-2 p-2.5 transition-all shadow-sm ${wrapperBorder}`}>
+                          <div className="relative w-full">
+                            <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                            <input
+                              type="search"
+                              value={matchSearch}
+                              onChange={(e) => setMatchSearch(e.target.value)}
+                              placeholder="Pesquisar partida por nome..."
+                              className={`w-full h-11 pl-9 pr-8 border-2 rounded-xl font-bold text-sm outline-none transition-all ${searchStyles.inputClasses}`}
+                            />
+                            {matchSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setMatchSearch('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                                title="Limpar pesquisa"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                          {hasQuery && (
+                            <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                              {hasResults
+                                ? `${visibleCategoryMatches.length} ${visibleCategoryMatches.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+                                : `Nenhum resultado para "${matchSearch}"`}
+                            </p>
                           )}
-                        </label>
+                        </div>
                       );
                     })()}
 

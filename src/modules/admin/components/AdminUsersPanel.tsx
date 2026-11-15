@@ -111,42 +111,61 @@ export const AdminUsersPanel = ({
       </div>
 
       {(() => {
+        const hasQuery = userSearch.trim().length > 0;
+        const hasResults = foundUsers.length > 0;
         const searchStyles = getSearchInputStyles({
           query: userSearch,
           resultCount: foundUsers.length,
           hasSearched: hasSearchedUsers,
           isSearching: isSearchingUsers,
         });
+        const wrapperBorder = !hasQuery
+          ? 'border-blue-200 bg-blue-50/40'
+          : hasSearchedUsers
+            ? hasResults
+              ? 'border-emerald-400 bg-emerald-50/40'
+              : 'border-rose-400 bg-rose-50/40'
+            : 'border-blue-200 bg-blue-50/40';
+
         return (
-          <div className="relative">
-            <input
-              type="text"
-              value={userSearch}
-              onChange={(event) => onUserSearchChange(event.target.value)}
-              onKeyDown={(event) => event.key === 'Enter' && onSearchUsers()}
-              placeholder="Buscar por nome, apelido, e-mail ou PIN..."
-              className={`w-full h-12 border rounded-xl px-4 pr-20 text-sm font-bold outline-none transition-all ${searchStyles.inputClasses}`}
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-black">
-              {userSearch && (
+          <div className={`rounded-2xl border-2 p-2.5 transition-all shadow-sm ${wrapperBorder}`}>
+            <div className="relative">
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(event) => onUserSearchChange(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && onSearchUsers()}
+                placeholder="Buscar por nome, apelido, e-mail ou PIN..."
+                className={`w-full h-11 border-2 rounded-xl px-3.5 pr-20 text-sm font-bold outline-none transition-all ${searchStyles.inputClasses}`}
+              />
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-black">
+                {userSearch && (
+                  <button
+                    type="button"
+                    onClick={onClearUserSearch || (() => onUserSearchChange(''))}
+                    className="w-7 h-7 rounded-lg hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-black transition-colors cursor-pointer"
+                    title="Limpar busca"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={onClearUserSearch || (() => onUserSearchChange(''))}
-                  className="w-6 h-6 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-black transition-colors"
-                  title="Limpar busca"
+                  onClick={onSearchUsers}
+                  className="w-7 h-7 rounded-lg hover:bg-slate-200 flex items-center justify-center text-black transition-colors cursor-pointer"
+                  title="Buscar"
                 >
-                  <X size={14} />
+                  {isSearchingUsers ? <Loader2 className="animate-spin text-blue-600" size={16} /> : <Search size={16} className={searchStyles.iconClasses} />}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={onSearchUsers}
-                className="w-7 h-7 rounded-lg hover:bg-slate-200 flex items-center justify-center text-black transition-colors"
-                title="Buscar"
-              >
-                {isSearchingUsers ? <Loader2 className="animate-spin text-blue-600" size={18} /> : <Search size={18} className={searchStyles.iconClasses} />}
-              </button>
+              </div>
             </div>
+            {hasSearchedUsers && !isSearchingUsers && hasQuery && (
+              <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                {hasResults
+                  ? `${foundUsers.length} ${foundUsers.length === 1 ? 'usuário encontrado' : 'usuários encontrados'}`
+                  : `Nenhum usuário encontrado para "${userSearch}"`}
+              </p>
+            )}
           </div>
         );
       })()}

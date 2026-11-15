@@ -544,33 +544,52 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     },
   ];
 
+  const matchingCount = entries.filter(matchesSearch).length;
+  const hasQuery = searchName.trim().length > 0;
+  const hasResults = matchingCount > 0;
+
   const searchStyles = getSearchInputStyles({
     query: searchName,
-    resultCount: entries.filter(matchesSearch).length,
+    resultCount: matchingCount,
   });
+
+  const wrapperBorder = !hasQuery
+    ? 'border-blue-200 bg-blue-50/40'
+    : hasResults
+      ? 'border-emerald-400 bg-emerald-50/40'
+      : 'border-rose-400 bg-rose-50/40';
 
   return (
     <div className="space-y-4 animate-in fade-in">
       {/* Barra de Pesquisa e Filtros */}
       <div className="space-y-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
-        <div className="relative w-full">
-          <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
-          <input
-            type="text"
-            value={searchName}
-            onChange={(e) => setSearchName(e.target.value)}
-            placeholder="Pesquisar por nome ou ID da inscrição..."
-            className={`w-full h-10 pl-9 pr-8 border rounded-xl font-bold text-xs outline-none transition-all ${searchStyles.inputClasses}`}
-          />
-          {searchName && (
-            <button
-              type="button"
-              onClick={() => setSearchName('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
-              title="Limpar pesquisa"
-            >
-              <X size={14} />
-            </button>
+        <div className={`rounded-2xl border-2 p-2.5 transition-all ${wrapperBorder}`}>
+          <div className="relative w-full">
+            <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+            <input
+              type="text"
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              placeholder="Pesquisar por nome ou ID da inscrição..."
+              className={`w-full h-11 pl-9 pr-8 border-2 rounded-xl font-bold text-sm outline-none transition-all ${searchStyles.inputClasses}`}
+            />
+            {searchName && (
+              <button
+                type="button"
+                onClick={() => setSearchName('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                title="Limpar pesquisa"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          {hasQuery && (
+            <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+              {hasResults
+                ? `${matchingCount} ${matchingCount === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+                : `Nenhum resultado para "${searchName}"`}
+            </p>
           )}
         </div>
 

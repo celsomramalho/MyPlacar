@@ -387,29 +387,47 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
             <h3 className="text-sm font-black text-black tracking-tight">Localizar torneios</h3>
           </div>
           {(() => {
+            const resultCount = availableEvents.length + filteredRegistrations.length;
+            const hasQuery = pinInput.trim().length > 0;
+            const hasResults = resultCount > 0;
             const searchStyles = getSearchInputStyles({
               query: pinInput,
-              resultCount: availableEvents.length + filteredRegistrations.length,
+              resultCount,
             });
+            const wrapperBorder = !hasQuery
+              ? 'border-blue-200 bg-blue-50/40'
+              : hasResults
+                ? 'border-emerald-400 bg-emerald-50/40'
+                : 'border-rose-400 bg-rose-50/40';
+
             return (
-              <div className={`rounded-[2rem] p-2.5 px-4 shadow-sm border flex items-center gap-3 transition-all ${searchStyles.inputClasses}`}>
-                <Search size={20} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
-                <input
-                  type="text"
-                  placeholder="Digite o PIN ou nome do evento"
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  className="flex-1 h-12 bg-transparent font-black text-sm outline-none placeholder:text-inherit placeholder:font-bold"
-                />
-                {pinInput && (
-                  <button
-                    type="button"
-                    onClick={() => setPinInput('')}
-                    className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
-                    title="Limpar busca"
-                  >
-                    <X size={16} />
-                  </button>
+              <div className={`rounded-2xl border-2 p-2.5 transition-all shadow-sm ${wrapperBorder}`}>
+                <div className={`rounded-xl p-2 px-3.5 border-2 flex items-center gap-3 transition-all ${searchStyles.inputClasses}`}>
+                  <Search size={18} className={`shrink-0 transition-colors ${searchStyles.iconClasses}`} />
+                  <input
+                    type="text"
+                    placeholder="Digite o PIN ou nome do evento"
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value)}
+                    className="flex-1 h-9 bg-transparent font-black text-sm outline-none placeholder:text-inherit placeholder:font-bold"
+                  />
+                  {pinInput && (
+                    <button
+                      type="button"
+                      onClick={() => setPinInput('')}
+                      className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                      title="Limpar busca"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+                {hasQuery && (
+                  <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {hasResults
+                      ? `${resultCount} ${resultCount === 1 ? 'torneio encontrado' : 'torneios encontrados'}`
+                      : `Nenhum torneio encontrado para "${pinInput}"`}
+                  </p>
                 )}
               </div>
             );
