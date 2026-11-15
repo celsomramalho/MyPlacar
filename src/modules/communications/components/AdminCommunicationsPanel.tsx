@@ -944,33 +944,37 @@ export const AdminCommunicationsPanel: React.FC<Props> = ({ adminProfile, appUrl
       {/* Resultados da Pesquisa (exibidos acima dos comunicados recentes se houver busca ativa) */}
       {searchQuery.trim() && (
         <div className="bg-blue-50/50 rounded-3xl p-5 border-2 border-blue-200/80 shadow-sm space-y-4 animate-in fade-in">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
-                <Search size={14} />
+          <div className="flex items-start justify-between px-1 gap-2">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                <Search size={15} />
               </div>
-              <div>
-                <h3 className="text-xs font-black text-slate-900">
+              <div className="space-y-0.5 min-w-0">
+                <h3 className="text-xs font-black text-slate-900 whitespace-nowrap">
                   Resultado(s) da pesquisa
                 </h3>
-                <p className="text-[10px] font-bold text-slate-400">
+                <p className="text-[10px] font-bold text-slate-400 whitespace-nowrap truncate">
                   Buscando por "{searchQuery.trim()}"
                 </p>
+                <div>
+                  <span className={`inline-block whitespace-nowrap text-[10px] font-black px-2.5 py-0.5 rounded-full mt-0.5 ${
+                    searchResults.length > 0
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-rose-100 text-rose-600'
+                  }`}>
+                    {searchResults.length} {searchResults.length === 1 ? 'aviso encontrado' : 'avisos encontrados'}
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
-                {searchResults.length} {searchResults.length === 1 ? 'aviso encontrado' : 'avisos encontrados'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="text-slate-400 hover:text-slate-600 p-1"
-                title="Fechar pesquisa"
-              >
-                <X size={14} />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="text-slate-400 hover:text-slate-600 p-1 shrink-0"
+              title="Fechar pesquisa"
+            >
+              <X size={14} />
+            </button>
           </div>
 
           {searchResults.length === 0 ? (
