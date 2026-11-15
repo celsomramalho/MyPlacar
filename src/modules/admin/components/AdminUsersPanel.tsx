@@ -84,7 +84,7 @@ export const AdminUsersPanel = ({
 }: AdminUsersPanelProps) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const handleCopy = async (text: string, key: string) => {
+  const handleCopy = async (text: string | undefined | null, key: string) => {
     if (!text) return;
     const ok = await copyToClipboard(text);
     if (ok) {

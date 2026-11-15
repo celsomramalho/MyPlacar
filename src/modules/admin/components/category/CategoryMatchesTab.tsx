@@ -356,7 +356,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
               <ParticipantSearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
-                resultCount={visibleMatches.length}
+                resultCount={rawFilteredMatches.length}
                 placeholder="Pesquisar partida por nome..."
               />
             </div>
