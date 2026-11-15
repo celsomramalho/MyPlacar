@@ -146,17 +146,16 @@ export const getEventPaymentStats = (event: TournamentEvent): EventPaymentStats 
       }
     }
 
-    // Pré-inscrito: Ativo, não isento, sem comprovante em análise e com saldo devido em aberto
-    const hasPendingReview = payments.some((p) => getPaymentReviewStatus(p) === 'Aguardando Confirmação');
-    const remainingDue = Math.max(0, entryDue - entryPaid);
+    // Pré-inscrito / Saldo ou diferença a pagar: Ativo, não isento e com saldo em aberto sem comprovante em análise
+    const pendingReviewSum = payments.reduce(
+      (sum, p) => (getPaymentReviewStatus(p) === 'Aguardando Confirmação' ? sum + (p.amount || 0) : sum),
+      0
+    );
+    const uncoveredDue = Math.max(0, entryDue - entryPaid - pendingReviewSum);
 
-    if (!isCancelled && !isExempt && !hasPendingReview && remainingDue > 0) {
-      // Se não tem comprovante anexado
-      const hasReceipt = payments.some((p) => Boolean(p.receiptUrl));
-      if (!hasReceipt || entryPaid === 0) {
-        prePins.add(entry.pin);
-        totalPre += remainingDue;
-      }
+    if (!isCancelled && !isExempt && uncoveredDue > 0) {
+      prePins.add(entry.pin);
+      totalPre += uncoveredDue;
     }
   });
 

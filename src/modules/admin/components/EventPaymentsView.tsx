@@ -113,7 +113,14 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     pendingAmount: number;
     categoriesStr: string;
   }[] = [];
-  const preRegistrationEntries: TournamentEntry[] = [];
+  const preRegistrationEntries: {
+    entry: TournamentEntry;
+    dueAmount: number;
+    paidAmount: number;
+    uncoveredDue: number;
+    isDifference: boolean;
+    categoriesStr: string;
+  }[] = [];
   const refusedEntriesList: {
     entry: TournamentEntry;
     payment: PaymentItem;
@@ -287,15 +294,24 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
       }
     }
 
-    // Pré-inscrição: ativa, sem análise pendente e com saldo em aberto
-    const hasAwaitingReview = payments.some((p) => getPaymentReviewStatus(p) === 'Aguardando Confirmação');
-    const remainingDue = Math.max(0, entryDue - entryPaid);
-    const hasReceipt = payments.some((p) => Boolean(p.receiptUrl));
+    // Pré-inscrição / diferença a pagar: ativa, sem isenção e com saldo em aberto sem comprovante em análise
+    const pendingReviewSum = payments.reduce(
+      (sum, p) => (getPaymentReviewStatus(p) === 'Aguardando Confirmação' ? sum + (p.amount || 0) : sum),
+      0
+    );
+    const uncoveredDue = Math.max(0, entryDue - entryPaid - pendingReviewSum);
 
-    if (!isCancelled && !isExempt && !hasAwaitingReview && remainingDue > 0 && (!hasReceipt || entryPaid === 0)) {
-      totalPreSum += remainingDue;
+    if (!isCancelled && !isExempt && uncoveredDue > 0) {
+      totalPreSum += uncoveredDue;
       if (showEntry) {
-        preRegistrationEntries.push(entry);
+        preRegistrationEntries.push({
+          entry,
+          dueAmount: entryDue,
+          paidAmount: entryPaid,
+          uncoveredDue,
+          isDifference: entryPaid > 0,
+          categoriesStr: catStr,
+        });
       }
     }
   });
@@ -882,26 +898,65 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
               {preRegistrationEntries.length === 0 ? (
                 <p className="text-xs text-slate-400 font-bold text-center py-4">Nenhuma pré-inscrição sem comprovante.</p>
               ) : (
-                preRegistrationEntries.map((entry) => {
-                  const dueAmount = entry.dueAmount ?? (event.registrationFee || 0);
+                preRegistrationEntries.map((item) => {
+                  const previousReceipt = item.entry.payments?.find((p) => p.receiptUrl);
                   return (
-                    <article key={entry.pin} className="rounded-2xl border border-sky-200 bg-sky-50/20 p-3 space-y-2">
+                    <article key={item.entry.pin} className="rounded-2xl border border-sky-200 bg-sky-50/20 p-3 space-y-2">
                       <div className="flex justify-between gap-3">
                         <div>
-                          <p className="font-black text-slate-800">{entry.name || entry.nickname}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-black text-slate-800">{item.entry.name || item.entry.nickname}</p>
+                            {item.isDifference && (
+                              <span className="text-[9px] font-black bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded-md">
+                                Diferença
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] font-bold text-sky-700">
-                            Inscrição: {formatRegistrationId(entry.registrationId) || '—'} · {formatDateShort(entry.joinedAt)}
+                            Inscrição: {formatRegistrationId(item.entry.registrationId) || '—'} · {formatDateShort(item.entry.joinedAt)}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs font-black text-sky-700">R$ {dueAmount.toFixed(2)}</p>
-                          <span className="block text-[9px] text-slate-400">pendente</span>
+                          <p className="text-xs font-black text-sky-700">R$ {item.uncoveredDue.toFixed(2)}</p>
+                          <span className="block text-[9px] text-slate-400">
+                            {item.isDifference ? 'diferença' : 'pendente'}
+                          </span>
                         </div>
                       </div>
+
                       <div className="flex justify-between border-t border-sky-100 pt-2 text-[10px] text-slate-500">
-                        <span>Devido R$ {dueAmount.toFixed(2)}</span>
-                        <span>{getCategoriesText(entry)}</span>
+                        <span>
+                          {item.isDifference
+                            ? `Devido R$ ${item.dueAmount.toFixed(2)} · Pago R$ ${item.paidAmount.toFixed(2)}`
+                            : `Devido R$ ${item.dueAmount.toFixed(2)}`}
+                        </span>
+                        <span>{item.categoriesStr}</span>
                       </div>
+
+                      {previousReceipt?.receiptUrl && (
+                        <div className="flex justify-end border-t border-sky-100 pt-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenReceipt({
+                                paymentId: previousReceipt.id || `prev-${item.entry.pin}`,
+                                entryPin: item.entry.pin,
+                                participantName: item.entry.name || item.entry.nickname,
+                                registrationId: item.entry.registrationId,
+                                dueAmount: item.dueAmount,
+                                date: previousReceipt.date,
+                                amount: previousReceipt.amount || item.paidAmount,
+                                categoriesStr: item.categoriesStr,
+                                receiptUrl: previousReceipt.receiptUrl,
+                                receiptFileName: previousReceipt.receiptFileName,
+                              })
+                            }
+                            className="shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 hover:bg-sky-100 transition-colors cursor-pointer"
+                          >
+                            <Eye size={14} className="mr-1 inline" /> Ver comprovante pago
+                          </button>
+                        </div>
+                      )}
                     </article>
                   );
                 })
