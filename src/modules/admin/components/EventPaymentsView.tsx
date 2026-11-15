@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X, Trash2, RotateCcw, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X, Trash2, RotateCcw, AlertTriangle, ShieldCheck, Copy, Check, Share2 } from 'lucide-react';
 import { formatRegistrationId, type PaymentItem, type TournamentEvent, type TournamentEntry, type PaymentStatus } from '@modules/events/types';
 import { getPaymentReviewStatus, type PaymentReviewStatus } from '@modules/events/services/eventPaymentStats';
 import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
+import { buildPixBrCode } from '@shared/utils/pixBrCode';
+import { buildPixTxid } from '@shared/utils/pixTxid';
+import { copyToClipboard } from '@shared/utils/clipboard';
 
 interface Props {
   event: TournamentEvent;
@@ -63,6 +66,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
   const [isPaidExpanded, setIsPaidExpanded] = useState(false);
   const [isExemptExpanded, setIsExemptExpanded] = useState(false);
   const [isRefundedExpanded, setIsRefundedExpanded] = useState(false);
+  const [copiedPixPin, setCopiedPixPin] = useState<string | null>(null);
 
   const [selectedReceipt, setSelectedReceipt] = useState<{ url: string; title: string } | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{
@@ -466,6 +470,101 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
       }),
     });
     setPendingReceiptDeletion(null);
+  };
+
+  const handleCopyPix = async (item: {
+    entry: TournamentEntry;
+    dueAmount: number;
+    paidAmount: number;
+    uncoveredDue: number;
+    isDifference: boolean;
+    categoriesStr: string;
+  }) => {
+    if (!event.pixKey) return;
+    const receiverName = event.pixReceiverName || event.name || 'Organizador';
+    const city = event.pixCity || 'SAO PAULO';
+
+    const txid = buildPixTxid({
+      eventPin: event.pin,
+      registrationId: item.entry.registrationId,
+      paymentsCount: item.entry.payments?.length ?? 0,
+    });
+
+    const brCode = buildPixBrCode({
+      pixKey: event.pixKey,
+      amount: item.uncoveredDue,
+      receiverName,
+      city,
+      txid,
+    });
+
+    const ok = await copyToClipboard(brCode);
+    if (ok) {
+      setCopiedPixPin(item.entry.pin);
+      setTimeout(() => setCopiedPixPin(null), 3000);
+    }
+  };
+
+  const handleSharePix = (item: {
+    entry: TournamentEntry;
+    dueAmount: number;
+    paidAmount: number;
+    uncoveredDue: number;
+    isDifference: boolean;
+    categoriesStr: string;
+  }) => {
+    if (!event.pixKey) return;
+    const receiverName = event.pixReceiverName || event.name || 'Organizador';
+    const city = event.pixCity || 'SAO PAULO';
+
+    const txid = buildPixTxid({
+      eventPin: event.pin,
+      registrationId: item.entry.registrationId,
+      paymentsCount: item.entry.payments?.length ?? 0,
+    });
+
+    const brCode = buildPixBrCode({
+      pixKey: event.pixKey,
+      amount: item.uncoveredDue,
+      receiverName,
+      city,
+      txid,
+    });
+
+    const participantName = item.entry.name || item.entry.nickname;
+    const regIdStr = formatRegistrationId(item.entry.registrationId);
+    const amountStr = `R$ ${item.uncoveredDue.toFixed(2)}`;
+
+    const message = item.isDifference
+      ? `Olá, ${participantName}! Segue a chave Pix da diferença pendente da sua inscrição no evento *${event.name}* (Inscrição: ${regIdStr || '—'}):\n\n` +
+        `*Valor a pagar:* ${amountStr}\n` +
+        `*Categorias:* ${item.categoriesStr}\n\n` +
+        `*Código Pix Copia e Cola:*\n${brCode}\n\n` +
+        `Após o pagamento, por favor anexe o comprovante no app para confirmação.`
+      : `Olá, ${participantName}! Segue a chave Pix para pagamento da sua inscrição no evento *${event.name}* (Inscrição: ${regIdStr || '—'}):\n\n` +
+        `*Valor:* ${amountStr}\n` +
+        `*Categorias:* ${item.categoriesStr}\n\n` +
+        `*Código Pix Copia e Cola:*\n${brCode}\n\n` +
+        `Após o pagamento, por favor anexe o comprovante no app para confirmação.`;
+
+    const cleanPhone = (item.entry.phone || '').replace(/\D/g, '');
+    const phoneParam = cleanPhone.length >= 10 ? (cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`) : '';
+
+    if (typeof navigator !== 'undefined' && navigator.share && !phoneParam) {
+      navigator
+        .share({
+          title: `Pix - ${event.name}`,
+          text: message,
+        })
+        .catch(() => {
+          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
+        });
+    } else {
+      const waUrl = phoneParam
+        ? `https://api.whatsapp.com/send?phone=${phoneParam}&text=${encodeURIComponent(message)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
+    }
   };
 
   // b & c) Ordem dos filtros e respectivas cores
@@ -951,6 +1050,48 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
                         </span>
                         <span>{item.categoriesStr}</span>
                       </div>
+
+                      {/* Cobrança Pix: Copiar e Compartilhar */}
+                      {event.pixKey ? (
+                        <div className="flex flex-col sm:flex-row items-stretch gap-2 border-t border-sky-100 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPix(item)}
+                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer ${
+                              copiedPixPin === item.entry.pin
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                            }`}
+                            title="Copiar código Pix de sua inscrição"
+                          >
+                            {copiedPixPin === item.entry.pin ? (
+                              <>
+                                <Check size={14} />
+                                <span>Código Pix Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={14} />
+                                <span>Copiar Código Pix de sua inscrição</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSharePix(item)}
+                            className="bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+                            title="Compartilhar cobrança com o atleta"
+                          >
+                            <Share2 size={14} />
+                            <span>Compartilhar</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="border-t border-sky-100 pt-1.5 text-[10px] font-bold text-amber-700">
+                          Chave Pix não configurada no evento.
+                        </div>
+                      )}
 
                       {previousReceipt?.receiptUrl && (
                         <div className="flex justify-end border-t border-sky-100 pt-2">
