@@ -1317,33 +1317,49 @@ export const EventRegistrationsManager: React.FC<Props> = ({
             </button>
             {/* Campo de pesquisa de participante por nome */}
             {(() => {
+              const hasQuery = searchName.trim().length > 0;
+              const hasResults = filteredEntries.length > 0;
               const searchStyles = getSearchInputStyles({
                 query: searchName,
                 resultCount: filteredEntries.length,
               });
+              const wrapperBorder = !hasQuery
+                ? 'border-blue-200 bg-blue-50/40'
+                : hasResults
+                  ? 'border-emerald-400 bg-emerald-50/40'
+                  : 'border-rose-400 bg-rose-50/40';
               return (
-                <div className="relative w-full">
-                  <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
-                  <input
-                    type="text"
-                    value={searchName}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setSearchName(value);
-                      if (value.trim()) setRegistrationGroup('all');
-                    }}
-                    placeholder="Pesquisar por nome ou ID da inscrição..."
-                    className={`w-full h-10 pl-9 pr-8 border rounded-xl font-bold text-xs outline-none transition-all ${searchStyles.inputClasses}`}
-                  />
-                  {searchName && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchName('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
-                      title="Limpar pesquisa"
-                    >
-                      <X size={14} />
-                    </button>
+                <div className={`rounded-2xl border-2 p-2.5 transition-all ${wrapperBorder}`}>
+                  <div className="relative w-full">
+                    <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                    <input
+                      type="text"
+                      value={searchName}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSearchName(value);
+                        if (value.trim()) setRegistrationGroup('all');
+                      }}
+                      placeholder="Pesquisar por nome ou ID da inscrição..."
+                      className={`w-full h-11 pl-9 pr-8 border-2 rounded-xl font-bold text-sm outline-none transition-all ${searchStyles.inputClasses}`}
+                    />
+                    {searchName && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchName('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                        title="Limpar pesquisa"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {hasQuery && (
+                    <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {hasResults
+                        ? `${filteredEntries.length} ${filteredEntries.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+                        : `Nenhum resultado para "${searchName}"`}
+                    </p>
                   )}
                 </div>
               );
@@ -1715,7 +1731,13 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       )}
 
       {/* Participants List */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className={`bg-white rounded-3xl border-2 shadow-sm overflow-hidden transition-all ${
+        searchName.trim()
+          ? filteredEntries.length > 0
+            ? 'border-emerald-400 shadow-emerald-100/50'
+            : 'border-rose-300 shadow-rose-100/50'
+          : 'border-slate-100'
+      }`}>
         {entries.length === 0 ? (
           <div className="p-10 text-center space-y-2">
             <Users className="mx-auto text-slate-300" size={32} />
