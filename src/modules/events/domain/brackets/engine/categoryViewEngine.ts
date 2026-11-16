@@ -1,4 +1,5 @@
 import type { EventCategory, TournamentEntry, TournamentMatch, TournamentPair } from '@modules/events/types';
+import { deduplicateTournamentEntries } from '@modules/events/types';
 import type { CategoryMatchFilterOptions, CategoryPairFilterOptions } from '../types';
 
 const normalizeEmail = (value?: string) => (value || '').toLowerCase().trim();
@@ -9,7 +10,8 @@ export const getCategoryEntries = (
   category?: Pick<EventCategory, 'id'> | null
 ): TournamentEntry[] => {
   if (!category) return [];
-  return entries.filter((entry) => entry.categoryIds?.includes(category.id));
+  const filtered = entries.filter((entry) => entry.categoryIds?.includes(category.id));
+  return deduplicateTournamentEntries(filtered);
 };
 
 export const getCategoryPairs = (

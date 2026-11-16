@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Edit2, Trash2, Users, Check, X, CreditCard, DollarSign, Plus, Upload, Paperclip, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search, History, FileSpreadsheet } from 'lucide-react';
 import { collection, getDocs, type Firestore } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
-import { formatRegistrationId, getNextRegistrationId, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem, type TournamentPair, type PaymentStatus } from '@modules/events/types';
+import { formatRegistrationId, getNextRegistrationId, deduplicateTournamentEntries, type TournamentEvent, type TournamentEntry, type EventCategory, type PaymentItem, type TournamentPair, type PaymentStatus } from '@modules/events/types';
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { fetchEventEntries } from '@infra/firebase/events';
 import { updateUserProfileFields } from '@infra/firebase/users';
@@ -829,7 +829,22 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     if (editingPin) {
       updatedList = entries.map((entry) => (entry.pin === editingPin ? entryData : entry));
     } else {
-      updatedList = [...entries, entryData];
+      const isTargetLegacy = (item: TournamentEntry) => {
+        if (entryData.registrationId && item.registrationId && item.registrationId === entryData.registrationId) return true;
+        const targetEmail = entryData.email?.toLowerCase().trim();
+        const itemEmail = item.email?.toLowerCase().trim();
+        if (targetEmail && itemEmail && targetEmail === itemEmail) return true;
+        const targetPin = entryData.pin?.toUpperCase().trim();
+        const itemPin = item.pin?.toUpperCase().trim();
+        if (targetPin && itemPin && targetPin === itemPin && !targetPin.startsWith('TEMP') && !targetPin.startsWith('SIMP')) return true;
+        return false;
+      };
+      const hasMatchLegacy = entries.some(isTargetLegacy);
+      updatedList = deduplicateTournamentEntries(
+        hasMatchLegacy
+          ? entries.map((entry) => (isTargetLegacy(entry) ? entryData : entry))
+          : [...entries, entryData]
+      );
     }
 
     onUpdateEntries(updatedList);
@@ -876,7 +891,24 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         console.warn('Inscrição salva, mas não foi possível criar o índice auxiliar do usuário:', error);
       }
     }
-    const updated = editingPin ? entries.map((item) => item.pin === editingPin ? finalEntry : item) : [...entries, finalEntry];
+    const isTarget = (item: TournamentEntry) => {
+      if (editingPin && item.pin === editingPin) return true;
+      if (finalEntry.registrationId && item.registrationId && item.registrationId === finalEntry.registrationId) return true;
+      const targetEmail = finalEntry.email?.toLowerCase().trim();
+      const itemEmail = item.email?.toLowerCase().trim();
+      if (targetEmail && itemEmail && targetEmail === itemEmail) return true;
+      const targetPin = finalEntry.pin?.toUpperCase().trim();
+      const itemPin = item.pin?.toUpperCase().trim();
+      if (targetPin && itemPin && targetPin === itemPin && !targetPin.startsWith('TEMP') && !targetPin.startsWith('SIMP')) return true;
+      return false;
+    };
+
+    const hasMatch = entries.some(isTarget);
+    const updated = deduplicateTournamentEntries(
+      hasMatch
+        ? entries.map((item) => (isTarget(item) ? finalEntry : item))
+        : [...entries, finalEntry]
+    );
     onUpdateEntries(updated);
     onUpdateEvent({ ...event, entries: updated });
     if (resetAfterSave) resetForm();
@@ -1396,6 +1428,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
         key={editingPin || 'new-registration'}
         event={event}
         mode="admin"
+        isNew={!editingPin}
         entry={editingPin ? entries.find((item) => item.pin === editingPin)! : { name: name.trim(), nickname: nickname.trim(), email: email.trim(), pin: pin.trim(), joinedAt: Date.now(), gender, phone, shirtSize, categoryIds: selectedCategoryIds, dueAmount, paymentStatus, payments }}
         onSave={handleSaveSharedEntry}
         onSaveDraft={(entryData) => handleSaveSharedEntry(entryData, false)}

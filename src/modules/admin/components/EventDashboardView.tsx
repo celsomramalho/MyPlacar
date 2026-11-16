@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ChevronDown,
@@ -53,6 +53,7 @@ export const EventDashboardView: React.FC<Props> = ({
 }) => {
   const blockMenuRef = React.useRef<HTMLDivElement>(null);
   const [isBlockMenuOpen, setIsBlockMenuOpen] = useState(false);
+
 
   // Fecha menu de blocos ao clicar fora
   React.useEffect(() => {

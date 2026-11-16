@@ -27,6 +27,7 @@ import {
   orderPairEntriesForMixed,
   formatRegistrationId,
   getNextRegistrationId,
+  deduplicateTournamentEntries,
   type TournamentEvent,
   type TournamentEntry,
   type EventCategory,
@@ -551,5 +552,20 @@ describe('R-T21 e R-T22 – Detecção de Formação de Duplas e Validação de 
     expect(nextTeamNumber).toBe(3);
     const teamCode = `${String(nextTeamNumber).padStart(3, '0')} - SUP8M`;
     expect(teamCode).toBe('003 - SUP8M');
+  });
+
+  it('R-T25: deduplicateTournamentEntries elimina duplicatas mantendo dados atualizados', () => {
+    const duplicateEntries: TournamentEntry[] = [
+      makeEntry({ name: 'Willian Gabriel Gomes', email: 'wilgabriel27@gmail.com', pin: '89QUO', registrationId: 28, categoryIds: ['cat1'] }),
+      makeEntry({ name: 'Willian Gabriel Gomes', email: 'wilgabriel27@gmail.com', pin: '89QUO', registrationId: 28, categoryIds: ['cat1'] }),
+      makeEntry({ name: 'Willian Gabriel Gomes', email: 'wilgabriel27@gmail.com', pin: '89QUO', registrationId: 28, categoryIds: ['cat1'] }),
+      makeEntry({ name: 'Aline Aparecida Silvano', email: 'aline@gmail.com', pin: 'ALINE1', registrationId: 29, categoryIds: ['cat1'] }),
+    ];
+
+    const deduplicated = deduplicateTournamentEntries(duplicateEntries);
+    expect(deduplicated).toHaveLength(2);
+    expect(deduplicated[0].name).toBe('Willian Gabriel Gomes');
+    expect(deduplicated[0].email).toBe('wilgabriel27@gmail.com');
+    expect(deduplicated[1].name).toBe('Aline Aparecida Silvano');
   });
 });

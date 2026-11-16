@@ -97,7 +97,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
       }
 
       const displayName = candidateUser.nickname || candidateUser.name || candidateUser.pin;
-      setFoundUserMessage(`Cadastro vinculado e salvo: ${displayName}`);
+      setFoundUserMessage(`Cadastro vinculado: ${displayName}`);
       setTimeout(() => setFoundUserMessage(null), 4000);
       setIsUserBound(true);
       setShowConfirmModal(false);
@@ -368,7 +368,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
             </div>
 
             <p className="text-xs text-slate-500 font-semibold">
-              Deseja vincular esta inscrição ao cadastro localizado e salvar os dados do atleta?
+              Deseja vincular esta inscrição ao cadastro localizado e preencher os dados?
             </p>
 
             <div className="flex items-center gap-2 pt-2">
@@ -391,7 +391,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
                 ) : (
                   <Check size={14} className="stroke-[3]" />
                 )}
-                Confirmar e salvar
+                Confirmar e preencher
               </button>
             </div>
           </div>

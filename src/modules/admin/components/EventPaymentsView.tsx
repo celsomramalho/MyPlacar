@@ -323,25 +323,9 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
     }
   });
 
-  // Agrupamento por participante dos pagamentos confirmados
-  const paidRegistrationsList = Array.from(
-    paidPaymentsList.reduce((byPin, payment) => {
-      const current = byPin.get(payment.entryPin);
-      if (current) {
-        current.amount += payment.amount;
-        if (payment.date >= current.date) {
-          current.date = payment.date;
-          current.receiptUrl = payment.receiptUrl;
-          current.receiptFileName = payment.receiptFileName;
-          if (payment.registrationId) current.registrationId = payment.registrationId;
-          if (payment.dueAmount) current.dueAmount = payment.dueAmount;
-        }
-      } else {
-        byPin.set(payment.entryPin, { ...payment });
-      }
-      return byPin;
-    }, new Map<string, FlattenedPayment>()).values()
-  );
+  // Sem agrupamento: cada pagamento confirmado é exibido como card separado
+  const paidRegistrationsList = paidPaymentsList;
+  const paidUniqueRegistrations = new Set(paidPaymentsList.map((p) => p.entryPin)).size;
 
   const awaitingRegistrationCount = new Set(awaitingEntriesList.map((item) => item.entry.pin)).size;
   const refusedRegistrationCount = new Set(refusedEntriesList.map((item) => item.entry.pin)).size;
@@ -1513,7 +1497,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
           >
             <div className="flex items-center gap-2">
               <span className="text-sm font-black text-slate-800 tracking-tight">
-                Pagos (confirmados): R$ {totalPaidSum.toFixed(2)} · {paidRegistrationsList.length} inscrições
+                Pagos (confirmados): R$ {totalPaidSum.toFixed(2)} · {paidRegistrationsList.length} pagamentos · {paidUniqueRegistrations} inscrições
               </span>
             </div>
             <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors">
@@ -1528,7 +1512,7 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
               ) : (
                 paidRegistrationsList.map((pay, idx) => (
                   <article
-                    key={`${pay.entryPin}-${idx}`}
+                    key={pay.paymentId ?? `${pay.entryPin}-${idx}`}
                     className="rounded-2xl border border-emerald-200 bg-emerald-50/20 p-3 space-y-2"
                   >
                     <div className="flex justify-between gap-3">

@@ -3351,6 +3351,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                 event={event}
                 entry={blankPartnerEntry}
                 mode="user"
+                isNew={true}
                 isPartnerRegistration
                 onSave={async (updated) => {
                   const db = getDb();

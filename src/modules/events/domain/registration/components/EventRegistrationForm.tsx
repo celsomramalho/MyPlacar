@@ -14,6 +14,7 @@ import {
   minifyEntryForPair,
   isSimplifiedRegistrationEvent,
   resolveTeamFormationMode,
+  deduplicateTournamentEntries,
   type TournamentEvent,
   type TournamentEntry,
   type TournamentPair,
@@ -251,12 +252,37 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       teamCode: `${String(teamNumber).padStart(3, '0')} - ${cat?.abbreviation || cat?.name || categoryId}`,
     };
 
-    const updatedEntries = (event.entries || []).map((item) =>
-      item.pin === entry.pin ? currentEntry : item
+    const isTargetEntry = (item: TournamentEntry) => {
+      if (entry.pin && item.pin === entry.pin) return true;
+      if (currentEntry.registrationId && item.registrationId === currentEntry.registrationId) return true;
+      const targetEmail = currentEntry.email?.toLowerCase().trim();
+      const itemEmail = item.email?.toLowerCase().trim();
+      if (targetEmail && itemEmail && targetEmail === itemEmail) return true;
+      const targetPin = currentEntry.pin?.toUpperCase().trim();
+      const itemPin = item.pin?.toUpperCase().trim();
+      if (targetPin && itemPin && targetPin === itemPin && !targetPin.startsWith('TEMP') && !targetPin.startsWith('SIMP')) return true;
+      return false;
+    };
+
+    const existingEntries = event.entries || [];
+    const hasMatch = existingEntries.some(isTargetEntry);
+    const updatedEntries = deduplicateTournamentEntries(
+      hasMatch
+        ? existingEntries.map((item) => (isTargetEntry(item) ? currentEntry : item))
+        : [...existingEntries, currentEntry]
+    );
+
+    const existingPairs = (event.pairs || []).filter(
+      (p) => !(p.categoryId === categoryId && (
+        (p.p1?.email && currentEntry.email && p.p1.email.toLowerCase().trim() === currentEntry.email.toLowerCase().trim()) ||
+        (p.p2?.email && currentEntry.email && p.p2.email.toLowerCase().trim() === currentEntry.email.toLowerCase().trim()) ||
+        (p.p1?.pin && currentEntry.pin && p.p1.pin.toUpperCase().trim() === currentEntry.pin.toUpperCase().trim()) ||
+        (p.p2?.pin && currentEntry.pin && p.p2.pin.toUpperCase().trim() === currentEntry.pin.toUpperCase().trim())
+      ))
     );
 
     await (onSaveDraft || onSave)(currentEntry);
-    onUpdateEvent({ ...event, entries: updatedEntries, pairs: [...pairs, newPair] });
+    onUpdateEvent({ ...event, entries: updatedEntries, pairs: [...existingPairs, newPair] });
   }, [canFormTeamAtRegistration, entry, event, form, onSave, onSaveDraft, onUpdateEvent]);
 
   const isStepBeforePayment =
@@ -649,29 +675,36 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     if (user.gender) form.updateField('gender', user.gender);
     if (user.shirtSize) form.updateField('shirtSize', user.shirtSize);
 
-    // Salva imediatamente os dados da aba Atleta
+    // Salva imediatamente os dados da aba Atleta APENAS se for edição de inscrição existente
+    // que já possui categorias selecionadas e ID de inscrição.
+    // Em novas inscrições ou etapas preliminares sem categorias, não deve salvar no backend ainda.
     const current = form.getSubmissionEntry();
-    const resolvedEmail = (user.email || current.email || '').toLowerCase().trim();
-    const resolvedPin = (user.pin || current.pin || '').toUpperCase().trim();
-    const resolvedName = (user.name || current.name || user.nickname || current.nickname || '').trim();
-    const resolvedNickname = (user.nickname || current.nickname || user.name || current.name || '').trim();
+    const hasValidCategories = Boolean(current.categoryIds && current.categoryIds.length > 0);
+    const isExistingEntry = !isNew && Boolean(entry.registrationId || (entry.categoryIds && entry.categoryIds.length > 0));
 
-    const updatedEntry: TournamentEntry = {
-      ...current,
-      name: resolvedName,
-      nickname: resolvedNickname,
-      email: resolvedEmail,
-      phone: user.phone || current.phone,
-      pin: resolvedPin,
-      gender: user.gender || current.gender,
-      shirtSize: user.shirtSize || current.shirtSize,
-      isSimplified: false,
-    };
+    if (isExistingEntry && hasValidCategories && onSaveDraft) {
+      const resolvedEmail = (user.email || current.email || '').toLowerCase().trim();
+      const resolvedPin = (user.pin || current.pin || '').toUpperCase().trim();
+      const resolvedName = (user.name || current.name || user.nickname || current.nickname || '').trim();
+      const resolvedNickname = (user.nickname || current.nickname || user.name || current.name || '').trim();
 
-    if (onSaveDraft) {
-      await onSaveDraft(updatedEntry);
-    } else if (onSave) {
-      await onSave(updatedEntry);
+      const updatedEntry: TournamentEntry = {
+        ...current,
+        name: resolvedName,
+        nickname: resolvedNickname,
+        email: resolvedEmail,
+        phone: user.phone || current.phone,
+        pin: resolvedPin,
+        gender: user.gender || current.gender,
+        shirtSize: user.shirtSize || current.shirtSize,
+        isSimplified: false,
+      };
+
+      try {
+        await onSaveDraft(updatedEntry);
+      } catch (err) {
+        console.warn('[EventRegistrationForm] Erro ao salvar rascunho ao vincular atleta:', err);
+      }
     }
   };
 

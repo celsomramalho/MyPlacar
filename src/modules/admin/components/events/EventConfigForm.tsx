@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -22,6 +22,8 @@ import {
   ShieldCheck,
   Trophy,
   X,
+  Download,
+  Upload,
 } from 'lucide-react';
 import {
   EVENT_STATUS_OPTIONS,
@@ -55,6 +57,12 @@ import { SPORT_GROUPS, SPORT_LIST } from '../../../../constants';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import type { EventSportRules } from '@modules/events/types';
 import { getDefaultRulesForSport } from '@modules/events/domain/rules/eventMatchRules';
+import {
+  buildEventBackup,
+  downloadEventBackup,
+  readEventBackupFromFile,
+  restoreEventEntriesToFirestore,
+} from '@modules/events/services/eventBackupService';
 
 // ─── Bloco Accordion & Itens de Menu ──────────────────────────────────────────
 
@@ -229,6 +237,76 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   const regulationInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [restoreConfirm, setRestoreConfirm] = useState<null | { event: TournamentEvent; entries: import('@modules/events/types').TournamentEntry[] }>(null);
+
+  const handleExportBackup = async () => {
+    if (isExportingBackup) return;
+    setIsExportingBackup(true);
+    try {
+      const backup = await buildEventBackup(editingEvent, adminEmail);
+      downloadEventBackup(backup);
+    } catch (err) {
+      console.error('[Backup] Erro ao exportar:', err);
+      alert('Erro ao gerar backup. Tente novamente.');
+    } finally {
+      setIsExportingBackup(false);
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (isRestoringBackup) return;
+    setIsRestoringBackup(true);
+    try {
+      const result = await readEventBackupFromFile();
+      if (!result.ok) {
+        if (result.error !== 'Cancelado.') alert(result.error);
+        return;
+      }
+      if (result.event.pin !== editingEvent.pin) {
+        const proceed = window.confirm(
+          `Atenção: Este backup pertence ao evento PIN "${result.event.pin}" (${result.event.name || 'Sem nome'}), mas você está no evento "${editingEvent.pin}".\n\nDeseja restaurar para o evento atual "${editingEvent.pin}" mesmo assim?`
+        );
+        if (!proceed) return;
+      }
+      setRestoreConfirm({ event: { ...result.event, pin: editingEvent.pin }, entries: result.entries });
+    } catch (err) {
+      console.error('[Backup] Erro ao restaurar:', err);
+      alert('Erro ao ler o arquivo de backup.');
+    } finally {
+      setIsRestoringBackup(false);
+    }
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!restoreConfirm) return;
+    setIsRestoringBackup(true);
+    try {
+      // 1. Atualiza formulário na memória
+      const updated: TournamentEvent = { ...restoreConfirm.event, pin: editingEvent.pin, entries: restoreConfirm.entries };
+      onChangeEditingEvent(updated);
+      onUpdateEvent?.(updated);
+
+      // 2. Salva as inscrições do backup no Firestore se houver
+      let restoredEntriesCount = 0;
+      if (restoreConfirm.entries.length > 0) {
+        restoredEntriesCount = await restoreEventEntriesToFirestore(
+          editingEvent.pin,
+          restoreConfirm.entries,
+          adminEmail
+        );
+      }
+
+      setRestoreConfirm(null);
+      alert(`Backup restaurado com sucesso! ${restoredEntriesCount} inscrição(ões) processada(s). Clique em "Salvar alterações" no rodapé para consolidar o evento.`);
+    } catch (err) {
+      console.error('[Backup] Erro ao aplicar restauração:', err);
+      alert('Erro ao aplicar dados do backup.');
+    } finally {
+      setIsRestoringBackup(false);
+    }
+  };
   const [helperPins, setHelperPins] = useState(editingEvent.helperPins || []);
   useEffect(() => setHelperPins(editingEvent.helperPins || []), [editingEvent.pin, editingEvent.helperPins]);
 
@@ -565,6 +643,41 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Ações de Backup e Restauração */}
+      {!isReadOnlyRegistration && (
+        <div className="flex items-center gap-2 pt-0.5 pb-1">
+          <button
+            type="button"
+            onClick={handleExportBackup}
+            disabled={isExportingBackup || isRestoringBackup}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+            title="Exportar backup completo do evento (JSON)"
+          >
+            {isExportingBackup ? (
+              <Loader2 className="animate-spin text-amber-500" size={14} />
+            ) : (
+              <Download size={14} className="text-slate-500" />
+            )}
+            <span>Fazer backup</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleRestoreBackup}
+            disabled={isExportingBackup || isRestoringBackup}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+            title="Restaurar backup do evento a partir de arquivo JSON"
+          >
+            {isRestoringBackup ? (
+              <Loader2 className="animate-spin text-blue-500" size={14} />
+            ) : (
+              <Upload size={14} className="text-slate-500" />
+            )}
+            <span>Restaurar backup</span>
+          </button>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* 1. EVENTO — somente admin global                                      */}
@@ -1637,6 +1750,52 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
         >
           {isSavingEvent ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar evento
         </Button>
+      )}
+      {/* ── Modal de Confirmação de Restauração ─────────────────────────────── */}
+      {restoreConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-800">Restaurar backup do evento</h3>
+                <p className="text-xs font-bold text-slate-400">Confirmação de restauração</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 space-y-1.5 text-xs text-slate-700 font-bold">
+              <p><span className="text-slate-400 font-medium">Evento:</span> {restoreConfirm.event.name || restoreConfirm.event.pin}</p>
+              <p><span className="text-slate-400 font-medium">PIN:</span> {restoreConfirm.event.pin}</p>
+              <p><span className="text-slate-400 font-medium">Inscrições:</span> {restoreConfirm.entries.length} atleta(s)</p>
+            </div>
+
+            <p className="text-xs text-rose-600 font-bold">
+              Atenção: Os dados do formulário serão substituídos pelas informações do backup.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setRestoreConfirm(null)}
+                disabled={isRestoringBackup}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                disabled={isRestoringBackup}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black text-white bg-amber-500 hover:bg-amber-600 shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {isRestoringBackup && <Loader2 className="animate-spin" size={14} />}
+                <span>{isRestoringBackup ? 'Restaurando...' : 'Confirmar restauração'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

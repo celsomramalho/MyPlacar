@@ -687,110 +687,127 @@ export const updateEvent = async (
   if (Array.isArray(toSave.pairs)) {
     const eventRef = doc(db, 'events', eventPin);
     const actorEmail = getAuthInstance()?.currentUser?.email?.toLowerCase().trim() || null;
-    return runTransaction(db, async (transaction) => {
-      const current = await transaction.get(eventRef);
-      const oldPairs = (current.data()?.pairs || []) as TournamentPair[];
-      const nextPairs = (sanitized as any).pairs as TournamentPair[];
-      const oldById = new Map(oldPairs.map((pair) => [pair.id, pair]));
-      const nextById = new Map(nextPairs.map((pair) => [pair.id, pair]));
-      const candidatePairs = [
-        ...nextPairs.filter((pair) => !oldById.has(pair.id)),
-        ...nextPairs.filter((pair) => oldById.has(pair.id) && JSON.stringify(oldById.get(pair.id)) !== JSON.stringify(pair)),
-      ];
-      const eventData = current.data() as any;
-      const eventCategories = (eventData?.categories || []) as Array<{ id: string; format?: string; gender1?: string; gender2?: string }>;
-      const memberReads = await Promise.all(candidatePairs.flatMap((pair) => [pair.p1, pair.p2]
-        .filter((person) => Boolean(person?.email))
-        .map((person) => transaction.get(doc(db, 'events', eventPin, 'entries', person.email.toLowerCase().trim())))));
-      const memberByEmail = new Map<string, Record<string, any>>();
-      let memberReadIndex = 0;
-      for (const pair of candidatePairs) {
-        for (const person of [pair.p1, pair.p2].filter((item) => Boolean(item?.email))) {
-          const member = memberReads[memberReadIndex++];
-          if (member?.exists()) memberByEmail.set(person.email.toLowerCase().trim(), member.data());
+    try {
+      return await runTransaction(db, async (transaction) => {
+        const current = await transaction.get(eventRef);
+        if (!current.exists()) {
+          throw new Error('Evento não encontrado no Firestore.');
         }
-      }
-      for (const pair of candidatePairs) {
-        const category = eventCategories.find((item) => item.id === pair.categoryId);
-        if (eventCategories.length && !category) throw new Error('Não foi possível validar a categoria do time. Atualize a tela e tente novamente.');
-        if (category?.format === 'Duplas') {
-          const participants = [pair.p1, pair.p2];
-          for (const person of participants) {
-            const email = person.email?.toLowerCase().trim();
-            const registered = email ? memberByEmail.get(email) : undefined;
-            const memberCategoryIds = registered?.categoryIds || person.categoryIds || [];
-            if (!memberCategoryIds.includes(category.id)) throw new Error('Um dos atletas não está inscrito nesta categoria. Revise os participantes do time.');
-          }
-          const expectedGenders = [category.gender1, category.gender2].filter(Boolean).sort();
-          const actualGenders = participants.map((person) => memberByEmail.get(person.email?.toLowerCase().trim() || '')?.gender || person.gender).filter(Boolean).sort();
-          if (expectedGenders.length === 2 && actualGenders.length === 2 && expectedGenders.join('|') !== actualGenders.join('|')) {
-            throw new Error('Os gêneros dos participantes não correspondem aos requisitos desta categoria.');
-          }
-        }
-      }
-      const changes = [
-        ...nextPairs.filter((pair) => !oldById.has(pair.id)).map((pair) => ({ action: 'team_formed', pair, before: null })),
-        ...oldPairs.filter((pair) => !nextById.has(pair.id)).map((pair) => ({ action: 'team_dissolved', pair, before: pair })),
-        ...nextPairs.filter((pair) => oldById.has(pair.id) && JSON.stringify(oldById.get(pair.id)) !== JSON.stringify(pair)).map((pair) => ({ action: 'team_updated', pair, before: oldById.get(pair.id) })),
-      ];
-      transaction.update(eventRef, { ...sanitized, entries: deleteField() });
-      for (const change of changes) {
-        const participants = [change.pair.p1, change.pair.p2].filter(Boolean);
-        for (const person of participants) {
-          const auditRef = doc(collection(db, 'events', eventPin, 'audit_logs'));
-          transaction.set(auditRef, {
-            id: auditRef.id,
-            eventPin,
-            registrationEmail: person.email?.toLowerCase().trim() || null,
-            registrationPin: person.pin?.toUpperCase().trim() || null,
-            registrationId: person.registrationId || null,
-            participantName: person.name || person.nickname || null,
-            categoryId: change.pair.categoryId || null,
-            actorEmail,
-            actorRole: actorEmail && actorEmail === person.email?.toLowerCase().trim() ? 'athlete' : actorEmail ? 'admin_or_coadmin' : 'system',
-            action: change.action,
-            changedFields: ['pair'],
-            before: change.before,
-            after: change.action === 'team_dissolved' ? null : change.pair,
-            source: 'live',
-            createdAt: serverTimestamp(),
-          });
-          if (actorEmail) {
-            const shouldNotifyPerson = actorEmail !== person.email?.toLowerCase().trim();
-            if (shouldNotifyPerson && person.email && !person.email.toLowerCase().includes('@simplificada.local')) {
-              const communicationRef = doc(collection(db, 'communications'));
-              const verb = change.action === 'team_formed' ? 'foi formado' : change.action === 'team_dissolved' ? 'foi desfeito' : 'foi atualizado';
-              const categoryName = eventData?.categories?.find((category: any) => category.id === change.pair.categoryId)?.name || 'do evento';
-              transaction.set(communicationRef, {
-                type: 'message',
-                title: change.action === 'team_dissolved' ? 'Time desfeito' : 'Time atualizado',
-                content: `Um time da categoria ${categoryName} ${verb} pela organização no evento ${eventData?.name || eventPin}.`,
-                authorId: 'system',
-                authorName: eventData?.name || 'Organização',
-                createdAt: Date.now(),
-                targetUserId: person.email.toLowerCase().trim(),
-                targetUserEmail: person.email.toLowerCase().trim(),
-                targetUserPin: person.pin || '',
-                isPinned: false,
-                readBy: [],
-                eventPin,
-                categoryId: change.pair.categoryId || null,
-                notificationType: 'event_team_updated',
-                auditId: auditRef.id,
-              });
+        const oldPairs = (current.data()?.pairs || []) as TournamentPair[];
+        const nextPairs = (sanitized as any).pairs as TournamentPair[];
+        const oldById = new Map(oldPairs.map((pair) => [pair.id, pair]));
+        const nextById = new Map(nextPairs.map((pair) => [pair.id, pair]));
+        const candidatePairs = [
+          ...nextPairs.filter((pair) => !oldById.has(pair.id)),
+          ...nextPairs.filter((pair) => oldById.has(pair.id) && JSON.stringify(oldById.get(pair.id)) !== JSON.stringify(pair)),
+        ];
+        const eventData = current.data() as any;
+        const eventCategories = (eventData?.categories || []) as Array<{ id: string; format?: string; gender1?: string; gender2?: string }>;
+
+        // Deduplica e-mails para evitar chamar transaction.get no mesmo documento mais de uma vez
+        const uniqueEmails = Array.from(
+          new Set(
+            candidatePairs.flatMap((pair) => [pair.p1?.email, pair.p2?.email])
+              .filter((email): email is string => Boolean(email))
+              .map((email) => email.toLowerCase().trim())
+          )
+        );
+        const memberReads = await Promise.all(
+          uniqueEmails.map((email) => transaction.get(doc(db, 'events', eventPin, 'entries', email)))
+        );
+        const memberByEmail = new Map<string, Record<string, any>>();
+        uniqueEmails.forEach((email, idx) => {
+          const member = memberReads[idx];
+          if (member?.exists()) memberByEmail.set(email, member.data());
+        });
+
+        for (const pair of candidatePairs) {
+          const category = eventCategories.find((item) => item.id === pair.categoryId);
+          if (eventCategories.length && !category) throw new Error('Não foi possível validar a categoria do time. Atualize a tela e tente novamente.');
+          if (category?.format === 'Duplas') {
+            const participants = [pair.p1, pair.p2];
+            for (const person of participants) {
+              const email = person.email?.toLowerCase().trim();
+              const registered = email ? memberByEmail.get(email) : undefined;
+              const memberCategoryIds = registered?.categoryIds || person.categoryIds || [];
+              if (!memberCategoryIds.includes(category.id)) throw new Error('Um dos atletas não está inscrito nesta categoria. Revise os participantes do time.');
+            }
+            const expectedGenders = [category.gender1, category.gender2].filter(Boolean).sort();
+            const actualGenders = participants.map((person) => memberByEmail.get(person.email?.toLowerCase().trim() || '')?.gender || person.gender).filter(Boolean).sort();
+            if (expectedGenders.length === 2 && actualGenders.length === 2 && expectedGenders.join('|') !== actualGenders.join('|')) {
+              throw new Error('Os gêneros dos participantes não correspondem aos requisitos desta categoria.');
             }
           }
         }
-      }
-    });
+        const changes = [
+          ...nextPairs.filter((pair) => !oldById.has(pair.id)).map((pair) => ({ action: 'team_formed', pair, before: null })),
+          ...oldPairs.filter((pair) => !nextById.has(pair.id)).map((pair) => ({ action: 'team_dissolved', pair, before: pair })),
+          ...nextPairs.filter((pair) => oldById.has(pair.id) && JSON.stringify(oldById.get(pair.id)) !== JSON.stringify(pair)).map((pair) => ({ action: 'team_updated', pair, before: oldById.get(pair.id) })),
+        ];
+
+        const updatePayload: Record<string, any> = { ...sanitized };
+        if (current.data()?.entries !== undefined) {
+          updatePayload.entries = deleteField();
+        }
+        transaction.update(eventRef, updatePayload);
+
+        for (const change of changes) {
+          const participants = [change.pair.p1, change.pair.p2].filter(Boolean);
+          for (const person of participants) {
+            if (actorEmail) {
+              const auditRef = doc(collection(db, 'events', eventPin, 'audit_logs'));
+              transaction.set(auditRef, {
+                id: auditRef.id,
+                eventPin,
+                registrationEmail: person.email?.toLowerCase().trim() || null,
+                registrationPin: person.pin?.toUpperCase().trim() || null,
+                registrationId: person.registrationId || null,
+                participantName: person.name || person.nickname || null,
+                categoryId: change.pair.categoryId || null,
+                actorEmail,
+                actorRole: actorEmail === person.email?.toLowerCase().trim() ? 'athlete' : 'admin_or_coadmin',
+                action: change.action,
+                changedFields: ['pair'],
+                before: change.before,
+                after: change.action === 'team_dissolved' ? null : change.pair,
+                source: 'live',
+                createdAt: serverTimestamp(),
+              });
+              const shouldNotifyPerson = actorEmail !== person.email?.toLowerCase().trim();
+              if (shouldNotifyPerson && person.email && !person.email.toLowerCase().includes('@simplificada.local')) {
+                const communicationRef = doc(collection(db, 'communications'));
+                const verb = change.action === 'team_formed' ? 'foi formado' : change.action === 'team_dissolved' ? 'foi desfeito' : 'foi atualizado';
+                const categoryName = eventData?.categories?.find((category: any) => category.id === change.pair.categoryId)?.name || 'do evento';
+                transaction.set(communicationRef, {
+                  type: 'message',
+                  title: change.action === 'team_dissolved' ? 'Time desfeito' : 'Time atualizado',
+                  content: `Um time da categoria ${categoryName} ${verb} pela organização no evento ${eventData?.name || eventPin}.`,
+                  authorId: 'system',
+                  authorName: eventData?.name || 'Organização',
+                  createdAt: Date.now(),
+                  targetUserId: person.email.toLowerCase().trim(),
+                  targetUserEmail: person.email.toLowerCase().trim(),
+                  targetUserPin: person.pin || '',
+                  isPinned: false,
+                  readBy: [],
+                  eventPin,
+                  categoryId: change.pair.categoryId || null,
+                  notificationType: 'event_team_updated',
+                  auditId: auditRef.id,
+                });
+              }
+            }
+          }
+        }
+      });
+    } catch (txError) {
+      console.warn('[updateEvent] Falha na transação ao atualizar pairs, aplicando fallback direto:', txError);
+    }
   }
   try {
-    return await updateDoc(doc(db, 'events', eventPin), {
-      ...sanitized,
-      entries: deleteField(),
-    });
-  } catch (_e) {
     return await updateDoc(doc(db, 'events', eventPin), sanitized);
+  } catch (_e) {
+    return await setDoc(doc(db, 'events', eventPin), sanitized, { merge: true });
   }
 };
 

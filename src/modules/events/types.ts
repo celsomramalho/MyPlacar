@@ -466,6 +466,52 @@ export const getNextRegistrationId = (
   return Math.max(...ids) + 1;
 };
 
+/**
+ * Remove duplicatas de inscrições do evento (em memória), garantindo
+ * unicidade por registrationId, e-mail ou PIN fixo/real.
+ */
+export const deduplicateTournamentEntries = (entries: TournamentEntry[]): TournamentEntry[] => {
+  if (!entries || entries.length <= 1) return entries || [];
+  const result: TournamentEntry[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const entry of entries) {
+    const regIdKey = entry.registrationId ? `reg_${entry.registrationId}` : null;
+    const emailKey = entry.email?.trim() ? `email_${entry.email.toLowerCase().trim()}` : null;
+    const pin = entry.pin?.toUpperCase().trim();
+    const pinKey = pin && !pin.startsWith('TEMP') && !pin.startsWith('SIMP') ? `pin_${pin}` : null;
+
+    const isDuplicate =
+      Boolean((regIdKey && seenKeys.has(regIdKey)) ||
+      (emailKey && seenKeys.has(emailKey)) ||
+      (pinKey && seenKeys.has(pinKey)));
+
+    if (isDuplicate) {
+      const existingIdx = result.findIndex(
+        (e) =>
+          (regIdKey && e.registrationId && `reg_${e.registrationId}` === regIdKey) ||
+          (emailKey && e.email && `email_${e.email.toLowerCase().trim()}` === emailKey) ||
+          (pinKey && e.pin && `pin_${e.pin.toUpperCase().trim()}` === pinKey)
+      );
+      if (existingIdx >= 0) {
+        result[existingIdx] = {
+          ...result[existingIdx],
+          ...entry,
+          registrationId: entry.registrationId || result[existingIdx].registrationId,
+          categoryIds: (entry.categoryIds && entry.categoryIds.length > 0) ? entry.categoryIds : result[existingIdx].categoryIds,
+        };
+      }
+    } else {
+      if (regIdKey) seenKeys.add(regIdKey);
+      if (emailKey) seenKeys.add(emailKey);
+      if (pinKey) seenKeys.add(pinKey);
+      result.push(entry);
+    }
+  }
+
+  return result;
+};
+
 export interface EventRegistration {
   pin: string;
   name: string;
