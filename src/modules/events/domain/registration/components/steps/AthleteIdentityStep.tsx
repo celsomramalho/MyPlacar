@@ -13,6 +13,7 @@ export interface AthleteIdentityStepProps {
   readOnly?: boolean;
   isSimplified?: boolean;
   nameConflictWarning?: string | null;
+  emailConflictWarning?: string | null;
   /** Quando true, desabilita Nome Completo e E-mail (campos vinculados ao cadastro do usuário) */
   disableIdentity?: boolean;
   /** Callback para confirmar vínculo e salvar dados do atleta */
@@ -34,6 +35,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
   readOnly = false,
   isSimplified = false,
   nameConflictWarning = null,
+  emailConflictWarning = null,
   disableIdentity = false,
   onConfirmUser,
 }) => {
@@ -183,7 +185,7 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
         </div>
 
         {/* E-mail */}
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 sm:col-span-2">
           <label className="text-xs font-black text-slate-700 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Mail size={14} className="text-slate-400" />
@@ -204,15 +206,25 @@ export const AthleteIdentityStep: React.FC<AthleteIdentityStepProps> = ({
             }}
             onBlur={(e) => handleLookup(e.target.value)}
             placeholder="atleta@email.com"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all"
+            className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-bold text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-500 outline-none transition-all ${
+              emailConflictWarning
+                ? 'border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                : 'border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+            }`}
           />
+          {emailConflictWarning && (
+            <div className="flex items-center gap-1.5 text-xs text-rose-600 bg-rose-50 border border-rose-200 px-3 py-2 rounded-xl font-bold animate-in fade-in">
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>{emailConflictWarning}</span>
+            </div>
+          )}
           {isIdentityLocked && (
             <p className="text-[10px] text-slate-400 font-semibold">Vinculado ao cadastro</p>
           )}
         </div>
 
         {/* WhatsApp */}
-        <div className={`space-y-1.5 ${isAdmin ? 'sm:col-start-1' : ''}`}>
+        <div className="space-y-1.5 sm:col-span-2">
           <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
             <Phone size={14} className="text-slate-400" />
             WhatsApp {!isSimplified && <span className="text-rose-500">*</span>}

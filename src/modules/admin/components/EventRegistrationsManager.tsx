@@ -117,7 +117,8 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   isReadOnly = false,
 }) => {
   const { setModalConfig } = useUI();
-  const entries = event.entries || [];
+  const rawEntries = event.entries || [];
+  const entries = useMemo(() => deduplicateTournamentEntries(rawEntries), [rawEntries]);
   const categories = event.categories || [];
 
   const [searchName, setSearchName] = useState('');
@@ -760,6 +761,27 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     const cleanPin = pin.trim().toUpperCase();
     const cleanEmail = email.trim() || `${cleanPin.toLowerCase()}@myplacar.app`;
 
+    const targetEmail = cleanEmail.toLowerCase();
+    const isSpecialEmail = targetEmail.includes('@simplificada.local') || targetEmail.endsWith('@myplacar.app');
+    if (!isSpecialEmail) {
+      const existingWithEmail = entries.find((other) => {
+        if (editingPin && other.pin === editingPin) return false;
+        const otherEmail = (other.email || '').toLowerCase().trim();
+        if (!otherEmail || otherEmail !== targetEmail) return false;
+        const isCancelled = Boolean(other.disabled || other.paymentStatus === 'Cancelado');
+        return !isCancelled;
+      });
+
+      if (existingWithEmail) {
+        setModalConfig({
+          title: 'E-mail já cadastrado',
+          message: `Já existe uma inscrição com o e-mail "${cleanEmail}" neste evento (${existingWithEmail.name || existingWithEmail.nickname}). Cada atleta deve possuir um e-mail único por evento.`,
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
+    }
+
     const db = getDb();
 
     const calculatedPaidAmount = payments.reduce((acc, curr) => acc + curr.amount, 0);
@@ -852,6 +874,27 @@ export const EventRegistrationsManager: React.FC<Props> = ({
   };
 
   const handleSaveSharedEntry = async (entryData: TournamentEntry, resetAfterSave = true) => {
+    const targetEmail = (entryData.email || '').toLowerCase().trim();
+    if (targetEmail && !targetEmail.includes('@simplificada.local') && !targetEmail.endsWith('@myplacar.app')) {
+      const duplicate = entries.find((other) => {
+        if (editingPin && other.pin === editingPin) return false;
+        if (entryData.pin && other.pin?.toUpperCase().trim() === entryData.pin.toUpperCase().trim()) return false;
+        if (entryData.registrationId && other.registrationId === entryData.registrationId) return false;
+        const otherEmail = (other.email || '').toLowerCase().trim();
+        if (!otherEmail || otherEmail !== targetEmail) return false;
+        const isCancelled = Boolean(other.disabled || other.paymentStatus === 'Cancelado');
+        return !isCancelled;
+      });
+      if (duplicate) {
+        setModalConfig({
+          title: 'E-mail já cadastrado',
+          message: `Já existe uma inscrição com o e-mail "${entryData.email}" neste evento (${duplicate.name || duplicate.nickname}). Cada atleta deve possuir um e-mail único por evento.`,
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
+    }
+
     const db = getDb();
     let registrationId = entryData.registrationId;
     if (!registrationId) {
@@ -939,6 +982,26 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     const newPin = (entryData.pin || '').toUpperCase().trim();
 
     const isRealAthlete = Boolean(newEmail && !newEmail.includes('@simplificada.local') && !newPin.startsWith('TEMP'));
+    if (isRealAthlete && newEmail) {
+      const duplicate = entries.find((other) => {
+        if (oldPin && other.pin?.toUpperCase().trim() === oldPin) return false;
+        if (newPin && other.pin?.toUpperCase().trim() === newPin) return false;
+        if (oldRegId && other.registrationId === oldRegId) return false;
+        if (entryData.registrationId && other.registrationId === entryData.registrationId) return false;
+        const otherEmail = (other.email || '').toLowerCase().trim();
+        if (!otherEmail || otherEmail !== newEmail) return false;
+        const isCancelled = Boolean(other.disabled || other.paymentStatus === 'Cancelado');
+        return !isCancelled;
+      });
+      if (duplicate) {
+        setModalConfig({
+          title: 'E-mail já cadastrado',
+          message: `Já existe uma inscrição com o e-mail "${entryData.email}" neste evento (${duplicate.name || duplicate.nickname}). Cada atleta deve possuir um e-mail único por evento.`,
+          onConfirm: () => setModalConfig(null),
+        });
+        return;
+      }
+    }
     const db = getDb();
     const finalEntry: TournamentEntry = {
       ...entryData,
@@ -1099,6 +1162,10 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
     // Atualiza o estado local: substitui a entrada específica sem duplicar
     const isTargetEntry = (item: TournamentEntry) => {
+      if (finalEntry.registrationId && item.registrationId && item.registrationId === finalEntry.registrationId) return true;
+      if (finalEntry.pin && item.pin && item.pin.toUpperCase().trim() === finalEntry.pin.toUpperCase().trim()) return true;
+      const targetEmail = finalEntry.email?.toLowerCase().trim();
+      if (targetEmail && item.email && item.email.toLowerCase().trim() === targetEmail) return true;
       if (oldRegId && item.registrationId && item.registrationId === oldRegId) return true;
       if (oldPin && item.pin && item.pin.toUpperCase().trim() === oldPin) return true;
       if (oldEmail && item.email && item.email.toLowerCase().trim() === oldEmail) return true;
@@ -1106,9 +1173,11 @@ export const EventRegistrationsManager: React.FC<Props> = ({
     };
 
     const hasMatch = entries.some(isTargetEntry);
-    const updatedList = hasMatch
-      ? entries.map((item) => (isTargetEntry(item) ? finalEntry : item))
-      : [...entries, finalEntry];
+    const updatedList = deduplicateTournamentEntries(
+      hasMatch
+        ? entries.map((item) => (isTargetEntry(item) ? finalEntry : item))
+        : [...entries, finalEntry]
+    );
 
     onUpdateEntries(updatedList);
     onUpdateEvent({
@@ -1810,7 +1879,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
               return (
                 <div
-                  key={entry.email || entry.pin}
+                  key={entry.pin || entry.email}
                   className={`transition-colors ${isExpanded ? 'bg-emerald-50/30' : 'hover:bg-slate-50/70'}`}
                 >
                   <div className="p-3.5 sm:p-4 flex items-center justify-between gap-3">
@@ -1988,7 +2057,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                     <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
                       <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
                         <EventRegistrationForm
-                          key={`expanded-${entry.registrationId || entry.email || entry.pin}`}
+                          key={`expanded-${entry.pin || entry.registrationId || entry.email}`}
                           event={event}
                           mode="admin"
                           entry={entry}

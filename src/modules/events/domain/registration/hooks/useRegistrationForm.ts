@@ -53,6 +53,7 @@ export interface UseRegistrationFormResult {
   requiresPartnerDetails: boolean;
   isSimplified: boolean;
   nameConflictWarning: string | null;
+  emailConflictWarning: string | null;
   conflictingCategoryIds: string[];
   groupConflictCategoryIds: string[];
   isStepValid: (step: RegistrationStep) => { isValid: boolean; error?: string };
@@ -177,6 +178,37 @@ export function useRegistrationForm({
     }
     return null;
   }, [formData.nickname, formData.categoryIds, conflictingCategoryIds, event.categories]);
+
+  // ─── Unicidade do E-mail por Evento ─────────────────────────────────────────
+  const emailConflictWarning = useMemo(() => {
+    const cleanEmail = (formData.email || '').trim().toLowerCase();
+    if (!cleanEmail || cleanEmail.includes('@simplificada.local')) return null;
+
+    const currentPin = (entry.pin || formData.pin || '').toUpperCase().trim();
+    const currentRegistrationId = entry.registrationId || formData.registrationId;
+
+    const conflict = liveEntries.some((other) => {
+      const otherEmail = (other.email || '').trim().toLowerCase();
+      if (!otherEmail || otherEmail !== cleanEmail) return false;
+
+      const otherPin = (other.pin || '').toUpperCase().trim();
+      const isSamePin = Boolean(currentPin && otherPin && currentPin === otherPin);
+      const otherRegId = other.registrationId;
+      const isSameRegId = Boolean(currentRegistrationId && otherRegId && currentRegistrationId === otherRegId);
+
+      if (isSamePin || isSameRegId) return false;
+
+      const isCancelled = Boolean(other.disabled || other.paymentStatus === 'Cancelado');
+      if (isCancelled) return false;
+
+      return true;
+    });
+
+    if (conflict) {
+      return 'Já existe uma inscrição com este e-mail neste evento.';
+    }
+    return null;
+  }, [formData.email, formData.pin, entry.pin, entry.registrationId, formData.registrationId, liveEntries]);
 
   const requiresPartnerDetails = useMemo(
     () => shouldRequirePartnerDetails(event.teamDrawType, event.categories || [], formData.categoryIds),
@@ -342,6 +374,9 @@ export function useRegistrationForm({
           if (!emailRegex.test(formData.email.trim())) {
             return { isValid: false, error: 'Informe um e-mail válido.' };
           }
+          if (emailConflictWarning) {
+            return { isValid: false, error: emailConflictWarning };
+          }
           const cleanPhone = (formData.phone || '').replace(/\D/g, '');
           if (!cleanPhone || cleanPhone.length < 10) {
             return { isValid: false, error: 'O WhatsApp é obrigatório com DDD (mínimo 10 dígitos).' };
@@ -351,6 +386,9 @@ export function useRegistrationForm({
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(formData.email.trim())) {
               return { isValid: false, error: 'Informe um e-mail válido.' };
+            }
+            if (emailConflictWarning) {
+              return { isValid: false, error: emailConflictWarning };
             }
           }
         }
@@ -423,7 +461,7 @@ export function useRegistrationForm({
 
       return { isValid: true };
     },
-    [formData, isSimplified, nameConflictWarning, conflictingCategoryIds, groupConflictCategoryIds, categoryVacancyMap, event.categories, event.regulationUrl, requiresPartnerDetails]
+    [formData, isSimplified, nameConflictWarning, emailConflictWarning, conflictingCategoryIds, groupConflictCategoryIds, categoryVacancyMap, event.categories, event.regulationUrl, requiresPartnerDetails]
   );
 
   const canProceedToNext = useMemo(() => isStepValid(currentStep).isValid, [currentStep, isStepValid]);
@@ -560,6 +598,7 @@ export function useRegistrationForm({
     requiresPartnerDetails,
     isSimplified,
     nameConflictWarning,
+    emailConflictWarning,
     conflictingCategoryIds,
     groupConflictCategoryIds,
     isStepValid,

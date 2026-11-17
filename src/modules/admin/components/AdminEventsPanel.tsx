@@ -1,6 +1,6 @@
 import React, { useState, type RefObject } from 'react';
 import { Loader2, Plus, Ticket } from 'lucide-react';
-import type { TournamentEntry, TournamentEvent } from '@modules/events/types';
+import { deduplicateTournamentEntries, type TournamentEntry, type TournamentEvent } from '@modules/events/types';
 import { findUsersByPins, getDb } from '@infra/firebase';
 import { ensureEventEntriesRegistrationIds, fetchEventByPin, fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
@@ -154,7 +154,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             sponsors: (freshEventDoc.sponsors as any) || freshestEvent.sponsors || [],
           } : {}),
         };
-        const entries: TournamentEntry[] = (fetchedEntries || []).map((fe) => ({
+        const entries: TournamentEntry[] = deduplicateTournamentEntries((fetchedEntries || []).map((fe) => ({
           registrationId: fe.registrationId,
           email: fe.email,
           name: fe.name,
@@ -176,7 +176,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           partnerEmail: fe.partnerEmail,
           partnerPhone: fe.partnerPhone,
           categoryPartners: fe.categoryPartners,
-        }));
+        })));
         setSelectedDashboardEvent({ ...baseEvent, entries });
       } else {
         setSelectedDashboardEvent(freshestEvent);
@@ -194,7 +194,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
     if (!db) return;
     return subscribeEventEntries(db, selectedDashboardEvent.pin, (freshEntries) => {
       void ensureEventEntriesRegistrationIds(db, selectedDashboardEvent.pin, freshEntries).then((withIds) => {
-        const entries: TournamentEntry[] = withIds.map((fe) => ({
+        const entries: TournamentEntry[] = deduplicateTournamentEntries(withIds.map((fe) => ({
           registrationId: fe.registrationId,
           email: fe.email,
           name: fe.name,
@@ -214,7 +214,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           partnerEmail: fe.partnerEmail,
           partnerPhone: fe.partnerPhone,
           categoryPartners: fe.categoryPartners,
-        }));
+        })));
         setSelectedDashboardEvent((current) => current ? { ...current, entries } : current);
       });
     });

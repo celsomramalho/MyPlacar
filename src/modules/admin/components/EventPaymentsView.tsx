@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Eye, CheckCircle2, Search, X, Trash2, RotateCcw, AlertTriangle, ShieldCheck, Copy, Check, Share2, Upload, Loader2 } from 'lucide-react';
 import { formatRegistrationId, type PaymentItem, type TournamentEvent, type TournamentEntry, type PaymentStatus } from '@modules/events/types';
 import { getPaymentReviewStatus, type PaymentReviewStatus } from '@modules/events/services/eventPaymentStats';
+import { calculateRegistrationPrice } from '@modules/events/domain/registration/engine/pricingEngine';
 import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 import { buildPixBrCode } from '@shared/utils/pixBrCode';
 import { buildPixTxid } from '@shared/utils/pixTxid';
@@ -159,7 +160,11 @@ export const EventPaymentsView: React.FC<Props> = ({ event, onUpdateEvent }) => 
 
   entries.forEach((entry) => {
     const showEntry = matchesSearch(entry);
-    const entryDue = entry.dueAmount ?? (event.registrationFee || 0);
+    // entryDue: recalcula com base nas categorias atuais e usa o maior entre o gravado e o calculado.
+    // Isso corrige casos onde entry.dueAmount foi salvo com valor desatualizado (ex: pagamento parcial antigo).
+    const calculatedDue = calculateRegistrationPrice(entry.categoryIds || [], event).dueAmount;
+    const storedDue = entry.dueAmount ?? (event.registrationFee || 0);
+    const entryDue = Math.max(storedDue, calculatedDue);
     const catStr = getCategoriesText(entry);
     const isCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
     const isExempt = entry.paymentStatus === 'Isento' || entry.payments?.some((p) => p.status === 'Isento');

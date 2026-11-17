@@ -1,4 +1,5 @@
 import type { TournamentEvent, TournamentEntry, PaymentItem } from '../types';
+import { calculateRegistrationPrice } from '../domain/registration/engine/pricingEngine';
 
 export interface EventPaymentStats {
   totalDue: number;
@@ -81,7 +82,10 @@ export const getEventPaymentStats = (event: TournamentEvent): EventPaymentStats 
   entries.forEach((entry) => {
     const isCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
     const isExempt = entry.paymentStatus === 'Isento' || entry.payments?.some((p) => p.status === 'Isento');
-    const entryDue = isExempt ? 0 : (entry.dueAmount ?? defaultFee);
+    // Recalcula o valor devido com base nas categorias para corrigir entry.dueAmount desatualizado
+    const calculatedDue = calculateRegistrationPrice(entry.categoryIds || [], event).dueAmount;
+    const storedDue = entry.dueAmount ?? defaultFee;
+    const entryDue = isExempt ? 0 : Math.max(storedDue, calculatedDue);
 
     // Soma ao total devido apenas inscrições ativas (não canceladas) e não isentas
     if (!isCancelled && !isExempt) {

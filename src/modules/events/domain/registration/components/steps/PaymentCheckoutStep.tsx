@@ -80,7 +80,10 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
 }) => {
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
   const [pendingPaymentDeletion, setPendingPaymentDeletion] = useState<{ paymentId: string; payment: PaymentItem } | null>(null);
-  const isFullyPaid = pricing.dueAmount > 0 && totalPaid >= pricing.dueAmount;
+  const isExempt =
+    entry.paymentStatus === 'Isento' ||
+    existingPayments.some((p) => p.status === 'Isento');
+  const isFullyPaid = isExempt || (pricing.dueAmount > 0 && totalPaid >= pricing.dueAmount);
 
   const handlePaymentStatusChange = async (
     paymentId: string,
@@ -107,8 +110,8 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
   };
 
   const isPaymentConfirmed = (item: PaymentItem) =>
-    item.status === 'Confirmado' || item.status === 'approved' || item.status === 'Pago' ||
-    (!item.status && (entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago'));
+    item.status === 'Confirmado' || item.status === 'approved' || item.status === 'Pago' || item.status === 'Isento' ||
+    (!item.status && (entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || entry.paymentStatus === 'Isento'));
 
   // Se o tipo de pagamento do evento é manual, inicia sempre no modo manual
   const eventPaymentType = String(event.paymentType ?? 'manual').trim().toLowerCase();
@@ -480,15 +483,19 @@ export const PaymentCheckoutStep: React.FC<PaymentCheckoutStepProps> = ({
             )}
           </label>
 
-          {/* Se a inscrição está 100% quitada */}
-          {!requiresReceipt && hasExistingReceipt && isFullyPaid && !payment.manualReceiptFile && (
+          {/* Se a inscrição está 100% quitada ou isenta */}
+          {(!requiresReceipt || isExempt) && (hasExistingReceipt || isExempt) && isFullyPaid && !payment.manualReceiptFile && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
               <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-              <span>Inscrição totalmente quitada pelos comprovantes anteriores. O envio de um novo arquivo é opcional.</span>
+              <span>
+                {isExempt
+                  ? 'Inscrição com taxa isenta ou dispensada. O envio de um novo arquivo é opcional.'
+                  : 'Inscrição totalmente quitada pelos comprovantes anteriores. O envio de um novo arquivo é opcional.'}
+              </span>
             </div>
           )}
 
-          {!requiresReceipt && hasExistingReceipt && !isFullyPaid && !payment.manualReceiptFile && (
+          {!requiresReceipt && !isExempt && hasExistingReceipt && !isFullyPaid && !payment.manualReceiptFile && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-800 flex items-center gap-2">
               <AlertCircle size={16} className="text-amber-600 shrink-0" />
               <span>Comprovantes enviados e aguardando confirmação do organizador.</span>

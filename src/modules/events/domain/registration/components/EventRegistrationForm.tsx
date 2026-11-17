@@ -188,9 +188,9 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   }, [entry.payments, entry.paidAmount, entry.dueAmount, entry.joinedAt, entry.pin, entry.paymentStatus, localPaymentsOverride, form.pricing.dueAmount]);
 
   const totalPaid = useMemo(() => {
-    const entryIsConfirmed = entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago';
+    const entryIsConfirmed = entry.paymentStatus === 'Confirmado' || entry.paymentStatus === 'Pago' || entry.paymentStatus === 'Isento';
     return existingPayments.reduce((acc, curr) => {
-      const isConfirmedPayment = curr.status === 'Confirmado' || curr.status === 'approved' || curr.status === 'Pago';
+      const isConfirmedPayment = curr.status === 'Confirmado' || curr.status === 'approved' || curr.status === 'Pago' || curr.status === 'Isento';
       const isLegacyConfirmedPayment = !curr.status && entryIsConfirmed;
       return acc + (isConfirmedPayment || isLegacyConfirmedPayment ? (curr.amount || 0) : 0);
     }, 0);
@@ -203,17 +203,21 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     [existingPayments]
   );
 
+  const isExempt =
+    entry.paymentStatus === 'Isento' ||
+    existingPayments.some((p) => p.status === 'Isento');
+
   const currentDueAmount = form.pricing.dueAmount;
   const teamFormationMode = resolveTeamFormationMode(event);
   const canFormTeamAtRegistration = teamFormationMode === 'registration' || teamFormationMode === 'registration_and_event';
-  const pendingAmount = Math.max(0, currentDueAmount - totalSubmitted);
-  const isFullyPaid = currentDueAmount > 0 && totalPaid >= currentDueAmount;
+  const pendingAmount = isExempt ? 0 : Math.max(0, currentDueAmount - Math.max(totalSubmitted, totalPaid));
+  const isFullyPaid = isExempt || (currentDueAmount > 0 && totalPaid >= currentDueAmount);
   const hasExistingReceipt = existingPayments.some((p) => Boolean(p.receiptUrl));
   const isManualPaymentEvent = String(event.paymentType || 'manual').trim().toLowerCase() === 'manual';
 
   // Comprovante é obrigatório se: o evento exige (requiresReceipt !== false), pagamento manual, não é gratuito e ainda há saldo pendente ou sem comprovante
   const eventRequiresReceipt = event.requiresReceipt !== false; // default true
-  const requiresReceipt = isManualPaymentEvent && eventRequiresReceipt && !form.pricing.isFree && (pendingAmount > 0 || !hasExistingReceipt);
+  const requiresReceipt = !isExempt && isManualPaymentEvent && eventRequiresReceipt && !form.pricing.isFree && (pendingAmount > 0 || !hasExistingReceipt);
 
   // ── Formação de Time ─────────────────────────────────────────────────────────
   const handleFormTeam = useCallback(async (categoryId: string, partnerEntry: TournamentEntry) => {
@@ -485,14 +489,14 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       await onSave(updatedEntry);
     } else if (onSaveDraft) {
       await onSaveDraft(updatedEntry);
-    }
-
-    if (onUpdateEvent) {
-      const updatedEntries = (event.entries || []).map((item) =>
-        (item.pin && item.pin === updatedEntry.pin) ||
-        (item.email && item.email === updatedEntry.email)
-          ? updatedEntry
-          : item
+    } else if (onUpdateEvent) {
+      const updatedEntries = deduplicateTournamentEntries(
+        (event.entries || []).map((item) =>
+          (item.pin && item.pin === updatedEntry.pin) ||
+          (item.email && item.email === updatedEntry.email)
+            ? updatedEntry
+            : item
+        )
       );
       onUpdateEvent({ ...event, entries: updatedEntries });
     }
@@ -549,17 +553,21 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       paymentStatus,
     };
 
-    if (onSave) await onSave(updatedEntry);
-    else if (onSaveDraft) await onSaveDraft(updatedEntry);
-    setLocalPaymentsOverride(updatedPayments);
-    if (onUpdateEvent) {
-      const updatedEntries = (event.entries || []).map((item) =>
-        (item.pin && item.pin === updatedEntry.pin) || (item.email && item.email === updatedEntry.email)
-          ? updatedEntry
-          : item
+    if (onSave) {
+      await onSave(updatedEntry);
+    } else if (onSaveDraft) {
+      await onSaveDraft(updatedEntry);
+    } else if (onUpdateEvent) {
+      const updatedEntries = deduplicateTournamentEntries(
+        (event.entries || []).map((item) =>
+          (item.pin && item.pin === updatedEntry.pin) || (item.email && item.email === updatedEntry.email)
+            ? updatedEntry
+            : item
+        )
       );
       onUpdateEvent({ ...event, entries: updatedEntries });
     }
+    setLocalPaymentsOverride(updatedPayments);
   };
 
   const handleSubmit = async () => {
@@ -794,6 +802,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
   const isConfirmedOrPaid =
     entry.paymentStatus === 'Confirmado' ||
     entry.paymentStatus === 'Pago' ||
+    entry.paymentStatus === 'Isento' ||
+    isExempt ||
     (form.pricing.isFree && isPreRegistered) ||
     isFullyPaid;
 
@@ -923,6 +933,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             readOnly={readOnly}
             isSimplified={form.isSimplified}
             nameConflictWarning={form.nameConflictWarning}
+            emailConflictWarning={form.emailConflictWarning}
             disableIdentity={disableIdentity || isConfirmedUserBound}
             onConfirmUser={handleConfirmUser}
           />
