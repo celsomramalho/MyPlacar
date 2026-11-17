@@ -61,7 +61,7 @@ import type { Firestore } from 'firebase/firestore';
 import { copyToClipboard } from '@shared/utils/clipboard';
 import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
 import type { ModalConfig } from '@modules/ui/types';
-import { EventRegistrationForm } from '../domain/registration';
+import { EventRegistrationForm, hasAvailableVacanciesForAthlete } from '../domain/registration';
 import { RankingStandingStatsBlock } from '../components/RankingStandingStatsBlock';
 import { Super8StandingStatsBlock } from '../components/Super8StandingStatsBlock';
 import { TechnicalTieDrawModal } from '../components/TechnicalTieDrawModal';
@@ -2233,6 +2233,25 @@ export const EventDetailScreen: React.FC<Props> = ({
           ) : (
             (() => {
               const period = getRegistrationPeriodStatus(event);
+              const vacancyStatus = hasAvailableVacanciesForAthlete(event, userProfile?.gender, entries, userProfile?.email, userProfile?.pin);
+              if (period.isOpen && !vacancyStatus.hasVacancies) {
+                return (
+                  <div className="bg-rose-50/70 p-4 rounded-3xl border border-rose-200/80 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-black text-rose-950">Inscrição no torneio</p>
+                      <p className="text-[11px] font-bold text-rose-700/80">
+                        Vagas esgotadas para as categorias compatíveis com seu perfil.
+                      </p>
+                      <p className="text-[11px] font-bold text-slate-500 mt-0.5">
+                        {period.message}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-black tracking-wider px-3 py-1.5 rounded-xl bg-rose-100 text-rose-700 border border-rose-200 shrink-0 self-start sm:self-center">
+                      Vagas esgotadas
+                    </span>
+                  </div>
+                );
+              }
               if (period.isOpen) {
                 return (
                   <div className="bg-white p-4 rounded-3xl border border-emerald-200/80 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

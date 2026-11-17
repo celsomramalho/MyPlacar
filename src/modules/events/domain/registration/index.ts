@@ -29,7 +29,11 @@ export {
 export {
   calculateCategoryVacancy,
   buildCategoryOccupancyCountMap,
+  buildCategoryGenderOccupancyCountMap,
   buildCategoryConfirmedCountMap,
+  isCategoryMixed,
+  isCategoryCompatibleWithGender,
+  hasAvailableVacanciesForAthlete,
 } from './engine/vacancyCalculator';
 
 export {

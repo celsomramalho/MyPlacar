@@ -21,6 +21,8 @@ export interface PartnerSelectionStepProps {
   onFormTeam?: (categoryId: string, partnerEntry: TournamentEntry) => Promise<void>;
   /** Se o atleta atual está cancelado/desativado */
   isSelfCancelled?: boolean;
+  /** Nome ou apelido do atleta que está realizando a inscrição */
+  currentAthleteName?: string;
 }
 
 const formatPhone = (value: string) => {
@@ -43,6 +45,7 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
   getPairForEmailInCategory,
   onFormTeam,
   isSelfCancelled = false,
+  currentAthleteName,
 }) => {
   const [isForming, setIsForming] = useState(false);
   const [searchingCatId, setSearchingCatId] = useState<string | null>(null);
@@ -320,10 +323,17 @@ export const PartnerSelectionStep: React.FC<PartnerSelectionStepProps> = ({
                   type="button"
                   disabled={isForming}
                   onClick={() => handleFormTeam(cat.id, partnerEntry!)}
-                  className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
+                  className="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-black text-white transition-all active:scale-95 flex items-center justify-center gap-2.5 shadow-sm disabled:opacity-50 cursor-pointer"
                 >
-                  <UserCheck size={14} />
-                  {isForming ? 'Formando dupla...' : `Confirmar dupla com ${partnerEntry!.nickname || partnerEntry!.name}`}
+                  <UserCheck size={18} className="shrink-0" />
+                  {isForming ? (
+                    <span>Formando dupla e salvando...</span>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center leading-tight py-0.5">
+                      <span>Confirmar dupla de {currentAthleteName || 'Atleta'}</span>
+                      <span className="text-[11px] font-bold text-blue-100">com {partnerEntry!.nickname || partnerEntry!.name}</span>
+                    </div>
+                  )}
                 </button>
               )}
 

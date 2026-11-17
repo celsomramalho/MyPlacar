@@ -75,6 +75,9 @@ import {
   calculateCategoryVacancy,
   buildCategoryConfirmedCountMap,
   validateCategoryPartner,
+  isCategoryMixed,
+  isCategoryCompatibleWithGender,
+  hasAvailableVacanciesForAthlete,
 } from '../../src/modules/events/domain/registration';
 
 // ─── Grupo 1: Regras Financeiras e Tarifação (Pricing) ───────────────────────
@@ -567,5 +570,101 @@ describe('R-T21 e R-T22 – Detecção de Formação de Duplas e Validação de 
     expect(deduplicated[0].name).toBe('Willian Gabriel Gomes');
     expect(deduplicated[0].email).toBe('wilgabriel27@gmail.com');
     expect(deduplicated[1].name).toBe('Aline Aparecida Silvano');
+  });
+});
+
+// ─── Grupo 7: Vagas por Gênero (hasAvailableVacanciesForAthlete) ─────────────
+
+describe('R-T26 a R-T30 – Verificação de Vagas por Gênero', () => {
+  const makeEventWithCategories = (categories: EventCategory[], entries: TournamentEntry[] = []): Pick<TournamentEvent, 'categories' | 'entries'> => ({
+    categories,
+    entries,
+  });
+
+  it('R-T26: isCategoryMixed detecta misto por gender1/gender2', () => {
+    const catMF = makeCategory({ id: 'mf', gender1: 'M', gender2: 'F' });
+    const catFF = makeCategory({ id: 'ff', gender1: 'F', gender2: 'F' });
+    const catMM = makeCategory({ id: 'mm', gender1: 'M', gender2: 'M' });
+    expect(isCategoryMixed(catMF)).toBe(true);
+    expect(isCategoryMixed(catFF)).toBe(false);
+    expect(isCategoryMixed(catMM)).toBe(false);
+  });
+
+  it('R-T27: isCategoryMixed detecta misto por nome da categoria', () => {
+    const catByName = makeCategory({ id: 'n1', name: 'Super 8 Misto D', gender1: undefined, gender2: undefined });
+    const catMasc = makeCategory({ id: 'n2', name: 'Super 8 Masculino D', gender1: undefined, gender2: undefined });
+    expect(isCategoryMixed(catByName)).toBe(true);
+    expect(isCategoryMixed(catMasc)).toBe(false);
+  });
+
+  it('R-T28: isCategoryCompatibleWithGender filtra corretamente por gênero', () => {
+    const catFem = makeCategory({ id: 'f1', gender1: 'F', gender2: 'F' });
+    const catMasc = makeCategory({ id: 'm1', gender1: 'M', gender2: 'M' });
+    const catMisto = makeCategory({ id: 'mix', gender1: 'M', gender2: 'F' });
+    const catOpen = makeCategory({ id: 'open' }); // sem restrição
+
+    expect(isCategoryCompatibleWithGender(catFem, 'F')).toBe(true);
+    expect(isCategoryCompatibleWithGender(catFem, 'M')).toBe(false);
+    expect(isCategoryCompatibleWithGender(catMasc, 'M')).toBe(true);
+    expect(isCategoryCompatibleWithGender(catMasc, 'F')).toBe(false);
+    expect(isCategoryCompatibleWithGender(catMisto, 'M')).toBe(true);
+    expect(isCategoryCompatibleWithGender(catMisto, 'F')).toBe(true);
+    expect(isCategoryCompatibleWithGender(catOpen, 'M')).toBe(true);
+    expect(isCategoryCompatibleWithGender(catOpen, 'F')).toBe(true);
+  });
+
+  it('R-T29: hasAvailableVacanciesForAthlete retorna false quando categorias compatíveis estão cheias', () => {
+    const catFem = makeCategory({ id: 'f1', name: 'Feminino D', maxPlayers: 2, gender1: 'F', gender2: 'F' });
+    const entries = [
+      makeEntry({ email: 'a@a.com', gender: 'F', categoryIds: ['f1'] }),
+      makeEntry({ email: 'b@b.com', gender: 'F', categoryIds: ['f1'] }),
+    ];
+    const event = makeEventWithCategories([catFem]);
+    const result = hasAvailableVacanciesForAthlete(event, 'F', entries);
+    expect(result.hasVacancies).toBe(false);
+  });
+
+  it('R-T30: hasAvailableVacanciesForAthlete retorna false quando cota de gênero em categoria mista está esgotada', () => {
+    const catMisto = makeCategory({ id: 'mix', name: 'Super 8 Misto D', maxPlayers: 4, gender1: 'M', gender2: 'F' });
+    // 2 vagas para M (ceil(4/2)), 2 para F — M já preencheu as 2 cotas
+    const entries = [
+      makeEntry({ email: 'm1@a.com', gender: 'M', categoryIds: ['mix'] }),
+      makeEntry({ email: 'm2@a.com', gender: 'M', categoryIds: ['mix'] }),
+    ];
+    const event = makeEventWithCategories([catMisto]);
+    const resultM = hasAvailableVacanciesForAthlete(event, 'M', entries);
+    const resultF = hasAvailableVacanciesForAthlete(event, 'F', entries);
+    expect(resultM.hasVacancies).toBe(false);
+    expect(resultF.hasVacancies).toBe(true);
+  });
+
+  it('R-T31: hasAvailableVacanciesForAthlete retorna false quando atleta já está inscrito no único grupo disponível', () => {
+    // Cenário: Masculino D (1 vaga restante) e Masculino C (cheio) no mesmo grupo "Masculino"
+    // Atleta já inscrito em Masculino C → grupo "Masculino" bloqueado → sem vagas disponíveis
+    const catMascD = makeCategory({ id: 'masc-d', name: 'Super 8 Masculino D', maxPlayers: 8, gender1: 'M', gender2: 'M', categoryGroup: 'Masculino' });
+    const catMascC = makeCategory({ id: 'masc-c', name: 'Super 8 Masculino C', maxPlayers: 8, gender1: 'M', gender2: 'M', categoryGroup: 'Masculino' });
+    const entries = [
+      // 7 atletas em Masculino D (1 vaga restante)
+      makeEntry({ email: 'a@a.com', gender: 'M', categoryIds: ['masc-d'] }),
+      makeEntry({ email: 'b@b.com', gender: 'M', categoryIds: ['masc-d'] }),
+      makeEntry({ email: 'c@c.com', gender: 'M', categoryIds: ['masc-d'] }),
+      makeEntry({ email: 'd@d.com', gender: 'M', categoryIds: ['masc-d'] }),
+      makeEntry({ email: 'e@e.com', gender: 'M', categoryIds: ['masc-d'] }),
+      makeEntry({ email: 'f@f.com', gender: 'M', categoryIds: ['masc-d'] }),
+      makeEntry({ email: 'g@g.com', gender: 'M', categoryIds: ['masc-d'] }),
+      // 8 atletas em Masculino C (cheio)
+      ...Array.from({ length: 8 }, (_, i) => makeEntry({ email: `m${i}@c.com`, gender: 'M', categoryIds: ['masc-c'] })),
+      // Atleta alvo inscrito em Masculino C
+      makeEntry({ email: 'atleta@teste.com', pin: 'ATPIN', gender: 'M', categoryIds: ['masc-c'] }),
+    ];
+    const event = makeEventWithCategories([catMascD, catMascC]);
+
+    // Sem informar email/pin do atleta: a vaga em Masculino D parece disponível
+    const semAtleta = hasAvailableVacanciesForAthlete(event, 'M', entries);
+    expect(semAtleta.hasVacancies).toBe(true); // 1 vaga no Masculino D (grupo ainda aparece disponível sem info do atleta)
+
+    // Com email do atleta: detecta que já está no grupo Masculino → sem vagas
+    const comAtleta = hasAvailableVacanciesForAthlete(event, 'M', entries, 'atleta@teste.com', 'ATPIN');
+    expect(comAtleta.hasVacancies).toBe(false);
   });
 });

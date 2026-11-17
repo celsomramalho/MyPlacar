@@ -3,10 +3,10 @@ import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, 
 import { getDb, updateEvent, saveEventEntry } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { fetchActiveEvents } from '../services/fetchActiveEvents';
-import { fetchEventByPin, fetchEventEntry } from '@infra/firebase/events';
+import { fetchEventByPin, fetchEventEntry, fetchEventEntries } from '@infra/firebase/events';
 import type { EventRegistration, TournamentEntry, TournamentEvent } from '../types';
 import type { UserProfile } from '@modules/auth/types';
-import { EventRegistrationForm } from '../domain/registration';
+import { EventRegistrationForm, hasAvailableVacanciesForAthlete } from '../domain/registration';
 import { canUseEventAdminAccess, isCoAdminOfEvent, isEventHelper, isJudgeOfEvent, isPrimaryAdminEmail } from '../services/eventAdminAccess';
 import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
 import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
@@ -35,6 +35,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
   const [isLoadingActive, setIsLoadingActive] = useState(true);
   const [directRegistrationPins, setDirectRegistrationPins] = useState<Set<string>>(new Set());
   const [isCheckingDirectRegistrations, setIsCheckingDirectRegistrations] = useState(true);
+  const [activeEventsEntriesMap, setActiveEventsEntriesMap] = useState<Record<string, TournamentEntry[]>>({});
 
   // Pre-join form state
   const [pendingEvent, setPendingEvent] = useState<TournamentEvent | null>(null);
@@ -136,6 +137,37 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     return () => { isMounted = false; };
   }, [activeEventPinsKey, userProfile?.email]);
 
+  // Carrega inscrições dos eventos ativos para validação de vagas por gênero
+  useEffect(() => {
+    const db = getDb();
+    if (!db || activeEventPins.length === 0) {
+      setActiveEventsEntriesMap({});
+      return;
+    }
+
+    let isMounted = true;
+    Promise.all(
+      activeEventPins.map(async (eventPin) => {
+        try {
+          const entries = (await fetchEventEntries(db as Firestore, eventPin)) as unknown as TournamentEntry[];
+          return { pin: eventPin.toUpperCase(), entries };
+        } catch {
+          return { pin: eventPin.toUpperCase(), entries: [] };
+        }
+      })
+    ).then((results) => {
+      if (isMounted) {
+        const map: Record<string, TournamentEntry[]> = {};
+        for (const res of results) {
+          map[res.pin] = res.entries;
+        }
+        setActiveEventsEntriesMap(map);
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [activeEventPinsKey]);
+
   // Para cada inscrição que NÃO está em activeEvents, buscar o evento completo para checar coAdminPins
   useEffect(() => {
     if (!userProfile?.pin && !isPrimaryAdminEmail(userProfile?.email)) return;
@@ -182,11 +214,27 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
       return;
     }
 
+    const cachedEntries = activeEventsEntriesMap[ev.pin.toUpperCase()] || ev.entries;
+    const vacancyStatus = hasAvailableVacanciesForAthlete(ev, userProfile?.gender, cachedEntries, userProfile?.email, userProfile?.pin);
+    if (!vacancyStatus.hasVacancies) {
+      onSelectEvent({ pin: ev.pin, name: ev.name, joinedAt: 0 });
+      return;
+    }
+
     const db = getDb();
     const freshEvent = db ? await fetchEventByPin(db as Firestore, ev.pin) : null;
     const targetEvent = (freshEvent as TournamentEvent | null) || ev;
     const freshPeriod = getRegistrationPeriodStatus(targetEvent);
     if (!freshPeriod.isOpen) {
+      onSelectEvent({ pin: targetEvent.pin, name: targetEvent.name, joinedAt: 0 });
+      return;
+    }
+
+    const freshEntries = db
+      ? ((await fetchEventEntries(db as Firestore, targetEvent.pin).catch(() => cachedEntries || [])) as unknown as TournamentEntry[])
+      : (cachedEntries || []);
+    const freshVacancy = hasAvailableVacanciesForAthlete(targetEvent, userProfile?.gender, freshEntries, userProfile?.email, userProfile?.pin);
+    if (!freshVacancy.hasVacancies) {
       onSelectEvent({ pin: targetEvent.pin, name: targetEvent.name, joinedAt: 0 });
       return;
     }
@@ -212,13 +260,24 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
     const event = db ? await fetchEventByPin(db as Firestore, targetPin) : null;
     setIsSearching(false);
     if (event) {
-      const period = getRegistrationPeriodStatus(event as TournamentEvent);
+      const targetEvent = event as TournamentEvent;
+      const period = getRegistrationPeriodStatus(targetEvent);
       if (!period.isOpen) {
-        onSelectEvent({ pin: (event as TournamentEvent).pin, name: (event as TournamentEvent).name, joinedAt: 0 });
+        onSelectEvent({ pin: targetEvent.pin, name: targetEvent.name, joinedAt: 0 });
         setPendingPin(null);
         return;
       }
-      setPendingEvent(event as TournamentEvent);
+      const entries = db
+        ? ((await fetchEventEntries(db as Firestore, targetEvent.pin).catch(() => targetEvent.entries || [])) as unknown as TournamentEntry[])
+        : (targetEvent.entries || []);
+      const vacancy = hasAvailableVacanciesForAthlete(targetEvent, userProfile?.gender, entries, userProfile?.email, userProfile?.pin);
+      if (!vacancy.hasVacancies) {
+        alert('As vagas para as categorias compatíveis com seu perfil estão esgotadas neste evento.');
+        onSelectEvent({ pin: targetEvent.pin, name: targetEvent.name, joinedAt: 0 });
+        setPendingPin(null);
+        return;
+      }
+      setPendingEvent(targetEvent);
     } else {
       alert('Torneio não encontrado com o PIN informado ou está inativo.');
       setPendingPin(null);
@@ -457,6 +516,9 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
               {availableEvents.map((ev) => {
                 const isJoiningThis = isSearching && joiningPin === ev.pin;
                 const period = getRegistrationPeriodStatus(ev);
+                const entries = activeEventsEntriesMap[ev.pin.toUpperCase()] || ev.entries;
+                const vacancy = hasAvailableVacanciesForAthlete(ev, userProfile?.gender, entries, userProfile?.email, userProfile?.pin);
+                const hasVacancies = vacancy.hasVacancies;
                 return (
                   <button
                     key={ev.pin}
@@ -502,6 +564,10 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                     <div className="shrink-0 pl-2">
                       {isJoiningThis ? (
                         <Loader2 size={20} className="animate-spin text-emerald-500" />
+                      ) : !hasVacancies ? (
+                        <span className="bg-rose-50 text-rose-600 border border-rose-200 text-[10px] font-black px-2.5 py-1.5 rounded-xl shadow-2xs">
+                          Vagas esgotadas
+                        </span>
                       ) : period.isOpen ? (
                         <span className="bg-emerald-500 text-white text-[11px] font-black px-3 py-1.5 rounded-xl group-hover:bg-emerald-600 transition-colors shadow-sm">
                           Inscrever-se

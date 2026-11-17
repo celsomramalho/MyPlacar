@@ -190,7 +190,13 @@ export const updateUserProfileFields = (
     passkeyCredentialId?: string;
     passkeyPublicKey?: string;
   },
-) => updateDoc(doc(db, 'users', email.toLowerCase().trim()), data);
+) => setDoc(doc(db, 'users', email.toLowerCase().trim()), data, { merge: true });
+
+export const updateUserGender = (
+  db: Firestore,
+  email: string,
+  gender: 'M' | 'F',
+) => setDoc(doc(db, 'users', email.toLowerCase().trim()), { gender }, { merge: true });
 
 export const searchUserProfiles = async (
   db: Firestore,
@@ -247,6 +253,8 @@ export const searchUserProfiles = async (
           userCreatedAtMs = getUserAddedAt(data);
         }
 
+        const resolvedGender = (data.gender === 'F' ? 'F' : 'M') as 'M' | 'F';
+
         results.push({
           ...(data as UserProfile),
           email: data.email || (docSnapshot.id.includes('@') ? docSnapshot.id : ''),
@@ -256,6 +264,7 @@ export const searchUserProfiles = async (
           pin: data.pin || (!docSnapshot.id.includes('@') ? docSnapshot.id : ''),
           isProfileComplete: Boolean(data.isProfileComplete),
           createdAt: userCreatedAtMs || data.createdAt,
+          gender: resolvedGender,
         });
       }
     });

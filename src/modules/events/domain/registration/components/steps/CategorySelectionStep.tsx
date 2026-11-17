@@ -1,5 +1,6 @@
 import React from 'react';
 import { Layers, CheckCircle2, AlertTriangle, Users, DollarSign } from 'lucide-react';
+import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import type { EventCategory } from '@modules/events/types';
 import type { PricingCalculationResult, CategoryVacancyResult } from '../../types';
 
@@ -13,6 +14,8 @@ export interface CategorySelectionStepProps {
   conflictingCategoryIds?: string[];
   groupConflictCategoryIds?: string[];
   nickname?: string;
+  gender?: 'M' | 'F';
+  onGenderChange?: (gender: 'M' | 'F') => void;
 }
 
 export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
@@ -25,6 +28,8 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
   conflictingCategoryIds = [],
   groupConflictCategoryIds = [],
   nickname = '',
+  gender = 'M',
+  onGenderChange,
 }) => {
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
@@ -36,6 +41,67 @@ export const CategorySelectionStep: React.FC<CategorySelectionStepProps> = ({
         <p className="text-xs text-slate-400 font-bold mt-0.5">
           Selecione uma ou mais categorias que deseja disputar.
         </p>
+      </div>
+
+      {/* Banner Informativo de Gênero com Troca Rápida */}
+      <div
+        className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+          gender === 'F'
+            ? 'bg-rose-50/60 border-rose-200/80 text-rose-950'
+            : 'bg-blue-50/60 border-blue-200/80 text-blue-950'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+              gender === 'F' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'
+            }`}
+          >
+            {gender === 'F' ? <VenusIcon size={16} /> : <MarsIcon size={16} />}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-black">
+                Perfil: {gender === 'F' ? 'Feminino' : 'Masculino'}
+              </span>
+              <span
+                className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                  gender === 'F' ? 'bg-rose-100/90 text-rose-700' : 'bg-blue-100/90 text-blue-700'
+                }`}
+              >
+                {gender === 'F' ? 'Categorias Femininas e Mistas' : 'Categorias Masculinas e Mistas'}
+              </span>
+            </div>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+              Exibindo apenas categorias compatíveis com o gênero do atleta.
+            </p>
+          </div>
+        </div>
+
+        {!readOnly && onGenderChange && (
+          <button
+            type="button"
+            onClick={() => onGenderChange(gender === 'F' ? 'M' : 'F')}
+            className={`self-start sm:self-center shrink-0 px-3 py-1.5 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95 ${
+              gender === 'F'
+                ? 'bg-white hover:bg-blue-50 text-slate-700 border-slate-200 hover:border-blue-300'
+                : 'bg-white hover:bg-rose-50 text-slate-700 border-slate-200 hover:border-rose-300'
+            }`}
+            title={`Alterar cadastro para perfil ${gender === 'F' ? 'Masculino' : 'Feminino'}`}
+          >
+            {gender === 'F' ? (
+              <>
+                <span className="text-blue-600 flex items-center"><MarsIcon size={13} /></span>
+                <span>Trocar para <strong className="text-blue-600">Masculino</strong></span>
+              </>
+            ) : (
+              <>
+                <span className="text-rose-600 flex items-center"><VenusIcon size={13} /></span>
+                <span>Trocar para <strong className="text-rose-600">Feminino</strong></span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {categories.length === 0 ? (

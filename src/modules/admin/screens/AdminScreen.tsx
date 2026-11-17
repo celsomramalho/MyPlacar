@@ -12,7 +12,7 @@ import {
 import { deleteLiveMatchesByIds, fetchLiveMatchesStats as fetchFirebaseLiveMatchesStats } from '@infra/firebase/liveMatches';
 import { linkLegacyMatchesToOwnerEmail } from '@infra/firebase/matches';
 import { fetchSystemConfig, saveSystemConfigPatch } from '@infra/firebase/systemConfig';
-import { countUserProfiles, fetchUsersByDateRange, migrateUsersCreatedAtToTimestamp, searchUserProfiles, type FirebaseUserWithCreatedAt } from '@infra/firebase/users';
+import { countUserProfiles, fetchUsersByDateRange, migrateUsersCreatedAtToTimestamp, searchUserProfiles, updateUserGender, type FirebaseUserWithCreatedAt } from '@infra/firebase/users';
 import { AdminConfirmModals, type AdminDeleteConfirm } from '@modules/admin/components/AdminConfirmModals';
 import { AdminEventsPanel } from '@modules/admin/components/AdminEventsPanel';
 import { AdminHeader } from '@modules/admin/components/AdminHeader';
@@ -587,6 +587,56 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     } catch (_e) { setStatus({ type: 'error', msg: "Falha ao atualizar plano." }); }
   };
 
+  const toggleUserGender = async (user: UserProfile) => {
+    const db = getDb();
+    if (!db) return;
+    const currentGender: 'M' | 'F' = user.gender === 'F' ? 'F' : 'M';
+    const nextGender: 'M' | 'F' = currentGender === 'M' ? 'F' : 'M';
+    const userTargetEmail = (user.email || '').toLowerCase().trim();
+
+    if (!userTargetEmail) {
+      setStatus({ type: 'error', msg: 'Usuário sem e-mail válido para salvar.' });
+      setTimeout(() => setStatus(null), 2500);
+      return;
+    }
+
+    // Atualização otimista imediata na interface
+    setFoundUsers(prev =>
+      prev.map(u => (u.email?.toLowerCase().trim() === userTargetEmail ? { ...u, gender: nextGender } : u))
+    );
+    setPeriodUsers(prev =>
+      prev.map(u =>
+        (u.email?.toLowerCase().trim() === userTargetEmail || u.id?.toLowerCase().trim() === userTargetEmail)
+          ? { ...u, gender: nextGender }
+          : u
+      )
+    );
+
+    try {
+      await updateUserGender(db, userTargetEmail, nextGender);
+      setStatus({
+        type: 'success',
+        msg: `Gênero de ${user.nickname || user.name || userTargetEmail} alterado para ${nextGender === 'F' ? 'Feminino' : 'Masculino'}.`,
+      });
+      setTimeout(() => setStatus(null), 2000);
+    } catch (error) {
+      console.error('Falha ao atualizar gênero do usuário:', error);
+      // Reverte caso falhe
+      setFoundUsers(prev =>
+        prev.map(u => (u.email?.toLowerCase().trim() === userTargetEmail ? { ...u, gender: currentGender } : u))
+      );
+      setPeriodUsers(prev =>
+        prev.map(u =>
+          (u.email?.toLowerCase().trim() === userTargetEmail || u.id?.toLowerCase().trim() === userTargetEmail)
+            ? { ...u, gender: currentGender }
+            : u
+        )
+      );
+      setStatus({ type: 'error', msg: 'Falha ao salvar gênero no banco.' });
+      setTimeout(() => setStatus(null), 2000);
+    }
+  };
+
   const executeFixLegacyMatches = async () => {
     setShowConfirmFix(false);
     setIsFixing(true);
@@ -1086,6 +1136,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             onSearchUsers={() => handleSearchUsers()}
             onClearUserSearch={handleClearUserSearch}
             onToggleUserPremium={toggleUserPremium}
+            onToggleUserGender={toggleUserGender}
             periodFrom={periodFrom}
             periodTo={periodTo}
             periodUsers={periodUsers}

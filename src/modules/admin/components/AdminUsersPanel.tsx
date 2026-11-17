@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Loader2, Search, Star, User, X } from 'lucide-react';
 import type { UserProfile } from '@modules/auth/types';
 import type { FirebaseUserWithCreatedAt } from '@infra/firebase/users';
+import { MarsIcon, VenusIcon } from '@shared/components/GenderIcons';
 import { applyGoldenRule } from '@shared/utils/formatters';
 import { copyToClipboard } from '@shared/utils/clipboard';
 import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
@@ -17,6 +18,7 @@ interface AdminUsersPanelProps {
   onSearchUsers: () => void;
   onClearUserSearch?: () => void;
   onToggleUserPremium: (user: UserProfile) => void;
+  onToggleUserGender?: (user: UserProfile) => void;
   // Inscrições por período
   periodFrom?: string;
   periodTo?: string;
@@ -66,6 +68,7 @@ export const AdminUsersPanel = ({
   onSearchUsers,
   onClearUserSearch,
   onToggleUserPremium,
+  onToggleUserGender,
   periodFrom = '',
   periodTo = '',
   periodUsers = [],
@@ -223,9 +226,27 @@ export const AdminUsersPanel = ({
                     )}
                   </div>
 
-                  {/* Linha 2: Badge Free/Premium e Botão Ativar/Revogar Premium NA MESMA LINHA */}
+                  {/* Linha 2: Badge Free/Premium, Gênero e Botão Ativar/Revogar Premium */}
                   <div className="flex items-center justify-between gap-3">
-                    <div>
+                    <div className="flex items-center gap-2">
+                      {/* Botão de Gênero interativo */}
+                      {onToggleUserGender && (
+                        <button
+                          type="button"
+                          onClick={() => onToggleUserGender(user)}
+                          title={`Gênero: ${user.gender === 'F' ? 'Feminino' : 'Masculino'}. Clique para trocar e salvar automaticamente.`}
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 border transition-all active:scale-90 cursor-pointer shadow-2xs select-none ${
+                            user.gender === 'F'
+                              ? 'bg-pink-50 border-pink-200 text-pink-600 hover:bg-pink-100'
+                              : 'bg-sky-50 border-sky-200 text-sky-600 hover:bg-sky-100'
+                          }`}
+                        >
+                          {user.gender === 'F' ? <VenusIcon size={11} /> : <MarsIcon size={11} />}
+                          <span>{user.gender === 'F' ? 'Feminino' : 'Masculino'}</span>
+                        </button>
+                      )}
+
+                      {/* Badge Free/Premium */}
                       {user.planType === 'premium' ? (
                         <div className="bg-blue-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                           <Star size={8} fill="currentColor" /> Premium
@@ -398,18 +419,45 @@ export const AdminUsersPanel = ({
               return (
                 <div key={user.id} className="bg-slate-50 rounded-2xl px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100/70 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <span
-                      onClick={() => handleCopy(user.nickname || user.name || user.pin || '', `${uKey}_name`)}
-                      className="font-black text-black text-[15px] block truncate cursor-pointer hover:text-blue-600 active:scale-95 transition-all"
-                      title="Clique para copiar o nome"
-                    >
-                      {user.nickname || user.name || user.pin}
-                      {copiedKey === `${uKey}_name` && (
-                        <span className="ml-1 text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200 inline-flex items-center gap-0.5 animate-in fade-in">
-                          <Check size={10} /> Copiado!
-                        </span>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span
+                        onClick={() => handleCopy(user.nickname || user.name || user.pin || '', `${uKey}_name`)}
+                        className="font-black text-black text-[15px] truncate cursor-pointer hover:text-blue-600 active:scale-95 transition-all inline-flex items-center gap-1"
+                        title="Clique para copiar o nome"
+                      >
+                        {user.nickname || user.name || user.pin}
+                        {copiedKey === `${uKey}_name` && (
+                          <span className="ml-1 text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200 inline-flex items-center gap-0.5 animate-in fade-in">
+                            <Check size={10} /> Copiado!
+                          </span>
+                        )}
+                      </span>
+                      {onToggleUserGender && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onToggleUserGender({
+                              email: user.email || user.id,
+                              name: user.name || '',
+                              nickname: user.nickname || '',
+                              phone: user.phone || '',
+                              pin: user.pin || '',
+                              gender: user.gender || 'M',
+                              isProfileComplete: true,
+                            })
+                          }
+                          title={`Gênero: ${user.gender === 'F' ? 'Feminino' : 'Masculino'}. Clique para trocar e salvar.`}
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-black flex items-center gap-0.5 border transition-all active:scale-90 cursor-pointer shadow-2xs select-none ${
+                            user.gender === 'F'
+                              ? 'bg-pink-50 border-pink-200 text-pink-600 hover:bg-pink-100'
+                              : 'bg-sky-50 border-sky-200 text-sky-600 hover:bg-sky-100'
+                          }`}
+                        >
+                          {user.gender === 'F' ? <VenusIcon size={10} /> : <MarsIcon size={10} />}
+                          <span>{user.gender === 'F' ? 'Fem' : 'Masc'}</span>
+                        </button>
                       )}
-                    </span>
+                    </div>
                     <span
                       onClick={() => handleCopy(user.email ?? user.id, `${uKey}_email`)}
                       className="text-xs font-bold text-slate-600 block truncate cursor-pointer hover:text-blue-600 active:scale-95 transition-all"

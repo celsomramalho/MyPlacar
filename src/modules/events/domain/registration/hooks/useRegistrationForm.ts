@@ -24,7 +24,7 @@ import type {
   PricingCalculationResult,
 } from '../types';
 import { calculateRegistrationPrice } from '../engine/pricingEngine';
-import { calculateCategoryVacancy, buildCategoryOccupancyCountMap } from '../engine/vacancyCalculator';
+import { calculateCategoryVacancy, buildCategoryOccupancyCountMap, buildCategoryGenderOccupancyCountMap } from '../engine/vacancyCalculator';
 import { isPreDefinedTeamDraw, requiresPartnerDetails as shouldRequirePartnerDetails } from '../engine/partnerRequirements';
 
 export interface UseRegistrationFormOptions {
@@ -243,16 +243,23 @@ export function useRegistrationForm({
     [liveEntries]
   );
 
+  const genderOccupancyCountMap = useMemo(
+    () => buildCategoryGenderOccupancyCountMap(liveEntries),
+    [liveEntries]
+  );
+
   const categoryVacancyMap = useMemo(() => {
     const map: Record<string, ReturnType<typeof calculateCategoryVacancy>> = {};
     const categories = event.categories || [];
+    const gender = formData.gender || entry.gender;
     for (const cat of categories) {
       const isAlreadyInEntry = (entry.categoryIds || []).includes(cat.id);
       const occupied = occupancyCountMap[cat.id] || 0;
-      map[cat.id] = calculateCategoryVacancy(cat, occupied, isAlreadyInEntry);
+      const genderOccupied = gender ? (genderOccupancyCountMap[cat.id]?.[gender as 'M' | 'F'] || 0) : undefined;
+      map[cat.id] = calculateCategoryVacancy(cat, occupied, isAlreadyInEntry, gender, genderOccupied);
     }
     return map;
-  }, [event, entry.categoryIds, occupancyCountMap]);
+  }, [event.categories, entry.categoryIds, entry.gender, formData.gender, occupancyCountMap, genderOccupancyCountMap]);
 
   const groupConflictCategoryIds = useMemo(() => {
     const categories = event.categories || [];
@@ -428,10 +435,15 @@ export function useRegistrationForm({
       const currentIndex = stepOrder.indexOf(currentStep);
       if (targetIndex > currentIndex) {
         if (!isStepValid(currentStep).isValid) return;
+        if (isNew) {
+          for (let i = currentIndex; i < targetIndex; i++) {
+            if (!isStepValid(stepOrder[i]).isValid) return;
+          }
+        }
       }
       setCurrentStep(target);
     },
-    [currentStep, isStepValid, stepOrder]
+    [currentStep, isNew, isStepValid, stepOrder]
   );
 
   const goToNextStep = useCallback((): boolean => {

@@ -100,6 +100,12 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     (!isAdmin && !isPartnerRegistration && Boolean(userProfile?.email)) ||
     (!isAdmin && isConfirmedUserBound);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [alertModalMessage, setAlertModalMessage] = useState<string | null>(null);
+
+  const showAlert = useCallback((message: string) => {
+    setFeedback(message);
+    setAlertModalMessage(message);
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSavedPreRegistration, setHasSavedPreRegistration] = useState(false);
   const [localPaymentsOverride, setLocalPaymentsOverride] = useState<PaymentItem[] | null>(null);
@@ -215,13 +221,13 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
 
     const isSelfCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
     if (isSelfCancelled || partnerEntry.disabled || partnerEntry.paymentStatus === 'Cancelado') {
-      setFeedback('Não é possível formar time com inscrição cancelada ou desativada.');
+      showAlert('Não é possível formar time com inscrição cancelada ou desativada.');
       return;
     }
 
     const currentEntry = form.getSubmissionEntry();
     if (!(partnerEntry.categoryIds || []).includes(categoryId) || !(currentEntry.categoryIds || []).includes(categoryId)) {
-      setFeedback('Para formar dupla, os dois atletas precisam estar inscritos nesta mesma categoria.');
+      showAlert('Para formar dupla, os dois atletas precisam estar inscritos nesta mesma categoria.');
       return;
     }
     const pairs = event.pairs || [];
@@ -281,8 +287,58 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       ))
     );
 
+    // Salva a inscrição e reserva registrationId se ainda não existir
+    let registrationId = currentEntry.registrationId || entry.registrationId;
+    const db = getDb();
+    if (!registrationId && db && event.pin && currentEntry.email) {
+      try {
+        registrationId = await reserveNextRegistrationId(db as Firestore, event.pin, currentEntry.email);
+        form.updateField('registrationId', registrationId);
+        currentEntry.registrationId = registrationId;
+      } catch (err) {
+        console.warn('Erro ao reservar registrationId em handleFormTeam:', err);
+      }
+    }
+    currentEntry.dueAmount = form.pricing.dueAmount;
+    currentEntry.paymentStatus = currentEntry.paymentStatus || 'Pendente';
+
     await (onSaveDraft || onSave)(currentEntry);
+    setHasSavedPreRegistration(true);
+
     onUpdateEvent({ ...event, entries: updatedEntries, pairs: [...existingPairs, newPair] });
+
+    // Notifica pré-inscrição com Pix se aplicável
+    if (event.pixKey && event.pixReceiverName && event.pixCity && form.pricing.dueAmount > 0 && registrationId) {
+      const txid = buildPixTxid({
+        eventPin: event.pin,
+        registrationId,
+        paymentsCount: currentEntry.payments?.length ?? 0,
+      });
+      const brCode = buildPixBrCode({
+        pixKey: event.pixKey,
+        amount: form.pricing.dueAmount,
+        receiverName: event.pixReceiverName,
+        city: event.pixCity,
+        txid,
+      });
+      if (db) {
+        void eventNotificationService.notifyPreRegistration(
+          db as Firestore,
+          event,
+          currentEntry,
+          form.pricing.dueAmount,
+          brCode,
+        );
+      }
+    }
+
+    // Se todas as duplas obrigatórias estão preenchidas/válidas, continua automaticamente para o próximo passo
+    const validation = form.isStepValid('partners');
+    if (validation.isValid) {
+      form.goToNextStep();
+    } else {
+      setFeedback('Dupla confirmada e salva! Preencha os dados do parceiro da outra categoria para continuar.');
+    }
   }, [canFormTeamAtRegistration, entry, event, form, onSave, onSaveDraft, onUpdateEvent]);
 
   const isStepBeforePayment =
@@ -298,7 +354,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     setFeedback(null);
     const validation = form.isStepValid(form.currentStep);
     if (!validation.isValid) {
-      setFeedback(validation.error || 'Preencha os campos obrigatórios.');
+      showAlert(validation.error || 'Preencha os campos obrigatórios.');
       return;
     }
 
@@ -345,7 +401,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
         }
       } catch (err) {
         console.warn('Erro ao salvar pré-inscrição:', err);
-        setFeedback(err instanceof Error ? err.message : 'Não foi possível reservar o ID da inscrição. Tente novamente.');
+        showAlert(err instanceof Error ? err.message : 'Não foi possível reservar o ID da inscrição. Tente novamente.');
         return;
       } finally {
         setIsSubmitting(false);
@@ -510,28 +566,28 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     setFeedback(null);
     const identityValidation = form.isStepValid('identity');
     if (!identityValidation.isValid) {
-      setFeedback(identityValidation.error || 'Preencha os dados do atleta.');
+      showAlert(identityValidation.error || 'Preencha os dados do atleta.');
       return;
     }
     const submission = form.getSubmissionEntry();
     if (!submission.categoryIds || submission.categoryIds.length === 0) {
-      setFeedback('Selecione pelo menos uma categoria.');
+      showAlert('Selecione pelo menos uma categoria.');
       return;
     }
     const partnerValidation = form.isStepValid('partners');
     if (!partnerValidation.isValid) {
-      setFeedback(partnerValidation.error || 'Preencha os dados obrigatórios do parceiro(a).');
+      showAlert(partnerValidation.error || 'Preencha os dados obrigatórios do parceiro(a).');
       return;
     }
 
     // Validação de comprovante manual
     if (requiresReceipt && !payment.manualReceiptFile && !isFullyPaid) {
       if (existingPayments.length > 0 && pendingAmount > 0) {
-        setFeedback(
+        showAlert(
           `Anexe o comprovante referente à diferença de R$ ${pendingAmount.toFixed(2)} para finalizar a inscrição.`
         );
       } else {
-        setFeedback('Anexe o comprovante de pagamento para finalizar a inscrição.');
+        showAlert('Anexe o comprovante de pagamento para finalizar a inscrição.');
       }
       return;
     }
@@ -539,14 +595,14 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     if (!submission.registrationId) {
       const db = getDb();
       if (!db) {
-        setFeedback('Não foi possível conectar ao Firebase para reservar o ID da inscrição. Tente novamente.');
+        showAlert('Não foi possível conectar ao Firebase para reservar o ID da inscrição. Tente novamente.');
         return;
       }
       try {
         submission.registrationId = await reserveNextRegistrationId(db as Firestore, event.pin, submission.email);
         form.updateField('registrationId', submission.registrationId);
       } catch (err) {
-        setFeedback(err instanceof Error ? err.message : 'Não foi possível reservar o ID da inscrição. Tente novamente.');
+        showAlert(err instanceof Error ? err.message : 'Não foi possível reservar o ID da inscrição. Tente novamente.');
         return;
       }
     }
@@ -645,16 +701,16 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
       }
     } catch (err: any) {
       console.error('[EventRegistrationForm] Erro ao salvar inscrição:', err);
-      setFeedback(err.message || 'Erro ao processar a inscrição.');
+      showAlert(err.message || 'Erro ao processar a inscrição.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const isSelfCancelled = Boolean(entry.disabled || entry.paymentStatus === 'Cancelado');
-  const registrationSteps = (form.requiresPartnerDetails || canFormTeamAtRegistration)
-    ? ['identity', 'information', 'categories', 'partners', 'payment'] as const
-    : ['identity', 'information', 'categories', 'payment'] as const;
+  const registrationSteps: RegistrationStep[] = (form.requiresPartnerDetails || canFormTeamAtRegistration)
+    ? ['identity', 'information', 'categories', 'partners', 'payment']
+    : ['identity', 'information', 'categories', 'payment'];
   const stepLabels: Record<RegistrationStep, string> = {
     identity: 'Atleta',
     information: 'Informações',
@@ -708,6 +764,26 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     }
   };
 
+  const handleGenderChange = useCallback(
+    async (newGender: 'M' | 'F') => {
+      form.updateField('gender', newGender);
+
+      const targetEmail = (userProfile?.email || form.formData.email || '').toLowerCase().trim();
+      if (targetEmail) {
+        const db = getDb();
+        if (db) {
+          try {
+            await updateUserProfileFields(db, targetEmail, { gender: newGender });
+          } catch (profileError) {
+            console.warn('[EventRegistrationForm] Não foi possível atualizar o gênero no perfil:', profileError);
+          }
+        }
+        onProfileSync?.({ gender: newGender });
+      }
+    },
+    [form, userProfile?.email, onProfileSync]
+  );
+
   const isPreRegistered = Boolean(
     hasSavedPreRegistration ||
     entry.registrationId ||
@@ -727,25 +803,30 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     entry.paymentStatus !== 'Cancelado';
 
   const isStepCompleted = (stepKey: RegistrationStep): boolean => {
-    if (stepKey === 'identity') {
-      return Boolean(form.formData.name?.trim()) && Boolean(form.formData.email?.trim());
-    }
-    if (stepKey === 'information') {
-      return Boolean(form.formData.regulationAccepted);
-    }
-    if (stepKey === 'categories') {
-      return form.formData.categoryIds.length > 0;
-    }
-    if (stepKey === 'partners') {
-      return form.isStepValid('partners').isValid;
-    }
-    if (stepKey === 'payment') {
-      return isConfirmedOrPaid;
-    }
-    return false;
+    return form.isStepValid(stepKey).isValid;
   };
 
-  const getStepButtonClass = (stepKey: RegistrationStep, isActive: boolean) => {
+  const canAccessStep = (stepKey: RegistrationStep): boolean => {
+    if (!isNew) return true;
+    const targetIdx = registrationSteps.indexOf(stepKey);
+    const currentIdx = registrationSteps.indexOf(form.currentStep);
+    // Pode sempre acessar etapas que já alcançou ou anteriores
+    if (targetIdx <= currentIdx) return true;
+    // Para etapas futuras, todas as etapas anteriores a targetIdx precisam estar válidas/completadas
+    for (let i = 0; i < targetIdx; i++) {
+      const prevStep = registrationSteps[i];
+      if (!isStepCompleted(prevStep)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const getStepButtonClass = (stepKey: RegistrationStep, isActive: boolean, isBlocked = false) => {
+    if (isBlocked) {
+      return 'bg-slate-100 text-slate-300 border border-slate-200/50 cursor-not-allowed opacity-60';
+    }
+
     // 1. Etapa de Pagamento
     if (stepKey === 'payment') {
       if (isConfirmedOrPaid) {
@@ -785,15 +866,25 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
         <div className="grid flex-1 min-w-0 grid-cols-2 gap-2">
           {registrationSteps.map((stepKey, idx) => {
             const isActive = form.currentStep === stepKey;
+            const isAccessible = !isNew || canAccessStep(stepKey);
             return (
               <button
                 key={stepKey}
                 id={`reg-step-${stepKey}`}
                 type="button"
-                onClick={() => form.goToStep(stepKey)}
+                onClick={() => {
+                  if (!isAccessible) {
+                    showAlert(
+                      `Para acessar a etapa "${stepLabels[stepKey]}", conclua o preenchimento das etapas anteriores.`
+                    );
+                    return;
+                  }
+                  form.goToStep(stepKey);
+                }}
                 className={`flex min-w-0 items-center justify-center gap-1.5 text-xs font-black px-3 py-2.5 rounded-xl transition-all ${getStepButtonClass(
                   stepKey,
-                  isActive
+                  isActive,
+                  !isAccessible
                 )}`}
               >
                 <span>{idx + 1}.</span>
@@ -860,6 +951,8 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
               conflictingCategoryIds={form.conflictingCategoryIds}
               groupConflictCategoryIds={form.groupConflictCategoryIds}
               nickname={form.formData.nickname}
+              gender={form.formData.gender || 'M'}
+              onGenderChange={handleGenderChange}
             />
           </div>
         )}
@@ -877,6 +970,7 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
             getPairForEmailInCategory={form.getPairForEmailInCategory}
             onFormTeam={onUpdateEvent ? handleFormTeam : undefined}
             isSelfCancelled={isSelfCancelled}
+            currentAthleteName={form.formData.nickname || form.formData.name || entry.nickname || entry.name || 'Atleta'}
           />
         )}
 
@@ -975,6 +1069,36 @@ export const EventRegistrationForm: React.FC<EventRegistrationFormProps> = ({
     {isAdmin && !isNew && event.pin && entry.email && (
       <div className="max-w-2xl mx-auto mt-3">
         <RegistrationActivityPanel eventPin={event.pin} entry={entry} categories={event.categories || []} />
+      </div>
+    )}
+
+    {/* Modal Central de Aviso / Validação */}
+    {alertModalMessage && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+        <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-center justify-center shrink-0">
+              <AlertCircle size={22} className="text-amber-600" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-900">Atenção</h4>
+              <p className="text-[11px] font-bold text-slate-400">Verifique os dados para continuar</p>
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl text-xs font-bold text-slate-700 leading-relaxed">
+            {alertModalMessage}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setAlertModalMessage(null)}
+            autoFocus
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm flex items-center justify-center"
+          >
+            Entendi
+          </button>
+        </div>
       </div>
     )}
     </>

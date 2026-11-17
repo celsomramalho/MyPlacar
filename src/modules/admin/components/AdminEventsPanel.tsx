@@ -284,6 +284,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         coAdminNamesByPin={coAdminNamesByPin}
         judgeNamesByPin={judgeNamesByPin}
         adminEmail={adminEmail}
+        adminPin={adminPin}
         initialBlock={initialConfigBlock}
         activeSports={activeSports}
         onChangeEditingEvent={onChangeEditingEvent}
