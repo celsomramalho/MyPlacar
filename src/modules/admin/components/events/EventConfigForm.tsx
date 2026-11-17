@@ -49,6 +49,7 @@ import { Button } from '@shared/components/Button';
 import { Toggle } from '@shared/components/Toggle';
 import { isRankingEvent, isSuper8DuplasEvent } from '@modules/events/services/eventTypeHelpers';
 import { openPdfOrUrl } from '@modules/events/services/openRegulationPdf';
+import { getEventPaymentStats } from '@modules/events/services/eventPaymentStats';
 import { EventCoAdminsManager } from './EventCoAdminsManager';
 import { EventJudgesManager } from './EventJudgesManager';
 import { EventHelpersManager } from './EventHelpersManager';
@@ -244,6 +245,17 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [restoreConfirm, setRestoreConfirm] = useState<null | { event: TournamentEvent; entries: import('@modules/events/types').TournamentEntry[] }>(null);
+
+  const eventFeeStats = React.useMemo(() => {
+    const stats = getEventPaymentStats(editingEvent);
+    const feePercent = editingEvent.marketplaceFeePercent ?? 10;
+    const platformFeeAmount = stats.totalDue * (feePercent / 100);
+    return {
+      totalDue: stats.totalDue,
+      platformFeeAmount,
+      feePercent,
+    };
+  }, [editingEvent]);
 
   const handleExportBackup = async () => {
     if (isExportingBackup) return;
@@ -930,6 +942,57 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           </div>
         </div>
 
+        {/* Taxa da Plataforma */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Taxa da plataforma (%)</label>
+            <span className="text-[10px] font-black text-sky-700">
+              {editingEvent.marketplaceFeePercent ?? 10}% de comissão
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            value={editingEvent.marketplaceFeePercent ?? 10}
+            disabled={isAdminOnlyDisabled}
+            onChange={(e) => {
+              const val =
+                e.target.value === '' ? 10 : Math.max(0, Math.min(100, Number(e.target.value)));
+              handleProtectedChange({ ...editingEvent, marketplaceFeePercent: val });
+            }}
+            className="w-full h-11 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-bold text-xs outline-none focus:border-sky-400"
+          />
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            Exemplo: em uma inscrição de R$ 100,00, R${' '}
+            {(100 * ((editingEvent.marketplaceFeePercent ?? 10) / 100)).toFixed(2)} fica com você
+            (plataforma) e R${' '}
+            {(100 * (1 - (editingEvent.marketplaceFeePercent ?? 10) / 100)).toFixed(2)} vai direto
+            para a conta do organizador.
+          </p>
+        </div>
+
+        {/* Resumo de valores */}
+        <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-50/80 border border-slate-200 rounded-2xl">
+          <div className="space-y-0.5">
+            <span className="text-[10px] font-black text-slate-400 block">
+              Valor devido do evento
+            </span>
+            <p className="text-sm font-black text-slate-800">
+              R$ {eventFeeStats.totalDue.toFixed(2)}
+            </p>
+          </div>
+          <div className="space-y-0.5">
+            <span className="text-[10px] font-black text-sky-700 block">
+              Valor plataforma
+            </span>
+            <p className="text-sm font-black text-sky-700">
+              R$ {eventFeeStats.platformFeeAmount.toFixed(2)}
+            </p>
+          </div>
+        </div>
+
         {/* Mercado Pago */}
         {editingEvent.paymentType === 'mercadopago' && (
           <div className="space-y-4 rounded-2xl border border-sky-200 bg-sky-50/50 p-4">
@@ -1020,37 +1083,6 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Taxa da Plataforma */}
-            <div className="space-y-1.5 pt-1 border-t border-sky-100">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-black text-slate-600 ml-1">Taxa da plataforma (%)</label>
-                <span className="text-[10px] font-black text-sky-700">
-                  {editingEvent.marketplaceFeePercent ?? 10}% de comissão
-                </span>
-              </div>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.5}
-                value={editingEvent.marketplaceFeePercent ?? 10}
-                disabled={isAdminOnlyDisabled}
-                onChange={(e) => {
-                  const val =
-                    e.target.value === '' ? 10 : Math.max(0, Math.min(100, Number(e.target.value)));
-                  handleProtectedChange({ ...editingEvent, marketplaceFeePercent: val });
-                }}
-                className="w-full h-11 bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-200 rounded-xl px-4 font-bold text-xs outline-none focus:border-sky-400"
-              />
-              <p className="text-[10px] text-slate-500 leading-relaxed">
-                Exemplo: em uma inscrição de R$ 100,00, R${' '}
-                {(100 * ((editingEvent.marketplaceFeePercent ?? 10) / 100)).toFixed(2)} fica com você
-                (plataforma) e R${' '}
-                {(100 * (1 - (editingEvent.marketplaceFeePercent ?? 10) / 100)).toFixed(2)} vai direto
-                para a conta do organizador.
-              </p>
             </div>
           </div>
         )}
