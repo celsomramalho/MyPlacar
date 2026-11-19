@@ -539,6 +539,25 @@ export const saveAdminEventCheckIn = async (
   }
 };
 
+/** Juízes podem atualizar somente os dados operacionais da fila do evento. */
+export const saveJudgeEventQueue = async (
+  eventPin: string,
+  adminEmail: string,
+  adminPin: string,
+  queue: { matches?: TournamentEvent['matches']; pairs?: TournamentEvent['pairs'] },
+) => {
+  const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
+  const response = await fetch(`${baseUrl}/api/admin-save-event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'judge-queue', eventPin, adminEmail, adminPin, queue }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Não foi possível salvar as alterações da fila.');
+  }
+};
+
 export const saveUserEventRegistration = (
   db: Firestore,
   email: string,

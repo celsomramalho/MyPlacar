@@ -56,7 +56,37 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Firebase Admin não inicializado" });
   }
 
-  const { event, adminEmail, adminPin: suppliedAdminPin } = req.body || {};
+  const { action, event, eventPin, adminEmail, adminPin: suppliedAdminPin, queue } = req.body || {};
+
+  if (action === 'judge-queue') {
+    const hasMatches = Array.isArray(queue?.matches);
+    const hasPairs = Array.isArray(queue?.pairs);
+    if (!eventPin || !adminEmail || !suppliedAdminPin || (!hasMatches && !hasPairs) || (queue?.matches !== undefined && !hasMatches) || (queue?.pairs !== undefined && !hasPairs)) {
+      return res.status(400).json({ error: 'Dados da fila inválidos ou incompletos' });
+    }
+    try {
+      const db = admin.firestore();
+      const cleanEmail = String(adminEmail).toLowerCase().trim();
+      const [eventSnap, userSnap] = await Promise.all([
+        db.collection('events').doc(eventPin).get(),
+        db.collection('users').doc(cleanEmail).get(),
+      ]);
+      const storedPin = userSnap.exists ? String(userSnap.data()?.pin || '').toUpperCase().trim() : '';
+      const judgePins = eventSnap.exists ? (eventSnap.data()?.judgePins || []).map((pin) => String(pin).toUpperCase().trim()) : [];
+      const requestedPin = String(suppliedAdminPin).toUpperCase().trim();
+      if (!eventSnap.exists || eventSnap.data()?.active !== true || !requestedPin || requestedPin !== storedPin || !judgePins.includes(requestedPin)) {
+        return res.status(403).json({ error: 'Acesso negado: usuário não é juiz ativo deste evento' });
+      }
+      const queuePatch = {};
+      if (hasMatches) queuePatch.matches = sanitize(queue.matches);
+      if (hasPairs) queuePatch.pairs = sanitize(queue.pairs);
+      await eventSnap.ref.update(queuePatch);
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('Erro ao salvar fila pelo juiz:', err);
+      return res.status(500).json({ error: `Erro interno: ${err.message}` });
+    }
+  }
 
   if (!event || !event.pin || !event.name) {
     return res.status(400).json({ error: "Dados do evento inválidos ou incompletos" });
@@ -81,8 +111,10 @@ export default async function handler(req, res) {
     const helperPins = ((existingEventData?.helperPins) || []).map(p => String(p).toUpperCase().trim());
     const requestPin = String(suppliedAdminPin || '').toUpperCase().trim();
     const isHelper = Boolean(userPin && requestPin === userPin && helperPins.includes(userPin) && existingEventData?.active === true);
+    const judgePins = ((existingEventData?.judgePins) || []).map(p => String(p).toUpperCase().trim());
+    const isJudge = Boolean(userPin && requestPin === userPin && judgePins.includes(userPin) && existingEventData?.active === true);
 
-    if (!isAdminUser && !isCoAdmin && !isHelper) {
+    if (!isAdminUser && !isCoAdmin && !isHelper && !isJudge) {
       return res.status(403).json({ error: "Acesso negado: usuário não é administrador do evento" });
     }
 
@@ -90,7 +122,7 @@ export default async function handler(req, res) {
     let { entries: _entries, ...eventWithoutEntries } = event;
 
     // Auxiliares podem salvar somente mudanças operacionais de partidas e quadras.
-    if (isHelper && !isAdminUser && !isCoAdmin && existingEventData) {
+    if ((isHelper || isJudge) && !isAdminUser && !isCoAdmin && existingEventData) {
       eventWithoutEntries = {
         ...existingEventData,
         matches: eventWithoutEntries.matches ?? existingEventData.matches,

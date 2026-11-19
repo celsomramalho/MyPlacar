@@ -3,7 +3,7 @@ import { Upload, Loader2, Sparkles, Plus, Trash2, ChevronDown, Save, Edit2, Data
 import { getAuthInstance, getDb } from '@infra/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { deleteAdminEvent, fetchAdminEvents, saveAdminEvent } from '@infra/firebase/adminEvents';
-import { updateEventEntry } from '@infra/firebase/events';
+import { saveJudgeEventQueue, updateEventEntry } from '@infra/firebase/events';
 import {
   fetchAdminIconCatalog,
   type FirebaseAdminCategoryIcon,
@@ -32,7 +32,7 @@ import { VoiceCommands, ErrorSoundType, Tab } from '../../../types';
 import type { UserProfile } from '@modules/auth/types';
 import { AdminCommunicationsPanel } from '@modules/communications';
 import { playErrorBeep, unlockAudio } from '@modules/game/presentation/hooks/useScoreAnnouncer';
-import { isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
+import { isPrimaryAdminEmail, isCoAdminOfEvent, isEventHelper, isJudgeOfEvent } from '@modules/events/services/eventAdminAccess';
 import { getSessionLoginMethod, setSessionLoginMethod } from '@modules/auth/services/authSession';
 
 interface Props {
@@ -347,7 +347,14 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
           import('@infra/firebase/events').then(({ fetchEventByPin, fetchEventEntries }) => {
             Promise.all([fetchEventByPin(db, targetPin), fetchEventEntries(db, targetPin)]).then(([ev, entries]) => {
               if (ev) {
-                setSelectedDashboardEvent({ ...(ev as TournamentEvent), entries: (entries || []) as any });
+                const accessEvent = ev as TournamentEvent;
+                const hasEventAccess = isPrimary || isCoAdminOfEvent(accessEvent, userProfile?.pin) || isEventHelper(accessEvent, userProfile?.pin) || isJudgeOfEvent(accessEvent, userProfile?.pin);
+                if (!hasEventAccess) {
+                  sessionStorage.removeItem('admin_target_event_pin');
+                  onBack();
+                  return;
+                }
+                setSelectedDashboardEvent({ ...accessEvent, entries: (entries || []) as any });
                 sessionStorage.removeItem('admin_target_event_pin');
               } else if (!isPrimary) {
                 onBack();
@@ -837,6 +844,21 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     const db = getDb();
     if (!db) return;
     try {
+      const isQueueOnlyJudge = !isPrimary
+        && selectedDashboardEvent?.pin === updatedEvent.pin
+        && isJudgeOfEvent(selectedDashboardEvent, userProfile?.pin)
+        && !isCoAdminOfEvent(selectedDashboardEvent, userProfile?.pin)
+        && !isEventHelper(selectedDashboardEvent, userProfile?.pin);
+      if (isQueueOnlyJudge) {
+        await saveJudgeEventQueue(updatedEvent.pin, userProfile?.email || '', userProfile?.pin || '', {
+          matches: updatedEvent.matches,
+          pairs: updatedEvent.pairs,
+        });
+        const { entries: _entries, ...eventWithoutEntries } = updatedEvent;
+        setEventList((prev) => prev.map((ev) => (ev.pin === updatedEvent.pin ? { ...eventWithoutEntries } : ev)));
+        return;
+      }
+
       const previousEntries = selectedDashboardEvent?.pin === updatedEvent.pin
         ? selectedDashboardEvent.entries || []
         : [];

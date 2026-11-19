@@ -78,6 +78,7 @@ export default async function handler(req, res) {
     const db = admin.firestore();
     let isAuthorized = await checkAdminAuthorization(db, adminEmail, eventPin);
     let isHelperCheckIn = false;
+    let isJudgeCheckIn = false;
     if (!isAuthorized && action === "check-in") {
       const cleanEmail = String(adminEmail).toLowerCase().trim();
       const requestedPin = String(body.adminPin || "").toUpperCase().trim();
@@ -87,8 +88,10 @@ export default async function handler(req, res) {
       ]);
       const storedPin = userSnap.exists ? String(userSnap.data()?.pin || "").toUpperCase().trim() : "";
       const helperPins = eventSnap.exists ? (eventSnap.data()?.helperPins || []).map((pin) => String(pin).toUpperCase().trim()) : [];
+      const judgePins = eventSnap.exists ? (eventSnap.data()?.judgePins || []).map((pin) => String(pin).toUpperCase().trim()) : [];
       isHelperCheckIn = Boolean(requestedPin && requestedPin === storedPin && helperPins.includes(requestedPin) && eventSnap.data()?.active === true);
-      isAuthorized = isHelperCheckIn;
+      isJudgeCheckIn = Boolean(requestedPin && requestedPin === storedPin && judgePins.includes(requestedPin) && eventSnap.data()?.active === true);
+      isAuthorized = isHelperCheckIn || isJudgeCheckIn;
     }
     if (!isAuthorized) {
       return res.status(403).json({ error: "Acesso negado: usuário não é administrador deste evento" });
@@ -141,7 +144,7 @@ export default async function handler(req, res) {
           registrationId: data.registrationId ?? null,
           participantName: data.name || data.nickname || null,
           actorEmail: String(adminEmail).toLowerCase().trim(),
-          actorRole: isHelperCheckIn ? "event_helper" : "admin_or_coadmin",
+          actorRole: isHelperCheckIn ? "event_helper" : isJudgeCheckIn ? "event_judge" : "admin_or_coadmin",
           action: "checkin_changed",
           changedFields: ["checkedIn", "checkInDate"],
           before: { checkedIn: Boolean(data.checkedIn), checkInDate: data.checkInDate || null },

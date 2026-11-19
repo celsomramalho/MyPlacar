@@ -694,7 +694,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onSelectEvent(eventObj);
+                            onSelectAdminEvent?.(eventObj);
                           }}
                           className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-all active:scale-90 shadow-sm"
                           title="Acessar como juiz do evento"
