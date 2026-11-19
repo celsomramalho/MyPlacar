@@ -7,6 +7,18 @@ export default {
         display: ['Outfit', 'sans-serif'],
       },
       colors: {
+        brown: {
+          50: '#fdf8f6',
+          100: '#f2e8e5',
+          200: '#eaddd7',
+          300: '#e0a96d',
+          400: '#b87333',
+          500: '#a0522d',
+          600: '#92400e', // Amber-800 / Padrão "A confirmar"
+          700: '#78350f', // Amber-900
+          800: '#5c2c16',
+          900: '#451a03',
+        },
         brand: {
           50: '#f0f7ff',
           100: '#e0effe',

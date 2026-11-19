@@ -356,7 +356,7 @@ export const EventDashboardView: React.FC<Props> = ({
           {/* Card 1: Categorias */}
           <button
             onClick={() => setActiveTab('categories')}
-            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
               activeTab === 'categories'
                 ? 'bg-emerald-500 text-white border-emerald-500 shadow-md scale-[1.02]'
                 : 'bg-slate-50/80 hover:bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
@@ -391,7 +391,7 @@ export const EventDashboardView: React.FC<Props> = ({
           {/* Card 2: Inscrições */}
           <button
             onClick={() => setActiveTab('registrations')}
-            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
               activeTab === 'registrations'
                 ? 'bg-emerald-500 text-white border-emerald-500 shadow-md scale-[1.02]'
                 : 'bg-slate-50/80 hover:bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
@@ -424,7 +424,7 @@ export const EventDashboardView: React.FC<Props> = ({
           {/* Card 3: Gerenciar fila */}
           <button
             onClick={() => setActiveTab('formed-teams')}
-            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
               activeTab === 'formed-teams'
                 ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02]'
                 : 'bg-slate-50/80 hover:bg-white text-slate-700 border-slate-200 hover:border-blue-300'
@@ -488,96 +488,125 @@ export const EventDashboardView: React.FC<Props> = ({
           {/* Card 4: Pagamentos */}
           <button
             onClick={() => setActiveTab('pending-payments')}
-            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
               activeTab === 'pending-payments'
-                ? 'bg-amber-500 text-white border-amber-500 shadow-md scale-[1.02]'
+                ? 'bg-amber-50/80 text-slate-800 border-2 border-amber-500 shadow-md ring-2 ring-amber-400/30 scale-[1.02]'
                 : 'bg-slate-50/80 hover:bg-white text-slate-700 border-slate-200 hover:border-amber-300'
             }`}
           >
             <div className="flex items-center justify-between w-full">
               <div
-                className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
                   activeTab === 'pending-payments'
-                    ? 'bg-white/20 text-white'
+                    ? 'bg-amber-500 text-white shadow-xs'
                     : 'bg-amber-100 text-amber-600'
                 }`}
               >
                 <DollarSign size={18} />
               </div>
-              <span className="text-2xl font-black leading-none">{pendingPaymentsCount}</span>
+              <span className={`text-2xl font-black leading-none ${activeTab === 'pending-payments' ? 'text-amber-900' : 'text-slate-800'}`}>
+                {pendingPaymentsCount}
+              </span>
             </div>
             <div className="space-y-1">
               <p
                 className={`text-[10px] font-black ${
-                  activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'
+                  activeTab === 'pending-payments' ? 'text-amber-800' : 'text-slate-400'
                 }`}
               >
                 Pagamentos
               </p>
-              <div
-                className={`text-[9px] font-bold leading-tight space-y-0.5 ${
-                  activeTab === 'pending-payments' ? 'text-white' : 'text-slate-500'
-                }`}
-              >
-                <div className="flex justify-between gap-1">
-                  <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Devido:</span>
-                  <span className="font-black">R$ {totalDue.toFixed(2)}</span>
+              <div className="text-[9px] font-bold leading-tight space-y-0.5">
+                {/* Devido: Laranja */}
+                <div className="flex justify-between items-baseline gap-1 text-orange-600">
+                  <span>Devido:</span>
+                  <span className="font-black whitespace-nowrap shrink-0 text-right">
+                    R$ {totalDue.toFixed(2)}
+                  </span>
                 </div>
-                <div className="flex justify-between gap-1">
-                  <span>
+
+                {/* Pago: Verde */}
+                <div className="flex justify-between items-baseline gap-1 text-emerald-600">
+                  <span className="min-w-0">
                     <span className="font-mono opacity-90">[{paidCount}]</span>{' '}
-                    <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Pago:</span>
+                    <span>Pago:</span>
                   </span>
-                  <span className="font-black">R$ {totalPaid.toFixed(2)}</span>
+                  <span className="font-black whitespace-nowrap shrink-0 text-right">
+                    R$ {totalPaid.toFixed(2)}
+                  </span>
                 </div>
-                <div className="flex justify-between gap-1">
-                  <span>
+
+                {/* A confirmar: Amarelo/Dourado */}
+                <div className="flex justify-between items-baseline gap-1 text-amber-600">
+                  <span className="min-w-0">
                     <span className="font-mono opacity-90">[{awaitingReceiptsCount}]</span>{' '}
-                    <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>A confirmar:</span>
+                    <span className="whitespace-nowrap">A confirmar:</span>
                   </span>
-                  <span className="font-black">R$ {totalAwaiting.toFixed(2)}</span>
+                  <span className="font-black whitespace-nowrap shrink-0 text-right">
+                    R$ {totalAwaiting.toFixed(2)}
+                  </span>
                 </div>
-                <div className="flex justify-between gap-1">
-                  <span>
+
+                {/* Aguardando pgto: Azul (Padrão Imagem 2) */}
+                <div className="flex justify-between items-baseline gap-1 text-sky-600">
+                  <span className="min-w-0">
                     <span className="font-mono opacity-90">[{preRegistrationCount}]</span>{' '}
-                    <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Aguardando pgto:</span>
+                    <span>Aguardando pgto:</span>
                   </span>
-                  <span className="font-black">R$ {totalPre.toFixed(2)}</span>
+                  <span className="font-black whitespace-nowrap shrink-0 text-right">
+                    R$ {totalPre.toFixed(2)}
+                  </span>
                 </div>
+
+                {/* A devolver: Roxo */}
                 {totalToRefund > 0 && (
-                  <div className="flex justify-between gap-1">
-                    <span>
+                  <div className="flex justify-between items-baseline gap-1 text-purple-600">
+                    <span className="min-w-0">
                       <span className="font-mono opacity-90">[{toRefundReceiptsCount}]</span>{' '}
-                      <span className={activeTab === 'pending-payments' ? 'text-purple-200' : 'text-purple-600'}>A devolver:</span>
+                      <span className="whitespace-nowrap">A devolver:</span>
                     </span>
-                    <span className="font-black">R$ {totalToRefund.toFixed(2)}</span>
+                    <span className="font-black whitespace-nowrap shrink-0 text-right">
+                      R$ {totalToRefund.toFixed(2)}
+                    </span>
                   </div>
                 )}
+
+                {/* Recusados: Vermelho / Rose */}
                 {totalRefused > 0 && (
-                  <div className="flex justify-between gap-1">
-                    <span>
+                  <div className="flex justify-between items-baseline gap-1 text-rose-500">
+                    <span className="min-w-0">
                       <span className="font-mono opacity-90">[{refusedReceiptsCount}]</span>{' '}
-                      <span className={activeTab === 'pending-payments' ? 'text-rose-200' : 'text-rose-500'}>Recusados:</span>
+                      <span>Recusados:</span>
                     </span>
-                    <span className="font-black">R$ {totalRefused.toFixed(2)}</span>
+                    <span className="font-black whitespace-nowrap shrink-0 text-right">
+                      R$ {totalRefused.toFixed(2)}
+                    </span>
                   </div>
                 )}
+
+                {/* Isentos: Cinza */}
                 {exemptCount > 0 && (
-                  <div className="flex justify-between gap-1">
-                    <span>
+                  <div className="flex justify-between items-baseline gap-1 text-slate-500">
+                    <span className="min-w-0">
                       <span className="font-mono opacity-90">[{exemptCount}]</span>{' '}
-                      <span className={activeTab === 'pending-payments' ? 'text-amber-100' : 'text-slate-400'}>Isentos:</span>
+                      <span>Isentos:</span>
                     </span>
-                    <span className="font-black">R$ 0.00</span>
+                    <span className="font-black whitespace-nowrap shrink-0 text-right">
+                      R$ 0.00
+                    </span>
                   </div>
                 )}
+
+                {/* Devolvidos: Cinza Zinc */}
                 {totalRefunded > 0 && (
-                  <div className="flex justify-between gap-1">
-                    <span>
+                  <div className="flex justify-between items-baseline gap-1 text-zinc-500">
+                    <span className="min-w-0">
                       <span className="font-mono opacity-90">[{refundedReceiptsCount}]</span>{' '}
-                      <span className={activeTab === 'pending-payments' ? 'text-slate-200' : 'text-slate-500'}>Devolvidos:</span>
+                      <span>Devolvidos:</span>
                     </span>
-                    <span className="font-black">R$ {totalRefunded.toFixed(2)}</span>
+                    <span className="font-black whitespace-nowrap shrink-0 text-right">
+                      R$ {totalRefunded.toFixed(2)}
+                    </span>
                   </div>
                 )}
               </div>
@@ -588,7 +617,7 @@ export const EventDashboardView: React.FC<Props> = ({
           {/* Card 5: Check-ins Realizados */}
           <button
             onClick={() => setActiveTab('checkins')}
-            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
               activeTab === 'checkins'
                 ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-[1.02]'
                 : 'bg-slate-50/80 hover:bg-white text-slate-700 border-slate-200 hover:border-indigo-300'
@@ -621,7 +650,7 @@ export const EventDashboardView: React.FC<Props> = ({
           {/* Card: Patrocinadores */}
           <button
             onClick={() => setActiveTab('sponsors')}
-            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
               activeTab === 'sponsors'
                 ? 'bg-emerald-500 text-white border-emerald-500 shadow-md scale-[1.02]'
                 : 'bg-slate-50/80 hover:bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
