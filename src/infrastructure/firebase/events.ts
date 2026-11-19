@@ -16,7 +16,7 @@ import {
   type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { minifyPairForStorage, type PaymentStatus, type TournamentPair } from '@modules/events/types';
+import { minifyPairForStorage, type PaymentStatus, type TournamentEvent, type TournamentPair } from '@modules/events/types';
 import { getAuthInstance } from './authClient';
 
 const auditValue = (value: unknown, field: string): unknown => {
