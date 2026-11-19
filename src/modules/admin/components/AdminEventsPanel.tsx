@@ -295,6 +295,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
         isReadOnlyRegistration={isReadOnlyRegistration}
         canManageEventAdmins={canManageEventAdmins}
         canManageEventHelpers={isPrimaryAdmin || isCoAdminOfEvent(editingEvent, adminPin)}
+        canRestoreEventBackup={isPrimaryAdmin}
         isSavingEvent={isSavingEvent}
         bannerInputRef={bannerInputRef}
         coAdminNamesByPin={coAdminNamesByPin}

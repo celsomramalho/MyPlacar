@@ -24,6 +24,7 @@ import {
   X,
   Download,
   Upload,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   EVENT_STATUS_OPTIONS,
@@ -59,6 +60,7 @@ import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import type { EventSportRules } from '@modules/events/types';
 import { getDefaultRulesForSport } from '@modules/events/domain/rules/eventMatchRules';
 import { getDb } from '@infra/firebase';
+import { exportEventActivities, exportEventRegistrationsAndReceipts } from '@modules/events/services/eventRegistrationExports';
 import { saveAdminEvent } from '@infra/firebase/adminEvents';
 import {
   buildEventBackup,
@@ -204,6 +206,7 @@ export interface EventConfigFormProps {
   editingEvent: TournamentEvent;
   isReadOnlyRegistration: boolean;
   canManageEventAdmins: boolean;
+  canRestoreEventBackup?: boolean;
   canManageEventHelpers: boolean;
   isSavingEvent: boolean;
   bannerInputRef: React.RefObject<HTMLInputElement>;
@@ -225,6 +228,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   editingEvent,
   isReadOnlyRegistration,
   canManageEventAdmins,
+  canRestoreEventBackup = false,
   canManageEventHelpers,
   isSavingEvent,
   bannerInputRef,
@@ -244,6 +248,8 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [isExportingActivities, setIsExportingActivities] = useState(false);
+  const [isExportingRegistrationData, setIsExportingRegistrationData] = useState(false);
   const [restoreConfirm, setRestoreConfirm] = useState<null | { event: TournamentEvent; entries: import('@modules/events/types').TournamentEntry[] }>(null);
 
   const eventFeeStats = React.useMemo(() => {
@@ -268,6 +274,30 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
       alert('Erro ao gerar backup. Tente novamente.');
     } finally {
       setIsExportingBackup(false);
+    }
+  };
+
+  const handleExportActivities = async () => {
+    if (isExportingActivities) return;
+    setIsExportingActivities(true);
+    try {
+      await exportEventActivities(editingEvent);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Não foi possível exportar as atividades.');
+    } finally {
+      setIsExportingActivities(false);
+    }
+  };
+
+  const handleExportRegistrationData = async () => {
+    if (isExportingRegistrationData) return;
+    setIsExportingRegistrationData(true);
+    try {
+      await exportEventRegistrationsAndReceipts(editingEvent);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Não foi possível exportar inscritos e comprovantes.');
+    } finally {
+      setIsExportingRegistrationData(false);
     }
   };
 
@@ -696,39 +726,66 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
       </div>
 
       {/* Ações de Backup e Restauração */}
-      {!isReadOnlyRegistration && (
-        <div className={`grid gap-2 pt-0.5 pb-1 ${canManageEventAdmins || isGlobalAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          <button
-            type="button"
-            onClick={handleExportBackup}
-            disabled={isExportingBackup || isRestoringBackup}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
-            title="Exportar backup completo do evento (JSON)"
-          >
-            {isExportingBackup ? (
-              <Loader2 className="animate-spin text-amber-500" size={14} />
-            ) : (
-              <Download size={14} className="text-slate-500 shrink-0" />
-            )}
-            <span className="truncate">Fazer backup</span>
-          </button>
+      {(canManageEventHelpers || canRestoreEventBackup || canManageEventAdmins || isGlobalAdmin) && (
+        <div className={`grid gap-2 pt-0.5 pb-1 ${canManageEventHelpers && (canRestoreEventBackup || canManageEventAdmins || isGlobalAdmin) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {canManageEventHelpers && (
+            <button
+              type="button"
+              onClick={handleExportBackup}
+              disabled={isExportingBackup || isRestoringBackup}
+              className="w-full flex items-center justify-center gap-2 bg-violet-50 hover:bg-violet-100 text-violet-800 border border-violet-200 font-black text-xs px-3 py-2.5 rounded-xl transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
+              title="Exportar backup completo do evento (JSON)"
+            >
+              {isExportingBackup ? (
+                <Loader2 className="animate-spin text-amber-500" size={14} />
+              ) : (
+                <Download size={14} className="text-violet-700 shrink-0" />
+              )}
+              <span className="truncate">Fazer backup</span>
+            </button>
+          )}
 
-          {(canManageEventAdmins || isGlobalAdmin) && (
+          {(canManageEventAdmins || isGlobalAdmin || canRestoreEventBackup) && (
             <button
               type="button"
               onClick={handleRestoreBackup}
               disabled={isExportingBackup || isRestoringBackup}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-black text-xs px-3 py-2.5 rounded-xl transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
               title="Restaurar backup do evento a partir de arquivo JSON (somente administrador)"
             >
               {isRestoringBackup ? (
                 <Loader2 className="animate-spin text-blue-500" size={14} />
               ) : (
-                <Upload size={14} className="text-slate-500 shrink-0" />
+              <Upload size={14} className="text-amber-700 shrink-0" />
               )}
               <span className="truncate">Restaurar backup</span>
             </button>
           )}
+        </div>
+      )}
+
+      {!isReadOnlyRegistration && (
+        <div className="grid grid-cols-1 gap-2 pb-1 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => void handleExportActivities()}
+            disabled={isExportingActivities || isExportingRegistrationData}
+            className="w-full flex items-center justify-center gap-2 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-black text-xs px-3 py-2.5 rounded-xl transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
+            title="Baixa uma planilha Excel com todas as atividades registradas nas inscrições deste evento"
+          >
+            {isExportingActivities ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
+            <span>{isExportingActivities ? 'Preparando atividades...' : 'Exportar atividades'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleExportRegistrationData()}
+            disabled={isExportingRegistrationData || isExportingActivities}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-black text-xs px-3 py-2.5 rounded-xl transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap"
+            title="Exporta inscritos, categorias e data, hora e valor dos comprovantes, sem incluir os arquivos"
+          >
+            {isExportingRegistrationData ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
+            <span>{isExportingRegistrationData ? 'Preparando inscritos...' : 'Exportar inscritos'}</span>
+          </button>
         </div>
       )}
 
