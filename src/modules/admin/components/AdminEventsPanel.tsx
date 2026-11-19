@@ -2,7 +2,7 @@ import React, { useState, type RefObject } from 'react';
 import { Loader2, Plus, Ticket } from 'lucide-react';
 import { deduplicateTournamentEntries, type TournamentEntry, type TournamentEvent } from '@modules/events/types';
 import { findUsersByPins, getDb } from '@infra/firebase';
-import { ensureEventEntriesRegistrationIds, fetchEventByPin, fetchEventEntries, subscribeEventEntries } from '@infra/firebase/events';
+import { ensureEventEntriesRegistrationIds, fetchEventByPin, fetchEventEntries, subscribeEventByPin, subscribeEventEntries } from '@infra/firebase/events';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
 import { EventDashboardView } from './EventDashboardView';
 import { canUseEventAdminAccess, isCoAdminOfEvent, isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
@@ -51,11 +51,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
   const selectedDashboardEvent = selectedDashboardEventProp !== undefined ? selectedDashboardEventProp : localSelectedDashboardEvent;
   const setSelectedDashboardEvent = (val: TournamentEvent | null | ((prev: TournamentEvent | null) => TournamentEvent | null)) => {
     if (onSelectDashboardEvent) {
-      if (typeof val === 'function') {
-        onSelectDashboardEvent(val(selectedDashboardEvent));
-      } else {
-        onSelectDashboardEvent(val);
-      }
+      onSelectDashboardEvent(val);
     } else {
       setLocalSelectedDashboardEvent(val);
     }
@@ -82,6 +78,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
             ? {
                 ...updatedInList,
                 pairs: prev.pairs ?? updatedInList.pairs,
+                matches: prev.matches ?? updatedInList.matches,
                 categories: prev.categories ?? updatedInList.categories,
                 sponsors: prev.sponsors ?? updatedInList.sponsors,
                 entries: prev.entries,
@@ -216,6 +213,25 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           categoryPartners: fe.categoryPartners,
         })));
         setSelectedDashboardEvent((current) => current ? { ...current, entries } : current);
+      });
+    });
+  }, [selectedDashboardEvent?.pin]);
+
+  // Mantém a aba "Partidas" e a fila administrativa no mesmo placar salvo no evento.
+  // A fila atualiza events/{pin}.matches; sem observar o documento raiz, a tela de
+  // partidas podia continuar usando a cópia carregada ao abrir o painel.
+  React.useEffect(() => {
+    const pin = selectedDashboardEvent?.pin;
+    if (!pin) return;
+    const db = getDb();
+    if (!db) return;
+
+    return subscribeEventByPin(db, pin, (freshEvent) => {
+      if (!Array.isArray(freshEvent.matches)) return;
+      setSelectedDashboardEvent((current) => {
+        if (!current || current.pin !== pin) return current;
+        if (current.matches === freshEvent.matches) return current;
+        return { ...current, matches: freshEvent.matches };
       });
     });
   }, [selectedDashboardEvent?.pin]);

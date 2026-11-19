@@ -73,12 +73,12 @@ export function useMatchAdminActions({
     phase,
     (event.setsCount || event.config?.sets || totalSets) as 1 | 3 | 5,
     Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6)),
-    event.sportId || event.config?.sportType
+    event.sportId || event.config?.sportType || selectedCategory?.sportId
   );
   const getGamesPerSet = (phase?: string) => getRulesForPhase(phase).gamesPerSet;
   const isTotalGamesSet = (phase?: string) => {
     const rules = getRulesForPhase(phase);
-    return (event.sportId || event.config?.sportType) === 'beach-tennis' && rules.gamesPerSet === 7;
+    return (event.sportId || event.config?.sportType || selectedCategory?.sportId) === 'beach-tennis' && rules.gamesPerSet === 7;
   };
 
   const persistPatch = async (
@@ -309,8 +309,11 @@ export function useMatchAdminActions({
         (_, i) => {
           const existing = m.scores?.[i] || {};
           return {
+            ...existing,
             p1: existing.p1 !== undefined ? existing.p1 : null,
             p2: existing.p2 !== undefined ? existing.p2 : null,
+            gameP1: existing.gameP1 || '0',
+            gameP2: existing.gameP2 || '0',
           };
         }
       );
@@ -346,7 +349,7 @@ export function useMatchAdminActions({
           } else if (complete && n2 > n1) {
             setsWon2 += 1;
           }
-        } else if (s.p1 !== null || s.p2 !== null) {
+        } else if (s.p1 !== null || s.p2 !== null || (s.gameP1 && s.gameP1 !== '0') || (s.gameP2 && s.gameP2 !== '0')) {
           hasAnyScore = true;
         }
       });
@@ -354,7 +357,7 @@ export function useMatchAdminActions({
       let status: 'waiting' | 'live' | 'finished' =
         m.status === 'finished'
           ? 'finished'
-          : hasAnyScore
+          : m.court || hasAnyScore
             ? 'live'
             : 'waiting';
       let winnerPairId: string | undefined = m.winnerPairId;
@@ -395,7 +398,10 @@ export function useMatchAdminActions({
     matchId: string,
     setIndex: number,
     p1Val: string,
-    p2Val: string
+    p2Val: string,
+    gameP1 = '0',
+    gameP2 = '0',
+    servingOrderOffset?: number | null
   ) => {
     const toVal = (raw: string) => {
       const n = parseInt(raw, 10);
@@ -408,19 +414,24 @@ export function useMatchAdminActions({
       const totalGamesSet = isTotalGamesSet(m.phase);
 
       const currentScores: MatchSetScore[] = Array.from(
-        { length: totalSets },
+        { length: Math.max(totalSets, m.scores?.length || 0) },
         (_, i) => {
           const existing = m.scores?.[i] || {};
           return {
             p1: existing.p1 !== undefined ? existing.p1 : null,
             p2: existing.p2 !== undefined ? existing.p2 : null,
+            gameP1: existing.gameP1 || '0',
+            gameP2: existing.gameP2 || '0',
           };
         }
       );
 
       currentScores[setIndex] = {
+        ...currentScores[setIndex],
         p1: toVal(p1Val),
         p2: toVal(p2Val),
+        gameP1,
+        gameP2,
       };
 
       let setsWon1 = 0;
@@ -446,7 +457,7 @@ export function useMatchAdminActions({
           } else if (complete && n2 > n1) {
             setsWon2 += 1;
           }
-        } else if (s.p1 !== null || s.p2 !== null) {
+        } else if (s.p1 !== null || s.p2 !== null || (s.gameP1 && s.gameP1 !== '0') || (s.gameP2 && s.gameP2 !== '0')) {
           hasAnyScore = true;
         }
       });
@@ -454,7 +465,7 @@ export function useMatchAdminActions({
       let status: 'waiting' | 'live' | 'finished' =
         m.status === 'finished'
           ? 'finished'
-          : hasAnyScore
+          : m.court || hasAnyScore
             ? 'live'
             : 'waiting';
       let winnerPairId: string | undefined = m.winnerPairId;
@@ -477,6 +488,7 @@ export function useMatchAdminActions({
         status,
         winnerPairId,
         loserPairId,
+        servingOrderOffset: servingOrderOffset === null ? undefined : servingOrderOffset ?? m.servingOrderOffset,
       };
     });
 
@@ -489,6 +501,46 @@ export function useMatchAdminActions({
         'Erro ao salvar placar no Firestore debounce:'
       );
     }, 1000);
+  };
+
+  const persistMatchControls = async (nextMatches: TournamentMatch[]) => {
+    if (saveMatchesTimeoutRef.current) {
+      clearTimeout(saveMatchesTimeoutRef.current);
+      saveMatchesTimeoutRef.current = null;
+    }
+    onUpdateEvent({ ...event, matches: nextMatches });
+    await persistPatch({ matches: nextMatches }, 'Erro ao salvar controles da partida no Firestore:');
+  };
+
+  const handleServeSettingsChange = (
+    matchId: string,
+    settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>
+  ) => {
+    const nextMatches = matches.map((m) => m.id === matchId ? { ...m, ...settings } : m);
+    void persistMatchControls(nextMatches);
+  };
+
+  const handleResetMatch = (matchId: string) => {
+    const nowIso = new Date().toISOString();
+    const nextMatches = matches.map((m) => {
+      if (m.id !== matchId) return m;
+      const rules = getRulesForPhase(m.phase);
+      return {
+        ...m,
+        scores: Array.from({ length: m.scores?.length || rules.setsCount }, () => ({ p1: 0, p2: 0, gameP1: '0', gameP2: '0' })),
+        result: '',
+        status: m.court || m.status === 'live' ? 'live' as const : 'waiting' as const,
+        startedAt: m.court || m.status === 'live' ? nowIso : undefined,
+        finishedAt: undefined,
+        durationMinutes: undefined,
+        winnerPairId: undefined,
+        loserPairId: undefined,
+        servingOrderOffset: undefined,
+        serveOrderP1Reversed: false,
+        serveOrderP2Reversed: false,
+      };
+    });
+    void persistMatchControls(nextMatches);
   };
 
   const handleMatchDateChange = (matchId: string, dateVal: string) => {
@@ -747,6 +799,8 @@ export function useMatchAdminActions({
     handleDeleteAllCategoryMatches,
     handleScoreInputChange,
     handleScoreUndoChange,
+    handleServeSettingsChange,
+    handleResetMatch,
     handleMatchDateChange,
     handleFinishMatchWithValidation,
     handleReopenMatch,

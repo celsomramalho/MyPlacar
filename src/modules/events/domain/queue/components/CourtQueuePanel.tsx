@@ -99,6 +99,8 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
                 totalSets={queue.totalSets}
                 gamesPerSet={queue.gamesPerSet}
                 isTotalGamesSet={queue.isTotalGamesSet}
+                sportId={event.sportId || event.config?.sportType}
+                sportRules={event.sportRules}
                 tieBreak={queue.tieBreak}
                 tieBreakAt={queue.tieBreakAt}
                 averageMatchDurationMinutes={queue.averageMatchDurationMinutes}
@@ -113,9 +115,11 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
                 onRefreshEventScore={(matchId) => onRefreshEventScore?.(matchId)}
                 onScoreInputChange={actions.handleScoreInputChange}
                 onScoreUndoChange={actions.handleScoreUndoChange}
+                onServeSettingsChange={actions.handleServeSettingsChange}
                 onScoreBlur={actions.handleScoreBlur}
                 onMatchDateChange={actions.handleMatchDateChange}
                 onFinishCourtMatch={actions.finishCourtMatch}
+                onResetCourtMatch={actions.resetCourtMatch}
               />
             ))}
           </div>

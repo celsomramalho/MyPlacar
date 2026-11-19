@@ -452,6 +452,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
     handleDeleteAllCategoryMatches,
     handleScoreInputChange,
     handleScoreUndoChange,
+    handleServeSettingsChange,
+    handleResetMatch,
     handleMatchDateChange,
     handleFinishMatchWithValidation,
     handleReopenMatch,
@@ -1358,6 +1360,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     queuePosByMatchId={queuePosByMatchId}
                     onScoreChange={handleScoreInputChange}
                     onUndoScore={handleScoreUndoChange}
+                    onServeSettingsChange={handleServeSettingsChange}
+                    onResetMatch={handleResetMatch}
                     onMatchDateChange={handleMatchDateChange}
                     onFinishMatch={handleFinishMatchWithValidation}
                     onReopenMatch={handleReopenMatch}

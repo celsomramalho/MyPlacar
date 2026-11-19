@@ -20,7 +20,9 @@ export interface CategoryMatchesTabProps {
   allCategoryFinished: boolean;
   queuePosByMatchId?: Map<string, number>;
   onScoreChange: (matchId: string, setIndex: number, player: 'p1' | 'p2', rawVal: string) => void;
-  onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string) => void;
+  onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string, gameP1?: string, gameP2?: string, servingOrderOffset?: number | null) => void;
+  onServeSettingsChange?: (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => void;
+  onResetMatch?: (matchId: string) => void | Promise<void>;
   onMatchDateChange: (matchId: string, matchDate: string) => void;
   onFinishMatch: (matchId: string) => void;
   onReopenMatch: (matchId: string) => void;
@@ -46,6 +48,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   queuePosByMatchId,
   onScoreChange,
   onUndoScore,
+  onServeSettingsChange,
+  onResetMatch,
   onMatchDateChange,
   onFinishMatch,
   onReopenMatch,
@@ -156,7 +160,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   );
 
   const renderItem = (match: TournamentMatch, idx?: number) => {
-    const sportId = event.sportId || event.config?.sportType;
+    const sportId = event.sportId || event.config?.sportType || category.sportId;
     const rules = resolveMatchRules(
       event.sportRules,
       match.phase,
@@ -176,6 +180,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       totalSets={rules.setsCount}
       gamesPerSet={rules.gamesPerSet}
       isTotalGamesSet={isTotalGamesSet}
+      sportId={sportId}
+      sportRules={event.sportRules}
       tieBreak={rules.tieBreak}
       tieBreakAt={rules.tieBreakAt}
       queuePosition={queuePosByMatchId?.get(match.id) ?? 0}
@@ -185,6 +191,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       allCategoryFinished={allCategoryFinished}
       onScoreChange={onScoreChange}
       onUndoScore={onUndoScore}
+      onServeSettingsChange={onServeSettingsChange}
+      onResetMatch={onResetMatch}
       onMatchDateChange={onMatchDateChange}
       onFinishMatch={onFinishMatch}
       onReopenMatch={onReopenMatch}

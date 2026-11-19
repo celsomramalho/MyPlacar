@@ -852,7 +852,6 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       updatedList = entries.map((entry) => (entry.pin === editingPin ? entryData : entry));
     } else {
       const isTargetLegacy = (item: TournamentEntry) => {
-        if (entryData.registrationId && item.registrationId && item.registrationId === entryData.registrationId) return true;
         const targetEmail = entryData.email?.toLowerCase().trim();
         const itemEmail = item.email?.toLowerCase().trim();
         if (targetEmail && itemEmail && targetEmail === itemEmail) return true;
@@ -1860,7 +1859,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {filteredEntries.map((entry) => {
+            {filteredEntries.map((entry, index) => {
               const entryCategories = categories.filter((c) =>
                 entry.categoryIds?.includes(c.id)
               );
@@ -1879,7 +1878,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
               return (
                 <div
-                  key={entry.pin || entry.email}
+                  key={entry.email ? `email:${entry.email.toLowerCase().trim()}` : entry.pin ? `pin:${entry.pin}` : `reg:${entry.registrationId || index}`}
                   className={`transition-colors ${isExpanded ? 'bg-emerald-50/30' : 'hover:bg-slate-50/70'}`}
                 >
                   <div className="p-3.5 sm:p-4 flex items-center justify-between gap-3">

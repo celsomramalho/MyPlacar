@@ -47,6 +47,8 @@ export interface UseCourtMatchActionsResult {
   freeCourtMatch: (matchId: string) => Promise<void>;
   /** Finaliza a partida na quadra, calculando vencedor e durationMinutes */
   finishCourtMatch: (matchId: string) => Promise<void>;
+  /** Zera o placar da partida em andamento sem liberar a quadra. */
+  resetCourtMatch: (matchId: string) => Promise<void>;
   /** Alterna o status de interdição de uma quadra */
   toggleInterdictCourt: (courtName: string) => Promise<void>;
   /** Alterna o congelamento manual de uma partida na fila */
@@ -66,8 +68,13 @@ export interface UseCourtMatchActionsResult {
     matchId: string,
     setIndex: number,
     p1Val: string,
-    p2Val: string
+    p2Val: string,
+    gameP1?: string,
+    gameP2?: string,
+    servingOrderOffset?: number | null
   ) => void;
+  /** Salva quem saca e a ordem dos parceiros na rotação do saque. */
+  handleServeSettingsChange: (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => void;
   /** Persiste o placar imediatamente ao perder o foco */
   handleScoreBlur: () => Promise<void>;
   /** Salva a data da partida com debounce de persistência */
@@ -258,6 +265,41 @@ export function useCourtMatchActions({
     [event, isReadOnly, parseMatchSets, persistEventChanges]
   );
 
+  const resetCourtMatch = useCallback(async (matchId: string) => {
+    if (isReadOnly) return;
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const nowIso = new Date().toISOString();
+    const nextMatches = (event.matches || []).map((m) => {
+      if (m.id !== matchId) return m;
+      const rules = resolveMatchRules(
+        event.sportRules,
+        m.phase,
+        (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+        Number(event.gamesPerSet || event.config?.gamesPerSet || (event.eventType === 'Super 8' ? 4 : 6)),
+        event.sportId || event.config?.sportType
+      );
+      const scores: MatchSetScore[] = Array.from({ length: rules.setsCount }, () => ({ p1: 0, p2: 0, gameP1: '0', gameP2: '0' }));
+      return {
+        ...m,
+        scores,
+        result: '',
+        status: 'live' as const,
+        startedAt: nowIso,
+        finishedAt: undefined,
+        durationMinutes: undefined,
+        winnerPairId: undefined,
+        loserPairId: undefined,
+        servingOrderOffset: undefined,
+        serveOrderP1Reversed: false,
+        serveOrderP2Reversed: false,
+      };
+    });
+    await persistEventChanges(nextMatches);
+  }, [event, isReadOnly, persistEventChanges]);
+
   // ─── Ação: Interditar / Liberar quadra ────────────────────────────────────
 
   const toggleInterdictCourt = useCallback(
@@ -303,6 +345,7 @@ export function useCourtMatchActions({
         const gamesPerSet = resolved.gamesPerSet;
 
         const currentScores: MatchSetScore[] = Array.from({ length: totalSets }, (_, i) => ({
+          ...m.scores?.[i],
           p1: m.scores?.[i]?.p1 !== undefined ? m.scores[i].p1 : null,
           p2: m.scores?.[i]?.p2 !== undefined ? m.scores[i].p2 : null,
         }));
@@ -355,7 +398,7 @@ export function useCourtMatchActions({
   // quando dois onScoreChange sequenciais leriam o mesmo snapshot de event.
 
   const handleScoreUndoChange = useCallback(
-    (matchId: string, setIndex: number, p1Val: string, p2Val: string) => {
+    (matchId: string, setIndex: number, p1Val: string, p2Val: string, gameP1 = '0', gameP2 = '0', servingOrderOffset?: number | null) => {
       if (isReadOnly) return;
       const nextMatches = (event.matches || []).map((m) => {
         if (m.id !== matchId) return m;
@@ -371,6 +414,7 @@ export function useCourtMatchActions({
         const gamesPerSet = resolved.gamesPerSet;
 
         const currentScores: MatchSetScore[] = Array.from({ length: totalSets }, (_, i) => ({
+          ...m.scores?.[i],
           p1: m.scores?.[i]?.p1 !== undefined ? m.scores[i].p1 : null,
           p2: m.scores?.[i]?.p2 !== undefined ? m.scores[i].p2 : null,
         }));
@@ -380,7 +424,7 @@ export function useCourtMatchActions({
           const n = parseInt(raw, 10);
           return isNaN(n) ? null : n;
         };
-        currentScores[setIndex] = { p1: toVal(p1Val), p2: toVal(p2Val) };
+        currentScores[setIndex] = { ...currentScores[setIndex], p1: toVal(p1Val), p2: toVal(p2Val), gameP1, gameP2 };
 
         let setsWon1 = 0;
         let setsWon2 = 0;
@@ -407,7 +451,7 @@ export function useCourtMatchActions({
           status = m.court || hasAnyScore ? 'live' : m.status || 'waiting';
         }
 
-        return { ...m, scores: currentScores, result: resultParts.join(' '), status, court: m.court };
+        return { ...m, scores: currentScores, result: resultParts.join(' '), status, court: m.court, servingOrderOffset: servingOrderOffset === null ? undefined : servingOrderOffset ?? m.servingOrderOffset };
       });
 
       const progressed = updatePlayoffProgression(event.pairs || [], nextMatches);
@@ -419,6 +463,19 @@ export function useCourtMatchActions({
       }, saveDebounceMs);
     },
     [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs]
+  );
+
+  const handleServeSettingsChange = useCallback(
+    async (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => {
+      if (isReadOnly) return;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      const nextMatches = (event.matches || []).map((m) => m.id === matchId ? { ...m, ...settings } : m);
+      await persistEventChanges(nextMatches);
+    },
+    [event, isReadOnly, persistEventChanges]
   );
 
   // ─── Ação: Flush do placar ao perder o foco ───────────────────────────────
@@ -454,10 +511,12 @@ export function useCourtMatchActions({
     assignMatchToCourt,
     freeCourtMatch,
     finishCourtMatch,
+    resetCourtMatch,
     toggleInterdictCourt,
     toggleFreezeMatch,
     handleScoreInputChange,
     handleScoreUndoChange,
+    handleServeSettingsChange,
     handleScoreBlur,
     handleMatchDateChange,
     parseMatchSets,

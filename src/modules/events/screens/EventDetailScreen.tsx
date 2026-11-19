@@ -1408,7 +1408,7 @@ export const EventDetailScreen: React.FC<Props> = ({
 
   // Restaura p1 e p2 de um set atomicamente (undo do tap-to-score)
   // Evita race condition de dois handleScoreChange sequenciais lendo o mesmo snapshot.
-  const handleScoreUndoChange = (matchId: string, setIndex: number, p1Val: string, p2Val: string) => {
+  const handleScoreUndoChange = (matchId: string, setIndex: number, p1Val: string, p2Val: string, gameP1 = '0', gameP2 = '0', servingOrderOffset?: number | null) => {
     if (isReadOnly || !canSubmitScore) return;
     const toVal = (raw: string) => {
       const n = parseInt(raw, 10);
@@ -1417,25 +1417,32 @@ export const EventDetailScreen: React.FC<Props> = ({
     const nextMatches = (event.matches || []).map((m) => {
       if (m.id !== matchId) return m;
 
-      const currentScores: MatchSetScore[] = [
-        {
-          p1: m.scores?.[0]?.p1 !== undefined ? m.scores[0].p1 : null,
-          p2: m.scores?.[0]?.p2 !== undefined ? m.scores[0].p2 : null,
-        },
-      ];
+      const resolved = resolveMatchRules(
+        event.sportRules,
+        m.phase,
+        (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+        Number(event.gamesPerSet || event.config?.gamesPerSet || 6),
+        event.sportId || event.config?.sportType
+      );
+      const scoreCount = Math.max(resolved.setsCount, m.scores?.length || 0);
+      const currentScores: MatchSetScore[] = Array.from({ length: scoreCount }, (_, i) => ({
+        ...m.scores?.[i],
+        p1: m.scores?.[i]?.p1 !== undefined ? m.scores[i].p1 : null,
+        p2: m.scores?.[i]?.p2 !== undefined ? m.scores[i].p2 : null,
+        gameP1: m.scores?.[i]?.gameP1 || '0',
+        gameP2: m.scores?.[i]?.gameP2 || '0',
+      }));
+      currentScores[setIndex] = { ...currentScores[setIndex], p1: toVal(p1Val), p2: toVal(p2Val), gameP1, gameP2 };
 
-      currentScores[setIndex] = { p1: toVal(p1Val), p2: toVal(p2Val) };
-
-      const s1 = currentScores[0].p1;
-      const s2 = currentScores[0].p2;
-      const hasAnyScore = s1 !== null || s2 !== null;
-      const result = s1 !== null && s2 !== null ? `${s1}/${s2}` : m.result || '';
+      const hasAnyScore = currentScores.some((score) => score.p1 !== null || score.p2 !== null || (score.gameP1 && score.gameP1 !== '0') || (score.gameP2 && score.gameP2 !== '0'));
+      const result = currentScores.filter((score) => score.p1 !== null && score.p2 !== null).map((score) => `${score.p1}/${score.p2}`).join(' ');
 
       return {
         ...m,
         scores: currentScores,
         result,
-        status: m.status === 'finished' ? ('finished' as const) : hasAnyScore ? ('live' as const) : ('waiting' as const),
+        status: m.status === 'finished' ? ('finished' as const) : m.court || hasAnyScore ? ('live' as const) : ('waiting' as const),
+        servingOrderOffset: servingOrderOffset === null ? undefined : servingOrderOffset ?? m.servingOrderOffset,
       };
     });
 
@@ -1452,6 +1459,56 @@ export const EventDetailScreen: React.FC<Props> = ({
         }
       }
     }, 600);
+  };
+
+  const persistMatchControls = async (nextMatches: TournamentMatch[]) => {
+    if (saveMatchesTimeoutRef.current) {
+      clearTimeout(saveMatchesTimeoutRef.current);
+      saveMatchesTimeoutRef.current = null;
+    }
+    setEvent((prev) => ({ ...prev, matches: nextMatches }));
+    const db = getDb();
+    if (!db) return;
+    try {
+      await updateEventMatches(db as Firestore, event.pin, nextMatches);
+    } catch (err) {
+      console.error('Erro ao atualizar controles da partida no Firestore:', err);
+    }
+  };
+
+  const handleMatchServeSettingsChange = (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => {
+    if (isReadOnly || !canSubmitScore) return;
+    const nextMatches = (event.matches || []).map((m) => m.id === matchId ? { ...m, ...settings } : m);
+    void persistMatchControls(nextMatches);
+  };
+
+  const handleResetMatchScore = (matchId: string) => {
+    if (isReadOnly || !canSubmitScore) return;
+    const nextMatches = (event.matches || []).map((m) => {
+      if (m.id !== matchId) return m;
+      const resolved = resolveMatchRules(
+        event.sportRules,
+        m.phase,
+        (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+        Number(event.gamesPerSet || event.config?.gamesPerSet || 6),
+        event.sportId || event.config?.sportType
+      );
+      return {
+        ...m,
+        scores: Array.from({ length: m.scores?.length || resolved.setsCount }, () => ({ p1: 0, p2: 0, gameP1: '0', gameP2: '0' })),
+        result: '',
+        status: m.court || m.status === 'live' ? 'live' as const : 'waiting' as const,
+        startedAt: m.court || m.status === 'live' ? new Date().toISOString() : undefined,
+        finishedAt: undefined,
+        durationMinutes: undefined,
+        winnerPairId: undefined,
+        loserPairId: undefined,
+        servingOrderOffset: undefined,
+        serveOrderP1Reversed: false,
+        serveOrderP2Reversed: false,
+      };
+    });
+    void persistMatchControls(nextMatches);
   };
 
   const handleMatchDateChange = (matchId: string, dateVal: string) => {
@@ -2956,7 +3013,7 @@ export const EventDetailScreen: React.FC<Props> = ({
                               const canUseRankingMatchActions =
                                 isRanking && canSubmitScore && isCurrentUserMatchParticipant && !isCurrentPlayerCancelled;
 
-                              const sportId = event.sportId || event.config?.sportType;
+                              const sportId = event.sportId || event.config?.sportType || activeCategory.sportId;
                               const rules = resolveMatchRules(
                                 event.sportRules,
                                 match.phase,
@@ -2977,6 +3034,8 @@ export const EventDetailScreen: React.FC<Props> = ({
                                   totalSets={rules.setsCount}
                                   gamesPerSet={rules.gamesPerSet}
                                   isTotalGamesSet={isTotalGamesSet}
+                                  sportId={sportId}
+                                  sportRules={event.sportRules}
                                   tieBreak={rules.tieBreak}
                                   tieBreakAt={rules.tieBreakAt}
                                   liveScore={
@@ -3006,6 +3065,8 @@ export const EventDetailScreen: React.FC<Props> = ({
                                   allCategoryFinished={allCatFinished}
                                   onScoreChange={lockParticipantMatchControls ? undefined : handleScoreChange}
                                   onUndoScore={lockParticipantMatchControls ? undefined : handleScoreUndoChange}
+                                  onServeSettingsChange={lockParticipantMatchControls ? undefined : handleMatchServeSettingsChange}
+                                  onResetMatch={lockParticipantMatchControls ? undefined : handleResetMatchScore}
                                   onMatchDateChange={lockParticipantMatchControls ? undefined : handleMatchDateChange}
                                   onFinishMatch={lockParticipantMatchControls ? undefined : handleFinishRankingMatch}
                                   onReopenMatch={

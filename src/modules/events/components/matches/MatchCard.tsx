@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw } from 'lucide-react';
-import type { TournamentMatch, TournamentPair } from '../../types';
+import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw, ArrowRightLeft, CircleDot, Dices, Loader2, RefreshCw } from 'lucide-react';
+import type { TournamentEvent, TournamentMatch, TournamentPair } from '../../types';
 import { getPhaseLabel, parseMatchSets, isSetScoreComplete } from '../../domain/brackets';
+import { resolveMatchRules } from '../../domain/rules/eventMatchRules';
 import { COURT_COLOR_PAIRS, COURT_TEAM_STYLES, getCourtColors } from '../../../../constants';
 
 type LegacyScoreChangeHandler = (matchId: string, player: 'p1' | 'p2', value: string) => void;
@@ -35,7 +36,11 @@ export interface MatchCardProps {
    * Chamado pelo undo do tap-to-score com p1 e p2 do set juntos,
    * de forma atômica (evita race condition de dois onScoreChange sequenciais).
    */
-  onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string) => void;
+  onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string, gameP1?: string, gameP2?: string, servingOrderOffset?: number | null) => void;
+  sportId?: string;
+  sportRules?: TournamentEvent['sportRules'];
+  onServeSettingsChange?: (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => void;
+  onResetMatch?: (matchId: string) => void | Promise<void>;
   onScoreBlur?: () => void;
   onMatchDateChange?: (matchId: string, date: string) => void;
   onFinishMatch?: (matchId: string) => void;
@@ -63,6 +68,10 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   allCategoryFinished = false,
   onScoreChange,
   onUndoScore,
+  sportId,
+  sportRules,
+  onServeSettingsChange,
+  onResetMatch,
   onScoreBlur,
   onMatchDateChange,
   onFinishMatch,
@@ -147,22 +156,85 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
   // ── Tap-to-score e Undo com histórico fiel de ambos os times ──────────────
   // Guarda a pilha de estados anteriores: { setIdx, p1, p2 }
-  const scoreHistoryRef = useRef<Array<{ setIdx: number; p1: string; p2: string }>>([]);
+  const scoreHistoryRef = useRef<Array<{ setIdx: number; p1: string; p2: string; gameP1: string; gameP2: string; servingOrderOffset?: number | null }>>([]);
   const [hasUndoSteps, setHasUndoSteps] = useState(false);
+  const [isDrawingServer, setIsDrawingServer] = useState(false);
+  const [drawPreview, setDrawPreview] = useState<0 | 1 | null>(null);
+  const drawTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const drawFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestServingOffsetRef = useRef<number | null>(match.servingOrderOffset ?? null);
+  const isTennisOrBeach = sportId === 'tennis' || sportId === 'beach-tennis';
+  const servingOffset = match.servingOrderOffset;
+  const servingTeam = servingOffset === undefined ? null : servingOffset % 2 === 0 ? 'p1' : 'p2';
+  const servingPartner = servingOffset !== undefined && servingOffset >= 2;
+  const team1FirstName = match.serveOrderP1Reversed ? team1P2Name || team1P1Name || team1Name : team1P1Name || team1Name;
+  const team1SecondName = match.serveOrderP1Reversed ? team1P1Name : team1P2Name;
+  const team2FirstName = match.serveOrderP2Reversed ? team2P2Name || team2P1Name || team2Name : team2P1Name || team2Name;
+  const team2SecondName = match.serveOrderP2Reversed ? team2P1Name : team2P2Name;
+
+  useEffect(() => () => {
+    if (drawTimerRef.current) clearInterval(drawTimerRef.current);
+    if (drawFinalizeTimerRef.current) clearTimeout(drawFinalizeTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    latestServingOffsetRef.current = match.servingOrderOffset ?? null;
+  }, [match.id, match.servingOrderOffset]);
 
   // Mantém o estado mais recente de cada set em memória local para cliques rápidos
-  const latestScoresRef = useRef<Record<number, { p1: string; p2: string }>>({});
+  const latestScoresRef = useRef<Record<number, { p1: string; p2: string; gameP1?: string; gameP2?: string }>>({});
 
   // Sincroniza latestScoresRef quando scores mudar de fora (props)
   useEffect(() => {
     scores.forEach((s, idx) => {
       const p1 = s.p1 !== null && s.p1 !== undefined ? String(s.p1) : '';
       const p2 = s.p2 !== null && s.p2 !== undefined ? String(s.p2) : '';
-      latestScoresRef.current[idx] = { p1, p2 };
+      latestScoresRef.current[idx] = { p1, p2, gameP1: s.gameP1 || '0', gameP2: s.gameP2 || '0' };
     });
   }, [scores]);
 
   const canTapScore = canSubmitScore && !isFinished && (!!onUndoScore || !!onScoreChange);
+  const hasAnyScoreActivity = scores.some((score) => Number(score.p1 || 0) > 0 || Number(score.p2 || 0) > 0 || (score.gameP1 && score.gameP1 !== '0') || (score.gameP2 && score.gameP2 !== '0'));
+  const canDrawStartingServer = canTapScore && isTennisOrBeach && !hasAnyScoreActivity;
+
+  const resetCurrentMatch = () => {
+    if (!onResetMatch || !canTapScore || isReadOnly) return;
+    if (!window.confirm('Deseja zerar a partida? Esta ação não pode ser desfeita.')) return;
+    scoreHistoryRef.current = [];
+    latestScoresRef.current = {};
+    latestServingOffsetRef.current = null;
+    setHasUndoSteps(false);
+    void onResetMatch(match.id);
+  };
+
+  const drawStartingServer = () => {
+    if (!onServeSettingsChange || !canDrawStartingServer || isDrawingServer) return;
+    setIsDrawingServer(true);
+    let rounds = 0;
+    let finalOffset: 0 | 1 = 0;
+    drawTimerRef.current = setInterval(() => {
+      finalOffset = Math.random() < 0.5 ? 0 : 1;
+      setDrawPreview(finalOffset);
+      rounds += 1;
+      if (rounds >= 3) {
+        if (drawTimerRef.current) clearInterval(drawTimerRef.current);
+        drawTimerRef.current = null;
+        drawFinalizeTimerRef.current = setTimeout(() => {
+          drawFinalizeTimerRef.current = null;
+          setIsDrawingServer(false);
+          setDrawPreview(null);
+          latestServingOffsetRef.current = finalOffset;
+          onServeSettingsChange(match.id, { servingOrderOffset: finalOffset });
+        }, 260);
+      }
+    }, 220);
+  };
+
+  const toggleServeOrder = (team: 'p1' | 'p2') => {
+    if (!onServeSettingsChange) return;
+    const field = team === 'p1' ? 'serveOrderP1Reversed' : 'serveOrderP2Reversed';
+    onServeSettingsChange(match.id, { [field]: !match[field] });
+  };
 
   // Determina se já há um vencedor definido pelo placar
   const setsToWin = Math.ceil(totalSets / 2);
@@ -198,11 +270,12 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   }, [totalSets, scores, gamesPerSet, isTotalGamesSet, tieBreak, tieBreakAt]);
 
   const applySetScore = useCallback(
-    (setIdx: number, p1Val: string, p2Val: string) => {
-      latestScoresRef.current[setIdx] = { p1: p1Val, p2: p2Val };
+    (setIdx: number, p1Val: string, p2Val: string, gameP1 = '0', gameP2 = '0', servingOrderOffset: number | null | undefined = latestServingOffsetRef.current) => {
+      latestScoresRef.current[setIdx] = { p1: p1Val, p2: p2Val, gameP1, gameP2 };
+      latestServingOffsetRef.current = servingOrderOffset ?? null;
 
       if (onUndoScore) {
-        onUndoScore(match.id, setIdx, p1Val, p2Val);
+        onUndoScore(match.id, setIdx, p1Val, p2Val, gameP1, gameP2, servingOrderOffset);
       } else if (onScoreChange) {
         if (onScoreChange.length <= 3) {
           (onScoreChange as LegacyScoreChangeHandler)(match.id, 'p1', p1Val);
@@ -213,8 +286,64 @@ export const MatchCard: React.FC<MatchCardProps> = ({
         }
       }
     },
-    [match.id, onUndoScore, onScoreChange]
+    [match.id, match.servingOrderOffset, onUndoScore, onScoreChange]
   );
+
+  const handleTapGame = useCallback((player: 'p1' | 'p2', setIdx: number) => {
+    if (!canIncrementScore || !isTennisOrBeach) return;
+    const score = scores[setIdx];
+    if (!score) return;
+    const latest = latestScoresRef.current[setIdx];
+    const oldP1 = latest?.p1 ?? String(score.p1 ?? '');
+    const oldP2 = latest?.p2 ?? String(score.p2 ?? '');
+    const oldGameP1 = latest?.gameP1 || score.gameP1 || '0';
+    const oldGameP2 = latest?.gameP2 || score.gameP2 || '0';
+    const previousServingOffset = latestServingOffsetRef.current;
+    const servingOrderOffset = previousServingOffset ?? 0;
+    scoreHistoryRef.current = [...scoreHistoryRef.current, { setIdx, p1: oldP1, p2: oldP2, gameP1: oldGameP1, gameP2: oldGameP2, servingOrderOffset: previousServingOffset }];
+    setHasUndoSteps(true);
+
+    const rules = resolveMatchRules(sportRules, match.phase, totalSets as 1 | 3 | 5, gamesPerSet, sportId);
+    const inTieBreak = rules.tieBreak && !isTotalGamesSet && oldP1 !== '' && oldP2 !== '' && (() => {
+      const [a, b] = rules.tieBreakAt.split('-').map(Number);
+      return Number(oldP1) === a && Number(oldP2) === b;
+    })();
+    let g1 = oldGameP1;
+    let g2 = oldGameP2;
+    let wonGame = false;
+    let nextServingOrderOffset = servingOrderOffset;
+    if (inTieBreak) {
+      if (player === 'p1') g1 = String(Number(g1) + 1); else g2 = String(Number(g2) + 1);
+      const a = Number(g1), b = Number(g2), target = rules.tieBreakPoints || 7;
+      wonGame = rules.tieBreakWinByTwo
+        ? Math.max(a, b) >= target && Math.abs(a - b) >= 2
+        : Math.max(a, b) >= target;
+      if (!wonGame && (a + b) % 2 === 1) nextServingOrderOffset = (nextServingOrderOffset + 1) % (pair1?.p2 || pair2?.p2 ? 4 : 2);
+    } else {
+      const values = ['0', '15', '30', '40'];
+      const mine = player === 'p1' ? g1 : g2;
+      const theirs = player === 'p1' ? g2 : g1;
+      if (mine === '40' && theirs === '40') {
+        if (rules.noAd) wonGame = true;
+        else if (player === 'p1') g1 = 'Ad'; else g2 = 'Ad';
+      } else if (mine === 'Ad') wonGame = true;
+      else if (theirs === 'Ad') { if (player === 'p1') g2 = '40'; else g1 = '40'; }
+      else if (mine === '40') wonGame = true;
+      else {
+        const next = values[Math.min(values.indexOf(mine), 2) + 1] || '15';
+        if (player === 'p1') g1 = next; else g2 = next;
+      }
+    }
+    let nextP1 = oldP1, nextP2 = oldP2;
+    if (wonGame) {
+      const n1 = Number(oldP1 || 0) + (player === 'p1' ? 1 : 0);
+      const n2 = Number(oldP2 || 0) + (player === 'p2' ? 1 : 0);
+      nextP1 = String(n1); nextP2 = String(n2); g1 = '0'; g2 = '0';
+      if (!inTieBreak) nextServingOrderOffset = (nextServingOrderOffset + 1) % (pair1?.p2 || pair2?.p2 ? 4 : 2);
+      if (isSetScoreComplete(n1, n2, rules.gamesPerSet, { isTotalGamesSet, tieBreak: rules.tieBreak, tieBreakAt: rules.tieBreakAt })) { g1 = '0'; g2 = '0'; }
+    }
+    applySetScore(setIdx, nextP1, nextP2, g1, g2, nextServingOrderOffset);
+  }, [canIncrementScore, isTennisOrBeach, scores, match, sportRules, totalSets, gamesPerSet, sportId, isTotalGamesSet, pair1, pair2, applySetScore]);
 
   const handleTapScore = useCallback(
     (player: 'p1' | 'p2', setIdxOverride?: number) => {
@@ -231,16 +360,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       // Salva o snapshot EXATO do placar de ambos os times ANTES do ponto
       scoreHistoryRef.current = [
         ...scoreHistoryRef.current,
-        { setIdx, p1: curP1, p2: curP2 },
+        { setIdx, p1: curP1, p2: curP2, gameP1: existing.gameP1 || scores[setIdx]?.gameP1 || '0', gameP2: existing.gameP2 || scores[setIdx]?.gameP2 || '0', servingOrderOffset: latestServingOffsetRef.current },
       ];
       setHasUndoSteps(true);
 
       const nextP1 = player === 'p1' ? String(Number(curP1 || 0) + 1) : (curP1 || '0');
       const nextP2 = player === 'p2' ? String(Number(curP2 || 0) + 1) : (curP2 || '0');
+      const nextServingOrderOffset = ((latestServingOffsetRef.current ?? 0) + 1) % (pair1?.p2 || pair2?.p2 ? 4 : 2);
 
-      applySetScore(setIdx, nextP1, nextP2);
+      applySetScore(setIdx, nextP1, nextP2, '0', '0', nextServingOrderOffset);
     },
-    [canIncrementScore, getActiveSetIdx, scores, applySetScore]
+    [canIncrementScore, getActiveSetIdx, scores, pair1, pair2, applySetScore]
   );
 
   const handleUndo = useCallback(() => {
@@ -251,7 +381,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       const prev = scoreHistoryRef.current[scoreHistoryRef.current.length - 1];
       scoreHistoryRef.current = scoreHistoryRef.current.slice(0, -1);
       setHasUndoSteps(scoreHistoryRef.current.length > 0);
-      applySetScore(prev.setIdx, prev.p1, prev.p2);
+      applySetScore(prev.setIdx, prev.p1, prev.p2, prev.gameP1, prev.gameP2, prev.servingOrderOffset);
       return;
     }
 
@@ -261,7 +391,14 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     const cur = latestScoresRef.current[activeSetIdx] || {
       p1: scores[activeSetIdx]?.p1 !== null && scores[activeSetIdx]?.p1 !== undefined ? String(scores[activeSetIdx].p1) : '',
       p2: scores[activeSetIdx]?.p2 !== null && scores[activeSetIdx]?.p2 !== undefined ? String(scores[activeSetIdx].p2) : '',
+      gameP1: scores[activeSetIdx]?.gameP1 || '0',
+      gameP2: scores[activeSetIdx]?.gameP2 || '0',
     };
+    const previousGamePoint = (value: string) => value === 'Ad' ? '40' : value === '40' ? '30' : value === '30' ? '15' : value === '15' ? '0' : '0';
+    if ((cur.gameP1 && cur.gameP1 !== '0') || (cur.gameP2 && cur.gameP2 !== '0')) {
+      applySetScore(activeSetIdx, cur.p1, cur.p2, previousGamePoint(cur.gameP1 || '0'), previousGamePoint(cur.gameP2 || '0'));
+      return;
+    }
     const n1 = Number(cur.p1 || 0);
     const n2 = Number(cur.p2 || 0);
 
@@ -293,7 +430,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     };
     scoreHistoryRef.current = [
       ...scoreHistoryRef.current,
-      { setIdx, p1: existing.p1, p2: existing.p2 },
+      { setIdx, p1: existing.p1, p2: existing.p2, gameP1: scores[setIdx]?.gameP1 || '0', gameP2: scores[setIdx]?.gameP2 || '0', servingOrderOffset: latestServingOffsetRef.current },
     ];
     setHasUndoSteps(true);
 
@@ -303,7 +440,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   };
 
   const isAnyScorePositive = scores.some(
-    (s) => (s.p1 !== null && Number(s.p1) > 0) || (s.p2 !== null && Number(s.p2) > 0)
+    (s) => (s.p1 !== null && Number(s.p1) > 0) || (s.p2 !== null && Number(s.p2) > 0) || (s.gameP1 && s.gameP1 !== '0') || (s.gameP2 && s.gameP2 !== '0')
   );
   // Botão Undo permanece habilitado mesmo com vencedor (para permitir corrigir/voltar placar)
   const canUndo = canTapScore && (hasUndoSteps || isAnyScorePositive);
@@ -548,17 +685,14 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               handleTapScore('p1', 0);
             }}
           >
-            <div className="min-w-0 flex-1 pointer-events-none">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="min-w-0">
-                  <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
-                    {team1P1Name || team1Name}
-                  </p>
-                  {team1P2Name && (
-                    <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
-                      {team1P2Name}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <p className={`text-sm font-black leading-tight truncate ${servingTeam === 'p1' && !servingPartner ? 'bg-[#bef264] text-[#1a1a1a] px-1 rounded' : t1Style.text}`}>{team1FirstName}</p>
+                    {servingTeam === 'p1' && !servingPartner && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0" title="Sacador atual"><CircleDot size={12} /></span>}
+                  </div>
+                  {team1SecondName && <div className="flex items-center gap-1"><p className={`text-sm font-black leading-tight truncate ${servingTeam === 'p1' && servingPartner ? 'bg-[#bef264] text-[#1a1a1a] px-1 rounded' : t1Style.text}`}>{team1SecondName}</p>{servingTeam === 'p1' && servingPartner && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0" title="Sacador atual"><CircleDot size={12} /></span>}</div>}
                 </div>
                 {isFinished && match.winnerPairId === match.pair1Id && (
                   <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
@@ -569,11 +703,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   </span>
                 )}
               </div>
-              {team1Code && (
-                <p className={`text-xs font-bold mt-0.5 ${t1Style.subText}`}>
-                  [{team1Code}]
-                </p>
-              )}
+              <div className="flex items-center gap-2 mt-0.5">{team1Code && <p className={`text-xs font-bold ${t1Style.subText}`}>[{team1Code}]</p>}{team1P2Name && isTennisOrBeach && <button type="button" disabled={isReadOnly} onClick={(e) => { e.stopPropagation(); toggleServeOrder('p1'); }} className="w-6 h-6 rounded-full bg-white text-slate-700 shadow-sm flex items-center justify-center disabled:opacity-40" title="Trocar a ordem de saque dos parceiros"><ArrowRightLeft size={12} /></button>}</div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
@@ -596,29 +726,35 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                     : t1Style.input
                 }`}
               />
+              {isTennisOrBeach && <button type="button" disabled={!canIncrementScore} onClick={(e) => { e.stopPropagation(); handleTapGame('p1', 0); }} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-black text-sm ${t1Style.input} disabled:opacity-50`} style={{ borderColor: '#ffd400', borderWidth: 3 }} title="Adicionar ponto ao game atual do Time 1">{scores[0]?.gameP1 || '0'}</button>}
             </div>
           </div>
 
           {/* Linha central: label set1 + botão undo */}
-          <div className="flex items-center justify-between px-3 py-0.5">
-            <div className="w-9 sm:w-10" />
-            {canTapScore ? (
+          <div className="flex items-center gap-1 px-1 py-0.5">
+            <div className="flex items-center gap-1">
+              {isTennisOrBeach && onResetMatch && <button type="button" onClick={resetCurrentMatch} disabled={!canTapScore || isReadOnly} className="min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40" title="Zerar partida"><RefreshCw size={13} /><span className="text-[9px] leading-tight font-black">0 x 0</span></button>}
+              {isTennisOrBeach && canDrawStartingServer && <button type="button" onClick={drawStartingServer} disabled={isDrawingServer} className="min-w-[110px] h-9 px-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white shadow-sm flex items-center justify-center gap-1 disabled:opacity-40" title="Sortear qual time inicia sacando">{isDrawingServer ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Dices size={14} className="text-yellow-300 shrink-0" />}<span className="text-[9px] leading-tight font-black text-center">{isDrawingServer ? `Time ${(drawPreview ?? 0) + 1} inicia sacando` : <>Sortear<br />sacador</>}</span></button>}
+            </div>
+            {canTapScore && isAnyScorePositive ? (
               <button
                 type="button"
                 onClick={handleUndo}
                 disabled={!canUndo}
-                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                className={`h-8 px-1.5 rounded-xl border flex items-center justify-center gap-1 transition-all active:scale-90 ${
                   canUndo
                     ? 'bg-amber-50 border border-amber-300 text-amber-600 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-700 shadow-sm cursor-pointer'
                     : 'bg-slate-50 border border-slate-200 text-slate-300 cursor-not-allowed'
                 }`}
-                title={canUndo ? 'Desfazer último ponto' : 'Nenhum ponto para desfazer'}
+                title={canUndo ? 'Voltar' : 'Nenhum ponto para desfazer'}
               >
                 <RotateCcw size={14} />
+                <span className="text-[9px] font-black">Voltar</span>
               </button>
             ) : (
               <div />
             )}
+            <div className="flex-1" />
             <div className="flex items-center gap-1 w-9 sm:w-10 justify-center">
               {tieBreakSetFlags[0] && (
                 <span className="text-[9px] font-black text-amber-600 animate-pulse leading-none">TB</span>
@@ -627,6 +763,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 set1
               </span>
             </div>
+            {isTennisOrBeach && <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>}
           </div>
 
           {/* Equipe 2 — clique fora do input incrementa +1 */}
@@ -637,17 +774,11 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               handleTapScore('p2', 0);
             }}
           >
-            <div className="min-w-0 flex-1 pointer-events-none">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="min-w-0">
-                  <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
-                    {team2P1Name || team2Name}
-                  </p>
-                  {team2P2Name && (
-                    <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
-                      {team2P2Name}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-1"><p className={`text-sm font-black leading-tight truncate ${servingTeam === 'p2' && !servingPartner ? 'bg-[#bef264] text-[#1a1a1a] px-1 rounded' : t2Style.text}`}>{team2FirstName}</p>{servingTeam === 'p2' && !servingPartner && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0" title="Sacador atual"><CircleDot size={12} /></span>}</div>
+                  {team2SecondName && <div className="flex items-center gap-1"><p className={`text-sm font-black leading-tight truncate ${servingTeam === 'p2' && servingPartner ? 'bg-[#bef264] text-[#1a1a1a] px-1 rounded' : t2Style.text}`}>{team2SecondName}</p>{servingTeam === 'p2' && servingPartner && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0" title="Sacador atual"><CircleDot size={12} /></span>}</div>}
                 </div>
                 {isFinished && match.winnerPairId === match.pair2Id && (
                   <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
@@ -658,11 +789,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   </span>
                 )}
               </div>
-              {team2Code && (
-                <p className={`text-xs font-bold mt-0.5 ${t2Style.subText}`}>
-                  [{team2Code}]
-                </p>
-              )}
+              <div className="flex items-center gap-2 mt-0.5">{team2Code && <p className={`text-xs font-bold ${t2Style.subText}`}>[{team2Code}]</p>}{team2P2Name && isTennisOrBeach && <button type="button" disabled={isReadOnly} onClick={(e) => { e.stopPropagation(); toggleServeOrder('p2'); }} className="w-6 h-6 rounded-full bg-white text-slate-700 shadow-sm flex items-center justify-center disabled:opacity-40" title="Trocar a ordem de saque dos parceiros"><ArrowRightLeft size={12} /></button>}</div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
@@ -685,6 +812,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                     : t2Style.input
                 }`}
               />
+              {isTennisOrBeach && <button type="button" disabled={!canIncrementScore} onClick={(e) => { e.stopPropagation(); handleTapGame('p2', 0); }} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-black text-sm ${t2Style.input} disabled:opacity-50`} style={{ borderColor: '#ffd400', borderWidth: 3 }} title="Adicionar ponto ao game atual do Time 2">{scores[0]?.gameP2 || '0'}</button>}
             </div>
           </div>
         </div>
@@ -699,17 +827,11 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               handleTapScore('p1');
             }}
           >
-            <div className="min-w-0 flex-1 pointer-events-none">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="min-w-0">
-                  <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
-                    {team1P1Name || team1Name}
-                  </p>
-                  {team1P2Name && (
-                    <p className={`text-sm font-black leading-tight truncate ${t1Style.text}`}>
-                      {team1P2Name}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-1"><p className={`text-sm font-black leading-tight truncate ${servingTeam === 'p1' && !servingPartner ? 'bg-[#bef264] text-[#1a1a1a] px-1 rounded' : t1Style.text}`}>{team1FirstName}</p>{servingTeam === 'p1' && !servingPartner && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0" title="Sacador atual"><CircleDot size={12} /></span>}</div>
+                  {team1SecondName && <div className="flex items-center gap-1"><p className={`text-sm font-black leading-tight truncate ${servingTeam === 'p1' && servingPartner ? 'bg-[#bef264] text-[#1a1a1a] px-1 rounded' : t1Style.text}`}>{team1SecondName}</p>{servingTeam === 'p1' && servingPartner && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0" title="Sacador atual"><CircleDot size={12} /></span>}</div>}
                 </div>
                 {isFinished && match.winnerPairId === match.pair1Id && (
                   <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
@@ -720,9 +842,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   </span>
                 )}
               </div>
-              {team1Code && (
-                <p className={`text-xs font-bold mt-0.5 ${t1Style.subText}`}>[{team1Code}]</p>
-              )}
+              <div className="flex items-center gap-2 mt-0.5">{team1Code && <p className={`text-xs font-bold ${t1Style.subText}`}>[{team1Code}]</p>}{team1P2Name && isTennisOrBeach && <button type="button" disabled={isReadOnly} onClick={(e) => { e.stopPropagation(); toggleServeOrder('p1'); }} className="w-6 h-6 rounded-full bg-white text-slate-700 shadow-sm flex items-center justify-center disabled:opacity-40" title="Trocar a ordem de saque dos parceiros"><ArrowRightLeft size={12} /></button>}</div>
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
@@ -758,29 +878,35 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   />
                 );
               })}
+              {isTennisOrBeach && <button type="button" disabled={!canIncrementScore} onClick={(e) => { e.stopPropagation(); handleTapGame('p1', getActiveSetIdx()); }} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-black text-sm ${t1Style.input} disabled:opacity-50`} style={{ borderColor: '#ffd400', borderWidth: 3 }} title="Adicionar ponto ao game atual do Time 1">{scores[getActiveSetIdx()]?.gameP1 || '0'}</button>}
             </div>
           </div>
 
           {/* Labels dos sets + botão undo */}
-          <div className="flex items-center justify-between px-3 py-0.5">
-            <div />
-            {canTapScore ? (
+          <div className="flex items-center gap-1 px-1 py-0.5">
+            <div className="flex items-center gap-1">
+              {isTennisOrBeach && onResetMatch && <button type="button" onClick={resetCurrentMatch} disabled={!canTapScore || isReadOnly} className="min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40" title="Zerar partida"><RefreshCw size={13} /><span className="text-[9px] leading-tight font-black">0 x 0</span></button>}
+              {isTennisOrBeach && canDrawStartingServer && <button type="button" onClick={drawStartingServer} disabled={isDrawingServer} className="min-w-[110px] h-9 px-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white shadow-sm flex items-center justify-center gap-1 disabled:opacity-40" title="Sortear qual time inicia sacando">{isDrawingServer ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Dices size={14} className="text-yellow-300 shrink-0" />}<span className="text-[9px] leading-tight font-black text-center">{isDrawingServer ? `Time ${(drawPreview ?? 0) + 1} inicia sacando` : <>Sortear<br />sacador</>}</span></button>}
+            </div>
+            {canTapScore && isAnyScorePositive ? (
               <button
                 type="button"
                 onClick={handleUndo}
                 disabled={!canUndo}
-                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                className={`h-8 px-1.5 rounded-xl border flex items-center justify-center gap-1 transition-all active:scale-90 ${
                   canUndo
                     ? 'bg-amber-50 border border-amber-300 text-amber-600 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-700 shadow-sm cursor-pointer'
                     : 'bg-slate-50 border border-slate-200 text-slate-300 cursor-not-allowed'
                 }`}
-                title={canUndo ? 'Desfazer último ponto' : 'Nenhum ponto para desfazer'}
+                title={canUndo ? 'Voltar' : 'Nenhum ponto para desfazer'}
               >
                 <RotateCcw size={14} />
+                <span className="text-[9px] font-black">Voltar</span>
               </button>
             ) : (
               <div />
             )}
+            <div className="flex-1" />
             <div className="flex items-center gap-1.5">
               <span className="w-5" />
               {scores.map((_, setIdx) => (
@@ -796,6 +922,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   </span>
                 </div>
               ))}
+              {isTennisOrBeach && <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>}
             </div>
           </div>
 
@@ -807,17 +934,11 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               handleTapScore('p2');
             }}
           >
-            <div className="min-w-0 flex-1 pointer-events-none">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="min-w-0">
-                  <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
-                    {team2P1Name || team2Name}
-                  </p>
-                  {team2P2Name && (
-                    <p className={`text-sm font-black leading-tight truncate ${t2Style.text}`}>
-                      {team2P2Name}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-1"><p className={`text-sm font-black leading-tight truncate ${servingTeam === 'p2' && !servingPartner ? 'bg-[#bef264] text-[#1a1a1a] px-1 rounded' : t2Style.text}`}>{team2FirstName}</p>{servingTeam === 'p2' && !servingPartner && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0" title="Sacador atual"><CircleDot size={12} /></span>}</div>
+                  {team2SecondName && <div className="flex items-center gap-1"><p className={`text-sm font-black leading-tight truncate ${servingTeam === 'p2' && servingPartner ? 'bg-[#bef264] text-[#1a1a1a] px-1 rounded' : t2Style.text}`}>{team2SecondName}</p>{servingTeam === 'p2' && servingPartner && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0" title="Sacador atual"><CircleDot size={12} /></span>}</div>}
                 </div>
                 {isFinished && match.winnerPairId === match.pair2Id && (
                   <Trophy size={14} className="text-amber-300 shrink-0" fill="currentColor" />
@@ -828,9 +949,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   </span>
                 )}
               </div>
-              {team2Code && (
-                <p className={`text-xs font-bold mt-0.5 ${t2Style.subText}`}>[{team2Code}]</p>
-              )}
+              <div className="flex items-center gap-2 mt-0.5">{team2Code && <p className={`text-xs font-bold ${t2Style.subText}`}>[{team2Code}]</p>}{team2P2Name && isTennisOrBeach && <button type="button" disabled={isReadOnly} onClick={(e) => { e.stopPropagation(); toggleServeOrder('p2'); }} className="w-6 h-6 rounded-full bg-white text-slate-700 shadow-sm flex items-center justify-center disabled:opacity-40" title="Trocar a ordem de saque dos parceiros"><ArrowRightLeft size={12} /></button>}</div>
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
@@ -866,6 +985,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                   />
                 );
               })}
+              {isTennisOrBeach && <button type="button" disabled={!canIncrementScore} onClick={(e) => { e.stopPropagation(); handleTapGame('p2', getActiveSetIdx()); }} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-black text-sm ${t2Style.input} disabled:opacity-50`} style={{ borderColor: '#ffd400', borderWidth: 3 }} title="Adicionar ponto ao game atual do Time 2">{scores[getActiveSetIdx()]?.gameP2 || '0'}</button>}
             </div>
           </div>
         </div>

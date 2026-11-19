@@ -833,7 +833,8 @@ export const ensureEventEntriesRegistrationIds = async (
   // Ordena por joinedAt para manter a ordem cronológica de inscrição
   const sorted = [...entries].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
 
-  const existingIds = new Set<number>(
+  const seenIds = new Set<number>();
+  const occupiedIds = new Set<number>(
     sorted
       .map((e) => Number(e.registrationId))
       .filter((n) => !isNaN(n) && n > 0)
@@ -841,31 +842,40 @@ export const ensureEventEntriesRegistrationIds = async (
 
   let nextSeq = 1;
   const getNextAvailableId = () => {
-    while (existingIds.has(nextSeq)) {
+    while (occupiedIds.has(nextSeq)) {
       nextSeq++;
     }
-    existingIds.add(nextSeq);
+    occupiedIds.add(nextSeq);
     return nextSeq;
   };
 
+  const toUpdate: { email: string; registrationId: number }[] = [];
+
   const updatedEntries = sorted.map((entry) => {
-    if (!entry.registrationId || isNaN(Number(entry.registrationId)) || Number(entry.registrationId) <= 0) {
+    const numId = Number(entry.registrationId);
+    const isInvalid = !entry.registrationId || isNaN(numId) || numId <= 0;
+    const isDuplicate = !isInvalid && seenIds.has(numId);
+
+    if (isInvalid || isDuplicate) {
       hasChanges = true;
       const assignedId = getNextAvailableId();
+      seenIds.add(assignedId);
+      if (entry.email) {
+        toUpdate.push({ email: entry.email, registrationId: assignedId });
+      }
       return { ...entry, registrationId: assignedId };
     }
+
+    seenIds.add(numId);
     return entry;
   });
 
   if (hasChanges && db && eventPin) {
-    for (const entry of updatedEntries) {
-      const original = entries.find((e) => e.email === entry.email);
-      if (!original?.registrationId && entry.registrationId && entry.email) {
-        try {
-          void updateEventEntry(db, eventPin, entry.email, { registrationId: entry.registrationId });
-        } catch (err) {
-          console.warn('Erro ao auto-atribuir Inscrição_ID para', entry.email, err);
-        }
+    for (const item of toUpdate) {
+      try {
+        void updateEventEntry(db, eventPin, item.email, { registrationId: item.registrationId });
+      } catch (err) {
+        console.warn('Erro ao auto-atribuir Inscrição_ID para', item.email, err);
       }
     }
   }

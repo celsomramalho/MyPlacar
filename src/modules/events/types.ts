@@ -71,6 +71,9 @@ export const orderPairEntriesForMixed = (
 export interface MatchSetScore {
   p1?: number | null;
   p2?: number | null;
+  /** Current game points for the live score (0/15/30/40/Ad or tie-break points). */
+  gameP1?: string;
+  gameP2?: string;
   inProgress?: boolean;
 }
 
@@ -89,6 +92,10 @@ export interface TournamentMatch {
   status: 'waiting' | 'live' | 'finished';
   result?: string;
   scores?: MatchSetScore[];
+  /** 0/2 = team 1 serves, 1/3 = team 2 serves; 2/3 indicate partner order. */
+  servingOrderOffset?: number;
+  serveOrderP1Reversed?: boolean;
+  serveOrderP2Reversed?: boolean;
   winnerPairId?: string;
   loserPairId?: string;
   ownerPin?: string;
@@ -468,30 +475,31 @@ export const getNextRegistrationId = (
 
 /**
  * Remove duplicatas de inscrições do evento (em memória), garantindo
- * unicidade por registrationId, e-mail ou PIN fixo/real.
+ * unicidade por e-mail ou PIN fixo/real.
+ * Nota: NUNCA usar registrationId para deduplicar, pois se dois atletas
+ * diferentes sofrerem colisão de ID numérico sequencial, um atleta não deve engolir o outro.
  */
 export const deduplicateTournamentEntries = (entries: TournamentEntry[]): TournamentEntry[] => {
   if (!entries || entries.length <= 1) return entries || [];
   const result: TournamentEntry[] = [];
-  const seenKeys = new Set<string>();
+  const seenEmails = new Set<string>();
+  const seenPins = new Set<string>();
 
   for (const entry of entries) {
-    const regIdKey = entry.registrationId ? `reg_${entry.registrationId}` : null;
-    const emailKey = entry.email?.trim() ? `email_${entry.email.toLowerCase().trim()}` : null;
+    const emailKey = entry.email?.trim() ? entry.email.toLowerCase().trim() : null;
     const pin = entry.pin?.toUpperCase().trim();
-    const pinKey = pin && !pin.startsWith('TEMP') && !pin.startsWith('SIMP') ? `pin_${pin}` : null;
+    const pinKey = pin && !pin.startsWith('TEMP') && !pin.startsWith('SIMP') ? pin : null;
 
-    const isDuplicate =
-      Boolean((regIdKey && seenKeys.has(regIdKey)) ||
-      (emailKey && seenKeys.has(emailKey)) ||
-      (pinKey && seenKeys.has(pinKey)));
+    const isDuplicate = Boolean(
+      (emailKey && seenEmails.has(emailKey)) ||
+      (pinKey && seenPins.has(pinKey))
+    );
 
     if (isDuplicate) {
       const existingIdx = result.findIndex(
         (e) =>
-          (regIdKey && e.registrationId && `reg_${e.registrationId}` === regIdKey) ||
-          (emailKey && e.email && `email_${e.email.toLowerCase().trim()}` === emailKey) ||
-          (pinKey && e.pin && `pin_${e.pin.toUpperCase().trim()}` === pinKey)
+          (emailKey && e.email && e.email.toLowerCase().trim() === emailKey) ||
+          (pinKey && e.pin && e.pin.toUpperCase().trim() === pinKey)
       );
       if (existingIdx >= 0) {
         result[existingIdx] = {
@@ -502,9 +510,8 @@ export const deduplicateTournamentEntries = (entries: TournamentEntry[]): Tourna
         };
       }
     } else {
-      if (regIdKey) seenKeys.add(regIdKey);
-      if (emailKey) seenKeys.add(emailKey);
-      if (pinKey) seenKeys.add(pinKey);
+      if (emailKey) seenEmails.add(emailKey);
+      if (pinKey) seenPins.add(pinKey);
       result.push(entry);
     }
   }
