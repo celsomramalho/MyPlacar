@@ -1,4 +1,4 @@
-const CACHE_NAME = 'myplacar-build-mwnof2kk';
+const CACHE_NAME = 'myplacar-build-mwnuggrp';
 const OFFLINE_ASSETS = %%OFFLINE_ASSETS%%;
 
 const PRECACHE_URLS = [

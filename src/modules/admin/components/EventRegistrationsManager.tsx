@@ -18,7 +18,7 @@ import { EventRegistrationForm } from '@modules/events/domain/registration';
 import { reconcileLegacyPendingPaymentAmounts } from '@modules/events/domain/registration/engine/pricingEngine';
 import { createRegistrationCancellationRequest, getRegistrationCancellationRefundPercent, hasRegistrationReceiptAttachment } from '@modules/events/services/registrationCancellation';
 import { useUI } from '@modules/ui';
-import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
+import { CheckInStatusButton } from '@shared/components/CheckInStatusButton';
 import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 
 const formatPhone = (value: string) => {
@@ -1740,30 +1740,18 @@ export const EventRegistrationsManager: React.FC<Props> = ({
                     {/* Lado Direito: Check-in + Inscrição_ID + Botão de Ação / Chevron */}
                     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                       {/* Check-in só aparece nos dias do torneio */}
-                      {isTournamentActive && <button
-                        type="button"
-                        disabled={isReadOnly}
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (isReadOnly) return;
-                          await handleToggleCheckIn(entry);
-                        }}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-black transition-all ${
-                          isCheckedIn
-                            ? 'bg-rose-100 text-rose-900 border-rose-300 hover:bg-rose-200 shadow-xs'
-                            : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                        } ${isReadOnly ? 'cursor-default opacity-80' : 'cursor-pointer active:scale-95'}`}
-                        title={
-                          !isTournamentActive
-                            ? 'Check-in disponível apenas nos dias do torneio (hoje)'
-                            : isCheckedIn
-                            ? 'Check-in confirmado (clique para desmarcar)'
-                            : 'Marcar check-in'
-                        }
-                      >
-                        <CheckInPinIcon checked={isCheckedIn} size={19} />
-                        <span className="text-[11px] hidden sm:inline font-bold">Check-in</span>
-                      </button>}
+                      {isTournamentActive && (
+                        <CheckInStatusButton
+                          athleteName={entry.nickname || entry.name}
+                          checked={isCheckedIn}
+                          disabled={isReadOnly}
+                          compactOnMobile
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isReadOnly) void handleToggleCheckIn(entry);
+                          }}
+                        />
+                      )}
 
                       <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
                         {formatRegistrationId(entry.registrationId)}

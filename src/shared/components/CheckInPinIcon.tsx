@@ -14,8 +14,8 @@ export const CheckInPinIcon: React.FC<CheckInPinIconProps> = ({ checked, size = 
     width={size}
     height={size}
     className={className}
-    fill={checked ? '#ef4444' : '#fff1f2'}
-    stroke={checked ? '#dc2626' : '#f87171'}
+    fill={checked ? '#10b981' : '#eef2ff'}
+    stroke={checked ? '#059669' : '#818cf8'}
     strokeWidth="1.8"
     strokeLinecap="round"
     strokeLinejoin="round"
@@ -27,7 +27,7 @@ export const CheckInPinIcon: React.FC<CheckInPinIconProps> = ({ checked, size = 
         <path d="m6.8 10.9 3.6 3.7 7.2-8" fill="none" stroke="#00c853" strokeWidth="4.2" />
       </>
     ) : (
-      <circle cx="12" cy="10" r="2.8" fill="#fff" stroke="#ef4444" strokeWidth="1.2" />
+        <circle cx="12" cy="10" r="2.8" fill="#fff" stroke="#6366f1" strokeWidth="1.2" />
     )}
   </svg>
 );

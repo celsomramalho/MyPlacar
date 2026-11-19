@@ -2,6 +2,7 @@
 import {
   ArrowLeft,
   ChevronDown,
+  ChevronUp,
   Tag,
   Users,
   Trophy,
@@ -10,6 +11,8 @@ import {
   Award,
   ShieldAlert,
   Menu,
+  Search,
+  X,
 } from 'lucide-react';
 import type { TournamentEvent, EventCategory, TournamentEntry, EventSponsor } from '@modules/events/types';
 import type { FirebaseAdminSportIcon } from '@infra/firebase/adminIcons';
@@ -21,9 +24,11 @@ import { EventSponsorsManager } from './EventSponsorsManager';
 import { EventPaymentsView } from './EventPaymentsView';
 import { calculateQueueState } from '@modules/events/domain/queue';
 import { isCoAdminOfEvent, isEventHelper, isJudgeOfEvent, isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
-import { isEntryCheckedInToday, getTodayDateStr } from '@modules/events/services/eventRegistrationPeriod';
+import { entryHasFinishedMatchOnDate, getTodayDateStr, isEntryCheckedInToday, isTournamentPeriodActive } from '@modules/events/services/eventRegistrationPeriod';
 import { getEventPaymentStats } from '@modules/events/services/eventPaymentStats';
 import { saveAdminEventCheckIn } from '@infra/firebase/events';
+import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
+import { CheckInStatusButton } from '@shared/components/CheckInStatusButton';
 
 export type EventDashboardTab =
   | 'categories'
@@ -55,6 +60,9 @@ export const EventDashboardView: React.FC<Props> = ({
   const blockMenuRef = React.useRef<HTMLDivElement>(null);
   const [isBlockMenuOpen, setIsBlockMenuOpen] = useState(false);
   const [savingCheckInEmail, setSavingCheckInEmail] = useState<string | null>(null);
+  const [checkInSearchQuery, setCheckInSearchQuery] = useState('');
+  const [isArrivedCheckInsExpanded, setIsArrivedCheckInsExpanded] = useState(false);
+  const [isPendingCheckInsExpanded, setIsPendingCheckInsExpanded] = useState(false);
 
 
   // Fecha menu de blocos ao clicar fora
@@ -120,32 +128,100 @@ export const EventDashboardView: React.FC<Props> = ({
   }, [event.pairs]);
 
   const checkedInCount = entries.filter((e) => isEntryCheckedInToday(e, event.matches, pairsById, todayStr)).length;
+  const prioritizedCheckInEntries = React.useMemo(() => entries.map((entry) => {
+    const entryCategories = (entry.categoryIds || [])
+      .map((id) => categories.find((category) => category.id === id))
+      .filter((category): category is EventCategory => Boolean(category))
+      .sort((a, b) => (a.priority ?? 9999) - (b.priority ?? 9999) || a.name.localeCompare(b.name, 'pt-BR'));
+    return {
+      entry,
+      entryCategories,
+      primaryCategory: entryCategories[0],
+      priority: entryCategories[0]?.priority ?? 9999,
+      checkedIn: isEntryCheckedInToday(entry, event.matches, pairsById, todayStr),
+    };
+  }).sort((a, b) =>
+    a.priority - b.priority
+    || Number(b.checkedIn) - Number(a.checkedIn)
+    || (a.entry.nickname || a.entry.name).localeCompare(b.entry.nickname || b.entry.name, 'pt-BR')
+  ), [entries, categories, event.matches, pairsById, todayStr]);
+  const filteredCheckInEntries = React.useMemo(() => {
+    const term = checkInSearchQuery.trim().toLocaleLowerCase('pt-BR');
+    if (!term) return prioritizedCheckInEntries;
+    const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normalizedTerm = normalize(term);
+    return prioritizedCheckInEntries.filter(({ entry, entryCategories }) => {
+      const searchable = [
+        entry.nickname,
+        entry.name,
+        entry.registrationId == null ? '' : String(entry.registrationId),
+        entry.pin,
+        ...entryCategories.map((category) => category.name),
+      ].filter(Boolean).join(' ').toLocaleLowerCase('pt-BR');
+      return normalize(searchable).includes(normalizedTerm);
+    });
+  }, [checkInSearchQuery, prioritizedCheckInEntries]);
+  const arrivedCheckInEntries = filteredCheckInEntries.filter(({ checkedIn }) => checkedIn);
+  const pendingCheckInEntries = filteredCheckInEntries.filter(({ checkedIn }) => !checkedIn);
+
+  useEffect(() => {
+    if (!checkInSearchQuery.trim()) return;
+    setIsArrivedCheckInsExpanded(arrivedCheckInEntries.length > 0);
+    setIsPendingCheckInsExpanded(pendingCheckInEntries.length > 0);
+  }, [checkInSearchQuery, arrivedCheckInEntries.length, pendingCheckInEntries.length]);
 
   const isPrimary = isPrimaryAdminEmail(adminEmail);
   const isCoAdmin = !isPrimary && (event.coAdminPins || []).some((pin) => pin.toUpperCase().trim() === (adminPin || '').toUpperCase().trim());
   const isHelper = !isPrimary && !isCoAdmin && (event.helperPins || []).some((pin) => pin.toUpperCase().trim() === (adminPin || '').toUpperCase().trim());
   const isJudge = !isPrimary && !isCoAdmin && !isHelper && isJudgeOfEvent(event, adminPin);
-  const canJudgeOperate = isJudge && event.active === true;
   useEffect(() => {
     if (isHelper && (activeTab === 'registrations' || activeTab === 'pending-payments')) setActiveTab('categories');
   }, [isHelper, activeTab]);
   const isReadOnly = event.active !== true && !isPrimary;
+  const canManageParticipantCheckIns = !isReadOnly && (isPrimary || isCoAdmin || isHelper || isJudge);
+  const canChangeCheckInNow = canManageParticipantCheckIns && event.active === true && isTournamentPeriodActive(event);
 
   useEffect(() => {
     if (isJudge && activeTab !== 'formed-teams' && activeTab !== 'checkins') setActiveTab('formed-teams');
   }, [isJudge, activeTab]);
 
-  const handleJudgeCheckIn = async (entry: TournamentEntry, checkedIn: boolean) => {
-    if (!canJudgeOperate || !adminEmail || !adminPin || !entry.email || savingCheckInEmail) return;
+  const handleCheckInChange = async (entry: TournamentEntry, checkedIn: boolean) => {
+    if (!canChangeCheckInNow || !adminEmail || !entry.email || savingCheckInEmail) return;
+    if (!checkedIn && entryHasFinishedMatchOnDate(entry, event.matches, pairsById, todayStr)) return;
     setSavingCheckInEmail(entry.email);
     try {
-      await saveAdminEventCheckIn(event.pin, adminEmail, adminPin, { ...entry, checkedIn });
+      await saveAdminEventCheckIn(event.pin, adminEmail, adminPin || '', { ...entry, checkedIn });
     } catch (error) {
       console.error('Erro ao atualizar check-in pelo juiz:', error);
     } finally {
       setSavingCheckInEmail(null);
     }
   };
+
+  const renderCheckInEntry = ({ entry, entryCategories, primaryCategory, priority, checkedIn }: (typeof filteredCheckInEntries)[number]) => (
+    <div key={entry.email || entry.pin || entry.name} className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-black text-slate-800">{entry.nickname || entry.name}</p>
+        <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-bold text-slate-400">
+          {primaryCategory && <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-600">Prio {priority}</span>}
+          <span className="truncate">{entryCategories.map((category) => category.name).join(', ') || 'Sem categoria'}</span>
+        </div>
+      </div>
+      {canManageParticipantCheckIns ? (
+        <CheckInStatusButton
+          athleteName={entry.nickname || entry.name}
+          checked={checkedIn}
+          loading={savingCheckInEmail === entry.email}
+          disabled={!canChangeCheckInNow || !entry.email || (checkedIn && entryHasFinishedMatchOnDate(entry, event.matches, pairsById, todayStr))}
+          onClick={() => void handleCheckInChange(entry, !checkedIn)}
+        />
+      ) : (
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${checkedIn ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+          {checkedIn ? 'Check-in feito' : 'Pendente'}
+        </span>
+      )}
+    </div>
+  );
 
   const safeUpdateEvent = (updated: TournamentEvent) => {
     if (isReadOnly) return;
@@ -616,6 +692,9 @@ export const EventDashboardView: React.FC<Props> = ({
           event={event}
           onUpdateEvent={safeUpdateEvent}
           isReadOnly={isReadOnly}
+          canCheckInParticipants={!isReadOnly && (isPrimary || isCoAdmin || isHelper || isJudge)}
+          adminEmail={adminEmail}
+          adminPin={adminPin}
         />
       )}
 
@@ -628,8 +707,106 @@ export const EventDashboardView: React.FC<Props> = ({
 
       {activeTab === 'checkins' && (
         <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-slate-100 p-5"><CheckCircle2 size={24} className="text-indigo-500" /><div><h3 className="text-base font-black text-slate-800">Check-in dos Participantes</h3><p className="text-xs font-bold text-slate-400">{checkedInCount} de {entries.length} participantes com check-in hoje.</p></div></div>
-          <div className="divide-y divide-slate-100">{entries.map((entry) => { const checked = isEntryCheckedInToday(entry, event.matches, pairsById, todayStr); return <div key={entry.email || entry.pin || entry.name} className="flex items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="truncate text-sm font-black text-slate-800">{entry.nickname || entry.name}</p><p className="text-[10px] font-bold text-slate-400">{(entry.categoryIds || []).map((id) => categories.find((category) => category.id === id)?.name).filter(Boolean).join(', ')}</p></div>{isJudge ? <button type="button" disabled={!canJudgeOperate || !entry.email || savingCheckInEmail === entry.email} onClick={() => void handleJudgeCheckIn(entry, !checked)} className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-black disabled:opacity-50 ${checked ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>{savingCheckInEmail === entry.email ? 'Salvando…' : checked ? 'Check-in feito' : 'Fazer check-in'}</button> : <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${checked ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{checked ? 'Check-in feito' : 'Pendente'}</span>}</div>; })}</div>
+          <div className="flex items-center gap-3 border-b border-slate-100 p-5">
+            <CheckCircle2 size={24} className="text-indigo-500" />
+            <div>
+              <h3 className="text-base font-black text-slate-800">Check-in dos Participantes</h3>
+              <p className="text-xs font-bold text-slate-400">{checkedInCount} de {entries.length} participantes com check-in hoje.</p>
+              <p className="mt-1 text-[10px] font-bold text-slate-400">Categorias de maior prioridade primeiro; presentes aparecem antes dos pendentes.</p>
+            </div>
+          </div>
+          {(() => {
+            const hasQuery = checkInSearchQuery.trim().length > 0;
+            const hasResults = filteredCheckInEntries.length > 0;
+            const searchStyles = getSearchInputStyles({ query: checkInSearchQuery, resultCount: filteredCheckInEntries.length });
+            const wrapperBorder = !hasQuery
+              ? 'border-blue-200 bg-blue-50/40'
+              : hasResults
+                ? 'border-emerald-400 bg-emerald-50/40'
+                : 'border-rose-400 bg-rose-50/40';
+            return (
+              <div className={`mx-4 rounded-2xl border-2 p-2.5 transition-all ${wrapperBorder}`}>
+                <div className="relative w-full">
+                  <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${searchStyles.iconClasses}`} />
+                  <input
+                    type="text"
+                    value={checkInSearchQuery}
+                    onChange={(e) => setCheckInSearchQuery(e.target.value)}
+                    placeholder="Pesquisar por nome ou ID da inscrição..."
+                    className={`w-full h-11 pl-9 pr-8 border-2 rounded-xl font-bold text-sm outline-none transition-all ${searchStyles.inputClasses}`}
+                  />
+                  {checkInSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCheckInSearchQuery('');
+                        setIsArrivedCheckInsExpanded(false);
+                        setIsPendingCheckInsExpanded(false);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+                      title="Limpar pesquisa"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {hasQuery && (
+                  <p className={`mt-1.5 px-1 text-[11px] font-bold ${hasResults ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {hasResults
+                      ? `${filteredCheckInEntries.length} ${filteredCheckInEntries.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}`
+                      : `Nenhum resultado para "${checkInSearchQuery}"`}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+          {filteredCheckInEntries.length === 0 ? (
+            <p className="p-6 text-center text-sm font-bold text-slate-400">
+              {checkInSearchQuery.trim() ? 'Nenhum atleta encontrado.' : 'Nenhum participante inscrito.'}
+            </p>
+          ) : (
+            <div className="space-y-3 p-4">
+              <section className="overflow-hidden rounded-3xl border-2 border-emerald-300/80 bg-white shadow-sm transition-all hover:border-emerald-400">
+                <button
+                  type="button"
+                  onClick={() => setIsArrivedCheckInsExpanded((prev) => !prev)}
+                  className="group flex w-full cursor-pointer select-none items-center justify-between gap-3 p-4 text-left"
+                >
+                  <span className="text-sm font-black tracking-tight text-slate-800">Já chegaram · {arrivedCheckInEntries.length} atletas</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-colors group-hover:bg-slate-200">
+                    {isArrivedCheckInsExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </span>
+                </button>
+                {isArrivedCheckInsExpanded && (
+                  <div className="animate-in fade-in divide-y divide-slate-100 border-t border-slate-100">
+                    {arrivedCheckInEntries.length > 0
+                      ? arrivedCheckInEntries.map(renderCheckInEntry)
+                      : <p className="px-4 py-5 text-center text-xs font-bold text-slate-400">Ninguém chegou ainda nesta pesquisa.</p>}
+                  </div>
+                )}
+              </section>
+
+              <section className="overflow-hidden rounded-3xl border-2 border-amber-300/80 bg-white shadow-sm transition-all hover:border-amber-400">
+                <button
+                  type="button"
+                  onClick={() => setIsPendingCheckInsExpanded((prev) => !prev)}
+                  className="group flex w-full cursor-pointer select-none items-center justify-between gap-3 p-4 text-left"
+                >
+                  <span className="text-sm font-black tracking-tight text-slate-800">Precisam fazer check-in · {pendingCheckInEntries.length} atletas</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-colors group-hover:bg-slate-200">
+                    {isPendingCheckInsExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </span>
+                </button>
+                {isPendingCheckInsExpanded && (
+                  <div className="animate-in fade-in divide-y divide-slate-100 border-t border-slate-100">
+                    {pendingCheckInEntries.length > 0
+                      ? pendingCheckInEntries.map(renderCheckInEntry)
+                      : <p className="px-4 py-5 text-center text-xs font-bold text-emerald-600">Todos os atletas encontrados já chegaram.</p>}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
         </section>
       )}
     </div>

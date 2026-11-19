@@ -59,7 +59,7 @@ import { addCommunication } from '@infra/firebase/communications';
 
 import type { Firestore } from 'firebase/firestore';
 import { copyToClipboard } from '@shared/utils/clipboard';
-import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
+import { CheckInStatusButton } from '@shared/components/CheckInStatusButton';
 import type { ModalConfig } from '@modules/ui/types';
 import { EventRegistrationForm, hasAvailableVacanciesForAthlete } from '../domain/registration';
 import { RankingStandingStatsBlock } from '../components/RankingStandingStatsBlock';
@@ -2240,20 +2240,12 @@ export const EventDetailScreen: React.FC<Props> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Check-in no período do torneio para participante com inscrição válida */}
                     {isConfirmed && isTournamentActive && (
-                      <button
-                        type="button"
-                        onClick={handleParticipantCheckIn}
-                        disabled={isCheckingIn}
-                        className={`px-3.5 py-2 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm border ${
-                          isCheckedIn
-                            ? 'bg-rose-100 hover:bg-rose-200 text-rose-900 border-rose-300'
-                            : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
-                        }`}
-                        title={isCheckedIn ? 'Check-in confirmado (clique para alternar)' : 'Fazer check-in no evento'}
-                      >
-                        <CheckInPinIcon checked={isCheckedIn} size={19} />
-                        <span>{isCheckingIn ? 'Confirmando...' : isCheckedIn ? 'Check-in realizado' : 'Fazer check-in'}</span>
-                      </button>
+                      <CheckInStatusButton
+                        athleteName={currentUserEntry.nickname || currentUserEntry.name}
+                        checked={isCheckedIn}
+                        loading={isCheckingIn}
+                        onClick={() => void handleParticipantCheckIn()}
+                      />
                     )}
                     {canPayCurrentEntry && !isCancelled && (
                       <button

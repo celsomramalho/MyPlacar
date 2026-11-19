@@ -22,6 +22,7 @@ import type { TournamentEvent } from '../../../types';
 import { isSetScoreComplete } from '@modules/events/domain/brackets/engine/matchScoreEngine';
 import { resolveMatchRules } from '../../rules/eventMatchRules';
 import { getCourtColors, COURT_TEAM_STYLES } from '../../../../../constants';
+import type { QueueCategoryColor } from '../utils/queueCategoryColors';
 
 export { COURT_TEAM_STYLES };
 
@@ -80,6 +81,7 @@ export interface CourtCardProps {
   court: CourtState;
   index: number;
   isReadOnly: boolean;
+  categoryColor?: QueueCategoryColor;
   pairsById: Record<string, TournamentPair>;
   totalSets: number;
   gamesPerSet: number;
@@ -120,6 +122,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   court,
   index,
   isReadOnly,
+  categoryColor,
   pairsById,
   totalSets,
   gamesPerSet,
@@ -510,7 +513,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
           {isBusy && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black border bg-amber-100 text-amber-900 border-amber-300 whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-              Ocupada (Ao vivo)
+              Ocupada (ao vivo)
             </span>
           )}
           {isBusy && activeMatch && (
@@ -579,7 +582,15 @@ export const CourtCard: React.FC<CourtCardProps> = ({
         <div className="mt-1 p-3 bg-white/95 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center text-[10px] font-black text-slate-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg whitespace-nowrap">
+              <span
+                style={categoryColor ? {
+                  backgroundColor: categoryColor.backgroundColor,
+                  borderColor: categoryColor.borderColor,
+                  color: categoryColor.color,
+                } : undefined}
+                className={`inline-flex items-center gap-1.5 text-[10px] font-black border px-2 py-0.5 rounded-lg whitespace-nowrap ${categoryColor ? '' : 'text-slate-600 bg-amber-50 border-amber-200'}`}
+              >
+                {categoryColor && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor.indicatorColor }} />}
                 {activeCat?.abbreviation || activeCat?.name || ''}
                 {activeCat && ' · '}
                 {phaseLabel}
@@ -1018,7 +1029,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
       {isFree && (
         <p className="text-xs font-bold text-slate-400 whitespace-nowrap truncate">
-          Aguardando chamada de jogos · Quadra pronta para receber a próxima partida.
+          Aguardando chamada de jogos · quadra pronta para receber a próxima partida.
         </p>
       )}
 

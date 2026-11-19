@@ -346,7 +346,7 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
 
   const pendingMatches = allMatches.filter((m) => m.status !== 'finished' && m.status !== 'live');
 
-  // ─── 4. Ordenação por categoria e alternância circular de chaves ──────────
+  // ─── 4. Ordenação por prioridade, alternando categorias e chaves ──────────
 
   const matchesByCategory = new Map<string, TournamentMatch[]>();
   for (const m of pendingMatches) {
@@ -364,12 +364,13 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     return (catA?.name || '').localeCompare(catB?.name || '');
   });
 
-  const orderedMatches: TournamentMatch[] = [];
+  const categoryQueues: Array<{ priority: number; matches: TournamentMatch[] }> = [];
 
   for (const catId of sortedCategoryIds) {
     const catMatches = matchesByCategory.get(catId) || [];
     const chaveMatchesMap = new Map<number, TournamentMatch[]>();
     const otherMatches: TournamentMatch[] = [];
+    const categoryOrderedMatches: TournamentMatch[] = [];
 
     for (const m of catMatches) {
       const chNum = getChaveNumber(m.phase);
@@ -394,7 +395,7 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
         hasMore = false;
         for (const q of queues) {
           if (q.length > 0) {
-            orderedMatches.push(q.shift()!);
+            categoryOrderedMatches.push(q.shift()!);
             hasMore = true;
           }
         }
@@ -402,7 +403,33 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     }
 
     otherMatches.sort((a, b) => (a.order ?? a.matchNumber ?? 0) - (b.order ?? b.matchNumber ?? 0));
-    orderedMatches.push(...otherMatches);
+    categoryOrderedMatches.push(...otherMatches);
+    const category = categoryMap.get(catId);
+    categoryQueues.push({ priority: category?.priority ?? 9999, matches: categoryOrderedMatches });
+  }
+
+  // Categorias com a mesma prioridade compartilham a fila em rodízio.
+  // Dentro de cada categoria, a ordem de fases e partidas já foi preservada acima.
+  const queuesByPriority = new Map<number, TournamentMatch[][]>();
+  categoryQueues.forEach(({ priority, matches }) => {
+    if (!queuesByPriority.has(priority)) queuesByPriority.set(priority, []);
+    queuesByPriority.get(priority)!.push(matches);
+  });
+
+  const orderedMatches: TournamentMatch[] = [];
+  const sortedPriorities = Array.from(queuesByPriority.keys()).sort((a, b) => a - b);
+  for (const priority of sortedPriorities) {
+    const categoryRoundRobinQueues = queuesByPriority.get(priority)!;
+    let hasMore = true;
+    while (hasMore) {
+      hasMore = false;
+      for (const categoryQueue of categoryRoundRobinQueues) {
+        if (categoryQueue.length > 0) {
+          orderedMatches.push(categoryQueue.shift()!);
+          hasMore = true;
+        }
+      }
+    }
   }
 
   // ─── 5. Elegibilidade e semáforo de cada partida ──────────────────────────
@@ -460,12 +487,19 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     };
   });
 
-  // ─── 6. Ordenação final por cor: Verde → Amarela → Cinza → Vermelha ───────
+  // ─── 6. Mantém prioridade da categoria e ordena por prontidão dentro dela ──
 
   const colorOrder: Record<string, number> = { green: 1, yellow: 2, gray: 3, red: 4 };
-  const orderedQueue = [...evaluatedQueue].sort(
-    (a, b) => colorOrder[a.queueStatus] - colorOrder[b.queueStatus]
-  );
+  const orderedQueue = evaluatedQueue
+    .map((item, originalOrder) => ({ item, originalOrder }))
+    .sort((a, b) => {
+      const priorityA = a.item.category?.priority ?? 9999;
+      const priorityB = b.item.category?.priority ?? 9999;
+      return priorityA - priorityB
+        || colorOrder[a.item.queueStatus] - colorOrder[b.item.queueStatus]
+        || a.originalOrder - b.originalOrder;
+    })
+    .map(({ item }) => item);
 
   // ─── 7. Simulação de estimativas de tempo de chamada ─────────────────────
 

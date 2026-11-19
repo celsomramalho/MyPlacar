@@ -8,7 +8,7 @@ import { formatRegistrationId } from '../../types';
 import { RankingStandingStatsBlock } from '../RankingStandingStatsBlock';
 import { Super8StandingStatsBlock } from '../Super8StandingStatsBlock';
 import { ParticipantMatchHistory } from './ParticipantMatchHistory';
-import { CheckInPinIcon } from '@shared/components/CheckInPinIcon';
+import { CheckInStatusButton } from '@shared/components/CheckInStatusButton';
 
 export interface ParticipantRowProps {
   entry: TournamentEntry;
@@ -252,23 +252,16 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = ({
             )}
 
           {checkInStatus && (
-            <button
-              type="button"
+            <CheckInStatusButton
+              compact
+              athleteName={entry.nickname || entry.name}
+              checked={checkInStatus.checked}
               disabled={checkInStatus.disabled}
               onClick={(e) => {
                 e.stopPropagation();
                 checkInStatus.onToggle(entry);
               }}
-              title={checkInStatus.checked ? 'Check-in confirmado (clique para desmarcar)' : 'Marcar check-in'}
-              aria-label={checkInStatus.checked ? 'Desmarcar check-in' : 'Marcar check-in'}
-              className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${
-                checkInStatus.checked
-                  ? 'bg-rose-100 border-rose-300 hover:bg-rose-200'
-                  : 'bg-rose-50 border-rose-200 hover:bg-rose-100'
-              } ${checkInStatus.disabled ? 'opacity-60 cursor-default' : 'cursor-pointer active:scale-95'}`}
-            >
-              <CheckInPinIcon checked={checkInStatus.checked} size={21} />
-            </button>
+            />
           )}
 
           {onEdit && (

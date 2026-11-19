@@ -1,5 +1,6 @@
 import React from 'react';
 import { Layers, Clock } from 'lucide-react';
+import { formatWaitDuration } from '../utils/formatWaitDuration';
 
 export interface QueueHeaderStatsProps {
   visibleMatchesCount: number;
@@ -63,16 +64,16 @@ export const QueueHeaderStats: React.FC<QueueHeaderStatsProps> = ({
           <div className="flex items-center gap-2 flex-wrap mt-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              {freeCourtsCount} {freeCourtsCount === 1 ? 'Livre' : 'Livres'}
+              {freeCourtsCount} {freeCourtsCount === 1 ? 'livre' : 'livres'}
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              {busyCourtsCount} {busyCourtsCount === 1 ? 'Ocupada' : 'Ocupadas'}
+              {busyCourtsCount} {busyCourtsCount === 1 ? 'ocupada' : 'ocupadas'}
             </span>
             {interdictedCourtsCount > 0 && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-red-50 text-red-700 border border-red-200 whitespace-nowrap">
                 <span className="w-2 h-2 rounded-full bg-red-500" />
-                {interdictedCourtsCount} {interdictedCourtsCount === 1 ? 'Interditada' : 'Interditadas'}
+                {interdictedCourtsCount} {interdictedCourtsCount === 1 ? 'interditada' : 'interditadas'}
               </span>
             )}
             <span className="inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
@@ -82,7 +83,7 @@ export const QueueHeaderStats: React.FC<QueueHeaderStatsProps> = ({
             {freeCourtsCount === 0 && nextCourtFreeWaitMinutes !== undefined && (
               <span className="inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-xl bg-sky-50 text-sky-800 border border-sky-200 whitespace-nowrap">
                 <Clock size={11} className="text-sky-600" />
-                Próxima liberação: ~{nextCourtFreeWaitMinutes} min (~{nextCourtFreeTimeStr})
+                Próxima liberação: ~{nextCourtFreeWaitMinutes} min (~{formatWaitDuration(nextCourtFreeWaitMinutes)})
               </span>
             )}
           </div>

@@ -9,6 +9,10 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import type { QueueMatchItem } from '../types';
+import type { TournamentEntry } from '@modules/events/types';
+import { CheckInStatusButton } from '@shared/components/CheckInStatusButton';
+import type { QueueCategoryColor } from '../utils/queueCategoryColors';
+import { formatWaitDuration } from '../utils/formatWaitDuration';
 
 export interface QueueMatchCardProps {
   item: QueueMatchItem;
@@ -19,6 +23,11 @@ export interface QueueMatchCardProps {
   onToggleFreezeMatch: (matchId: string) => void;
   onToggleSelectCourt: (matchId: string) => void;
   onAssignMatchToCourt: (matchId: string, courtName: string) => void;
+  canCheckInParticipants?: boolean;
+  isEntryCheckedIn?: (entry: TournamentEntry) => boolean;
+  isCheckInDisabled?: (entry: TournamentEntry) => boolean;
+  onToggleCheckIn?: (entry: TournamentEntry) => void;
+  categoryColor?: QueueCategoryColor;
 }
 
 export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
@@ -30,6 +39,11 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
   onToggleFreezeMatch,
   onToggleSelectCourt,
   onAssignMatchToCourt,
+  canCheckInParticipants = false,
+  isEntryCheckedIn,
+  isCheckInDisabled,
+  onToggleCheckIn,
+  categoryColor,
 }) => {
   const { match, category, queueStatus, conflictReason, pair1Name, pair2Name, phaseLabel } = item;
 
@@ -75,7 +89,15 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
 
           {/* Categoria e Prioridade */}
           {category && (
-            <span className="text-[10px] font-black text-slate-600 bg-white/90 border border-slate-200 px-2 py-0.5 rounded-lg whitespace-nowrap shrink-0">
+            <span
+              style={categoryColor ? {
+                backgroundColor: categoryColor.backgroundColor,
+                borderColor: categoryColor.borderColor,
+                color: categoryColor.color,
+              } : undefined}
+              className={`inline-flex items-center gap-1.5 text-[10px] font-black border px-2 py-0.5 rounded-lg whitespace-nowrap shrink-0 ${categoryColor ? '' : 'text-slate-600 bg-white/90 border-slate-200'}`}
+            >
+              {categoryColor && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor.indicatorColor }} />}
               {category.name} (Prio {category.priority ?? 1})
             </span>
           )}
@@ -83,12 +105,12 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
           {/* Status Badge */}
           {isGreen && (
             <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap shrink-0">
-              Pronta para Quadra
+              Pronta para quadra
             </span>
           )}
           {isYellow && (
             <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap shrink-0">
-              Aguardando Chamada
+              Aguardando chamada
             </span>
           )}
           {isRed && (
@@ -96,8 +118,8 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
               <AlertTriangle size={10} />
               {conflictReason
                 ? conflictReason.includes('fase anterior')
-                  ? 'Aguardando Fase'
-                  : 'Conflito de Jogador'
+                  ? 'Aguardando fase'
+                  : 'Conflito de jogador'
                 : 'Congelada'}
             </span>
           )}
@@ -107,12 +129,12 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
             item.estimatedWaitMinutes === 0 ? (
               <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 whitespace-nowrap shrink-0">
                 <Zap size={10} className="fill-emerald-600 text-emerald-600" />
-                Chamada Imediata
+                Chamada imediata
               </span>
             ) : item.estimatedWaitMinutes !== undefined ? (
               <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-300 flex items-center gap-1 whitespace-nowrap shrink-0">
                 <Clock size={10} />
-                Previsão: em ~{item.estimatedWaitMinutes} min (~{item.estimatedCallTimeStr})
+                Previsão: em ~{item.estimatedWaitMinutes} min (~{formatWaitDuration(item.estimatedWaitMinutes)})
               </span>
             ) : null
           )}
@@ -207,16 +229,34 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
 
       {/* Nomes dos Times */}
       <div className="text-xs font-black text-slate-800 space-y-1 w-full">
-        <p className="whitespace-nowrap truncate w-full">
-          {pair1Name}{' '}
+        <p className="whitespace-nowrap truncate w-full flex items-center gap-1">
+          {match.pair1?.p1 && match.pair1?.p2 ? (
+            [match.pair1.p1, match.pair1.p2].map((entry, index) => {
+              const checked = isEntryCheckedIn?.(entry) ?? false;
+              return <React.Fragment key={entry.email || entry.pin || `${match.id}-p1-${index}`}>
+                {index > 0 && <span className="text-slate-400">&</span>}
+                {canCheckInParticipants && <CheckInStatusButton compact athleteName={entry.nickname || entry.name} checked={checked} disabled={isCheckInDisabled?.(entry)} onClick={() => onToggleCheckIn?.(entry)} />}
+                <span>{entry.nickname || entry.name || 'Atleta'}</span>
+              </React.Fragment>;
+            })
+          ) : <>{pair1Name}{' '}</>}
           {match.pair1?.teamCode && (
             <span className="text-[10px] text-slate-400 font-bold">
               [{match.pair1.teamCode}]
             </span>
           )}
         </p>
-        <p className="whitespace-nowrap truncate w-full">
-          {pair2Name}{' '}
+        <p className="whitespace-nowrap truncate w-full flex items-center gap-1">
+          {match.pair2?.p1 && match.pair2?.p2 ? (
+            [match.pair2.p1, match.pair2.p2].map((entry, index) => {
+              const checked = isEntryCheckedIn?.(entry) ?? false;
+              return <React.Fragment key={entry.email || entry.pin || `${match.id}-p2-${index}`}>
+                {index > 0 && <span className="text-slate-400">&</span>}
+                {canCheckInParticipants && <CheckInStatusButton compact athleteName={entry.nickname || entry.name} checked={checked} disabled={isCheckInDisabled?.(entry)} onClick={() => onToggleCheckIn?.(entry)} />}
+                <span>{entry.nickname || entry.name || 'Atleta'}</span>
+              </React.Fragment>;
+            })
+          ) : <>{pair2Name}{' '}</>}
           {match.pair2?.teamCode && (
             <span className="text-[10px] text-slate-400 font-bold">
               [{match.pair2.teamCode}]

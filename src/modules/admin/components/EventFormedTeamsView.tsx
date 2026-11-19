@@ -14,6 +14,9 @@ interface Props {
   event: TournamentEvent;
   onUpdateEvent?: (event: TournamentEvent) => void;
   isReadOnly?: boolean;
+  canCheckInParticipants?: boolean;
+  adminEmail?: string;
+  adminPin?: string;
 }
 
 const getPhaseLabel = (phase?: string) => {
@@ -22,7 +25,7 @@ const getPhaseLabel = (phase?: string) => {
   return phase || 'Jogo';
 };
 
-export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false }) => {
+export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false, canCheckInParticipants = false, adminEmail, adminPin }) => {
   const [refreshingMatchId, setRefreshingMatchId] = useState<string | null>(null);
   const { setMatchSettings } = useGame();
   const { setCurrentScreen, setModalConfig } = useUI();
@@ -265,6 +268,9 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
         onOpenMatchRules={handleOpenMatchRules}
         onRefreshEventScore={handleRefreshEventScore}
         refreshingMatchId={refreshingMatchId}
+        canCheckInParticipants={canCheckInParticipants}
+        adminEmail={adminEmail}
+        adminPin={adminPin}
       />
     </div>
   );
