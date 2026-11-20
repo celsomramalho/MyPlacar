@@ -221,6 +221,11 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   const t2Style = COURT_TEAM_STYLES[courtColors.p2Color] || COURT_TEAM_STYLES.vermelho;
   const servingOffset = activeMatch?.servingOrderOffset;
   const servingTeam = servingOffset === undefined ? null : (servingOffset % 2 === 0 ? 'p1' : 'p2');
+  const openingServingTeam = activeMatch?.initialServingOrderOffset === undefined
+    ? null
+    : (activeMatch.initialServingOrderOffset % 2 === 0 ? 'p1' : 'p2');
+  const team1MatchOrderClass = openingServingTeam === 'p2' ? 'order-3' : 'order-1';
+  const team2MatchOrderClass = openingServingTeam === 'p2' ? 'order-1' : 'order-3';
   const servingPartner = servingOffset === undefined ? false : servingOffset >= 2;
   const p1FirstServeReversed = Boolean(activeMatch?.serveOrderP1Reversed);
   const p2FirstServeReversed = Boolean(activeMatch?.serveOrderP2Reversed);
@@ -267,10 +272,16 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   const drawTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const drawFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => {
-    if (drawTimerRef.current) clearInterval(drawTimerRef.current);
-    if (drawFinalizeTimerRef.current) clearTimeout(drawFinalizeTimerRef.current);
-  }, []);
+  useEffect(() => {
+    setIsDrawingServer(false);
+    setDrawPreview(null);
+    return () => {
+      if (drawTimerRef.current) clearInterval(drawTimerRef.current);
+      if (drawFinalizeTimerRef.current) clearTimeout(drawFinalizeTimerRef.current);
+      drawTimerRef.current = null;
+      drawFinalizeTimerRef.current = null;
+    };
+  }, [activeMatch?.id]);
 
   const resetCurrentMatch = () => {
     if (!activeMatch || !onResetCourtMatch || isReadOnly) return;
@@ -303,7 +314,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   }, [scores]);
 
   const canTapScore = !isReadOnly && Boolean(activeMatch);
-  const canDrawStartingServer = canTapScore && !hasAnyScoreActivity;
+  const canDrawStartingServer = canTapScore && (courtStage === 'serve_draw' || !hasAnyScoreActivity);
 
   // Determina se já há um vencedor definido pelo placar
   const setsToWin = Math.ceil(totalSets / 2);
@@ -646,44 +657,42 @@ export const CourtCard: React.FC<CourtCardProps> = ({
           </div>
 
           {courtStage === 'warmup' && activeMatch && (
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2">
-              <div className={`rounded-xl px-3 py-3 text-sm font-black ${t1Style.bar} ${t1Style.text}`}>
+            <div className="space-y-2 py-2">
+              <div className={`rounded-2xl p-3 text-sm font-black ${t1Style.bar} ${t1Style.text}`}>
                 <span className={`inline-flex items-center gap-1 ${servingTeam === 'p1' ? 'rounded px-1 bg-[#bef264] text-[#1a1a1a]' : ''}`}>{team1FirstName}{servingTeam === 'p1' && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0"><CircleDot size={12} /></span>}</span>{team1SecondName && <><span className="my-1 block h-px w-full bg-white/80" />{team1SecondName}</>}
               </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sky-800">
-                  <Hourglass size={18} />
+              <div className="flex items-center justify-center gap-1.5">
+                <div className="inline-flex items-center gap-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-sky-800">
+                  <Hourglass size={15} />
                   <WarmupCountdown startedAt={activeMatch.warmupStartedAt} minutes={resolveCourtMinutes(sportRules).warmupMinutes} />
                 </div>
-                <div className="flex items-center justify-center gap-2">
-                  {!activeMatch.warmupStartedAt && <button type="button" disabled={isReadOnly} onClick={() => void onStartCourtWarmup(activeMatch.id)} className="w-9 h-9 rounded-xl bg-lime-400 text-emerald-800 flex items-center justify-center disabled:opacity-40" title="Iniciar aquecimento"><Play size={16} fill="currentColor" /></button>}
-                  <button type="button" disabled={isReadOnly} onClick={() => void onAdvanceCourtMatchStage(activeMatch.id, 'serve_draw')} className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center disabled:opacity-40" title="Encerrar aquecimento">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
+                {!activeMatch.warmupStartedAt && <button type="button" disabled={isReadOnly} onClick={() => void onStartCourtWarmup(activeMatch.id)} className="w-8 h-8 rounded-lg bg-lime-400 text-emerald-800 flex items-center justify-center disabled:opacity-40" title="Iniciar aquecimento"><Play size={15} fill="currentColor" /></button>}
+                <button type="button" disabled={isReadOnly} onClick={() => void onAdvanceCourtMatchStage(activeMatch.id, 'serve_draw')} className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center disabled:opacity-40" title="Encerrar aquecimento">
+                  <Trash2 size={14} />
+                </button>
               </div>
-              <div className={`rounded-xl px-3 py-3 text-sm font-black ${t2Style.bar} ${t2Style.text}`}>
+              <div className={`rounded-2xl p-3 text-sm font-black ${t2Style.bar} ${t2Style.text}`}>
                 <span className={`inline-flex items-center gap-1 ${servingTeam === 'p2' ? 'rounded px-1 bg-[#bef264] text-[#1a1a1a]' : ''}`}>{team2FirstName}{servingTeam === 'p2' && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0"><CircleDot size={12} /></span>}</span>{team2SecondName && <><span className="my-1 block h-px w-full bg-white/80" />{team2SecondName}</>}
               </div>
             </div>
           )}
 
           {courtStage === 'serve_draw' && activeMatch && (
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2">
-              <div className={`rounded-xl px-3 py-3 text-sm font-black ${t1Style.bar} ${t1Style.text}`}>
+            <div className="flex flex-col gap-2 py-2">
+              <div className={`${servingTeam === 'p2' ? 'order-3' : 'order-1'} rounded-2xl p-3 text-sm font-black ${t1Style.bar} ${t1Style.text}`}>
                 <span className={`inline-flex items-center gap-1 ${servingTeam === 'p1' ? 'rounded px-1 bg-[#bef264] text-[#1a1a1a]' : ''}`}>{team1FirstName}{servingTeam === 'p1' && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0"><CircleDot size={12} /></span>}</span>{team1SecondName && <><span className="my-1 block h-px w-full bg-white/80" />{team1SecondName}</>}
                 {team1P2Name && <button type="button" disabled={isReadOnly} onClick={() => toggleServeOrder('p1')} className="ml-2 inline-flex rounded-full bg-white/90 p-1 text-slate-700" title="Trocar a ordem dos sacadores"><ArrowRightLeft size={12} /></button>}
                 {servingTeam === 'p1' && <span className="mt-1 block rounded-md bg-lime-300 px-1.5 py-0.5 text-[9px] text-slate-900">Começa sacando</span>}
                 {servingTeam === 'p2' && <span className="mt-1 block w-fit rounded-md bg-lime-300 px-1.5 py-0.5 text-[9px] text-slate-900">Escolhe quadra</span>}
               </div>
-              <div className="flex flex-col items-center gap-2">
+              <div className="order-2 flex items-center justify-center gap-2">
                 {supportsServerDraw ? <button type="button" onClick={drawStartingServer} disabled={isDrawingServer || isReadOnly} className="h-10 rounded-xl bg-sky-500 px-3 text-white flex items-center gap-1.5 disabled:opacity-50">
                   {isDrawingServer ? <Loader2 size={15} className="animate-spin" /> : <Dices size={15} />}
                   <span className="text-[10px] font-black text-center">{isDrawingServer ? `Time ${(drawPreview ?? 0) + 1}` : <>Sortear<br />sacador</>}</span>
                 </button> : <span className="text-[10px] font-bold text-slate-500">Preparar jogo</span>}
                 <button type="button" onClick={() => void onAdvanceCourtMatchStage(activeMatch.id, 'match')} disabled={isReadOnly || (supportsServerDraw && activeMatch.servingOrderOffset === undefined) || isDrawingServer} className="h-8 rounded-lg bg-green-700 px-3 text-xs font-black text-white disabled:opacity-40">OK</button>
               </div>
-              <div className={`rounded-xl px-3 py-3 text-sm font-black ${t2Style.bar} ${t2Style.text}`}>
+              <div className={`${servingTeam === 'p2' ? 'order-1' : 'order-3'} rounded-2xl p-3 text-sm font-black ${t2Style.bar} ${t2Style.text}`}>
                 <span className={`inline-flex items-center gap-1 ${servingTeam === 'p2' ? 'rounded px-1 bg-[#bef264] text-[#1a1a1a]' : ''}`}>{team2FirstName}{servingTeam === 'p2' && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0"><CircleDot size={12} /></span>}</span>{team2SecondName && <><span className="my-1 block h-px w-full bg-white/80" />{team2SecondName}</>}
                 {team2P2Name && <button type="button" disabled={isReadOnly} onClick={() => toggleServeOrder('p2')} className="ml-2 inline-flex rounded-full bg-white/90 p-1 text-slate-700" title="Trocar a ordem dos sacadores"><ArrowRightLeft size={12} /></button>}
                 {servingTeam === 'p2' && <span className="mt-1 block rounded-md bg-lime-300 px-1.5 py-0.5 text-[9px] text-slate-900">Começa sacando</span>}
@@ -695,10 +704,10 @@ export const CourtCard: React.FC<CourtCardProps> = ({
           {/* Placar */}
           {courtStage === 'match' && (
           totalSets === 1 ? (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               {/* Equipe 1 — clique fora do input incrementa +1 */}
               <div
-                className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${
+                className={`${team1MatchOrderClass} rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${
                   canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
                 }`}
                 onClick={(e) => {
@@ -759,7 +768,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               </div>
 
               {/* Linha central: label set1 + botão undo */}
-              <div className="flex items-center gap-1 px-1 py-0.5">
+              <div className="order-2 flex items-center gap-1 px-1 py-0.5">
+                <div className="flex flex-1 min-w-0 items-center justify-center gap-1">
                 <div className="flex items-center gap-1">
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
@@ -795,7 +805,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                   </button>
                 ) : null}
                 <ScoreStopwatch startedAt={activeMatch.scoreStartedAt} finishedAt={activeMatch.scoreFinishedAt} />
-                <div className="flex-1" />
+                </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">set1</span>
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
@@ -809,7 +819,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
               {/* Equipe 2 — clique fora do input incrementa +1 */}
               <div
-                className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${
+                className={`${team2MatchOrderClass} rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${
                   canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
                 }`}
                 onClick={(e) => {
@@ -870,10 +880,10 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               {/* Equipe 1 — clique fora do input incrementa +1 */}
               <div
-                className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${
+                className={`${team1MatchOrderClass} rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t1Style.bar} ${
                   canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
                 }`}
                 onClick={(e) => {
@@ -943,7 +953,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               </div>
 
               {/* Labels dos sets + botão undo */}
-              <div className="flex items-center gap-1 px-1 py-0.5">
+              <div className="order-2 flex items-center gap-1 px-1 py-0.5">
+                <div className="flex flex-1 min-w-0 items-center justify-center gap-1">
                 <div className="flex items-center gap-1">
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
@@ -979,7 +990,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                   </button>
                 ) : null}
                 <ScoreStopwatch startedAt={activeMatch.scoreStartedAt} finishedAt={activeMatch.scoreFinishedAt} />
-                <div className="flex-1" />
+                </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="w-5" />
                   {scores.map((_, setIdx) => (
@@ -1003,7 +1014,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
               {/* Equipe 2 — clique fora do input incrementa +1 */}
               <div
-                className={`rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${
+                className={`${team2MatchOrderClass} rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs ${t2Style.bar} ${
                   canIncrementScore ? 'cursor-pointer select-none active:brightness-90 transition-all' : ''
                 }`}
                 onClick={(e) => {
