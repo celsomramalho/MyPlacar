@@ -145,6 +145,7 @@ export function calculateAverageMatchDuration(
 ): MatchDurationStats {
   const finishedWithDuration = matches.filter((m) => {
     if (m.status !== 'finished') return false;
+    if (typeof m.courtDurationMinutes === 'number' && m.courtDurationMinutes > 0) return true;
     if (typeof m.durationMinutes === 'number' && m.durationMinutes > 0) return true;
     if (m.startedAt && m.finishedAt) {
       const s = new Date(m.startedAt).getTime();
@@ -156,6 +157,9 @@ export function calculateAverageMatchDuration(
 
   if (finishedWithDuration.length > 0) {
     const totalMinutes = finishedWithDuration.reduce((acc, m) => {
+      if (typeof m.courtDurationMinutes === 'number' && m.courtDurationMinutes > 0) {
+        return acc + m.courtDurationMinutes;
+      }
       if (typeof m.durationMinutes === 'number' && m.durationMinutes > 0) {
         return acc + m.durationMinutes;
       }
@@ -307,14 +311,15 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
   const now = new Date();
   const durationStats = calculateAverageMatchDuration(allMatches, event);
 
-  // Tempo de quadra configurado pelo organizador (aquecimento + partida).
-  // Quando definido, substitui a estimativa histórica para o cálculo da fila.
+  // Tempo configurado serve como base até haver partidas finalizadas com duração real de quadra.
   const configuredCourt = resolveCourtMinutes((event as any).sportRules);
   const hasConfiguredCourt = configuredCourt.courtMinutes > 0;
   // Minutos usados para simular ocupação de quadra na estimativa da fila
-  const queueSlotMinutes = hasConfiguredCourt
-    ? configuredCourt.courtMinutes
-    : durationStats.averageMinutes;
+  const queueSlotMinutes = durationStats.sampleCount > 0
+    ? durationStats.averageMinutes
+    : hasConfiguredCourt
+      ? configuredCourt.courtMinutes
+      : durationStats.averageMinutes;
 
   // ─── 2. Estado de cada quadra ─────────────────────────────────────────────
 
@@ -325,7 +330,7 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     const liveMatch = courtLiveMatchMap.get(courtName);
     if (liveMatch) {
       let remainingMinutes = queueSlotMinutes;
-      const startedAt = liveMatch.startedAt;
+      const startedAt = liveMatch.courtStartedAt || liveMatch.startedAt;
       if (startedAt) {
         const startMs = new Date(startedAt).getTime();
         if (!isNaN(startMs)) {

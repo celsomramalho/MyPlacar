@@ -96,6 +96,10 @@ export interface TournamentMatch {
   servingOrderOffset?: number;
   serveOrderP1Reversed?: boolean;
   serveOrderP2Reversed?: boolean;
+  /** Configuração inicial de saque confirmada ao iniciar a partida, preservada para o reset do placar. */
+  initialServingOrderOffset?: number;
+  initialServeOrderP1Reversed?: boolean;
+  initialServeOrderP2Reversed?: boolean;
   winnerPairId?: string;
   loserPairId?: string;
   ownerPin?: string;
@@ -104,6 +108,17 @@ export interface TournamentMatch {
   order?: number;
   frozen?: boolean;
   startedAt?: string;
+  /** Início da ocupação contínua da quadra, incluindo aquecimento e preparação. */
+  courtStartedAt?: string;
+  /** Horário do primeiro ponto da partida, independente do início de ocupação da quadra. */
+  scoreStartedAt?: string;
+  /** Tempo decorrido da quadra até o encerramento, usado para estimar a fila. */
+  courtDurationMinutes?: number;
+  /** Tempo decorrido do primeiro ponto até o encerramento. */
+  scoreFinishedAt?: string;
+  /** Etapa operacional da partida na quadra. Partidas antigas sem este campo são tratadas como partida em andamento. */
+  courtStage?: 'warmup' | 'serve_draw' | 'match';
+  warmupStartedAt?: string;
   finishedAt?: string;
   durationMinutes?: number;
   matchDate?: string; // Data da partida no formato YYYY-MM-DD

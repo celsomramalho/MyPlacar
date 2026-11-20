@@ -43,6 +43,8 @@ export interface ParseMatchSetsResult {
 export interface UseCourtMatchActionsResult {
   /** Vincula uma partida a uma quadra livre (status → live, startedAt definido) */
   assignMatchToCourt: (matchId: string, courtName: string) => Promise<void>;
+  advanceCourtMatchStage: (matchId: string, stage: 'serve_draw' | 'match') => Promise<void>;
+  startCourtWarmup: (matchId: string) => Promise<void>;
   /** Libera a quadra: volta a partida para 'waiting' sem finalizar */
   freeCourtMatch: (matchId: string) => Promise<void>;
   /** Finaliza a partida na quadra, calculando vencedor e durationMinutes */
@@ -188,6 +190,16 @@ export function useCourtMatchActions({
               court: courtName,
               frozen: false,
               startedAt: m.startedAt || nowIso,
+              courtStartedAt: nowIso,
+              courtDurationMinutes: undefined,
+              warmupStartedAt: undefined,
+              courtStage: 'warmup' as const,
+              scoreStartedAt: undefined,
+              scoreFinishedAt: undefined,
+              servingOrderOffset: undefined,
+              initialServingOrderOffset: undefined,
+              initialServeOrderP1Reversed: undefined,
+              initialServeOrderP2Reversed: undefined,
               matchDate: m.matchDate || todayDate,
             }
       );
@@ -195,6 +207,32 @@ export function useCourtMatchActions({
     },
     [event, isReadOnly, persistEventChanges]
   );
+
+  const advanceCourtMatchStage = useCallback(async (matchId: string, stage: 'serve_draw' | 'match') => {
+    if (isReadOnly) return;
+    const nowIso = new Date().toISOString();
+    const nextMatches = (event.matches || []).map((m) => m.id !== matchId ? m : {
+      ...m,
+      courtStage: stage,
+      ...(stage === 'match' ? {
+        startedAt: nowIso,
+        initialServingOrderOffset: m.servingOrderOffset,
+        initialServeOrderP1Reversed: m.serveOrderP1Reversed,
+        initialServeOrderP2Reversed: m.serveOrderP2Reversed,
+      } : {}),
+    });
+    await persistEventChanges(nextMatches);
+  }, [event, isReadOnly, persistEventChanges]);
+
+  const startCourtWarmup = useCallback(async (matchId: string) => {
+    if (isReadOnly) return;
+    const nowIso = new Date().toISOString();
+    const nextMatches = (event.matches || []).map((m) => m.id !== matchId || m.warmupStartedAt ? m : {
+      ...m,
+      warmupStartedAt: nowIso,
+    });
+    await persistEventChanges(nextMatches);
+  }, [event, isReadOnly, persistEventChanges]);
 
   // ─── Ação: Liberar quadra (sem finalizar) ──────────────────────────────────
 
@@ -204,7 +242,7 @@ export function useCourtMatchActions({
       const nextMatches = (event.matches || []).map((m) =>
         m.id !== matchId
           ? m
-          : { ...m, status: 'waiting' as const, court: undefined, startedAt: undefined }
+          : { ...m, status: 'waiting' as const, court: undefined, startedAt: undefined, courtStartedAt: undefined, courtDurationMinutes: undefined, warmupStartedAt: undefined, scoreStartedAt: undefined, scoreFinishedAt: undefined, courtStage: undefined }
       );
       await persistEventChanges(nextMatches);
     },
@@ -248,6 +286,15 @@ export function useCourtMatchActions({
           }
         }
 
+        let courtDurationMinutes: number | undefined;
+        if (m.courtStartedAt || m.startedAt) {
+          const startMs = new Date(m.courtStartedAt || m.startedAt!).getTime();
+          const endMs = new Date(nowIso).getTime();
+          if (!isNaN(startMs) && !isNaN(endMs) && endMs >= startMs) {
+            courtDurationMinutes = Math.max(1, Math.round((endMs - startMs) / 60000));
+          }
+        }
+
         return {
           ...m,
           status: 'finished' as const,
@@ -256,6 +303,8 @@ export function useCourtMatchActions({
           court: m.court,
           finishedAt: nowIso,
           durationMinutes: durationMinutes ?? m.durationMinutes,
+          courtDurationMinutes: courtDurationMinutes ?? m.courtDurationMinutes,
+          scoreFinishedAt: m.scoreStartedAt ? nowIso : m.scoreFinishedAt,
         };
       });
 
@@ -287,14 +336,17 @@ export function useCourtMatchActions({
         scores,
         result: '',
         status: 'live' as const,
+        courtStage: 'match' as const,
         startedAt: nowIso,
+        servingOrderOffset: m.initialServingOrderOffset ?? m.servingOrderOffset,
+        serveOrderP1Reversed: m.initialServeOrderP1Reversed ?? m.serveOrderP1Reversed,
+        serveOrderP2Reversed: m.initialServeOrderP2Reversed ?? m.serveOrderP2Reversed,
         finishedAt: undefined,
         durationMinutes: undefined,
+        scoreStartedAt: undefined,
+        scoreFinishedAt: undefined,
         winnerPairId: undefined,
         loserPairId: undefined,
-        servingOrderOffset: undefined,
-        serveOrderP1Reversed: false,
-        serveOrderP2Reversed: false,
       };
     });
     await persistEventChanges(nextMatches);
@@ -374,12 +426,16 @@ export function useCourtMatchActions({
           }
         });
 
+        const hasStartedScoring = currentScores.some((s) =>
+          Number(s.p1 || 0) > 0 || Number(s.p2 || 0) > 0 || (s.gameP1 && s.gameP1 !== '0') || (s.gameP2 && s.gameP2 !== '0')
+        );
+        const scoreStartedAt = hasStartedScoring ? m.scoreStartedAt || new Date().toISOString() : undefined;
         let status: 'waiting' | 'live' | 'finished' = m.status || 'live';
         if (status !== 'finished') {
           status = m.court || hasAnyScore ? 'live' : m.status || 'waiting';
         }
 
-        return { ...m, scores: currentScores, result: resultParts.join(' '), status, court: m.court };
+        return { ...m, scores: currentScores, result: resultParts.join(' '), status, court: m.court, scoreStartedAt };
       });
 
       const progressed = updatePlayoffProgression(event.pairs || [], nextMatches);
@@ -446,12 +502,16 @@ export function useCourtMatchActions({
           }
         });
 
+        const hasStartedScoring = currentScores.some((s) =>
+          Number(s.p1 || 0) > 0 || Number(s.p2 || 0) > 0 || (s.gameP1 && s.gameP1 !== '0') || (s.gameP2 && s.gameP2 !== '0')
+        );
+        const scoreStartedAt = hasStartedScoring ? m.scoreStartedAt || new Date().toISOString() : undefined;
         let status: 'waiting' | 'live' | 'finished' = m.status || 'live';
         if (status !== 'finished') {
           status = m.court || hasAnyScore ? 'live' : m.status || 'waiting';
         }
 
-        return { ...m, scores: currentScores, result: resultParts.join(' '), status, court: m.court, servingOrderOffset: servingOrderOffset === null ? undefined : servingOrderOffset ?? m.servingOrderOffset };
+        return { ...m, scores: currentScores, result: resultParts.join(' '), status, court: m.court, scoreStartedAt, servingOrderOffset: servingOrderOffset === null ? undefined : servingOrderOffset ?? m.servingOrderOffset };
       });
 
       const progressed = updatePlayoffProgression(event.pairs || [], nextMatches);
@@ -509,6 +569,8 @@ export function useCourtMatchActions({
 
   return {
     assignMatchToCourt,
+    advanceCourtMatchStage,
+    startCourtWarmup,
     freeCourtMatch,
     finishCourtMatch,
     resetCourtMatch,
