@@ -17,6 +17,8 @@ interface AdminConfirmModalsProps {
   onConfirmDelete: () => void;
   onCancelUnsavedChanges?: () => void;
   onConfirmUnsavedChanges?: () => void;
+  onSaveAndExitUnsavedChanges?: () => void;
+  isSavingEvent?: boolean;
 }
 
 const AdminModalFrame = ({
@@ -27,6 +29,9 @@ const AdminModalFrame = ({
   confirmClassName,
   onCancel,
   onConfirm,
+  saveAndExitLabel,
+  onSaveAndExit,
+  isSaving = false,
 }: {
   title: string;
   message: string;
@@ -35,14 +40,18 @@ const AdminModalFrame = ({
   confirmClassName: string;
   onCancel: () => void;
   onConfirm: () => void;
+  saveAndExitLabel?: string;
+  onSaveAndExit?: () => void;
+  isSaving?: boolean;
 }) => (
   <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
     <div className="bg-white rounded-[2.5rem] p-8 max-sm w-full shadow-2xl space-y-6">
       <h3 className="text-xl font-black text-black">{title}</h3>
       <p className="text-black font-bold text-sm">{message}</p>
-      <div className="flex gap-3">
-        <button onClick={onCancel} className="flex-1 py-4 bg-gray-100 text-black rounded-2xl font-black text-xs">{cancelLabel}</button>
-        <button onClick={onConfirm} className={`flex-1 py-4 text-white rounded-2xl font-black text-xs ${confirmClassName}`}>{confirmLabel}</button>
+      <div className="flex flex-wrap gap-3">
+        <button onClick={onCancel} disabled={isSaving} className="flex-1 min-w-[120px] py-4 bg-gray-100 text-black rounded-2xl font-black text-xs disabled:opacity-50">{cancelLabel}</button>
+        {onSaveAndExit && <button onClick={onSaveAndExit} disabled={isSaving} className="flex-1 min-w-[120px] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs disabled:opacity-50">{isSaving ? 'Salvando...' : saveAndExitLabel}</button>}
+        <button onClick={onConfirm} disabled={isSaving} className={`flex-1 min-w-[120px] py-4 text-white rounded-2xl font-black text-xs disabled:opacity-50 ${confirmClassName}`}>{confirmLabel}</button>
       </div>
     </div>
   </div>
@@ -82,6 +91,8 @@ export const AdminConfirmModals = ({
   onConfirmDelete,
   onCancelUnsavedChanges,
   onConfirmUnsavedChanges,
+  onSaveAndExitUnsavedChanges,
+  isSavingEvent,
 }: AdminConfirmModalsProps) => (
   <>
     {showClearCache && (
@@ -124,6 +135,9 @@ export const AdminConfirmModals = ({
         cancelLabel="Continuar editando"
         confirmLabel="Sair sem salvar"
         confirmClassName="bg-red-500"
+        saveAndExitLabel="Salvar e sair"
+        onSaveAndExit={onSaveAndExitUnsavedChanges}
+        isSaving={isSavingEvent}
         onCancel={onCancelUnsavedChanges || (() => {})}
         onConfirm={onConfirmUnsavedChanges || (() => {})}
       />

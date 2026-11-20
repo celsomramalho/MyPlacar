@@ -32,6 +32,10 @@ export interface EventSportRules {
     semifinal?: MatchRulesConfig;
     final?: MatchRulesConfig;
   };
+  /** Tempo de aquecimento por quadra, em minutos (padrão 5). */
+  warmupMinutes?: number;
+  /** Duração estimada de cada partida, em minutos (padrão 15). */
+  matchMinutes?: number;
 }
 
 export const SYSTEM_RULE_PRESETS: MatchRulesPreset[] = [
@@ -466,4 +470,24 @@ export const resolveMatchRules = (
   const phaseSpecific = sportRules.phaseRules[phaseCategory];
 
   return phaseSpecific ?? defaultRules;
+};
+
+/** Padrões para tempo de aquecimento e partida. */
+export const DEFAULT_WARMUP_MINUTES = 5;
+export const DEFAULT_MATCH_MINUTES = 15;
+
+/**
+ * Retorna o tempo total de quadra (aquecimento + partida) em minutos.
+ * Usado para estimar o tempo de espera na fila.
+ */
+export const resolveCourtMinutes = (
+  sportRules?: EventSportRules | null
+): { warmupMinutes: number; matchMinutes: number; courtMinutes: number } => {
+  const warmupMinutes = sportRules?.warmupMinutes ?? DEFAULT_WARMUP_MINUTES;
+  const matchMinutes = sportRules?.matchMinutes ?? DEFAULT_MATCH_MINUTES;
+  return {
+    warmupMinutes,
+    matchMinutes,
+    courtMinutes: warmupMinutes + matchMinutes,
+  };
 };

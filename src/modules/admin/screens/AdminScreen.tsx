@@ -799,15 +799,15 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
     }
   };
 
-  const handleSaveEvent = async () => {
-    if (!editingEvent?.pin || !editingEvent?.name) return;
+  const handleSaveEvent = async (): Promise<boolean> => {
+    if (!editingEvent?.pin || !editingEvent?.name) return false;
     setIsSavingEvent(true);
     const db = getDb();
     if (!db) {
       setIsSavingEvent(false);
       setStatus({ type: 'error', msg: 'Erro: banco de dados indisponível.' });
       setTimeout(() => setStatus(null), 2000);
-      return;
+        return false;
     }
     try {
       await saveAdminEvent(db, editingEvent, userProfile?.email, userProfile?.pin);
@@ -821,6 +821,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       setStatus({ type: 'success', msg: 'Evento salvo com sucesso!' });
       setEditingEvent(null);
       initialEditingEventSnapshotRef.current = null;
+        return true;
     } catch (e) {
       console.error('Erro ao salvar evento:', e);
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -833,6 +834,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
         confirmLabel: 'Entendido',
         onConfirm: () => setModalConfig(null),
       });
+        return false;
     } finally {
       setIsSavingEvent(false);
       setTimeout(() => setStatus(null), 4000);
@@ -947,6 +949,16 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
             setPendingNavigationAction(null);
           }
         }}
+          isSavingEvent={isSavingEvent}
+          onSaveAndExitUnsavedChanges={async () => {
+            const saved = await handleSaveEvent();
+            if (!saved) return;
+            setShowUnsavedChangesModal(false);
+            if (pendingNavigationAction) {
+              pendingNavigationAction();
+              setPendingNavigationAction(null);
+            }
+          }}
       />
 
       <AdminHeader

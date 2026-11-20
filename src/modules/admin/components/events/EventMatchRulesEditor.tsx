@@ -10,6 +10,8 @@ import {
   deleteCustomPreset,
   getDefaultRulesForSport,
   SYSTEM_RULE_PRESETS,
+  DEFAULT_WARMUP_MINUTES,
+  DEFAULT_MATCH_MINUTES,
 } from '@modules/events/domain/rules/eventMatchRules';
 
 interface EventMatchRulesEditorProps {
@@ -17,6 +19,8 @@ interface EventMatchRulesEditorProps {
   sportId?: string;
   isReadOnly: boolean;
   onChangeSportRules: (rules: EventSportRules) => void;
+  /** Handler específico para campos de tempo de quadra — não bloqueado pelo modo somente-leitura. */
+  onChangeTimings?: (warmupMinutes: number, matchMinutes: number) => void;
 }
 
 const PHASES: Array<{ key: 'groups' | 'playoffs' | 'semifinal' | 'final'; label: string; description: string }> = [
@@ -31,6 +35,7 @@ export const EventMatchRulesEditor: React.FC<EventMatchRulesEditorProps> = ({
   sportId,
   isReadOnly,
   onChangeSportRules,
+  onChangeTimings,
 }) => {
   const [allPresets, setAllPresets] = useState<MatchRulesPreset[]>(() => getAllPresets());
   const [isCreatingPreset, setIsCreatingPreset] = useState(false);
@@ -45,6 +50,8 @@ export const EventMatchRulesEditor: React.FC<EventMatchRulesEditorProps> = ({
       defaultRules: sportRules?.defaultRules ?? getDefaultRulesForSport(sportId),
       customPhasesEnabled: sportRules?.customPhasesEnabled ?? false,
       phaseRules: sportRules?.phaseRules ?? {},
+      warmupMinutes: sportRules?.warmupMinutes ?? DEFAULT_WARMUP_MINUTES,
+      matchMinutes: sportRules?.matchMinutes ?? DEFAULT_MATCH_MINUTES,
     };
   }, [sportRules, sportId]);
 
@@ -398,6 +405,98 @@ export const EventMatchRulesEditor: React.FC<EventMatchRulesEditorProps> = ({
 
   return (
     <div className="space-y-4 pt-2 border-t border-slate-100">
+      {/* ── Tempos de Quadra ─────────────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <label className="text-[10px] font-black text-slate-500 ml-1">
+          Tempos por quadra
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {/* Aquecimento */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 ml-1">
+              Aquecimento
+            </label>
+            <div className="flex items-center h-11 bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  const cur = currentRules.warmupMinutes ?? DEFAULT_WARMUP_MINUTES;
+                  const val = Math.max(0, cur - 1);
+                  onChangeTimings
+                    ? onChangeTimings(val, currentRules.matchMinutes ?? DEFAULT_MATCH_MINUTES)
+                    : onChangeSportRules({ ...currentRules, warmupMinutes: val });
+                }}
+                className="px-2 h-full text-slate-500 hover:bg-slate-100 active:bg-slate-200 text-sm font-bold select-none"
+              >−</button>
+              <span className="flex-1 text-center text-xs font-black text-slate-700">
+                {currentRules.warmupMinutes ?? DEFAULT_WARMUP_MINUTES}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const cur = currentRules.warmupMinutes ?? DEFAULT_WARMUP_MINUTES;
+                  const val = Math.min(60, cur + 1);
+                  onChangeTimings
+                    ? onChangeTimings(val, currentRules.matchMinutes ?? DEFAULT_MATCH_MINUTES)
+                    : onChangeSportRules({ ...currentRules, warmupMinutes: val });
+                }}
+                className="px-2 h-full text-slate-500 hover:bg-slate-100 active:bg-slate-200 text-sm font-bold select-none"
+              >+</button>
+            </div>
+            <p className="text-[9px] text-slate-400 ml-1">min</p>
+          </div>
+
+          {/* Partida */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 ml-1">
+              Partida
+            </label>
+            <div className="flex items-center h-11 bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  const cur = currentRules.matchMinutes ?? DEFAULT_MATCH_MINUTES;
+                  const val = Math.max(1, cur - 1);
+                  onChangeTimings
+                    ? onChangeTimings(currentRules.warmupMinutes ?? DEFAULT_WARMUP_MINUTES, val)
+                    : onChangeSportRules({ ...currentRules, matchMinutes: val });
+                }}
+                className="px-2 h-full text-slate-500 hover:bg-slate-100 active:bg-slate-200 text-sm font-bold select-none"
+              >−</button>
+              <span className="flex-1 text-center text-xs font-black text-slate-700">
+                {currentRules.matchMinutes ?? DEFAULT_MATCH_MINUTES}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const cur = currentRules.matchMinutes ?? DEFAULT_MATCH_MINUTES;
+                  const val = Math.min(180, cur + 1);
+                  onChangeTimings
+                    ? onChangeTimings(currentRules.warmupMinutes ?? DEFAULT_WARMUP_MINUTES, val)
+                    : onChangeSportRules({ ...currentRules, matchMinutes: val });
+                }}
+                className="px-2 h-full text-slate-500 hover:bg-slate-100 active:bg-slate-200 text-sm font-bold select-none"
+              >+</button>
+            </div>
+            <p className="text-[9px] text-slate-400 ml-1">min</p>
+          </div>
+
+          {/* Quadra (soma calculada) */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 ml-1">
+              Quadra (total)
+            </label>
+            <div className="flex items-center justify-center h-11 bg-slate-50 border border-slate-200 rounded-xl px-3">
+              <span className="text-xs font-black text-slate-700">
+                {(currentRules.warmupMinutes ?? DEFAULT_WARMUP_MINUTES) +
+                  (currentRules.matchMinutes ?? DEFAULT_MATCH_MINUTES)}
+              </span>
+            </div>
+            <p className="text-[9px] text-slate-400 ml-1">min · usado na fila</p>
+          </div>
+        </div>
+      </div>
+
       {/* ── Regras Gerais do Torneio ────────────────────────────────────────── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">

@@ -20,9 +20,8 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
     >
       <div className="flex-1 min-w-0 pr-3">
         <p className="font-black text-black text-sm truncate leading-tight">{event.name}</p>
-        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-          <p className="text-[10px] font-black text-amber-500 uppercase">{event.pin}</p>
-          <span className="text-[8px] font-black text-slate-300">•</span>
+        <p className="text-[10px] font-black text-amber-500 uppercase mt-0.5">{event.pin}</p>
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
           <p className={`text-[8px] font-black uppercase ${event.active ? 'text-green-500' : 'text-red-500'}`}>
             {event.active ? 'Ativo' : 'Inativo'}
           </p>

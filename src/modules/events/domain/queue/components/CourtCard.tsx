@@ -20,7 +20,7 @@ import type { TournamentMatch, TournamentPair, MatchSetScore } from '../../../ty
 import type { CourtState } from '../types';
 import type { TournamentEvent } from '../../../types';
 import { isSetScoreComplete } from '@modules/events/domain/brackets/engine/matchScoreEngine';
-import { resolveMatchRules } from '../../rules/eventMatchRules';
+import { resolveCourtMinutes, resolveMatchRules } from '../../rules/eventMatchRules';
 import { getCourtColors, COURT_TEAM_STYLES } from '../../../../../constants';
 import type { QueueCategoryColor } from '../utils/queueCategoryColors';
 
@@ -517,7 +517,10 @@ export const CourtCard: React.FC<CourtCardProps> = ({
             </span>
           )}
           {isBusy && activeMatch && (
-            <MatchTimer startedAt={activeMatch.startedAt} averageMinutes={averageMatchDurationMinutes} />
+            <MatchTimer
+              startedAt={activeMatch.startedAt}
+              averageMinutes={resolveCourtMinutes(sportRules).courtMinutes}
+            />
           )}
           {isInterdicted && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black border bg-red-100 text-red-800 border-red-300 whitespace-nowrap">

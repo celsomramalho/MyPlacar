@@ -503,6 +503,18 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
       } as any,
     });
   };
+
+  // Handler para campos de tempo de quadra — não bloqueado pelo modo somente-leitura de inscrição
+  const handleSportTimingsChange = (warmupMinutes: number, matchMinutes: number) => {
+    onChangeEditingEvent({
+      ...editingEvent,
+      sportRules: {
+        ...(editingEvent.sportRules ?? { defaultRules: {} as any, customPhasesEnabled: false, phaseRules: {} }),
+        warmupMinutes,
+        matchMinutes,
+      },
+    });
+  };
   const [organizerStatus, setOrganizerStatus] = useState<{
     loading: boolean;
     connected?: boolean;
@@ -1822,6 +1834,7 @@ export const EventConfigForm: React.FC<EventConfigFormProps> = ({
           sportId={currentSportId}
           isReadOnly={isReadOnlyRegistration}
           onChangeSportRules={handleSportRulesChange}
+          onChangeTimings={handleSportTimingsChange}
         />
       </FormBlock>
 

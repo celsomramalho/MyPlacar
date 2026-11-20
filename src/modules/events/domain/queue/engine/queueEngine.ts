@@ -20,6 +20,7 @@ import type {
   QueueCalculationResult,
   MatchDurationStats,
 } from '../types';
+import { resolveCourtMinutes } from '@modules/events/domain/rules/eventMatchRules';
 
 // ─── Helpers Internos ────────────────────────────────────────────────────────
 
@@ -306,6 +307,15 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
   const now = new Date();
   const durationStats = calculateAverageMatchDuration(allMatches, event);
 
+  // Tempo de quadra configurado pelo organizador (aquecimento + partida).
+  // Quando definido, substitui a estimativa histórica para o cálculo da fila.
+  const configuredCourt = resolveCourtMinutes((event as any).sportRules);
+  const hasConfiguredCourt = configuredCourt.courtMinutes > 0;
+  // Minutos usados para simular ocupação de quadra na estimativa da fila
+  const queueSlotMinutes = hasConfiguredCourt
+    ? configuredCourt.courtMinutes
+    : durationStats.averageMinutes;
+
   // ─── 2. Estado de cada quadra ─────────────────────────────────────────────
 
   const courtStates: CourtState[] = courtList.map((courtName) => {
@@ -314,13 +324,13 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     }
     const liveMatch = courtLiveMatchMap.get(courtName);
     if (liveMatch) {
-      let remainingMinutes = durationStats.averageMinutes;
+      let remainingMinutes = queueSlotMinutes;
       const startedAt = liveMatch.startedAt;
       if (startedAt) {
         const startMs = new Date(startedAt).getTime();
         if (!isNaN(startMs)) {
           const elapsedMins = Math.floor((now.getTime() - startMs) / 60000);
-          remainingMinutes = Math.max(2, durationStats.averageMinutes - elapsedMins);
+          remainingMinutes = Math.max(2, queueSlotMinutes - elapsedMins);
         }
       }
       const finishDate = new Date(now.getTime() + remainingMinutes * 60000);
@@ -511,7 +521,7 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     if (cs.status === 'free') {
       courtSimSlots.push({ courtName: cs.courtName, availableAt: new Date(now.getTime()) });
     } else if (cs.status === 'busy') {
-      const remaining = cs.estimatedRemainingMinutes ?? durationStats.averageMinutes;
+      const remaining = cs.estimatedRemainingMinutes ?? queueSlotMinutes;
       courtSimSlots.push({ courtName: cs.courtName, availableAt: new Date(now.getTime() + remaining * 60000) });
     }
   });
@@ -534,7 +544,7 @@ export function calculateQueueState(event: TournamentEvent): QueueCalculationRes
     const callDate = new Date(earliest.availableAt.getTime());
     item.estimatedWaitMinutes = Math.max(0, Math.round((callDate.getTime() - now.getTime()) / 60000));
     item.estimatedCallTimeStr = callDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    earliest.availableAt = new Date(callDate.getTime() + durationStats.averageMinutes * 60000);
+    earliest.availableAt = new Date(callDate.getTime() + queueSlotMinutes * 60000);
   });
 
   // ─── 8. Limite de visibilidade: 4 × quadras_efetivas ─────────────────────
