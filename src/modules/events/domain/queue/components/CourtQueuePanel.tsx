@@ -36,6 +36,7 @@ export interface CourtQueuePanelProps {
   canCheckInParticipants?: boolean;
   adminEmail?: string;
   adminPin?: string;
+  compact?: boolean;
 }
 
 export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
@@ -50,6 +51,7 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
   canCheckInParticipants = false,
   adminEmail,
   adminPin,
+  compact = false,
 }) => {
   const [activeSelectMatchId, setActiveSelectMatchId] = useState<string | null>(null);
   const [checkInOverrides, setCheckInOverrides] = useState<Map<string, boolean>>(() => new Map());
@@ -187,6 +189,7 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
         nextCourtFreeTimeStr={queue.nextCourtFreeTimeStr}
         title={title}
         subtitle={subtitle}
+        compact={compact}
       />
 
       {/* 2. Grid de Quadras */}

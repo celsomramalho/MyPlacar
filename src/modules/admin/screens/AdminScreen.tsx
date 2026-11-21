@@ -964,6 +964,7 @@ export const AdminScreen: React.FC<Props> = ({ onBack, onNavigateToTab, onOpenRu
       <AdminHeader
         activeTab={adminTab}
         hideTabs={!isPrimary}
+        onOpenMenu={onOpenMenu}
         onBack={() => handleGuardedAction(() => {
           if (editingEvent) {
             setEditingEvent(null);

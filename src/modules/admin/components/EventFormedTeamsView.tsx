@@ -17,6 +17,7 @@ interface Props {
   canCheckInParticipants?: boolean;
   adminEmail?: string;
   adminPin?: string;
+  compact?: boolean;
 }
 
 const getPhaseLabel = (phase?: string) => {
@@ -25,7 +26,7 @@ const getPhaseLabel = (phase?: string) => {
   return phase || 'Jogo';
 };
 
-export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false, canCheckInParticipants = false, adminEmail, adminPin }) => {
+export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false, canCheckInParticipants = false, adminEmail, adminPin, compact = false }) => {
   const [refreshingMatchId, setRefreshingMatchId] = useState<string | null>(null);
   const { setMatchSettings } = useGame();
   const { setCurrentScreen, setModalConfig } = useUI();
@@ -260,7 +261,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
   };
 
   return (
-    <div className="space-y-6 max-w-full overflow-hidden">
+    <div className={`${compact ? 'space-y-3' : 'space-y-6'} max-w-full overflow-hidden`}>
       <CourtQueuePanel
         event={event}
         isReadOnly={isReadOnly}
@@ -271,6 +272,7 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
         canCheckInParticipants={canCheckInParticipants}
         adminEmail={adminEmail}
         adminPin={adminPin}
+        compact={compact}
       />
     </div>
   );

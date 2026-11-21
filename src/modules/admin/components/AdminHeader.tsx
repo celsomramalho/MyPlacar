@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft, LayoutGrid, Send, Settings as SettingsIcon, ShieldCheck, Ticket, User } from 'lucide-react';
+import { Menu, LayoutGrid, Send, Settings as SettingsIcon, ShieldCheck, Ticket, User } from 'lucide-react';
 import type { AdminTab } from '@modules/admin/types';
 
 interface AdminHeaderProps {
   activeTab: AdminTab;
   onBack: () => void;
+  onOpenMenu?: () => void;
   onSelectTab: (tab: AdminTab) => void;
   hideTabs?: boolean;
 }
@@ -17,10 +18,15 @@ const ADMIN_TABS: Array<{ id: AdminTab; label: string; icon: ReactNode }> = [
   { id: 'icons', label: 'Ícones', icon: <LayoutGrid size={22} /> },
 ];
 
-export const AdminHeader = ({ activeTab, onBack, onSelectTab, hideTabs = false }: AdminHeaderProps) => (
+export const AdminHeader = ({ activeTab, onBack, onOpenMenu, onSelectTab, hideTabs = false }: AdminHeaderProps) => (
   <header className="px-4 py-5 bg-white border-b border-gray-200 sticky top-0 z-50">
     <div className="flex items-center justify-between max-w-md mx-auto">
-      <button onClick={onBack} className="p-2 -ml-2 text-black active:scale-90"><ArrowLeft size={24} /></button>
+      <button
+        type="button"
+        onClick={onOpenMenu || onBack}
+        aria-label="Abrir menu"
+        className="w-10 h-10 -ml-2 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 active:scale-95 transition-all"
+      ><Menu size={20} /></button>
       <div className="flex items-center gap-2">
         <ShieldCheck size={24} className="text-black" />
         <h1 className="text-xl font-black text-black tracking-tight leading-tight">

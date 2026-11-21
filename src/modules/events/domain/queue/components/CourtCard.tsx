@@ -658,6 +658,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
           {courtStage === 'warmup' && activeMatch && (
             <div className="space-y-2 py-2">
+              <h5 className="px-1 text-sm font-black text-slate-800">1. Etapa: aquecimento</h5>
               <div className={`rounded-2xl p-3 text-sm font-black ${t1Style.bar} ${t1Style.text}`}>
                 <span className={`inline-flex items-center gap-1 ${servingTeam === 'p1' ? 'rounded px-1 bg-[#bef264] text-[#1a1a1a]' : ''}`}>{team1FirstName}{servingTeam === 'p1' && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0"><CircleDot size={12} /></span>}</span>{team1SecondName && <><span className="my-1 block h-px w-full bg-white/80" />{team1SecondName}</>}
               </div>
@@ -679,24 +680,25 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
           {courtStage === 'serve_draw' && activeMatch && (
             <div className="flex flex-col gap-2 py-2">
+              <h5 className="px-1 text-sm font-black text-slate-800">2. Etapa: sorteio e definição ordem dos sacadores</h5>
               <div className={`${servingTeam === 'p2' ? 'order-3' : 'order-1'} rounded-2xl p-3 text-sm font-black ${t1Style.bar} ${t1Style.text}`}>
                 <span className={`inline-flex items-center gap-1 ${servingTeam === 'p1' ? 'rounded px-1 bg-[#bef264] text-[#1a1a1a]' : ''}`}>{team1FirstName}{servingTeam === 'p1' && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0"><CircleDot size={12} /></span>}</span>{team1SecondName && <><span className="my-1 block h-px w-full bg-white/80" />{team1SecondName}</>}
                 {team1P2Name && <button type="button" disabled={isReadOnly} onClick={() => toggleServeOrder('p1')} className="ml-2 inline-flex rounded-full bg-white/90 p-1 text-slate-700" title="Trocar a ordem dos sacadores"><ArrowRightLeft size={12} /></button>}
-                {servingTeam === 'p1' && <span className="mt-1 block rounded-md bg-lime-300 px-1.5 py-0.5 text-[9px] text-slate-900">Começa sacando</span>}
-                {servingTeam === 'p2' && <span className="mt-1 block w-fit rounded-md bg-lime-300 px-1.5 py-0.5 text-[9px] text-slate-900">Escolhe quadra</span>}
+                {servingTeam === 'p1' && <span className="mt-1 block w-full rounded-md bg-lime-300 px-1.5 py-0.5 text-center text-[9px] text-slate-900">Começa sacando</span>}
+                {servingTeam === 'p2' && <span className="mt-1 block w-full rounded-md border border-slate-300 bg-slate-200 px-1.5 py-0.5 text-center text-[9px] text-slate-900">Escolhe quadra</span>}
               </div>
               <div className="order-2 flex items-center justify-center gap-2">
                 {supportsServerDraw ? <button type="button" onClick={drawStartingServer} disabled={isDrawingServer || isReadOnly} className="h-10 rounded-xl bg-sky-500 px-3 text-white flex items-center gap-1.5 disabled:opacity-50">
                   {isDrawingServer ? <Loader2 size={15} className="animate-spin" /> : <Dices size={15} />}
                   <span className="text-[10px] font-black text-center">{isDrawingServer ? `Time ${(drawPreview ?? 0) + 1}` : <>Sortear<br />sacador</>}</span>
                 </button> : <span className="text-[10px] font-bold text-slate-500">Preparar jogo</span>}
-                <button type="button" onClick={() => void onAdvanceCourtMatchStage(activeMatch.id, 'match')} disabled={isReadOnly || (supportsServerDraw && activeMatch.servingOrderOffset === undefined) || isDrawingServer} className="h-8 rounded-lg bg-green-700 px-3 text-xs font-black text-white disabled:opacity-40">OK</button>
+                <button type="button" onClick={() => void onAdvanceCourtMatchStage(activeMatch.id, 'match')} disabled={isReadOnly || (supportsServerDraw && activeMatch.servingOrderOffset === undefined) || isDrawingServer} className="h-9 rounded-lg bg-green-700 px-3 text-xs font-black text-white flex items-center gap-1.5 disabled:opacity-40" title="Iniciar partida"><Play size={14} fill="currentColor" /> Iniciar partida</button>
               </div>
               <div className={`${servingTeam === 'p2' ? 'order-1' : 'order-3'} rounded-2xl p-3 text-sm font-black ${t2Style.bar} ${t2Style.text}`}>
                 <span className={`inline-flex items-center gap-1 ${servingTeam === 'p2' ? 'rounded px-1 bg-[#bef264] text-[#1a1a1a]' : ''}`}>{team2FirstName}{servingTeam === 'p2' && <span className="w-5 h-5 rounded-full bg-white text-sky-600 flex items-center justify-center shrink-0"><CircleDot size={12} /></span>}</span>{team2SecondName && <><span className="my-1 block h-px w-full bg-white/80" />{team2SecondName}</>}
                 {team2P2Name && <button type="button" disabled={isReadOnly} onClick={() => toggleServeOrder('p2')} className="ml-2 inline-flex rounded-full bg-white/90 p-1 text-slate-700" title="Trocar a ordem dos sacadores"><ArrowRightLeft size={12} /></button>}
-                {servingTeam === 'p2' && <span className="mt-1 block rounded-md bg-lime-300 px-1.5 py-0.5 text-[9px] text-slate-900">Começa sacando</span>}
-                {servingTeam === 'p1' && <span className="mt-1 block w-fit rounded-md bg-lime-300 px-1.5 py-0.5 text-[9px] text-slate-900">Escolhe quadra</span>}
+                {servingTeam === 'p2' && <span className="mt-1 block w-full rounded-md bg-lime-300 px-1.5 py-0.5 text-center text-[9px] text-slate-900">Começa sacando</span>}
+                {servingTeam === 'p1' && <span className="mt-1 block w-full rounded-md border border-slate-300 bg-slate-200 px-1.5 py-0.5 text-center text-[9px] text-slate-900">Escolhe quadra</span>}
               </div>
             </div>
           )}
@@ -758,7 +760,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                   />
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" disabled={!canIncrementScore} onClick={(e) => { e.stopPropagation(); handleTapGame('p1', 0); }}
-                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-black text-sm ${t1Style.input}  disabled:opacity-50`}
+                      className={`w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-lg font-black text-sm ${t1Style.input}  disabled:opacity-50`}
                       style={{ borderColor: '#ffd400', borderWidth: 3 }}
                       title="Adicionar ponto ao game do Time 1">
                       {scores[0]?.gameP1 || '0'}
@@ -809,7 +811,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">set1</span>
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
-                    <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>
+                    <span className="w-11 sm:w-12 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>
                   )}
                   {tieBreakSetFlags[0] && (
                     <span className="text-[9px] font-black text-amber-600 animate-pulse leading-none">TB</span>
@@ -870,7 +872,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                   />
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" disabled={!canIncrementScore} onClick={(e) => { e.stopPropagation(); handleTapGame('p2', 0); }}
-                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-black text-sm ${t2Style.input}  disabled:opacity-50`}
+                      className={`w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-lg font-black text-sm ${t2Style.input}  disabled:opacity-50`}
                       style={{ borderColor: '#ffd400', borderWidth: 3 }}
                       title="Adicionar ponto ao game do Time 2">
                       {scores[0]?.gameP2 || '0'}
@@ -943,7 +945,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                   })}
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" disabled={!canIncrementScore} onClick={(e) => { e.stopPropagation(); handleTapGame('p1', getActiveSetIdx()); }}
-                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-black text-sm ${t1Style.input}  disabled:opacity-50`}
+                      className={`w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-lg font-black text-sm ${t1Style.input}  disabled:opacity-50`}
                       style={{ borderColor: '#ffd400', borderWidth: 3 }}
                       title="Adicionar ponto ao game atual do Time 1">
                       {scores[getActiveSetIdx()]?.gameP1 || '0'}
@@ -1007,7 +1009,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     </div>
                   ))}
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
-                    <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>
+                    <span className="w-11 sm:w-12 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>
                   )}
                 </div>
               </div>
@@ -1074,7 +1076,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                   })}
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" disabled={!canIncrementScore} onClick={(e) => { e.stopPropagation(); handleTapGame('p2', getActiveSetIdx()); }}
-                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-black text-sm ${t2Style.input}  disabled:opacity-50`}
+                      className={`w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-lg font-black text-sm ${t2Style.input}  disabled:opacity-50`}
                       style={{ borderColor: '#ffd400', borderWidth: 3 }}
                       title="Adicionar ponto ao game atual do Time 2">
                       {scores[getActiveSetIdx()]?.gameP2 || '0'}

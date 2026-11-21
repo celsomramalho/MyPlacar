@@ -8,6 +8,7 @@ const AdminRoute = lazy(() => import('./AdminRoute.tsx').then(m => ({ default: m
 const AuthRoute = lazy(() => import('./AuthRoute.tsx').then(m => ({ default: m.AuthRoute })));
 const PublicScoreboardRoute = lazy(() => import('./PublicScoreboardRoute.tsx').then(m => ({ default: m.PublicScoreboardRoute })));
 const EventDetailRoute = lazy(() => import('./EventDetailRoute.tsx').then(m => ({ default: m.EventDetailRoute })));
+const QueueOnlyRoute = lazy(() => import('./QueueOnlyRoute.tsx').then(m => ({ default: m.QueueOnlyRoute })));
 const SpectatorScreen = lazy(() => import('@modules/live/screens/SpectatorScreen.tsx').then(m => ({ default: m.SpectatorScreen })));
 const LocationScreen = lazy(() => import('@modules/history/screens/LocationScreen').then(m => ({ default: m.LocationScreen })));
 const TournamentsScreen = lazy(() => import('@modules/events').then(m => ({ default: m.TournamentsScreen })));
@@ -143,6 +144,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
   const [installPromptShownSession, setInstallPromptShownSession] = useState(true);
   const [showLogViewer, setShowLogViewer] = useState(false);
   const [initialConfirmDeleteJudge, setInitialConfirmDeleteJudge] = useState(false);
+  const [queueOnlyEventPin, setQueueOnlyEventPin] = useState<string | null>(null);
 
   const isAdmin = userProfile.isAdmin === true;
   const offlineAllowedScreens = currentScreen === 'scoreboard' || currentScreen === 'new-game' || currentScreen === 'settings';
@@ -385,7 +387,14 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
             registrations={registeredEvents}
             onBack={() => setCurrentScreen('settings')}
             onJoin={(pin, entryData) => handleJoinTournament(pin, false, entryData as any, undefined, entryData)}
-            onSelectEvent={ev => handleSelectEvent(ev as unknown as TournamentEvent)}
+            onSelectEvent={ev => {
+              setQueueOnlyEventPin(null);
+              handleSelectEvent(ev as unknown as TournamentEvent);
+            }}
+            onSelectQueueEvent={ev => {
+              setQueueOnlyEventPin(ev.pin.toUpperCase());
+              handleSelectEvent(ev as unknown as TournamentEvent);
+            }}
             onSelectAdminEvent={(ev) => {
               try {
                 sessionStorage.setItem('admin_target_event_pin', ev.pin);
@@ -408,7 +417,13 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
         )}
 
         {currentScreen === 'event-detail' && activeEvent && (
-          <EventDetailRoute
+          queueOnlyEventPin === activeEvent.pin.toUpperCase() ? (
+            <QueueOnlyRoute
+              event={activeEvent}
+              userProfile={userProfile}
+              onOpenMenu={() => setIsMenuOpen(true)}
+            />
+          ) : <EventDetailRoute
             appUrl={appUrl}
             event={activeEvent}
             handleExitTournament={handleExitTournament}
