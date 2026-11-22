@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X, Bell, ShieldCheck, ClipboardCheck } from 'lucide-react';
+import { Search, Trophy, Calendar, Ticket, Loader2, ChevronRight, Menu, MapPin, Zap, X, Bell, ShieldCheck, Gavel, ClipboardCheck } from 'lucide-react';
 import { getDb, updateEvent, saveEventEntry } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { fetchActiveEvents } from '../services/fetchActiveEvents';
@@ -11,6 +11,7 @@ import { canUseEventAdminAccess, isCoAdminOfEvent, isEventHelper, isJudgeOfEvent
 import { getRegistrationPeriodStatus } from '../services/eventRegistrationPeriod';
 import { useScreenOnboarding, ScreenIntroCard, SpotlightTour, getOnboardingStatus } from '@shared/onboarding';
 import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
+import { isWatchDevice } from '@shared/utils/device';
 
 interface Props {
   registrations: EventRegistration[];
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSelectEvent, onSelectAdminEvent, onSelectQueueEvent, onOpenMenu, userProfile, onOpenCommunications, unreadCount = 0, onRefreshRegistrations, onRegisterReplayTour, onProfileSync }) => {
+  const isWatch = isWatchDevice();
   const [pinInput, setPinInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [joiningPin, setJoiningPin] = useState<string | null>(null);
@@ -615,7 +617,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                 const isHelper = Boolean(eventObj && isEventHelper(eventObj, userProfile?.pin) && !isCoAdmin);
                 const isJudge = Boolean(eventObj && isJudgeOfEvent(eventObj, userProfile?.pin));
                 const canOpenEventAdmin = isPrimaryAdmin || isCoAdmin || isHelper;
-                const opensQueueDirectly = isPrimaryAdmin || isCoAdmin || isJudge;
+                const opensQueueDirectly = isWatch && (isPrimaryAdmin || isCoAdmin || isJudge);
                 const accessLabel = isPrimaryAdmin
                   ? 'Administrador do evento'
                   : isCoAdmin
@@ -679,7 +681,7 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {canOpenEventAdmin && !opensQueueDirectly && (
+                      {canOpenEventAdmin && !(isWatch && opensQueueDirectly) && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -692,6 +694,19 @@ export const TournamentsScreen: React.FC<Props> = ({ registrations, onJoin, onSe
                           title={isHelper ? 'Acessar como auxiliar do evento' : 'Acessar como administrador do evento'}
                         >
                           {isHelper ? <ClipboardCheck size={20} /> : <ShieldCheck size={20} />}
+                        </button>
+                      )}
+                      {isJudge && eventObj && !(isWatch && opensQueueDirectly) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectAdminEvent?.(eventObj);
+                          }}
+                          className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-all active:scale-90 shadow-sm"
+                          title="Acessar como juiz do evento"
+                        >
+                          <Gavel size={20} />
                         </button>
                       )}
                       <ChevronRight size={20} className="text-gray-300 group-hover:text-amber-500 transition-colors" />
