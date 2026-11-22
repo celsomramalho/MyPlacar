@@ -825,6 +825,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <ScoreStopwatch startedAt={activeMatch.scoreStartedAt} finishedAt={activeMatch.scoreFinishedAt} />
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {sportId !== 'tennis' && sportId !== 'beach-tennis' && <ScoreSyncIndicator status={saveStatus} />}
                   <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">set1</span>
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <span className="w-11 sm:w-12 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>
@@ -1012,6 +1013,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="w-5" />
+                  {sportId !== 'tennis' && sportId !== 'beach-tennis' && <ScoreSyncIndicator status={saveStatus} />}
                   {scores.map((_, setIdx) => (
                     <div
                       key={`label_set_${setIdx}`}
