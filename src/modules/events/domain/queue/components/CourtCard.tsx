@@ -119,7 +119,7 @@ const ScoreSyncIndicator: React.FC<{ status: 'saved' | 'saving' | 'error' }> = (
       role="status"
       aria-label={label}
       title={label}
-      className={`w-2.5 h-2.5 shrink-0 rounded-full ${status === 'saving' ? 'bg-blue-600 animate-pulse' : status === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}
+      className={`w-2.5 h-2.5 shrink-0 rounded-full border-2 border-white shadow-sm ${status === 'saving' ? 'bg-blue-600 animate-pulse' : status === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}
     />
   );
 };
@@ -792,6 +792,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
                       className="min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                       title="Zerar partida">
+                      <ScoreSyncIndicator status={saveStatus} />
                       <RefreshCw size={13} />
                       <span className="text-[9px] leading-tight font-black">0 x 0</span>
                     </button>
@@ -824,7 +825,6 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <ScoreStopwatch startedAt={activeMatch.scoreStartedAt} finishedAt={activeMatch.scoreFinishedAt} />
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <ScoreSyncIndicator status={saveStatus} />
                   <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">set1</span>
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <span className="w-11 sm:w-12 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>
@@ -978,6 +978,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
                       className="min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                       title="Zerar partida">
+                      <ScoreSyncIndicator status={saveStatus} />
                       <RefreshCw size={13} />
                       <span className="text-[9px] leading-tight font-black">0 x 0</span>
                     </button>
@@ -1011,7 +1012,6 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="w-5" />
-                  <ScoreSyncIndicator status={saveStatus} />
                   {scores.map((_, setIdx) => (
                     <div
                       key={`label_set_${setIdx}`}
