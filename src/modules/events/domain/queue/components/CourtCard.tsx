@@ -878,7 +878,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     readOnly={isReadOnly}
                     value={scores[0]?.p2 !== null && scores[0]?.p2 !== undefined ? scores[0].p2 : ''}
                     onChange={(e) => handleScoreInput(0, 'p2', e.target.value)}
-                    onBlur={onScoreBlur}
+                    onBlur={() => onScoreBlur(activeMatch?.id)}
                     onClick={(e) => e.stopPropagation()}
                     className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                       !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && isSetWonByScore(Number(scores[0].p1), Number(scores[0].p2)) && Number(scores[0].p2) > Number(scores[0].p1)
@@ -1083,7 +1083,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                         readOnly={isReadOnly}
                         value={setScore.p2 !== null && setScore.p2 !== undefined ? setScore.p2 : ''}
                         onChange={(e) => handleScoreInput(setIdx, 'p2', e.target.value)}
-                        onBlur={onScoreBlur}
+                        onBlur={() => onScoreBlur(activeMatch?.id)}
                         onClick={(e) => e.stopPropagation()}
                         className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                           isSetWon ? t2Style.wonInput : t2Style.input
