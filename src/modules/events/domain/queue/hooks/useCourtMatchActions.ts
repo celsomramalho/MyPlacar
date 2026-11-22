@@ -146,7 +146,7 @@ export function useCourtMatchActions({
   );
 
   const persistEventChanges = useCallback(
-    async (updatedMatches?: TournamentMatch[], updatedInterdictedCourts?: string[]) => {
+    async (updatedMatches?: TournamentMatch[], updatedInterdictedCourts?: string[], matchId?: string) => {
       if (isReadOnly) return;
       const nextEvent: TournamentEvent = {
         ...event,
@@ -158,7 +158,7 @@ export function useCourtMatchActions({
       const payload: Partial<FirebaseTournamentEvent> = {};
       if (updatedMatches !== undefined) payload.matches = updatedMatches;
       if (updatedInterdictedCourts !== undefined) payload.interdictedCourts = updatedInterdictedCourts;
-      await persistToFirestore(payload);
+      await persistToFirestore(payload, matchId);
     },
     [event, isReadOnly, onUpdateEvent, persistToFirestore]
   );
@@ -237,7 +237,7 @@ export function useCourtMatchActions({
               matchDate: m.matchDate || todayDate,
             }
       );
-      await persistEventChanges(nextMatches);
+      await persistEventChanges(nextMatches, undefined, matchId);
     },
     [event, isReadOnly, persistEventChanges]
   );
@@ -255,7 +255,7 @@ export function useCourtMatchActions({
         initialServeOrderP2Reversed: m.serveOrderP2Reversed,
       } : {}),
     });
-    await persistEventChanges(nextMatches);
+    await persistEventChanges(nextMatches, undefined, matchId);
   }, [event, isReadOnly, persistEventChanges]);
 
   const startCourtWarmup = useCallback(async (matchId: string) => {
@@ -265,7 +265,7 @@ export function useCourtMatchActions({
       ...m,
       warmupStartedAt: nowIso,
     });
-    await persistEventChanges(nextMatches);
+    await persistEventChanges(nextMatches, undefined, matchId);
   }, [event, isReadOnly, persistEventChanges]);
 
   // ─── Ação: Liberar quadra (sem finalizar) ──────────────────────────────────
@@ -278,7 +278,7 @@ export function useCourtMatchActions({
           ? m
           : { ...m, status: 'waiting' as const, court: undefined, startedAt: undefined, courtStartedAt: undefined, courtDurationMinutes: undefined, warmupStartedAt: undefined, scoreStartedAt: undefined, scoreFinishedAt: undefined, courtStage: undefined }
       );
-      await persistEventChanges(nextMatches);
+      await persistEventChanges(nextMatches, undefined, matchId);
     },
     [event, isReadOnly, persistEventChanges]
   );
@@ -343,7 +343,7 @@ export function useCourtMatchActions({
       });
 
       const progressed = updatePlayoffProgression(event.pairs || [], nextMatches);
-      await persistEventChanges(progressed);
+      await persistEventChanges(progressed, undefined, matchId);
     },
     [event, isReadOnly, parseMatchSets, persistEventChanges]
   );
@@ -383,7 +383,7 @@ export function useCourtMatchActions({
         loserPairId: undefined,
       };
     });
-    await persistEventChanges(nextMatches);
+    await persistEventChanges(nextMatches, undefined, matchId);
   }, [event, isReadOnly, persistEventChanges]);
 
   // ─── Ação: Interditar / Liberar quadra ────────────────────────────────────
@@ -407,7 +407,7 @@ export function useCourtMatchActions({
       const nextMatches = (event.matches || []).map((m) =>
         m.id !== matchId ? m : { ...m, frozen: !m.frozen }
       );
-      await persistEventChanges(nextMatches);
+      await persistEventChanges(nextMatches, undefined, matchId);
     },
     [event, isReadOnly, persistEventChanges]
   );
@@ -569,7 +569,7 @@ export function useCourtMatchActions({
         saveTimeoutRef.current = null;
       }
       const nextMatches = (event.matches || []).map((m) => m.id === matchId ? { ...m, ...settings } : m);
-      await persistEventChanges(nextMatches);
+      await persistEventChanges(nextMatches, undefined, matchId);
     },
     [event, isReadOnly, persistEventChanges]
   );
@@ -594,13 +594,14 @@ export function useCourtMatchActions({
         m.id !== matchId ? m : { ...m, matchDate: dateVal || undefined }
       );
       onUpdateEvent?.({ ...event, matches: nextMatches });
+      markMatchSaveStatus(matchId, 'saving');
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        persistToFirestore({ matches: nextMatches });
+        void persistToFirestore({ matches: nextMatches }, matchId);
       }, saveDebounceMs);
     },
-    [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs]
+    [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs, markMatchSaveStatus]
   );
 
   return {
