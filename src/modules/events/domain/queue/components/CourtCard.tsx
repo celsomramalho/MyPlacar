@@ -111,6 +111,19 @@ const ScoreStopwatch: React.FC<{ startedAt?: string; finishedAt?: string }> = ({
   const time = [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
   return <span className="px-2 py-1 rounded-md border border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 font-mono text-[11px] tabular-nums whitespace-nowrap">{time}</span>;
 };
+
+const ScoreSyncIndicator: React.FC<{ status: 'saved' | 'saving' | 'error' }> = ({ status }) => {
+  const label = status === 'saving' ? 'Salvando no Firebase' : status === 'error' ? 'Falha ao salvar no Firebase' : 'Salvo no Firebase';
+  return (
+    <span
+      role="status"
+      aria-label={label}
+      title={label}
+      className={`w-2.5 h-2.5 shrink-0 rounded-full ${status === 'saving' ? 'bg-blue-600 animate-pulse' : status === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}
+    />
+  );
+};
+
 export interface CourtCardProps {
   court: CourtState;
   index: number;
@@ -126,6 +139,7 @@ export interface CourtCardProps {
   tieBreakAt: string;
   averageMatchDurationMinutes: number;
   refreshingMatchId: string | null;
+  saveStatus: 'saved' | 'saving' | 'error';
   getPlayerNick: (p?: { nickname?: string; name?: string; email?: string; pin?: string }) => string;
   parseMatchSets: (
     match: TournamentMatch,
@@ -146,7 +160,7 @@ export interface CourtCardProps {
     servingOrderOffset?: number | null
   ) => void;
   onServeSettingsChange?: (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => void;
-  onScoreBlur: () => void;
+  onScoreBlur: (matchId?: string) => void;
   onMatchDateChange: (matchId: string, matchDate: string) => void;
   onFinishCourtMatch: (matchId: string) => void;
   onResetCourtMatch?: (matchId: string) => void | Promise<void>;
@@ -169,6 +183,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   tieBreakAt,
   averageMatchDurationMinutes,
   refreshingMatchId,
+  saveStatus,
   getPlayerNick,
   parseMatchSets,
   onFreeCourtMatch,
@@ -750,7 +765,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     readOnly={isReadOnly}
                     value={scores[0]?.p1 !== null && scores[0]?.p1 !== undefined ? scores[0].p1 : ''}
                     onChange={(e) => handleScoreInput(0, 'p1', e.target.value)}
-                    onBlur={onScoreBlur}
+                    onBlur={() => onScoreBlur(activeMatch?.id)}
                     onClick={(e) => e.stopPropagation()}
                     className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                       !scores[0]?.inProgress && scores[0]?.p1 !== null && scores[0]?.p1 !== undefined && scores[0]?.p2 !== null && scores[0]?.p2 !== undefined && isSetWonByScore(Number(scores[0].p1), Number(scores[0].p2)) && Number(scores[0].p1) > Number(scores[0].p2)
@@ -771,7 +786,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
               {/* Linha central: label set1 + botão undo */}
               <div className="order-2 flex items-center gap-1 px-1 py-0.5">
-                <div className="flex flex-1 min-w-0 items-center justify-center gap-1">
+                <div className="flex flex-1 min-w-0 items-center justify-start gap-1">
                 <div className="flex items-center gap-1">
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
@@ -809,6 +824,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <ScoreStopwatch startedAt={activeMatch.scoreStartedAt} finishedAt={activeMatch.scoreFinishedAt} />
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <ScoreSyncIndicator status={saveStatus} />
                   <span className="w-9 sm:w-10 text-center text-[10px] sm:text-xs font-bold text-slate-400">set1</span>
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <span className="w-11 sm:w-12 text-center text-[10px] sm:text-xs font-bold text-[#b7ff3c]">game</span>
@@ -935,7 +951,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                         readOnly={isReadOnly}
                         value={setScore.p1 !== null && setScore.p1 !== undefined ? setScore.p1 : ''}
                         onChange={(e) => handleScoreInput(setIdx, 'p1', e.target.value)}
-                        onBlur={onScoreBlur}
+                        onBlur={() => onScoreBlur(activeMatch?.id)}
                         onClick={(e) => e.stopPropagation()}
                         className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-center font-black text-sm outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                           isSetWon ? t1Style.wonInput : t1Style.input
@@ -956,7 +972,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
 
               {/* Labels dos sets + botão undo */}
               <div className="order-2 flex items-center gap-1 px-1 py-0.5">
-                <div className="flex flex-1 min-w-0 items-center justify-center gap-1">
+                <div className="flex flex-1 min-w-0 items-center justify-start gap-1">
                 <div className="flex items-center gap-1">
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
@@ -995,6 +1011,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="w-5" />
+                  <ScoreSyncIndicator status={saveStatus} />
                   {scores.map((_, setIdx) => (
                     <div
                       key={`label_set_${setIdx}`}

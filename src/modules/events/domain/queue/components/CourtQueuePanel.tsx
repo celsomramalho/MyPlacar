@@ -161,6 +161,8 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
     event,
     isReadOnly,
     onUpdateEvent,
+    adminEmail,
+    adminPin,
   });
 
   const handleToggleSelectCourt = (matchId: string) => {
@@ -216,6 +218,7 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
                 tieBreakAt={queue.tieBreakAt}
                 averageMatchDurationMinutes={queue.averageMatchDurationMinutes}
                 refreshingMatchId={refreshingMatchId}
+                saveStatus={court.activeMatch ? actions.saveStatusByMatch[court.activeMatch.id] || 'saved' : 'saved'}
                 getPlayerNick={queue.getPlayerNick}
                 parseMatchSets={queue.parseMatchSets}
                 onFreeCourtMatch={(matchId, isFinished) =>
@@ -229,7 +232,7 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
                 onServeSettingsChange={actions.handleServeSettingsChange}
                 onAdvanceCourtMatchStage={actions.advanceCourtMatchStage}
                 onStartCourtWarmup={actions.startCourtWarmup}
-                onScoreBlur={actions.handleScoreBlur}
+                onScoreBlur={(matchId) => actions.handleScoreBlur(matchId)}
                 onMatchDateChange={actions.handleMatchDateChange}
                 onFinishCourtMatch={actions.finishCourtMatch}
                 onResetCourtMatch={actions.resetCourtMatch}

@@ -58,6 +58,49 @@ export default async function handler(req, res) {
 
   const { action, event, eventPin, adminEmail, adminPin: suppliedAdminPin, queue } = req.body || {};
 
+  if (action === 'queue-update') {
+    const allowedKeys = new Set(['matches', 'interdictedCourts']);
+    const queueKeys = queue && typeof queue === 'object' && !Array.isArray(queue) ? Object.keys(queue) : [];
+    const hasMatches = Array.isArray(queue?.matches);
+    const hasInterdictedCourts = Array.isArray(queue?.interdictedCourts)
+      && queue.interdictedCourts.every((court) => typeof court === 'string');
+    if (!eventPin || !adminEmail || !suppliedAdminPin || queueKeys.length === 0
+      || queueKeys.some((key) => !allowedKeys.has(key))
+      || (queue?.matches !== undefined && !hasMatches)
+      || (queue?.interdictedCourts !== undefined && !hasInterdictedCourts)) {
+      return res.status(400).json({ error: 'Dados da fila inválidos ou incompletos' });
+    }
+    try {
+      const db = admin.firestore();
+      const cleanEmail = String(adminEmail).toLowerCase().trim();
+      const requestedPin = String(suppliedAdminPin).toUpperCase().trim();
+      const [eventSnap, userSnap] = await Promise.all([
+        db.collection('events').doc(eventPin).get(),
+        db.collection('users').doc(cleanEmail).get(),
+      ]);
+      const eventData = eventSnap.exists ? eventSnap.data() : null;
+      const userData = userSnap.exists ? userSnap.data() : null;
+      const storedPin = String(userData?.pin || '').toUpperCase().trim();
+      const isAdminUser = userData?.isAdmin === true || cleanEmail === 'celsomramalho@gmail.com';
+      const isActiveEventStaff = eventData?.active === true && storedPin === requestedPin && (
+        (Array.isArray(eventData?.coAdminPins) && eventData.coAdminPins.some((pin) => String(pin).toUpperCase().trim() === requestedPin))
+        || (Array.isArray(eventData?.helperPins) && eventData.helperPins.some((pin) => String(pin).toUpperCase().trim() === requestedPin))
+        || (Array.isArray(eventData?.judgePins) && eventData.judgePins.some((pin) => String(pin).toUpperCase().trim() === requestedPin))
+      );
+      if (!eventSnap.exists || !requestedPin || storedPin !== requestedPin || (!isAdminUser && !isActiveEventStaff)) {
+        return res.status(403).json({ error: 'Acesso negado: usuário sem permissão para gerenciar a fila deste evento' });
+      }
+      const queuePatch = {};
+      if (hasMatches) queuePatch.matches = sanitize(queue.matches);
+      if (hasInterdictedCourts) queuePatch.interdictedCourts = sanitize(queue.interdictedCourts);
+      await eventSnap.ref.update(queuePatch);
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('Erro ao salvar fila do relógio:', err);
+      return res.status(500).json({ error: `Erro interno: ${err.message}` });
+    }
+  }
+
   if (action === 'judge-queue') {
     const hasMatches = Array.isArray(queue?.matches);
     const hasPairs = Array.isArray(queue?.pairs);

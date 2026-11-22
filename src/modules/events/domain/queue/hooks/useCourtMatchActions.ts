@@ -15,7 +15,7 @@
  * @see docs/PLANO_REFATORACAO_FILA_QUADRAS.md — Fase 3
  */
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import type { TournamentEvent, TournamentMatch, MatchSetScore } from '@modules/events/types';
 import { updatePlayoffProgression } from '@modules/events/domain/brackets/engine/bracketProgressionEngine';
 import { isSetScoreComplete } from '@modules/events/domain/brackets/engine/matchScoreEngine';
@@ -23,6 +23,7 @@ import { resolveMatchRules } from '../../rules/eventMatchRules';
 import { getDb } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import type { FirebaseTournamentEvent } from '@infra/firebase/events';
+import { isWatchDevice } from '@shared/utils/device';
 
 // ─── Tipos públicos do hook ───────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ export interface UseCourtMatchActionsOptions {
   event: TournamentEvent;
   isReadOnly: boolean;
   onUpdateEvent?: (updated: TournamentEvent) => void;
+  adminEmail?: string;
+  adminPin?: string;
   /** Debounce em ms para persistência de placar/data. Padrão: 600ms */
   saveDebounceMs?: number;
 }
@@ -41,6 +44,7 @@ export interface ParseMatchSetsResult {
 }
 
 export interface UseCourtMatchActionsResult {
+  saveStatusByMatch: Record<string, 'saved' | 'saving' | 'error'>;
   /** Vincula uma partida a uma quadra livre (status → live, startedAt definido) */
   assignMatchToCourt: (matchId: string, courtName: string) => Promise<void>;
   advanceCourtMatchStage: (matchId: string, stage: 'serve_draw' | 'match') => Promise<void>;
@@ -78,7 +82,7 @@ export interface UseCourtMatchActionsResult {
   /** Salva quem saca e a ordem dos parceiros na rotação do saque. */
   handleServeSettingsChange: (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => void;
   /** Persiste o placar imediatamente ao perder o foco */
-  handleScoreBlur: () => Promise<void>;
+  handleScoreBlur: (matchId?: string) => Promise<void>;
   /** Salva a data da partida com debounce de persistência */
   handleMatchDateChange: (matchId: string, dateVal: string) => void;
   /** Parseia os sets de uma partida retornando scores + setsWon */
@@ -91,24 +95,54 @@ export function useCourtMatchActions({
   event,
   isReadOnly,
   onUpdateEvent,
+  adminEmail,
+  adminPin,
   saveDebounceMs = 600,
 }: UseCourtMatchActionsOptions): UseCourtMatchActionsResult {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saveStatusByMatch, setSaveStatusByMatch] = useState<Record<string, 'saved' | 'saving' | 'error'>>({});
+  const markMatchSaveStatus = useCallback((matchId: string, status: 'saved' | 'saving' | 'error') => {
+    setSaveStatusByMatch((current) => current[matchId] === status ? current : { ...current, [matchId]: status });
+  }, []);
 
   // ─── Persistência no Firestore ─────────────────────────────────────────────
 
   const persistToFirestore = useCallback(
-    async (payload: Partial<FirebaseTournamentEvent>) => {
-      const db = getDb();
-      if (!db || !event.pin) return;
+    async (payload: Partial<FirebaseTournamentEvent>, matchId?: string) => {
+      if (!event.pin) return;
+      if (matchId) markMatchSaveStatus(matchId, 'saving');
       try {
+        if (isWatchDevice()) {
+          if (!adminEmail || !adminPin) {
+            throw new Error('O relógio não tem a identificação necessária para salvar a fila. Saia e entre novamente pelo celular.');
+          }
+          const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
+          const response = await fetch(`${baseUrl}/api/admin-save-event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'queue-update', eventPin: event.pin, adminEmail, adminPin, queue: payload }),
+          });
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.error || 'Não foi possível sincronizar a fila do relógio.');
+          }
+          if (matchId) markMatchSaveStatus(matchId, 'saved');
+          return;
+        }
+        const db = getDb();
+        if (!db) throw new Error('Não foi possível conectar ao Firestore.');
         const { updateEvent } = await import('@infra/firebase/events');
         await updateEvent(db as Firestore, event.pin, payload);
+        if (matchId) markMatchSaveStatus(matchId, 'saved');
       } catch (err) {
+        if (matchId) markMatchSaveStatus(matchId, 'error');
         console.error('[useCourtMatchActions] Erro ao persistir no Firestore:', err);
+        if (isWatchDevice() && typeof window !== 'undefined') {
+          window.alert(err instanceof Error ? err.message : 'Não foi possível sincronizar a fila. Tente novamente.');
+        }
       }
     },
-    [event.pin]
+    [event.pin, adminEmail, adminPin, markMatchSaveStatus]
   );
 
   const persistEventChanges = useCallback(
@@ -440,13 +474,14 @@ export function useCourtMatchActions({
 
       const progressed = updatePlayoffProgression(event.pairs || [], nextMatches);
       onUpdateEvent?.({ ...event, matches: progressed });
+      markMatchSaveStatus(matchId, 'saving');
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        persistToFirestore({ matches: progressed });
+        void persistToFirestore({ matches: progressed }, matchId);
       }, saveDebounceMs);
     },
-    [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs]
+    [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs, markMatchSaveStatus]
   );
 
   // ─── Ação: Restaurar placar atomicamente (undo do tap-to-score) ───────────
@@ -516,13 +551,14 @@ export function useCourtMatchActions({
 
       const progressed = updatePlayoffProgression(event.pairs || [], nextMatches);
       onUpdateEvent?.({ ...event, matches: progressed });
+      markMatchSaveStatus(matchId, 'saving');
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        persistToFirestore({ matches: progressed });
+        void persistToFirestore({ matches: progressed }, matchId);
       }, saveDebounceMs);
     },
-    [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs]
+    [event, isReadOnly, onUpdateEvent, persistToFirestore, saveDebounceMs, markMatchSaveStatus]
   );
 
   const handleServeSettingsChange = useCallback(
@@ -540,13 +576,13 @@ export function useCourtMatchActions({
 
   // ─── Ação: Flush do placar ao perder o foco ───────────────────────────────
 
-  const handleScoreBlur = useCallback(async () => {
+  const handleScoreBlur = useCallback(async (matchId?: string) => {
     if (isReadOnly) return;
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
-    await persistToFirestore({ matches: event.matches });
+    await persistToFirestore({ matches: event.matches }, matchId);
   }, [isReadOnly, event.matches, persistToFirestore]);
 
   // ─── Ação: Salvar data da partida (com debounce) ──────────────────────────
@@ -568,6 +604,7 @@ export function useCourtMatchActions({
   );
 
   return {
+    saveStatusByMatch,
     assignMatchToCourt,
     advanceCourtMatchStage,
     startCourtWarmup,
