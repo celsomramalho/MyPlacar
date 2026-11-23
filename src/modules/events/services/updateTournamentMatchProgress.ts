@@ -1,5 +1,5 @@
 import type { Firestore } from 'firebase/firestore';
-import { fetchEventByPin, fetchEventEntries, updateEventMatches } from '@infra/firebase/events';
+import { fetchEventByPin, fetchEventByPinFromServer, fetchEventEntries, updateEventMatches } from '@infra/firebase/events';
 import type { TournamentMatch } from '../types';
 import { updatePlayoffProgression, updateSuper8DuplasProgression } from './matchProgression';
 
@@ -30,21 +30,51 @@ export const markTournamentMatchScore = async (
   eventPin: string,
   matchId: string,
   scores: TournamentMatch['scores'],
+  servingOrderOffset?: number,
+  watchCredentials?: { adminEmail: string; adminPin: string },
 ) => {
-  const event = await fetchEventByPin(db, eventPin);
-  if (!event) return;
+  const event = watchCredentials
+    ? await fetchEventByPinFromServer(db, eventPin)
+    : await fetchEventByPin(db, eventPin);
+  if (!event) throw new Error('Evento não encontrado ao salvar o placar.');
 
+  let matchFound = false;
   const updatedMatches: TournamentMatch[] = ((event.matches || []) as TournamentMatch[]).map((match) => {
     if (match.id !== matchId) return match;
+    matchFound = true;
     return {
       ...match,
       scores,
+      ...(servingOrderOffset === undefined ? {} : { servingOrderOffset }),
       result: (scores || [])
         .filter((score) => score.p1 !== null && score.p1 !== undefined && score.p2 !== null && score.p2 !== undefined)
         .map((score) => `${score.p1}/${score.p2}`)
         .join(' '),
     };
   });
+  if (!matchFound) throw new Error('Partida do evento não encontrada ao salvar o placar.');
+
+  if (watchCredentials) {
+    const baseUrl = typeof window !== 'undefined' && window.location.origin
+      ? window.location.origin
+      : 'https://myplacar.app.br';
+    const response = await fetch(`${baseUrl}/api/admin-save-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'queue-update',
+        eventPin,
+        adminEmail: watchCredentials.adminEmail,
+        adminPin: watchCredentials.adminPin,
+        queue: { matches: updatedMatches },
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || 'Não foi possível sincronizar o placar do relógio.');
+    }
+    return;
+  }
 
   await updateEventMatches(db, eventPin, updatedMatches);
 };

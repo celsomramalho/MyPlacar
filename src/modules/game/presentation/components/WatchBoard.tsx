@@ -62,6 +62,8 @@ interface WatchBoardProps {
   onExitOffline?: () => void;
   canReturnToQueue?: boolean;
   onReturnToQueue?: () => void;
+  isQueueMatch?: boolean;
+  queueScoreSaveStatus?: 'saved' | 'saving' | 'error';
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -98,7 +100,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline, canReturnToQueue, onReturnToQueue
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline, canReturnToQueue, onReturnToQueue, isQueueMatch = false, queueScoreSaveStatus = 'saved'
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { setMatchSettings } = useGame();
@@ -114,6 +116,13 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   const isMirror = false;
   const [showSetGamesInMainScore, setShowSetGamesInMainScore] = React.useState(false);
   const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
+  const undoSyncBorderClass = !isQueueMatch
+    ? 'border border-white/5'
+    : queueScoreSaveStatus === 'saving'
+      ? 'border-4 border-blue-600 animate-pulse'
+      : queueScoreSaveStatus === 'error'
+        ? 'border-4 border-red-600'
+        : 'border-4 border-emerald-600';
   const [batteryStatus, setBatteryStatus] = React.useState<BatteryStatus | null>(null);
   const [fbAckElapsedSeconds, setFbAckElapsedSeconds] = React.useState(0);
   const pauseRotationUntil = React.useRef(0);
@@ -675,7 +684,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
               {/* Undo */}
               <button
                 onPointerDown={() => { resetDimTimer(); handleUndoWithLog(); }}
-                className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white border border-white/5 transition-all active:scale-90"
+                className={`w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white ${undoSyncBorderClass} transition-all active:scale-90`}
               >
                 <RotateCcw size={34} strokeWidth={4} />
               </button>

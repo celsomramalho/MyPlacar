@@ -64,6 +64,8 @@ const getTournamentScoresFromState = (state: GameState): MatchSetScore[] => {
     scores[state.currentSet] = {
       p1: state.p1.games,
       p2: state.p2.games,
+      gameP1: state.p1.score,
+      gameP2: state.p2.score,
       inProgress: true,
     };
   }
@@ -127,6 +129,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     }
     return saved;
   });
+  const [tournamentScoreSaveStatus, setTournamentScoreSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const gameStateRef = useRef(gameState);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
@@ -1081,6 +1084,46 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     }
   }, [gameState, userProfile.pin, setIsSavingJudge, partners, setPartners, setModalConfig]);
 
+  const persistTournamentScore = useCallback((state: GameState) => {
+    if (!state.tournamentPin || !state.tournamentMatchId) return;
+    const tournamentPin = state.tournamentPin;
+    const tournamentMatchId = state.tournamentMatchId;
+    if (!navigator.onLine) {
+      setTournamentScoreSaveStatus('error');
+      return;
+    }
+
+    setTournamentScoreSaveStatus('saving');
+    void (async () => {
+      try {
+        const watchCredentials = isWatchDevice()
+          ? userProfile.email && userProfile.pin
+            ? { adminEmail: userProfile.email, adminPin: userProfile.pin }
+            : null
+          : undefined;
+        if (isWatchDevice() && !watchCredentials) {
+          throw new Error('O relógio não tem autorização para salvar o placar do evento.');
+        }
+
+        const db = await getDbAsync();
+        if (!db) throw new Error('Não foi possível conectar ao Firebase.');
+        const { markTournamentMatchScore } = await import('@modules/events/services/updateTournamentMatchProgress');
+        await markTournamentMatchScore(
+          db as Firestore,
+          tournamentPin,
+          tournamentMatchId,
+          getTournamentScoresFromState(state),
+          state.servingOrderOffset,
+          watchCredentials || undefined,
+        );
+        setTournamentScoreSaveStatus('saved');
+      } catch (error) {
+        console.error('[GameContext] Falha ao salvar placar do evento no Firebase:', error);
+        setTournamentScoreSaveStatus('error');
+      }
+    })();
+  }, [userProfile.email, userProfile.pin]);
+
   const handleScoreUpdate = useCallback((player: 1 | 2, type: PointType = 'rally', source: string = 'cb') => {
     setGameState(prev => {
       if (!prev || prev.isConfirmedFinished || prev.isMatchOver || (prev.isMirroringActive && prev.isLiveClosed)) return prev;
@@ -1094,15 +1137,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       }
 
       const lastPoint = next.pointHistory[next.pointHistory.length - 1];
-      if (lastPoint?.resultingScore && next.tournamentPin && next.tournamentMatchId && navigator.onLine) {
-        void import('@infra/firebase/client').then(({ getDb }) => {
-          const db = getDb();
-          if (!db) return;
-          return import('@modules/events/services/updateTournamentMatchProgress').then(({ markTournamentMatchScore }) =>
-            markTournamentMatchScore(db as Firestore, next.tournamentPin!, next.tournamentMatchId!, getTournamentScoresFromState(next)),
-          );
-        }).catch(() => {});
-      }
+      if (lastPoint?.resultingScore) persistTournamentScore(next);
       
       setHistoryStack(stack => {
         const updated = [...stack, JSON.parse(JSON.stringify(next))];
@@ -1111,7 +1146,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       });
       return { ...next };
     });
-  }, [deviceId]);
+  }, [deviceId, persistTournamentScore]);
 
   const handleCorrectScore = useCallback((type: 'game' | 'gameSet' | 'matchSet', value: string, options?: { forceLocal?: boolean }) => {
     const forceLocal = options?.forceLocal === true;
@@ -1147,7 +1182,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       nextState.currentSet = s1 + s2;
     }
     setGameState(nextState); setHistoryStack([JSON.parse(JSON.stringify(nextState))]);
-  }, [gameState, deviceId, setGameState]);
+    persistTournamentScore(nextState);
+  }, [gameState, deviceId, setGameState, persistTournamentScore]);
 
   const handleUndo = useCallback(() => {
     const isCommandOwner = !gameState?.isMirroringActive || gameState?.commandOwnerId === deviceId;
@@ -1160,12 +1196,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       if (isFinishedPending) {
         setHistoryStack(stack.slice(0, -1));
         setGameState({ ...p, isPaused: false, isMatchOver: false, matchEndedAt: undefined });
+      persistTournamentScore({ ...p, isPaused: false, isMatchOver: false, matchEndedAt: undefined });
         return;
       }
       setHistoryStack(stack.slice(0, -1));
       setGameState({ ...p, isPaused: false, isMatchOver: false, matchEndedAt: undefined });
+      persistTournamentScore({ ...p, isPaused: false, isMatchOver: false, matchEndedAt: undefined });
     }
-  }, [gameState, deviceId, setGameState]);
+  }, [gameState, deviceId, setGameState, persistTournamentScore]);
 
   const handleSmartSwitchServer = useCallback(() => {
     const isCommandOwner = !gameState?.isMirroringActive || gameState?.commandOwnerId === deviceId;
@@ -1199,6 +1237,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     setHistoryStack([state]);
     setLiveLogs([]); // Zera logs ao iniciar nova partida
     setVoiceLogs([]); // Zera voice logs ao iniciar nova partida
+    setTournamentScoreSaveStatus('saved');
     try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(state)); } catch {}
   }, [setGameState, setHistoryStack, setLiveLogs, setVoiceLogs]);
 
@@ -1270,11 +1309,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         setIsRecoveryFromMatchOver(false);
         setIsWaitingSync(false);
         startGame(resetState);
+        persistTournamentScore(resetState);
         setModalConfig(null);
       },
       onCancel: () => setModalConfig(null)
     });
-  }, [gameState, matchSettings, setModalConfig, setIsRecoveryFromMatchOver, setIsWaitingSync, startGame]);
+  }, [gameState, matchSettings, setModalConfig, setIsRecoveryFromMatchOver, setIsWaitingSync, startGame, persistTournamentScore]);
 
   const canStartMatch = useMemo(() => {
     const s = matchSettings;
@@ -1577,6 +1617,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   const value: GameContextValue = useMemo(() => ({
     gameState,
     setGameState,
+    tournamentScoreSaveStatus,
     gameStateRef,
     matchSettings,
     setMatchSettings,
@@ -1610,6 +1651,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     gameState,
+    tournamentScoreSaveStatus,
     gameStateRef,
     matchSettings,
     userProfile,

@@ -20,6 +20,9 @@ export interface GameContextValue {
   /** Estado atual da partida em andamento. `null` = nenhuma partida ativa. */
   gameState: GameState | null;
 
+  /** Estado da última gravação do placar vinculado ao evento. */
+  tournamentScoreSaveStatus: 'saved' | 'saving' | 'error';
+
   /**
    * Setter direto do gameState. Usar com cuidado — prefira os handlers
    * específicos (`handleScoreUpdate`, `handleUndo`, etc.) para garantir

@@ -1296,6 +1296,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           onExitOffline={onExitOffline}
           canReturnToQueue={canReturnToQueue}
           onReturnToQueue={onReturnToQueue}
+          isQueueMatch={canReturnToQueue}
+          queueScoreSaveStatus={gameCtx.tournamentScoreSaveStatus}
         />
       </>
     );
