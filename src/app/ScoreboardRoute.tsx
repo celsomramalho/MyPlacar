@@ -20,6 +20,8 @@ interface ScoreboardRouteProps {
   /** Setter do AppScreenRouter — ativa o LiveControlOverlay em modo "confirmar exclusão de juiz" */
   setInitialConfirmDeleteJudge: React.Dispatch<React.SetStateAction<boolean>>;
   onRegisterReplayTour?: (fn: () => void) => void;
+  canReturnToQueue?: boolean;
+  onReturnToQueue?: () => void;
 }
 
 /**
@@ -36,6 +38,8 @@ export function ScoreboardRoute({
   setActiveTab,
   setInitialConfirmDeleteJudge,
   onRegisterReplayTour,
+  canReturnToQueue = false,
+  onReturnToQueue,
 }: ScoreboardRouteProps) {
   const {
     userProfile,
@@ -208,6 +212,8 @@ export function ScoreboardRoute({
       voiceLogs={voiceLogs}
       setVoiceLogs={setVoiceLogs}
       onRegisterReplayTour={onRegisterReplayTour}
+      canReturnToQueue={canReturnToQueue}
+      onReturnToQueue={onReturnToQueue}
     />
   );
 }

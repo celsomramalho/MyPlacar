@@ -29,6 +29,8 @@ export interface CourtQueuePanelProps {
   onOpenMatchRules?: (match: TournamentMatch) => void;
   onRefreshEventScore?: (matchId: string) => void;
   refreshingMatchId?: string | null;
+  isWatchModeEnabled?: boolean;
+  onToggleWatchMode?: () => void;
   /** Título customizado do header (opcional) */
   title?: string;
   /** Subtítulo customizado do header (opcional) */
@@ -46,6 +48,8 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
   onOpenMatchRules,
   onRefreshEventScore,
   refreshingMatchId = null,
+  isWatchModeEnabled = false,
+  onToggleWatchMode,
   title,
   subtitle,
   canCheckInParticipants = false,
@@ -219,6 +223,8 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
                 averageMatchDurationMinutes={queue.averageMatchDurationMinutes}
                 refreshingMatchId={refreshingMatchId}
                 saveStatus={court.activeMatch ? actions.saveStatusByMatch[court.activeMatch.id] || 'saved' : 'saved'}
+                isWatchModeEnabled={isWatchModeEnabled}
+                onToggleWatchMode={onToggleWatchMode}
                 getPlayerNick={queue.getPlayerNick}
                 parseMatchSets={queue.parseMatchSets}
                 onFreeCourtMatch={(matchId, isFinished) =>

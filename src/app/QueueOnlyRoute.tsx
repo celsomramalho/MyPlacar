@@ -3,7 +3,9 @@ import { Menu } from 'lucide-react';
 import type { TournamentEvent } from '@modules/events/types';
 import { EventFormedTeamsView } from '@modules/admin/components/EventFormedTeamsView';
 import { isCoAdminOfEvent, isJudgeOfEvent, isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
+import { getDb, subscribeEventByPin } from '@infra/firebase';
 import type { UserProfile } from '@modules/auth/types';
+import { useGame } from '@modules/game';
 
 interface QueueOnlyRouteProps {
   event: TournamentEvent;
@@ -12,8 +14,19 @@ interface QueueOnlyRouteProps {
 }
 
 export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRouteProps) {
+  const { matchSettings, setMatchSettings } = useGame();
   const [currentEvent, setCurrentEvent] = useState(event);
-  useEffect(() => setCurrentEvent(event), [event]);
+  useEffect(() => {
+    setCurrentEvent(event);
+    const db = getDb();
+    if (!db || !event.pin) return;
+    return subscribeEventByPin(db, event.pin, (updatedEvent) => {
+      setCurrentEvent((current) => ({
+        ...updatedEvent,
+        entries: updatedEvent.entries ?? current.entries,
+      } as TournamentEvent));
+    });
+  }, [event]);
   const isPrimaryAdmin = isPrimaryAdminEmail(userProfile.email);
   const isCoAdmin = isCoAdminOfEvent(currentEvent, userProfile.pin);
   const isJudge = isJudgeOfEvent(currentEvent, userProfile.pin);
@@ -36,6 +49,11 @@ export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRout
         adminEmail={userProfile.email}
         adminPin={userProfile.pin}
         compact
+        isWatchModeEnabled={!!matchSettings.isWatchMode}
+        onToggleWatchMode={() => setMatchSettings((current) => {
+          const isWatchMode = !current.isWatchMode;
+          return { ...current, isWatchMode, isScoreboardMode: isWatchMode ? false : current.isScoreboardMode };
+        })}
       />
     </main>
   );

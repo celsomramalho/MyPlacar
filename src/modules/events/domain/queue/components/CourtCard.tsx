@@ -3,6 +3,7 @@ import {
   Layers,
   Ban,
   Clock,
+  Watch,
   Play,
   ArrowLeft,
   ShieldOff,
@@ -25,6 +26,7 @@ import { isSetScoreComplete } from '@modules/events/domain/brackets/engine/match
 import { resolveCourtMinutes, resolveMatchRules } from '../../rules/eventMatchRules';
 import { getCourtColors, COURT_TEAM_STYLES } from '../../../../../constants';
 import type { QueueCategoryColor } from '../utils/queueCategoryColors';
+import { isWatchDevice } from '@shared/utils/device';
 
 export { COURT_TEAM_STYLES };
 
@@ -140,6 +142,8 @@ export interface CourtCardProps {
   averageMatchDurationMinutes: number;
   refreshingMatchId: string | null;
   saveStatus: 'saved' | 'saving' | 'error';
+  isWatchModeEnabled?: boolean;
+  onToggleWatchMode?: () => void;
   getPlayerNick: (p?: { nickname?: string; name?: string; email?: string; pin?: string }) => string;
   parseMatchSets: (
     match: TournamentMatch,
@@ -184,6 +188,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   averageMatchDurationMinutes,
   refreshingMatchId,
   saveStatus,
+  isWatchModeEnabled = false,
+  onToggleWatchMode,
   getPlayerNick,
   parseMatchSets,
   onFreeCourtMatch,
@@ -206,6 +212,17 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   const activeMatch = court.activeMatch;
   const courtStage = activeMatch?.courtStage || 'match';
   const activeCat = court.activeMatchCategory;
+  const isWatch = isWatchDevice();
+  const saveStatusLabel = saveStatus === 'saving'
+    ? 'Salvando no Firebase'
+    : saveStatus === 'error'
+      ? 'Falha ao salvar no Firebase'
+      : 'Salvo no Firebase';
+  const watchSyncBorderClass = saveStatus === 'saving'
+    ? 'border-4 border-blue-600 animate-pulse'
+    : saveStatus === 'error'
+      ? 'border-4 border-red-600'
+      : 'border-4 border-emerald-600';
 
   const p1 = activeMatch
     ? activeMatch.pair1 || (activeMatch.pair1Id && pairsById ? pairsById[activeMatch.pair1Id] : undefined)
@@ -663,11 +680,23 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 type="button"
                 onClick={() => onRefreshEventScore(activeMatch.id)}
                 disabled={refreshingMatchId === activeMatch.id}
-                className="w-8 h-8 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-blue-600 active:scale-95 transition-all flex items-center justify-center disabled:opacity-60"
+                className={`${isWatch ? 'w-10 h-10' : 'w-8 h-8'} rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-blue-600 active:scale-95 transition-all flex items-center justify-center disabled:opacity-60`}
                 title="Atualizar placar"
               >
-                <RefreshCw size={14} className={refreshingMatchId === activeMatch.id ? 'animate-spin' : ''} />
+                <RefreshCw size={isWatch ? 18 : 14} className={refreshingMatchId === activeMatch.id ? 'animate-spin' : ''} />
               </button>
+              {isWatch && onToggleWatchMode && (
+                <button
+                  type="button"
+                  onClick={onToggleWatchMode}
+                  aria-label={isWatchModeEnabled ? 'Desativar modo relógio' : 'Ativar modo relógio'}
+                  aria-pressed={isWatchModeEnabled}
+                  className={`w-10 h-10 rounded-xl border active:scale-95 transition-all flex items-center justify-center ${isWatchModeEnabled ? 'border-emerald-600 bg-emerald-500 text-white' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
+                  title={isWatchModeEnabled ? 'Modo relógio ativado' : 'Ativar modo relógio'}
+                >
+                  <Watch size={18} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -790,9 +819,9 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <div className="flex items-center gap-1">
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
-                      className="min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
-                      title="Zerar partida">
-                      <ScoreSyncIndicator status={saveStatus} />
+                      className={`min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${isWatch ? watchSyncBorderClass : 'border border-transparent'}`}
+                      title={`Zerar partida — ${saveStatusLabel}`}>
+                      {!isWatch && <ScoreSyncIndicator status={saveStatus} />}
                       <RefreshCw size={13} />
                       <span className="text-[9px] leading-tight font-black">0 x 0</span>
                     </button>
@@ -977,9 +1006,9 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <div className="flex items-center gap-1">
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
-                      className="min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
-                      title="Zerar partida">
-                      <ScoreSyncIndicator status={saveStatus} />
+                      className={`min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${isWatch ? watchSyncBorderClass : 'border border-transparent'}`}
+                      title={`Zerar partida — ${saveStatusLabel}`}>
+                      {!isWatch && <ScoreSyncIndicator status={saveStatus} />}
                       <RefreshCw size={13} />
                       <span className="text-[9px] leading-tight font-black">0 x 0</span>
                     </button>

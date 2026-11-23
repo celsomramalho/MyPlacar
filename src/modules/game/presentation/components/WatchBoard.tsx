@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, Gamepad2, Eye, User, Users } from 'lucide-react';
+import { RotateCcw, Check, Zap, X, Trophy, VolumeX, Wifi, WifiOff, Settings, RefreshCw, Mic, Watch, SquareKanban, Cast, BatteryCharging, Gamepad2, Eye, User, Users, ListTodo } from 'lucide-react';
 import { GameState, PointType, CourtSide } from '../../../../types.ts';
 import { isWatchDevice } from '@shared/utils/device';
 import { LiveIndicator } from '@modules/live';
@@ -60,6 +60,8 @@ interface WatchBoardProps {
   onToggleScoreboardMode?: () => void;
   onOpenRules?: () => void;
   onExitOffline?: () => void;
+  canReturnToQueue?: boolean;
+  onReturnToQueue?: () => void;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -96,7 +98,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline, canReturnToQueue, onReturnToQueue
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { setMatchSettings } = useGame();
@@ -884,6 +886,19 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 </div>
                 <span className="font-black text-sm">Regras</span>
               </button>
+
+              {canReturnToQueue && onReturnToQueue && (
+                <button
+                  type="button"
+                  onClick={() => { setIsMenuOpen(false); onReturnToQueue(); }}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
+                >
+                  <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-blue-500 rounded-xl">
+                    <ListTodo size={18} />
+                  </div>
+                  <span className="font-black text-sm">Gerenciar fila</span>
+                </button>
+              )}
 
               {/* Depuração de erro Firebase (apenas se online) */}
               {!isOfflineMode && (() => {

@@ -18,6 +18,8 @@ interface Props {
   adminEmail?: string;
   adminPin?: string;
   compact?: boolean;
+  isWatchModeEnabled?: boolean;
+  onToggleWatchMode?: () => void;
 }
 
 const getPhaseLabel = (phase?: string) => {
@@ -26,7 +28,7 @@ const getPhaseLabel = (phase?: string) => {
   return phase || 'Jogo';
 };
 
-export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false, canCheckInParticipants = false, adminEmail, adminPin, compact = false }) => {
+export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false, canCheckInParticipants = false, adminEmail, adminPin, compact = false, isWatchModeEnabled = false, onToggleWatchMode }) => {
   const [refreshingMatchId, setRefreshingMatchId] = useState<string | null>(null);
   const { setMatchSettings } = useGame();
   const { setCurrentScreen, setModalConfig } = useUI();
@@ -273,6 +275,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
         adminEmail={adminEmail}
         adminPin={adminPin}
         compact={compact}
+        isWatchModeEnabled={isWatchModeEnabled}
+        onToggleWatchMode={onToggleWatchMode}
       />
     </div>
   );
