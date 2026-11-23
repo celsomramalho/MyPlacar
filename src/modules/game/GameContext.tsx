@@ -1326,7 +1326,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
 
 
-  const initGameStateInternal = useCallback(async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
+  const initGameStateInternal = useCallback(async (
+    forceNew: boolean,
+    tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent },
+    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean },
+  ) => {
     const savedSettings = safeJsonParse('myPlacarSettings', matchSettings);
     let configToUse = { ...savedSettings };
     let tournamentMeta: Partial<GameState> = {};
@@ -1374,7 +1378,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           tournamentCourt: match.court,
        };
        forceNew = true;
-        if (navigator.onLine) {
+        if (!options?.skipMarkTournamentLive && navigator.onLine) {
            const db = await getDbAsync();
            if (db) {
               void import('@modules/events/services/updateTournamentMatchProgress').then(({ markTournamentMatchLive }) =>
@@ -1418,13 +1422,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({
        }
     }
 
-    if (isWatchDevice()) {
+    if (isWatchDevice() || options?.forceWatchMode) {
       configToUse = { ...configToUse, isWatchMode: true, isScoreboardMode: false };
     } else {
       configToUse = { ...configToUse, isWatchMode: false, isScoreboardMode: false };
     }
 
-    if (gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
+    if (!options?.preserveLiveDocument && gameState?.isMirroringActive && userProfile.email && navigator.onLine && gameState.commandOwnerId === deviceId) {
        const { doc, updateDoc } = await import('firebase/firestore');
        const db = await getDbAsync();
        if (db) {
@@ -1442,7 +1446,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
        }
     }
 
-    if (forceNew && navigator.onLine) {
+    if (forceNew && !options?.preserveLiveDocument && navigator.onLine) {
         const db = await getDbAsync();
         if (db && userProfile.pin) {
            const pinUpper = userProfile.pin.toUpperCase();
@@ -1575,7 +1579,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     setIsSettingsRegrasSaved, setIsRecoveryFromMatchOver, setIsWaitingSync,
   ]);
 
-  const initGameState = useCallback(async (forceNew: boolean, tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent }) => {
+  const initGameState = useCallback(async (
+    forceNew: boolean,
+    tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent },
+    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean },
+  ) => {
     if (finalizationTimerRef.current) { clearTimeout(finalizationTimerRef.current); finalizationTimerRef.current = null; }
     if (forceNew && !tournamentOverride && gameState && (gameState.p1.games > 0 || gameState.p2.games > 0 || gameState.p1.sets.length > 0 || gameState.p1.score !== '0' || gameState.p2.score !== '0')) {
        setModalConfig({
@@ -1583,12 +1591,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({
          message: "O placar atual está em andamento. Deseja realmente iniciar uma nova partida?",
          confirmLabel: "Sim, iniciar",
          cancelLabel: "Não, continuar a partida",
-         onConfirm: () => { setModalConfig(null); initGameStateInternal(forceNew, tournamentOverride); },
+         onConfirm: () => { setModalConfig(null); initGameStateInternal(forceNew, tournamentOverride, options); },
          onCancel: () => { setModalConfig(null); setCurrentScreen('scoreboard'); }
        });
        return;
     }
-    initGameStateInternal(forceNew, tournamentOverride);
+    initGameStateInternal(forceNew, tournamentOverride, options);
   }, [gameState, setModalConfig, setCurrentScreen, initGameStateInternal]);
 
   // ── Passo 6.1.4: handleExportData migrado do AppInner ───────────────────

@@ -116,6 +116,7 @@ interface Props {
   onRegisterReplayTour?: (fn: () => void) => void;
   canReturnToQueue?: boolean;
   onReturnToQueue?: () => void;
+  onRefreshQueueMatch?: () => Promise<void>;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -307,7 +308,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { onScoreUpdate, onUndo, onSwitchServer, onSwapSides, onToggleGender, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode, onRegisterReplayTour, canReturnToQueue, onReturnToQueue } = props;
+  const { onScoreUpdate, onUndo, onSwitchServer, onSwapSides, onToggleGender, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode, onRegisterReplayTour, canReturnToQueue, onReturnToQueue, onRefreshQueueMatch } = props;
 
   // ── Onboarding / Tour Guiado ─────────────────────────────────────────────
   const {
@@ -1298,6 +1299,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           onReturnToQueue={onReturnToQueue}
           isQueueMatch={canReturnToQueue}
           queueScoreSaveStatus={gameCtx.tournamentScoreSaveStatus}
+          onRefreshQueueMatch={onRefreshQueueMatch}
         />
       </>
     );

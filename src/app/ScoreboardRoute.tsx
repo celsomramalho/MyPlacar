@@ -8,6 +8,9 @@ import { useVoiceControl } from '@modules/game/presentation/hooks/useVoiceContro
 import { useLiveActions } from '@modules/live';
 import { useJudgeLookup } from '@modules/live/hooks/useJudgeLookup';
 import type { Tab } from '../types';
+import { getDb } from '@infra/firebase';
+import { fetchEventByPinFromServer } from '@infra/firebase/events';
+import type { TournamentEvent } from '@modules/events/types';
 
 interface ScoreboardRouteProps {
   appUrl: string;
@@ -44,6 +47,7 @@ export function ScoreboardRoute({
   const {
     userProfile,
     setMatchSettings,
+    initGameState,
     gameState,
     setGameState,
     handleLeaveLive,
@@ -140,6 +144,28 @@ export function ScoreboardRoute({
     );
   }
 
+  const refreshQueueMatchFromFirebase = async () => {
+    const eventPin = gameState.tournamentPin;
+    const matchId = gameState.tournamentMatchId;
+    if (!eventPin || !matchId) throw new Error('Esta partida não está vinculada a um evento da fila.');
+
+    const db = getDb();
+    if (!db) throw new Error('Não foi possível conectar ao Firebase.');
+    const freshEventRecord = await fetchEventByPinFromServer(db, eventPin);
+    if (!freshEventRecord) throw new Error('O evento não foi encontrado no Firebase.');
+    const event = freshEventRecord as unknown as TournamentEvent;
+    const match = event.matches?.find((candidate) => candidate.id === matchId);
+    const pair1 = match?.pair1 ?? event.pairs?.find((pair) => pair.id === match?.pair1Id);
+    const pair2 = match?.pair2 ?? event.pairs?.find((pair) => pair.id === match?.pair2Id);
+    if (!match || !pair1 || !pair2) throw new Error('Não foi possível carregar as equipes desta partida no Firebase.');
+
+    await initGameState(true, { match, pair1, pair2, event }, {
+      preserveLiveDocument: true,
+      forceWatchMode: true,
+      skipMarkTournamentLive: true,
+    });
+  };
+
   return (
     <ScoreboardScreen
       appUrl={appUrl}
@@ -214,6 +240,7 @@ export function ScoreboardRoute({
       onRegisterReplayTour={onRegisterReplayTour}
       canReturnToQueue={canReturnToQueue}
       onReturnToQueue={onReturnToQueue}
+      onRefreshQueueMatch={canReturnToQueue ? refreshQueueMatchFromFirebase : undefined}
     />
   );
 }

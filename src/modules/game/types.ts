@@ -143,7 +143,8 @@ export interface GameContextValue {
       pair1: TournamentPair;
       pair2: TournamentPair;
       event: TournamentEvent;
-    }
+    },
+    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean }
   ) => Promise<void>;
 
   /**

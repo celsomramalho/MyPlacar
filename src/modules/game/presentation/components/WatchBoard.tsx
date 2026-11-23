@@ -64,6 +64,7 @@ interface WatchBoardProps {
   onReturnToQueue?: () => void;
   isQueueMatch?: boolean;
   queueScoreSaveStatus?: 'saved' | 'saving' | 'error';
+  onRefreshQueueMatch?: () => Promise<void>;
 }
 
 const SOLID_COLORS: Record<string, string> = {
@@ -100,7 +101,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline, canReturnToQueue, onReturnToQueue, isQueueMatch = false, queueScoreSaveStatus = 'saved'
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline, canReturnToQueue, onReturnToQueue, isQueueMatch = false, queueScoreSaveStatus = 'saved', onRefreshQueueMatch
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { setMatchSettings } = useGame();
@@ -116,6 +117,8 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   const isMirror = false;
   const [showSetGamesInMainScore, setShowSetGamesInMainScore] = React.useState(false);
   const [statusPanel, setStatusPanel] = React.useState<WatchStatusPanel>('set');
+  const [isRefreshingQueueMatch, setIsRefreshingQueueMatch] = React.useState(false);
+  const [queueRefreshError, setQueueRefreshError] = React.useState<string | null>(null);
   const undoSyncBorderClass = !isQueueMatch
     ? 'border border-white/5'
     : queueScoreSaveStatus === 'saving'
@@ -123,6 +126,19 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
       : queueScoreSaveStatus === 'error'
         ? 'border-4 border-red-600'
         : 'border-4 border-emerald-600';
+  const handleRefreshQueueMatch = async () => {
+    if (!onRefreshQueueMatch || isRefreshingQueueMatch) return;
+    setIsRefreshingQueueMatch(true);
+    setQueueRefreshError(null);
+    try {
+      await onRefreshQueueMatch();
+      setIsMenuOpen(false);
+    } catch (error) {
+      setQueueRefreshError(error instanceof Error ? error.message : 'Não foi possível atualizar do Firebase.');
+    } finally {
+      setIsRefreshingQueueMatch(false);
+    }
+  };
   const [batteryStatus, setBatteryStatus] = React.useState<BatteryStatus | null>(null);
   const [fbAckElapsedSeconds, setFbAckElapsedSeconds] = React.useState(0);
   const pauseRotationUntil = React.useRef(0);
@@ -907,6 +923,26 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                   </div>
                   <span className="font-black text-sm">Gerenciar fila</span>
                 </button>
+              )}
+
+              {isQueueMatch && onRefreshQueueMatch && (
+                <>
+                  <button
+                    type="button"
+                    disabled={isRefreshingQueueMatch}
+                    onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); void handleRefreshQueueMatch(); }}
+                    className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors disabled:opacity-60"
+                    title="Atualizar todos os dados desta partida do Firebase"
+                  >
+                    <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-sky-500 rounded-xl">
+                      <RefreshCw size={18} className={isRefreshingQueueMatch ? 'animate-spin' : ''} />
+                    </div>
+                    <span className="font-black text-sm">{isRefreshingQueueMatch ? 'Atualizando partida' : 'Atualizar do Firebase'}</span>
+                  </button>
+                  {queueRefreshError && (
+                    <p role="alert" className="px-3 text-xs font-bold text-red-300">{queueRefreshError}</p>
+                  )}
+                </>
               )}
 
               {/* Depuração de erro Firebase (apenas se online) */}
