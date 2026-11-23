@@ -1,10 +1,10 @@
 import React from 'react';
-import { Layers, Clock } from 'lucide-react';
+import { Layers, Clock, RotateCcw } from 'lucide-react';
 import { formatWaitDuration } from '../utils/formatWaitDuration';
 
 export interface QueueHeaderStatsProps {
   visibleMatchesCount: number;
-  totalPendingCount: number;
+  totalUnfinishedCount: number;
   freeCourtsCount: number;
   busyCourtsCount: number;
   interdictedCourtsCount: number;
@@ -12,6 +12,8 @@ export interface QueueHeaderStatsProps {
   averageMatchDurationMinutes: number;
   isDurationEstimated: boolean;
   finishedMatchesCountWithDuration: number;
+  isReadOnly?: boolean;
+  onResetDurationHistory?: () => void;
   nextCourtFreeWaitMinutes?: number;
   nextCourtFreeTimeStr?: string;
   title?: string;
@@ -21,13 +23,15 @@ export interface QueueHeaderStatsProps {
 
 export const QueueHeaderStats: React.FC<QueueHeaderStatsProps> = ({
   visibleMatchesCount,
-  totalPendingCount,
+  totalUnfinishedCount,
   freeCourtsCount,
   busyCourtsCount,
   interdictedCourtsCount,
   averageMatchDurationMinutes,
   isDurationEstimated,
   finishedMatchesCountWithDuration,
+  isReadOnly = false,
+  onResetDurationHistory,
   nextCourtFreeWaitMinutes,
   nextCourtFreeTimeStr,
   title = 'Gerenciar fila',
@@ -52,20 +56,6 @@ export const QueueHeaderStats: React.FC<QueueHeaderStatsProps> = ({
           </p>
           </>}
 
-          {/* Volumetria da fila */}
-          <p className={`font-bold text-slate-500 ${compact ? 'text-[10px]' : 'text-xs mt-1.5'}`}>
-            Exibindo{' '}
-            <span className="font-black text-slate-700">{visibleMatchesCount}</span>
-            {' '}de{' '}
-            <span className="font-black text-slate-700">{totalPendingCount}</span>
-            {' '}partidas pendentes na fila
-            {totalPendingCount > visibleMatchesCount && (
-              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
-                +{totalPendingCount - visibleMatchesCount} não exibidas
-              </span>
-            )}
-          </p>
-
           {/* Indicativos de status das quadras */}
           <div className={`flex items-center gap-1.5 flex-wrap ${compact ? 'mt-1.5' : 'mt-2'}`}>
             <span className={`inline-flex items-center gap-1.5 rounded-xl font-black bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap ${compact ? 'px-2 py-1 text-[10px]' : 'px-3 py-1.5 text-xs'}`}>
@@ -86,6 +76,17 @@ export const QueueHeaderStats: React.FC<QueueHeaderStatsProps> = ({
               <Clock size={11} className="text-slate-500" />
               Duração média: {averageMatchDurationMinutes} min {isDurationEstimated ? '(estimada)' : `(${finishedMatchesCountWithDuration} jogos)`}
             </span>}
+            {!compact && !isReadOnly && !isDurationEstimated && onResetDurationHistory && (
+              <button
+                type="button"
+                onClick={onResetDurationHistory}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 transition-colors whitespace-nowrap"
+                title="Descartar a amostra de durações e voltar ao tempo configurado no evento"
+              >
+                <RotateCcw size={11} />
+                Zerar histórico
+              </button>
+            )}
             {freeCourtsCount === 0 && nextCourtFreeWaitMinutes !== undefined && (
               <span className="inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-xl bg-sky-50 text-sky-800 border border-sky-200 whitespace-nowrap">
                 <Clock size={11} className="text-sky-600" />
@@ -93,6 +94,20 @@ export const QueueHeaderStats: React.FC<QueueHeaderStatsProps> = ({
               </span>
             )}
           </div>
+
+          {/* Volume de partidas da fila, logo abaixo dos indicadores das quadras */}
+          <p className={`font-bold text-slate-500 ${compact ? 'text-[10px] mt-1.5' : 'text-xs mt-2'}`}>
+            Exibindo{' '}
+            <span className="font-black text-slate-700">{visibleMatchesCount}</span>
+            {' '}de{' '}
+            <span className="font-black text-slate-700">{totalUnfinishedCount}</span>
+            {' '}partidas não finalizadas
+            {totalUnfinishedCount > visibleMatchesCount && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                +{totalUnfinishedCount - visibleMatchesCount} não exibidas
+              </span>
+            )}
+          </p>
         </div>
       </div>
     </div>

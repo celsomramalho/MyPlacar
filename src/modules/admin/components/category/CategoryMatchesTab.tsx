@@ -19,6 +19,8 @@ export interface CategoryMatchesTabProps {
   totalSets: number;
   allCategoryFinished: boolean;
   queuePosByMatchId?: Map<string, number>;
+  queueEstimatedWaitMinutesByMatchId?: Map<string, number>;
+  scoreSaveStatusByMatchId?: Record<string, 'saved' | 'saving' | 'error'>;
   onScoreChange: (matchId: string, setIndex: number, player: 'p1' | 'p2', rawVal: string) => void;
   onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string, gameP1?: string, gameP2?: string, servingOrderOffset?: number | null) => void;
   onServeSettingsChange?: (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => void;
@@ -46,6 +48,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   totalSets,
   allCategoryFinished,
   queuePosByMatchId,
+  queueEstimatedWaitMinutesByMatchId,
+  scoreSaveStatusByMatchId,
   onScoreChange,
   onUndoScore,
   onServeSettingsChange,
@@ -185,6 +189,8 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
       tieBreak={rules.tieBreak}
       tieBreakAt={rules.tieBreakAt}
       queuePosition={queuePosByMatchId?.get(match.id) ?? 0}
+      estimatedWaitMinutes={queueEstimatedWaitMinutesByMatchId?.get(match.id)}
+      scoreSaveStatus={scoreSaveStatusByMatchId?.[match.id] || 'saved'}
       canSubmitScore={!isReadOnly}
       canManage={!isReadOnly}
       isReadOnly={isReadOnly}

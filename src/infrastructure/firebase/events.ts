@@ -224,6 +224,7 @@ export interface FirebaseTournamentEvent {
   regulationUrl?: string;
   regulationFileName?: string;
   information?: string;
+  queueDurationHistoryResetAt?: string;
   eventType?: string;
   sportGroup?: string;
   sportId?: string;

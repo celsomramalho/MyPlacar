@@ -40,6 +40,7 @@ export interface UseCategoryBoardResult {
   pairsById: Record<string, TournamentPair>;
   orderedQueue: ReturnType<typeof calculateQueueState>['orderedQueue'];
   queuePosByMatchId: Map<string, number>;
+  queueEstimatedWaitMinutesByMatchId: Map<string, number>;
   playerStandings: PlayerStanding[];
   playerStandingsMap: Map<string, PlayerStanding>;
   sortedCategoryEntries: TournamentEntry[];
@@ -125,6 +126,14 @@ export function useCategoryBoard({
     const map = new Map<string, number>();
     orderedQueue.forEach((item, index) => {
       map.set(item.match.id, index + 1);
+    });
+    return map;
+  }, [orderedQueue]);
+
+  const queueEstimatedWaitMinutesByMatchId = useMemo(() => {
+    const map = new Map<string, number>();
+    orderedQueue.forEach((item) => {
+      if (item.estimatedWaitMinutes !== undefined) map.set(item.match.id, item.estimatedWaitMinutes);
     });
     return map;
   }, [orderedQueue]);
@@ -344,6 +353,7 @@ export function useCategoryBoard({
     pairsById,
     orderedQueue,
     queuePosByMatchId,
+    queueEstimatedWaitMinutesByMatchId,
     playerStandings,
     playerStandingsMap,
     sortedCategoryEntries,

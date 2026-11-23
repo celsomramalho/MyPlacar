@@ -389,6 +389,8 @@ export interface TournamentEvent {
   regulationUrl?: string;
   regulationFileName?: string;
   information?: string;
+  /** Reinicia a amostra usada para calcular a duração média da quadra na fila. */
+  queueDurationHistoryResetAt?: string;
 }
 
 export type TeamFormationMode = NonNullable<TournamentEvent['teamFormationMode']>;

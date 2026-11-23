@@ -141,10 +141,17 @@ export function getPairDisplayName(
  */
 export function calculateAverageMatchDuration(
   matches: TournamentMatch[],
-  event?: Pick<TournamentEvent, 'setsCount' | 'config' | 'eventType'>
+  event?: Pick<TournamentEvent, 'setsCount' | 'config' | 'eventType' | 'sportRules' | 'queueDurationHistoryResetAt'>
 ): MatchDurationStats {
+  const resetAtMs = event?.queueDurationHistoryResetAt
+    ? new Date(event.queueDurationHistoryResetAt).getTime()
+    : undefined;
   const finishedWithDuration = matches.filter((m) => {
     if (m.status !== 'finished') return false;
+    if (resetAtMs !== undefined) {
+      const finishedAtMs = m.finishedAt ? new Date(m.finishedAt).getTime() : NaN;
+      if (!Number.isFinite(finishedAtMs) || finishedAtMs < resetAtMs) return false;
+    }
     if (typeof m.courtDurationMinutes === 'number' && m.courtDurationMinutes > 0) return true;
     if (typeof m.durationMinutes === 'number' && m.durationMinutes > 0) return true;
     if (m.startedAt && m.finishedAt) {
@@ -182,11 +189,12 @@ export function calculateAverageMatchDuration(
     event?.eventType === 'Super 8 individual' ||
     event?.config?.sportType === 'Super 8';
 
-  let defaultDuration = 25;
-  if (isSuper8) defaultDuration = 20;
-  else if (sets === 1) defaultDuration = 25;
-  else if (sets === 3) defaultDuration = 45;
-  else if (sets >= 5) defaultDuration = 75;
+  let defaultDuration = resolveCourtMinutes(event?.sportRules).courtMinutes;
+  if (!defaultDuration) defaultDuration = 25;
+  if (!event?.sportRules && isSuper8) defaultDuration = 20;
+  else if (!event?.sportRules && sets === 1) defaultDuration = 25;
+  else if (!event?.sportRules && sets === 3) defaultDuration = 45;
+  else if (!event?.sportRules && sets >= 5) defaultDuration = 75;
 
   return {
     averageMinutes: defaultDuration,

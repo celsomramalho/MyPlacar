@@ -21,6 +21,7 @@ import { QueueHeaderStats } from './QueueHeaderStats';
 import { CourtCard } from './CourtCard';
 import { QueueMatchCard } from './QueueMatchCard';
 import { getQueueCategoryColors } from '../utils/queueCategoryColors';
+import { useUI } from '@modules/ui';
 
 export interface CourtQueuePanelProps {
   event: TournamentEvent;
@@ -60,6 +61,7 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
   const [activeSelectMatchId, setActiveSelectMatchId] = useState<string | null>(null);
   const [checkInOverrides, setCheckInOverrides] = useState<Map<string, boolean>>(() => new Map());
   const [savingCheckInKeys, setSavingCheckInKeys] = useState<Set<string>>(() => new Set());
+  const { setModalConfig } = useUI();
 
   // Hook de leitura e estado reativo
   const queue = useCourtQueue(event);
@@ -178,12 +180,34 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
     await actions.assignMatchToCourt(matchId, courtName);
   };
 
+  const handleResetDurationHistory = () => {
+    setModalConfig({
+      title: 'Zerar histórico de duração?',
+      message: 'Os tempos antigos deixarão de participar da média da fila. As partidas e seus placares serão mantidos, e a estimativa voltará ao tempo configurado em Esporte (aquecimento + partida).',
+      confirmLabel: 'Zerar histórico',
+      cancelLabel: 'Cancelar',
+      variant: 'danger',
+      onConfirm: async () => {
+        setModalConfig(null);
+        const saved = await actions.resetDurationHistory();
+        if (!saved) {
+          setModalConfig({
+            title: 'Não foi possível zerar o histórico',
+            message: 'A alteração não foi salva no Firebase. Tente novamente quando a conexão estiver disponível.',
+            onConfirm: () => setModalConfig(null),
+          });
+        }
+      },
+      onCancel: () => setModalConfig(null),
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. Header com Métricas da Fila */}
       <QueueHeaderStats
         visibleMatchesCount={queue.visibleMatches.length}
-        totalPendingCount={queue.totalPendingCount}
+        totalUnfinishedCount={(event.matches || []).filter((match) => match.status !== 'finished').length}
         freeCourtsCount={queue.freeCourtsCount}
         busyCourtsCount={queue.busyCourtsCount}
         interdictedCourtsCount={queue.interdictedCourtsCount}
@@ -191,6 +215,8 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
         averageMatchDurationMinutes={queue.averageMatchDurationMinutes}
         isDurationEstimated={queue.isDurationEstimated}
         finishedMatchesCountWithDuration={queue.finishedMatchesCountWithDuration}
+        isReadOnly={isReadOnly}
+        onResetDurationHistory={handleResetDurationHistory}
         nextCourtFreeWaitMinutes={queue.nextCourtFreeWaitMinutes}
         nextCourtFreeTimeStr={queue.nextCourtFreeTimeStr}
         title={title}

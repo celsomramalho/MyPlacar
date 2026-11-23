@@ -329,6 +329,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     categoryPairs,
     pairsById,
     queuePosByMatchId,
+    queueEstimatedWaitMinutesByMatchId,
     playerStandings,
     playerStandingsMap,
     visibleCategoryEntries,
@@ -452,6 +453,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     handleDeleteAllCategoryMatches,
     handleScoreInputChange,
     handleScoreUndoChange,
+    scoreSaveStatusByMatchId,
     handleServeSettingsChange,
     handleResetMatch,
     handleMatchDateChange,
@@ -1358,6 +1360,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onToggleTeamSelection={toggleTeamSelection}
                     totalSets={totalSets}
                     queuePosByMatchId={queuePosByMatchId}
+                    queueEstimatedWaitMinutesByMatchId={queueEstimatedWaitMinutesByMatchId}
+                    scoreSaveStatusByMatchId={scoreSaveStatusByMatchId}
                     onScoreChange={handleScoreInputChange}
                     onUndoScore={handleScoreUndoChange}
                     onServeSettingsChange={handleServeSettingsChange}

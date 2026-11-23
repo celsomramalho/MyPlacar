@@ -55,6 +55,8 @@ export interface UseCourtMatchActionsResult {
   finishCourtMatch: (matchId: string) => Promise<void>;
   /** Zera o placar da partida em andamento sem liberar a quadra. */
   resetCourtMatch: (matchId: string) => Promise<void>;
+  /** Zera a amostra de duração da fila sem apagar placares ou partidas. */
+  resetDurationHistory: () => Promise<boolean>;
   /** Alterna o status de interdição de uma quadra */
   toggleInterdictCourt: (courtName: string) => Promise<void>;
   /** Alterna o congelamento manual de uma partida na fila */
@@ -109,7 +111,7 @@ export function useCourtMatchActions({
 
   const persistToFirestore = useCallback(
     async (payload: Partial<FirebaseTournamentEvent>, matchId?: string) => {
-      if (!event.pin) return;
+      if (!event.pin) return false;
       if (matchId) markMatchSaveStatus(matchId, 'saving');
       try {
         if (isWatchDevice()) {
@@ -127,19 +129,21 @@ export function useCourtMatchActions({
             throw new Error(body.error || 'Não foi possível sincronizar a fila do relógio.');
           }
           if (matchId) markMatchSaveStatus(matchId, 'saved');
-          return;
+          return true;
         }
         const db = getDb();
         if (!db) throw new Error('Não foi possível conectar ao Firestore.');
         const { updateEvent } = await import('@infra/firebase/events');
         await updateEvent(db as Firestore, event.pin, payload);
         if (matchId) markMatchSaveStatus(matchId, 'saved');
+        return true;
       } catch (err) {
         if (matchId) markMatchSaveStatus(matchId, 'error');
         console.error('[useCourtMatchActions] Erro ao persistir no Firestore:', err);
         if (isWatchDevice() && typeof window !== 'undefined') {
           window.alert(err instanceof Error ? err.message : 'Não foi possível sincronizar a fila. Tente novamente.');
         }
+        return false;
       }
     },
     [event.pin, adminEmail, adminPin, markMatchSaveStatus]
@@ -162,6 +166,16 @@ export function useCourtMatchActions({
     },
     [event, isReadOnly, onUpdateEvent, persistToFirestore]
   );
+
+  const resetDurationHistory = useCallback(async () => {
+    if (isReadOnly) return false;
+    const resetAt = new Date().toISOString();
+    const nextEvent = { ...event, queueDurationHistoryResetAt: resetAt };
+    onUpdateEvent?.(nextEvent);
+    const saved = await persistToFirestore({ queueDurationHistoryResetAt: resetAt });
+    if (!saved) onUpdateEvent?.(event);
+    return saved;
+  }, [event, isReadOnly, onUpdateEvent, persistToFirestore]);
 
   // ─── Parsing de Sets ───────────────────────────────────────────────────────
 
@@ -612,6 +626,7 @@ export function useCourtMatchActions({
     freeCourtMatch,
     finishCourtMatch,
     resetCourtMatch,
+    resetDurationHistory,
     toggleInterdictCourt,
     toggleFreezeMatch,
     handleScoreInputChange,

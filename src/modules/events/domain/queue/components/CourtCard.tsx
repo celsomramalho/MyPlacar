@@ -819,9 +819,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <div className="flex items-center gap-1">
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
-                      className={`min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${isWatch ? watchSyncBorderClass : 'border border-transparent'}`}
+                      className={`min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${watchSyncBorderClass}`}
                       title={`Zerar partida — ${saveStatusLabel}`}>
-                      {!isWatch && <ScoreSyncIndicator status={saveStatus} />}
                       <RefreshCw size={13} />
                       <span className="text-[9px] leading-tight font-black">0 x 0</span>
                     </button>
@@ -1006,9 +1005,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 <div className="flex items-center gap-1">
                   {(sportId === 'tennis' || sportId === 'beach-tennis') && (
                     <button type="button" onClick={resetCurrentMatch} disabled={isReadOnly}
-                      className={`min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${isWatch ? watchSyncBorderClass : 'border border-transparent'}`}
+                       className={`min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${watchSyncBorderClass}`}
                       title={`Zerar partida — ${saveStatusLabel}`}>
-                      {!isWatch && <ScoreSyncIndicator status={saveStatus} />}
                       <RefreshCw size={13} />
                       <span className="text-[9px] leading-tight font-black">0 x 0</span>
                     </button>

@@ -97,6 +97,7 @@ export const EventDashboardView: React.FC<Props> = ({
 
   const queueState = calculateQueueState(event);
   const { freeCourtsCount, busyCourtsCount, interdictedCourtsCount } = queueState;
+  const unfinishedMatchesCount = (event.matches || []).filter((match) => match.status !== 'finished').length;
 
   const paymentStats = getEventPaymentStats(event);
   const {
@@ -469,6 +470,14 @@ export const EventDashboardView: React.FC<Props> = ({
                 >
                   <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${activeTab === 'formed-teams' ? 'bg-amber-400' : 'bg-amber-500'}`} />
                   {busyCourtsCount} {busyCourtsCount === 1 ? 'Ocupada' : 'Ocupadas'}
+                </span>
+                <span
+                  className={`inline-flex items-center text-[9px] font-bold whitespace-nowrap ${
+                    activeTab === 'formed-teams' ? 'text-blue-100' : 'text-slate-500'
+                  }`}
+                  title="Partidas exibidas na fila em relação ao total ainda não finalizado"
+                >
+                  Fila: {queueState.visibleMatches.length}/{unfinishedMatchesCount} partidas
                 </span>
                 {interdictedCourtsCount > 0 && (
                   <span

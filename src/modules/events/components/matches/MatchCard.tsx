@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw, ArrowRightLeft, CircleDot, Dices, Loader2, RefreshCw } from 'lucide-react';
 import type { TournamentEvent, TournamentMatch, TournamentPair } from '../../types';
 import { getPhaseLabel, parseMatchSets, isSetScoreComplete } from '../../domain/brackets';
-import { resolveMatchRules } from '../../domain/rules/eventMatchRules';
+import { resolveCourtMinutes, resolveMatchRules } from '../../domain/rules/eventMatchRules';
+import { formatWaitDuration } from '../../domain/queue/utils/formatWaitDuration';
 import { COURT_COLOR_PAIRS, COURT_TEAM_STYLES, getCourtColors } from '../../../../constants';
 
 type LegacyScoreChangeHandler = (matchId: string, player: 'p1' | 'p2', value: string) => void;
@@ -26,6 +27,8 @@ export interface MatchCardProps {
   tieBreakAt?: string;
   liveScore?: { p1Score: number | string; p2Score: number | string };
   queuePosition?: number;
+  estimatedWaitMinutes?: number;
+  scoreSaveStatus?: 'saved' | 'saving' | 'error';
 
   canSubmitScore?: boolean;
   canManage?: boolean;
@@ -49,6 +52,43 @@ export interface MatchCardProps {
   onStartLiveMatch?: (match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair) => void;
 }
 
+const MatchCourtTimer: React.FC<{ startedAt?: string; averageMinutes?: number }> = ({ startedAt, averageMinutes }) => {
+  const [elapsed, setElapsed] = useState(() => startedAt ? Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)) : 0);
+  useEffect(() => {
+    if (!startedAt) return;
+    const tick = () => {
+      const start = new Date(startedAt).getTime();
+      setElapsed(Math.max(0, Number.isFinite(start) ? Math.floor((Date.now() - start) / 1000) : 0));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+  const totalMinutes = Math.floor(elapsed / 60);
+  const overtime = averageMinutes !== undefined && totalMinutes >= averageMinutes;
+  const time = [Math.floor(elapsed / 3600), Math.floor((elapsed % 3600) / 60), elapsed % 60]
+    .map((part) => String(part).padStart(2, '0')).join(':');
+  return <span title="Tempo total de ocupação da quadra" className={'inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-1 font-mono text-[10px] font-black tabular-nums whitespace-nowrap ' + (overtime ? 'border-rose-300 bg-rose-100 text-rose-800' : 'border-amber-300 bg-amber-100 text-amber-900')}><Clock size={11} />{time}{averageMinutes !== undefined && <span className="font-sans text-[9px] opacity-75">(~{averageMinutes}m)</span>}</span>;
+};
+
+const MatchQueueForecast: React.FC<{ minutes?: number }> = ({ minutes }) => {
+  if (minutes === undefined) return <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-500 whitespace-nowrap"><Clock size={11} />Previsão indisponível</span>;
+  if (minutes === 0) return <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-100 px-2 py-1 text-[10px] font-black text-emerald-800 whitespace-nowrap"><Play size={10} fill="currentColor" />Chamada imediata</span>;
+  return <span title={'Previsão de chamada em aproximadamente ' + minutes + ' minutos'} className="inline-flex items-center gap-1 rounded-lg border border-sky-300 bg-sky-100 px-2 py-1 text-[10px] font-black text-sky-800 whitespace-nowrap"><Clock size={11} />Previsão: em ~{minutes} min (~{formatWaitDuration(minutes)})</span>;
+};
+
+const syncBorderClass = (status: 'saved' | 'saving' | 'error') => status === 'saving'
+  ? 'border-4 border-blue-600 animate-pulse'
+  : status === 'error'
+    ? 'border-4 border-red-600'
+    : 'border-4 border-emerald-600';
+
+const syncStatusLabel = (status: 'saved' | 'saving' | 'error') => status === 'saving'
+  ? 'Salvando no Firebase'
+  : status === 'error'
+    ? 'Falha ao salvar no Firebase'
+    : 'Salvo no Firebase';
+
 export const MatchCard: React.FC<MatchCardProps> = ({
   match,
   pairsById,
@@ -62,6 +102,8 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   tieBreakAt = '6-6',
   liveScore,
   queuePosition = 0,
+  estimatedWaitMinutes,
+  scoreSaveStatus = 'saved',
   canSubmitScore = false,
   canManage = false,
   isReadOnly = false,
@@ -578,17 +620,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
           {/* Placar Central ou 'vs' */}
           <div className="shrink-0 text-center px-1">
-            {isLive && liveScore ? (
-              <div className="flex items-center gap-1">
-                <Wifi size={14} className="text-red-500 animate-pulse" />
-                <p className="text-lg font-black text-sky-600">{liveScore.p1Score}-{liveScore.p2Score}</p>
+            {isLive ? (
+              <div className="flex flex-col items-center gap-1">
+                {liveScore && <div className="flex items-center gap-1"><Wifi size={14} className="text-red-500 animate-pulse" /><p className="text-lg font-black text-sky-600">{liveScore.p1Score}-{liveScore.p2Score}</p></div>}
+                <MatchCourtTimer startedAt={match.courtStartedAt || match.startedAt} averageMinutes={resolveCourtMinutes(sportRules).courtMinutes} />
               </div>
             ) : isFinished ? (
               <span className="bg-slate-900 text-white px-3 py-1 rounded-xl text-xs font-black">
                 {match.result || '-'}
               </span>
             ) : (
-              <span className="text-xs font-black text-slate-300">vs</span>
+              estimatedWaitMinutes !== undefined ? <MatchQueueForecast minutes={estimatedWaitMinutes} /> : <span className="text-xs font-black text-slate-300">vs</span>
             )}
           </div>
 
@@ -733,7 +775,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           {/* Linha central: label set1 + botão undo */}
           <div className="flex items-center gap-1 px-1 py-0.5">
             <div className="flex items-center gap-1">
-              {isTennisOrBeach && onResetMatch && <button type="button" onClick={resetCurrentMatch} disabled={!canTapScore || isReadOnly} className="min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40" title="Zerar partida"><RefreshCw size={13} /><span className="text-[9px] leading-tight font-black">0 x 0</span></button>}
+              {isTennisOrBeach && onResetMatch && <button type="button" onClick={resetCurrentMatch} disabled={!canTapScore || isReadOnly} className={'min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 ' + syncBorderClass(scoreSaveStatus)} title={'Zerar partida — ' + syncStatusLabel(scoreSaveStatus)}><RefreshCw size={13} /><span className="text-[9px] leading-tight font-black">0 x 0</span></button>}
               {isTennisOrBeach && canDrawStartingServer && <button type="button" onClick={drawStartingServer} disabled={isDrawingServer} className="min-w-[110px] h-9 px-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white shadow-sm flex items-center justify-center gap-1 disabled:opacity-40" title="Sortear qual time inicia sacando">{isDrawingServer ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Dices size={14} className="text-yellow-300 shrink-0" />}<span className="text-[9px] leading-tight font-black text-center">{isDrawingServer ? `Time ${(drawPreview ?? 0) + 1} inicia sacando` : <>Sortear<br />sacador</>}</span></button>}
             </div>
             {canTapScore && isAnyScorePositive ? (
@@ -754,7 +796,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             ) : (
               <div />
             )}
-            <div className="flex-1" />
+            <div className="flex-1 min-w-0 flex justify-center px-1">{isLive ? <MatchCourtTimer startedAt={match.courtStartedAt || match.startedAt} averageMinutes={resolveCourtMinutes(sportRules).courtMinutes} /> : isWaiting ? <MatchQueueForecast minutes={estimatedWaitMinutes} /> : null}</div>
             <div className="flex items-center gap-1 w-9 sm:w-10 justify-center">
               {tieBreakSetFlags[0] && (
                 <span className="text-[9px] font-black text-amber-600 animate-pulse leading-none">TB</span>
@@ -885,7 +927,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           {/* Labels dos sets + botão undo */}
           <div className="flex items-center gap-1 px-1 py-0.5">
             <div className="flex items-center gap-1">
-              {isTennisOrBeach && onResetMatch && <button type="button" onClick={resetCurrentMatch} disabled={!canTapScore || isReadOnly} className="min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40" title="Zerar partida"><RefreshCw size={13} /><span className="text-[9px] leading-tight font-black">0 x 0</span></button>}
+              {isTennisOrBeach && onResetMatch && <button type="button" onClick={resetCurrentMatch} disabled={!canTapScore || isReadOnly} className={'min-w-[64px] h-9 px-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 flex items-center justify-center gap-1 disabled:opacity-40 ' + syncBorderClass(scoreSaveStatus)} title={'Zerar partida — ' + syncStatusLabel(scoreSaveStatus)}><RefreshCw size={13} /><span className="text-[9px] leading-tight font-black">0 x 0</span></button>}
               {isTennisOrBeach && canDrawStartingServer && <button type="button" onClick={drawStartingServer} disabled={isDrawingServer} className="min-w-[110px] h-9 px-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white shadow-sm flex items-center justify-center gap-1 disabled:opacity-40" title="Sortear qual time inicia sacando">{isDrawingServer ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Dices size={14} className="text-yellow-300 shrink-0" />}<span className="text-[9px] leading-tight font-black text-center">{isDrawingServer ? `Time ${(drawPreview ?? 0) + 1} inicia sacando` : <>Sortear<br />sacador</>}</span></button>}
             </div>
             {canTapScore && isAnyScorePositive ? (
@@ -906,7 +948,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             ) : (
               <div />
             )}
-            <div className="flex-1" />
+            <div className="flex-1 min-w-0 flex justify-center px-1">{isLive ? <MatchCourtTimer startedAt={match.courtStartedAt || match.startedAt} averageMinutes={resolveCourtMinutes(sportRules).courtMinutes} /> : isWaiting ? <MatchQueueForecast minutes={estimatedWaitMinutes} /> : null}</div>
             <div className="flex items-center gap-1.5">
               <span className="w-5" />
               {scores.map((_, setIdx) => (

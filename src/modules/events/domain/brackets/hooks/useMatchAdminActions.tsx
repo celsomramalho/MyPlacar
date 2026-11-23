@@ -66,6 +66,8 @@ export function useMatchAdminActions({
   setModalConfig,
 }: UseMatchAdminActionsOptions) {
   const [isSuper8dDrawModalOpen, setIsSuper8dDrawModalOpen] = useState(false);
+  const [scoreSaveStatusByMatchId, setScoreSaveStatusByMatchId] = useState<Record<string, 'saved' | 'saving' | 'error'>>({});
+  const setMatchSaveStatus = (matchId: string, status: 'saved' | 'saving' | 'error') => setScoreSaveStatusByMatchId((current) => ({ ...current, [matchId]: status }));
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getRulesForPhase = (phase?: string) => resolveMatchRules(
@@ -386,11 +388,17 @@ export function useMatchAdminActions({
     onUpdateEvent({ ...event, matches: nextMatches });
 
     if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+    setMatchSaveStatus(matchId, 'saving');
     saveMatchesTimeoutRef.current = setTimeout(async () => {
-      await persistPatch(
-        { matches: nextMatches },
-        'Erro ao salvar placar no Firestore debounce:'
-      );
+      const db = getDb();
+      if (!db) { setMatchSaveStatus(matchId, 'error'); return; }
+      try {
+        await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+        setMatchSaveStatus(matchId, 'saved');
+      } catch (err) {
+        console.error('Erro ao salvar placar no Firestore debounce:', err);
+        setMatchSaveStatus(matchId, 'error');
+      }
     }, 1000);
   };
 
@@ -495,11 +503,17 @@ export function useMatchAdminActions({
     onUpdateEvent({ ...event, matches: nextMatches });
 
     if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+    setMatchSaveStatus(matchId, 'saving');
     saveMatchesTimeoutRef.current = setTimeout(async () => {
-      await persistPatch(
-        { matches: nextMatches },
-        'Erro ao salvar placar no Firestore debounce:'
-      );
+      const db = getDb();
+      if (!db) { setMatchSaveStatus(matchId, 'error'); return; }
+      try {
+        await updateEvent(db as Firestore, event.pin, { matches: nextMatches });
+        setMatchSaveStatus(matchId, 'saved');
+      } catch (err) {
+        console.error('Erro ao salvar placar no Firestore debounce:', err);
+        setMatchSaveStatus(matchId, 'error');
+      }
     }, 1000);
   };
 
@@ -799,6 +813,7 @@ export function useMatchAdminActions({
     handleDeleteAllCategoryMatches,
     handleScoreInputChange,
     handleScoreUndoChange,
+    scoreSaveStatusByMatchId,
     handleServeSettingsChange,
     handleResetMatch,
     handleMatchDateChange,

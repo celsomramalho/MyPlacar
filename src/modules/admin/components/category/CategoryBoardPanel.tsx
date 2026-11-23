@@ -74,6 +74,8 @@ export interface CategoryBoardPanelProps {
   // Matches tab props
   totalSets: number;
   queuePosByMatchId: Map<string, number>;
+  queueEstimatedWaitMinutesByMatchId: Map<string, number>;
+  scoreSaveStatusByMatchId?: Record<string, 'saved' | 'saving' | 'error'>;
   onScoreChange: (matchId: string, setIndex: number, player: 'p1' | 'p2', rawVal: string) => void;
   onUndoScore?: (matchId: string, setIndex: number, p1Val: string, p2Val: string, gameP1?: string, gameP2?: string, servingOrderOffset?: number | null) => void;
   onServeSettingsChange?: (matchId: string, settings: Partial<Pick<TournamentMatch, 'servingOrderOffset' | 'serveOrderP1Reversed' | 'serveOrderP2Reversed'>>) => void;
@@ -141,6 +143,8 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   onToggleTeamSelection,
   totalSets,
   queuePosByMatchId,
+  queueEstimatedWaitMinutesByMatchId,
+  scoreSaveStatusByMatchId,
   onScoreChange,
   onUndoScore,
   onServeSettingsChange,
@@ -257,6 +261,8 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
             categoryMatches.every((m) => m.status === 'finished')
           }
           queuePosByMatchId={queuePosByMatchId}
+          queueEstimatedWaitMinutesByMatchId={queueEstimatedWaitMinutesByMatchId}
+          scoreSaveStatusByMatchId={scoreSaveStatusByMatchId}
           onScoreChange={onScoreChange}
           onUndoScore={onUndoScore}
           onServeSettingsChange={onServeSettingsChange}

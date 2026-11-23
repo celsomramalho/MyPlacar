@@ -657,6 +657,8 @@ export const EventDetailScreen: React.FC<Props> = ({
   }, [onboardingConfig, isRanking]);
 
   const saveMatchesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [matchScoreSaveStatusById, setMatchScoreSaveStatusById] = useState<Record<string, 'saved' | 'saving' | 'error'>>({});
+  const setMatchScoreSaveStatus = (matchId: string, status: 'saved' | 'saving' | 'error') => setMatchScoreSaveStatusById((current) => ({ ...current, [matchId]: status }));
 
   const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
   const inviteLink = useMemo(() => {
@@ -1394,14 +1396,16 @@ export const EventDetailScreen: React.FC<Props> = ({
     setEvent((prev) => ({ ...prev, matches: nextMatches }));
 
     if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+    setMatchScoreSaveStatus(matchId, 'saving');
     saveMatchesTimeoutRef.current = setTimeout(async () => {
       const db = getDb();
-      if (db) {
-        try {
-          await updateEventMatches(db as Firestore, event.pin, nextMatches);
-        } catch (err) {
-          console.error('Erro ao atualizar placar no Firestore:', err);
-        }
+      if (!db) { setMatchScoreSaveStatus(matchId, 'error'); return; }
+      try {
+        await updateEventMatches(db as Firestore, event.pin, nextMatches);
+        setMatchScoreSaveStatus(matchId, 'saved');
+      } catch (err) {
+        console.error('Erro ao atualizar placar no Firestore:', err);
+        setMatchScoreSaveStatus(matchId, 'error');
       }
     }, 600);
   };
@@ -1449,14 +1453,16 @@ export const EventDetailScreen: React.FC<Props> = ({
     setEvent((prev) => ({ ...prev, matches: nextMatches }));
 
     if (saveMatchesTimeoutRef.current) clearTimeout(saveMatchesTimeoutRef.current);
+    setMatchScoreSaveStatus(matchId, 'saving');
     saveMatchesTimeoutRef.current = setTimeout(async () => {
       const db = getDb();
-      if (db) {
-        try {
-          await updateEventMatches(db as Firestore, event.pin, nextMatches);
-        } catch (err) {
-          console.error('Erro ao desfazer placar no Firestore:', err);
-        }
+      if (!db) { setMatchScoreSaveStatus(matchId, 'error'); return; }
+      try {
+        await updateEventMatches(db as Firestore, event.pin, nextMatches);
+        setMatchScoreSaveStatus(matchId, 'saved');
+      } catch (err) {
+        console.error('Erro ao desfazer placar no Firestore:', err);
+        setMatchScoreSaveStatus(matchId, 'error');
       }
     }, 600);
   };
@@ -3039,6 +3045,8 @@ export const EventDetailScreen: React.FC<Props> = ({
                                       : undefined
                                   }
                                   queuePosition={queuePos}
+                                  estimatedWaitMinutes={match.status === 'waiting' ? orderedQueue.find((item) => item.match.id === match.id)?.estimatedWaitMinutes : undefined}
+                                  scoreSaveStatus={matchScoreSaveStatusById[match.id] || 'saved'}
                                   canSubmitScore={
                                     lockParticipantMatchControls
                                       ? false

@@ -59,15 +59,18 @@ export default async function handler(req, res) {
   const { action, event, eventPin, adminEmail, adminPin: suppliedAdminPin, queue } = req.body || {};
 
   if (action === 'queue-update') {
-    const allowedKeys = new Set(['matches', 'interdictedCourts']);
+    const allowedKeys = new Set(['matches', 'interdictedCourts', 'queueDurationHistoryResetAt']);
     const queueKeys = queue && typeof queue === 'object' && !Array.isArray(queue) ? Object.keys(queue) : [];
     const hasMatches = Array.isArray(queue?.matches);
     const hasInterdictedCourts = Array.isArray(queue?.interdictedCourts)
       && queue.interdictedCourts.every((court) => typeof court === 'string');
+    const hasQueueDurationHistoryResetAt = typeof queue?.queueDurationHistoryResetAt === 'string'
+      && Number.isFinite(Date.parse(queue.queueDurationHistoryResetAt));
     if (!eventPin || !adminEmail || !suppliedAdminPin || queueKeys.length === 0
       || queueKeys.some((key) => !allowedKeys.has(key))
       || (queue?.matches !== undefined && !hasMatches)
-      || (queue?.interdictedCourts !== undefined && !hasInterdictedCourts)) {
+      || (queue?.interdictedCourts !== undefined && !hasInterdictedCourts)
+      || (queue?.queueDurationHistoryResetAt !== undefined && !hasQueueDurationHistoryResetAt)) {
       return res.status(400).json({ error: 'Dados da fila inválidos ou incompletos' });
     }
     try {
@@ -93,6 +96,7 @@ export default async function handler(req, res) {
       const queuePatch = {};
       if (hasMatches) queuePatch.matches = sanitize(queue.matches);
       if (hasInterdictedCourts) queuePatch.interdictedCourts = sanitize(queue.interdictedCourts);
+      if (hasQueueDurationHistoryResetAt) queuePatch.queueDurationHistoryResetAt = sanitize(queue.queueDurationHistoryResetAt);
       await eventSnap.ref.update(queuePatch);
       return res.status(200).json({ success: true });
     } catch (err) {
