@@ -23,6 +23,9 @@ export interface GameContextValue {
   /** Estado da última gravação do placar vinculado ao evento. */
   tournamentScoreSaveStatus: 'saved' | 'saving' | 'error';
 
+  /** Aplica ao placar ativo as mudanças recebidas do documento da partida no evento. */
+  applyTournamentMatchSnapshot: (eventPin: string, match: TournamentMatch) => void;
+
   /**
    * Setter direto do gameState. Usar com cuidado — prefira os handlers
    * específicos (`handleScoreUpdate`, `handleUndo`, etc.) para garantir

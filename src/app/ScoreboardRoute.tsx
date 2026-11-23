@@ -8,9 +8,9 @@ import { useVoiceControl } from '@modules/game/presentation/hooks/useVoiceContro
 import { useLiveActions } from '@modules/live';
 import { useJudgeLookup } from '@modules/live/hooks/useJudgeLookup';
 import type { Tab } from '../types';
-import { getDb } from '@infra/firebase';
+import { getDb, subscribeEventByPin } from '@infra/firebase';
 import { fetchEventByPinFromServer } from '@infra/firebase/events';
-import type { TournamentEvent } from '@modules/events/types';
+import type { TournamentEvent, TournamentMatch } from '@modules/events/types';
 
 interface ScoreboardRouteProps {
   appUrl: string;
@@ -49,6 +49,7 @@ export function ScoreboardRoute({
     setMatchSettings,
     initGameState,
     gameState,
+    applyTournamentMatchSnapshot,
     setGameState,
     handleLeaveLive,
     handleCloseCloudLive,
@@ -90,6 +91,22 @@ export function ScoreboardRoute({
   const { voiceLogs, setVoiceLogs } = useVoiceControl();
 
   useJudgeLookup({ judgePinInput, setIsSearchingJudgePin, setJudgeNicknameLookup });
+
+  // A partida da fila é persistida no documento do evento, e não em live_matches.
+  // A tela do relógio precisa ouvir este mesmo documento para receber pontos dos
+  // outros dispositivos em tempo real e publicar suas alterações para eles.
+  React.useEffect(() => {
+    const eventPin = gameState?.tournamentPin;
+    const matchId = gameState?.tournamentMatchId;
+    if (!eventPin || !matchId) return;
+    const db = getDb();
+    if (!db) return;
+
+    return subscribeEventByPin(db, eventPin, (updatedEvent) => {
+      const match = (updatedEvent.matches as TournamentMatch[] | undefined)?.find((candidate) => candidate.id === matchId);
+      if (match) applyTournamentMatchSnapshot(eventPin, match);
+    });
+  }, [gameState?.tournamentPin, gameState?.tournamentMatchId, applyTournamentMatchSnapshot]);
 
   const { handleToggleMirroring, handleConfirmMatch } = useLiveActions({
     gameState,

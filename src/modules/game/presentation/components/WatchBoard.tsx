@@ -932,12 +932,12 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                     disabled={isRefreshingQueueMatch}
                     onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); void handleRefreshQueueMatch(); }}
                     className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors disabled:opacity-60"
-                    title="Atualizar todos os dados desta partida do Firebase"
+                    title="Recarregar placar, equipes e regras da partida do Firebase"
                   >
                     <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-sky-500 rounded-xl">
                       <RefreshCw size={18} className={isRefreshingQueueMatch ? 'animate-spin' : ''} />
                     </div>
-                    <span className="font-black text-sm">{isRefreshingQueueMatch ? 'Atualizando partida' : 'Atualizar do Firebase'}</span>
+                    <span className="font-black text-sm">{isRefreshingQueueMatch ? 'Atualizando partida' : 'Atualizar partida do Firebase'}</span>
                   </button>
                   {queueRefreshError && (
                     <p role="alert" className="px-3 text-xs font-bold text-red-300">{queueRefreshError}</p>

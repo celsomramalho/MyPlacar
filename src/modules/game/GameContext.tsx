@@ -130,6 +130,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     return saved;
   });
   const [tournamentScoreSaveStatus, setTournamentScoreSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const tournamentScoreSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const tournamentScoreWriteVersionRef = useRef(0);
   const gameStateRef = useRef(gameState);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
@@ -1088,41 +1090,100 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     if (!state.tournamentPin || !state.tournamentMatchId) return;
     const tournamentPin = state.tournamentPin;
     const tournamentMatchId = state.tournamentMatchId;
+    const writeVersion = ++tournamentScoreWriteVersionRef.current;
     if (!navigator.onLine) {
       setTournamentScoreSaveStatus('error');
       return;
     }
 
+    const scores = getTournamentScoresFromState(state);
+    const servingOrderOffset = state.servingOrderOffset;
     setTournamentScoreSaveStatus('saving');
-    void (async () => {
-      try {
-        const watchCredentials = isWatchDevice()
-          ? userProfile.email && userProfile.pin
-            ? { adminEmail: userProfile.email, adminPin: userProfile.pin }
-            : null
-          : undefined;
-        if (isWatchDevice() && !watchCredentials) {
-          throw new Error('O relógio não tem autorização para salvar o placar do evento.');
-        }
-
-        const db = await getDbAsync();
-        if (!db) throw new Error('Não foi possível conectar ao Firebase.');
-        const { markTournamentMatchScore } = await import('@modules/events/services/updateTournamentMatchProgress');
-        await markTournamentMatchScore(
-          db as Firestore,
-          tournamentPin,
-          tournamentMatchId,
-          getTournamentScoresFromState(state),
-          state.servingOrderOffset,
-          watchCredentials || undefined,
-        );
-        setTournamentScoreSaveStatus('saved');
-      } catch (error) {
-        console.error('[GameContext] Falha ao salvar placar do evento no Firebase:', error);
-        setTournamentScoreSaveStatus('error');
+    const writeSnapshot = async () => {
+      const watchCredentials = isWatchDevice()
+        ? userProfile.email && userProfile.pin
+          ? { adminEmail: userProfile.email, adminPin: userProfile.pin }
+          : null
+        : undefined;
+      if (isWatchDevice() && !watchCredentials) {
+        throw new Error('O relógio não tem autorização para salvar o placar do evento.');
       }
-    })();
+
+      const db = await getDbAsync();
+      if (!db) throw new Error('Não foi possível conectar ao Firebase.');
+      const { markTournamentMatchScore } = await import('@modules/events/services/updateTournamentMatchProgress');
+      await markTournamentMatchScore(
+        db as Firestore,
+        tournamentPin,
+        tournamentMatchId,
+        scores,
+        servingOrderOffset,
+        watchCredentials || undefined,
+      );
+    };
+
+    const queuedWrite = tournamentScoreSaveQueueRef.current.catch(() => {}).then(writeSnapshot);
+    tournamentScoreSaveQueueRef.current = queuedWrite;
+    void queuedWrite.then(
+      () => {
+        if (writeVersion === tournamentScoreWriteVersionRef.current) setTournamentScoreSaveStatus('saved');
+      },
+      (error) => {
+        console.error('[GameContext] Falha ao salvar placar do evento no Firebase:', error);
+        if (writeVersion === tournamentScoreWriteVersionRef.current) setTournamentScoreSaveStatus('error');
+      },
+    );
   }, [userProfile.email, userProfile.pin]);
+
+  const applyTournamentMatchSnapshot = useCallback((eventPin: string, match: TournamentMatch) => {
+    const current = gameStateRef.current;
+    if (!current || current.tournamentMatchId !== match.id || !current.tournamentPin || current.tournamentPin.toUpperCase() !== eventPin.toUpperCase() || !match.scores) return;
+
+    const scores = match.scores;
+    const inProgressIndex = scores.map((score) => score.inProgress === true).lastIndexOf(true);
+    const activeSetIndex = inProgressIndex >= 0 ? inProgressIndex : Math.max(0, scores.length - 1);
+    const activeScore = scores[activeSetIndex];
+    const completedScores = scores.slice(0, activeSetIndex);
+    const servingOrderOffset = match.servingOrderOffset ?? current.servingOrderOffset;
+    const next: GameState = {
+      ...current,
+      p1: {
+        ...current.p1,
+        games: activeScore?.p1 ?? 0,
+        score: activeScore?.gameP1 ?? '0',
+        sets: completedScores.map((score) => score.p1 ?? 0),
+      },
+      p2: {
+        ...current.p2,
+        games: activeScore?.p2 ?? 0,
+        score: activeScore?.gameP2 ?? '0',
+        sets: completedScores.map((score) => score.p2 ?? 0),
+      },
+      servingOrderOffset,
+      server: servingOrderOffset % 2 === 0 ? 1 : 2,
+      currentSet: activeSetIndex,
+      pointHistory: [],
+      history: [],
+    };
+
+    const hasChanged = current.p1.games !== next.p1.games
+      || current.p1.score !== next.p1.score
+      || JSON.stringify(current.p1.sets) !== JSON.stringify(next.p1.sets)
+      || current.p2.games !== next.p2.games
+      || current.p2.score !== next.p2.score
+      || JSON.stringify(current.p2.sets) !== JSON.stringify(next.p2.sets)
+      || current.servingOrderOffset !== next.servingOrderOffset
+      || current.server !== next.server
+      || current.currentSet !== next.currentSet;
+    if (!hasChanged) return;
+
+    gameStateRef.current = next;
+    setGameState(next);
+    historyStackRef.current = [next];
+    setHistoryStack([next]);
+    setTournamentScoreSaveStatus('saved');
+    try { localStorage.setItem('myPlacarActiveGameState', JSON.stringify(next)); } catch {}
+  }, [setGameState, setHistoryStack]);
 
   const handleScoreUpdate = useCallback((player: 1 | 2, type: PointType = 'rally', source: string = 'cb') => {
     setGameState(prev => {
@@ -1137,7 +1198,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       }
 
       const lastPoint = next.pointHistory[next.pointHistory.length - 1];
-      if (lastPoint?.resultingScore) persistTournamentScore(next);
+      if (lastPoint) persistTournamentScore(next);
       
       setHistoryStack(stack => {
         const updated = [...stack, JSON.parse(JSON.stringify(next))];
@@ -1500,7 +1561,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const globalLiveCount = parseInt(localStorage.getItem('myPlacarLiveGlobalCount') || '0') + 1;
     try { localStorage.setItem('myPlacarLiveGlobalCount', globalLiveCount.toString()); } catch {}
     const db = navigator.onLine && userProfile.pin ? await getDbAsync().catch(() => null) : null;
-    if (db) {
+    if (db && !options?.preserveLiveDocument) {
       try { 
         const { doc, deleteDoc } = await import('firebase/firestore');
         await deleteDoc(doc(db, "live_matches", userProfile.pin.toUpperCase())).catch(() => {}); 
@@ -1626,6 +1687,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     gameState,
     setGameState,
     tournamentScoreSaveStatus,
+    applyTournamentMatchSnapshot,
     gameStateRef,
     matchSettings,
     setMatchSettings,
@@ -1660,6 +1722,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   }), [
     gameState,
     tournamentScoreSaveStatus,
+    applyTournamentMatchSnapshot,
     gameStateRef,
     matchSettings,
     userProfile,
