@@ -1463,13 +1463,50 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       } catch {} 
     }
     
+    const queueScores = tournamentOverride?.match.scores || [];
+    const inProgressScoreIndex = queueScores.map((score) => score.inProgress === true).lastIndexOf(true);
+    const currentQueueScoreIndex = inProgressScoreIndex >= 0
+      ? inProgressScoreIndex
+      : Math.max(0, queueScores.length - 1);
+    const currentQueueScore = queueScores[currentQueueScoreIndex];
+    const completedQueueScores = queueScores.slice(0, currentQueueScoreIndex);
+    const initialServeOffset = tournamentOverride?.match.initialServingOrderOffset
+      ?? (configToUse.initialServer === 1 ? 0 : 1);
+    const currentServeOffset = tournamentOverride?.match.servingOrderOffset ?? initialServeOffset;
+    if (tournamentOverride) {
+      configToUse = {
+        ...configToUse,
+        initialServer: initialServeOffset % 2 === 0 ? 1 : 2,
+      };
+    }
+    const queueScoreStartTime = tournamentOverride?.match.scoreStartedAt;
+    const parsedQueueScoreStartTime = queueScoreStartTime ? Date.parse(queueScoreStartTime) : NaN;
     const newGameState: GameState = {
       matchId: `match_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      startTime: Date.now(),
-      p1: { name: configToUse.p1Name, partnerName: configToUse.p1Partner, gender: configToUse.p1Gender, partnerGender: configToUse.p1PartnerGender, score: '0', games: 0, sets: [], color: configToUse.p1Color },
-      p2: { name: configToUse.p2Name, partnerName: configToUse.p2Partner, gender: configToUse.p2Gender, partnerGender: configToUse.p2PartnerGender, score: '0', games: 0, sets: [], color: configToUse.p2Color },
-      server: configToUse.initialServer, servingOrderOffset: configToUse.initialServer === 1 ? 0 : 1,
-      pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode, isScoreboardMode: isWatchDevice() ? false : !!configToUse.isScoreboardMode }, history: [], currentSet: 0, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
+      startTime: Number.isFinite(parsedQueueScoreStartTime) ? parsedQueueScoreStartTime : Date.now(),
+      p1: {
+        name: configToUse.p1Name,
+        partnerName: configToUse.p1Partner,
+        gender: configToUse.p1Gender,
+        partnerGender: configToUse.p1PartnerGender,
+        score: currentQueueScore?.gameP1 || '0',
+        games: currentQueueScore?.p1 ?? 0,
+        sets: completedQueueScores.map((score) => score.p1 ?? 0),
+        color: configToUse.p1Color,
+      },
+      p2: {
+        name: configToUse.p2Name,
+        partnerName: configToUse.p2Partner,
+        gender: configToUse.p2Gender,
+        partnerGender: configToUse.p2PartnerGender,
+        score: currentQueueScore?.gameP2 || '0',
+        games: currentQueueScore?.p2 ?? 0,
+        sets: completedQueueScores.map((score) => score.p2 ?? 0),
+        color: configToUse.p2Color,
+      },
+      server: currentServeOffset % 2 === 0 ? 1 : 2,
+      servingOrderOffset: currentServeOffset,
+      pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode, isScoreboardMode: isWatchDevice() ? false : !!configToUse.isScoreboardMode }, history: [], currentSet: currentQueueScoreIndex, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
       isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin, ownerDeviceId: deviceId,
       liveSessionCounter: globalLiveCount, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, 
       controllers: { [deviceId]: { label: currentFullDeviceName, nickname: userProfile.nickname || userProfile.name?.split(' ')[0], lastSeen: Date.now(), isOwner: true, role: 'owner', status: 'controller', deviceType: getDeviceType() } },

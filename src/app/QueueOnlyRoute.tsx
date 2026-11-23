@@ -15,7 +15,7 @@ interface QueueOnlyRouteProps {
 }
 
 export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRouteProps) {
-  const { matchSettings, setMatchSettings, gameState, setGameState } = useGame();
+  const { matchSettings, setMatchSettings, gameState, setGameState, initGameState } = useGame();
   const { setCurrentScreen, setModalConfig } = useUI();
   const [currentEvent, setCurrentEvent] = useState(event);
   useEffect(() => {
@@ -54,24 +54,30 @@ export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRout
         isWatchModeEnabled={!!matchSettings.isWatchMode}
         onToggleWatchMode={(matchId) => {
           const eventPin = currentEvent.pin.toUpperCase();
-          const isMatchingGame = gameState?.tournamentPin?.toUpperCase() === eventPin
-            && gameState.tournamentMatchId === matchId;
+          const match = currentEvent.matches?.find((candidate) => candidate.id === matchId);
+          const pair1 = match?.pair1 ?? currentEvent.pairs?.find((pair) => pair.id === match?.pair1Id);
+          const pair2 = match?.pair2 ?? currentEvent.pairs?.find((pair) => pair.id === match?.pair2Id);
 
-          if (!isMatchingGame) {
+          if (!match || !pair1 || !pair2) {
             setModalConfig({
-              title: 'Placar não vinculado',
-              message: 'Esta partida da fila ainda não tem um placar aberto para o modo relógio. Abra a partida pelo botão Play para vinculá-la ao evento.',
+              title: 'Não foi possível abrir o placar',
+              message: 'Não encontrei os dados das duas duplas desta partida na fila.',
               onConfirm: () => setModalConfig(null),
             });
             return;
           }
 
           setMatchSettings((current) => ({ ...current, isWatchMode: true, isScoreboardMode: false }));
-          setGameState((current) => current ? {
-            ...current,
-            matchConfig: { ...current.matchConfig, isWatchMode: true, isScoreboardMode: false },
-          } : current);
-          setCurrentScreen('scoreboard');
+          if (gameState?.tournamentPin?.toUpperCase() === eventPin && gameState.tournamentMatchId === matchId) {
+            setGameState((current) => current ? {
+              ...current,
+              matchConfig: { ...current.matchConfig, isWatchMode: true, isScoreboardMode: false },
+            } : current);
+            setCurrentScreen('scoreboard');
+            return;
+          }
+
+          void initGameState(true, { match, pair1, pair2, event: currentEvent });
         }}
       />
     </main>
