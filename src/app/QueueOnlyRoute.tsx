@@ -6,6 +6,7 @@ import { isCoAdminOfEvent, isJudgeOfEvent, isPrimaryAdminEmail } from '@modules/
 import { getDb, subscribeEventByPin } from '@infra/firebase';
 import type { UserProfile } from '@modules/auth/types';
 import { useGame } from '@modules/game';
+import { useUI } from '@modules/ui';
 
 interface QueueOnlyRouteProps {
   event: TournamentEvent;
