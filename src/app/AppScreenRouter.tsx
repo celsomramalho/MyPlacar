@@ -372,7 +372,7 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
               setActiveTab={setActiveTab}
               setInitialConfirmDeleteJudge={setInitialConfirmDeleteJudge}
               onRegisterReplayTour={(fn) => { replayTourScoreboardRef.current = fn; }}
-              canReturnToQueue={!!activeEvent?.pin && queueOnlyEventPin === activeEvent.pin.toUpperCase() && gameState?.tournamentMatch?.eventPin?.toUpperCase() === activeEvent.pin.toUpperCase()}
+              canReturnToQueue={!!activeEvent?.pin && queueOnlyEventPin === activeEvent.pin.toUpperCase() && gameState?.tournamentPin?.toUpperCase() === activeEvent.pin.toUpperCase()}
               onReturnToQueue={() => setCurrentScreen('event-detail')}
             />
           )}

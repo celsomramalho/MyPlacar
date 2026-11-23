@@ -22,8 +22,8 @@ export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRout
     if (!db || !event.pin) return;
     return subscribeEventByPin(db, event.pin, (updatedEvent) => {
       setCurrentEvent((current) => ({
-        ...updatedEvent,
-        entries: updatedEvent.entries ?? current.entries,
+        ...(updatedEvent as TournamentEvent),
+        entries: current.entries,
       } as TournamentEvent));
     });
   }, [event]);
