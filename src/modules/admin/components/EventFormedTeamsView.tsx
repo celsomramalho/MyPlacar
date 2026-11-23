@@ -19,7 +19,7 @@ interface Props {
   adminPin?: string;
   compact?: boolean;
   isWatchModeEnabled?: boolean;
-  onToggleWatchMode?: () => void;
+  onToggleWatchMode?: (matchId: string) => void;
 }
 
 const getPhaseLabel = (phase?: string) => {

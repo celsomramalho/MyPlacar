@@ -14,7 +14,8 @@ interface QueueOnlyRouteProps {
 }
 
 export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRouteProps) {
-  const { matchSettings, setMatchSettings } = useGame();
+  const { matchSettings, setMatchSettings, gameState, setGameState } = useGame();
+  const { setCurrentScreen, setModalConfig } = useUI();
   const [currentEvent, setCurrentEvent] = useState(event);
   useEffect(() => {
     setCurrentEvent(event);
@@ -50,10 +51,27 @@ export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRout
         adminPin={userProfile.pin}
         compact
         isWatchModeEnabled={!!matchSettings.isWatchMode}
-        onToggleWatchMode={() => setMatchSettings((current) => {
-          const isWatchMode = !current.isWatchMode;
-          return { ...current, isWatchMode, isScoreboardMode: isWatchMode ? false : current.isScoreboardMode };
-        })}
+        onToggleWatchMode={(matchId) => {
+          const eventPin = currentEvent.pin.toUpperCase();
+          const isMatchingGame = gameState?.tournamentPin?.toUpperCase() === eventPin
+            && gameState.tournamentMatchId === matchId;
+
+          if (!isMatchingGame) {
+            setModalConfig({
+              title: 'Placar não vinculado',
+              message: 'Esta partida da fila ainda não tem um placar aberto para o modo relógio. Abra a partida pelo botão Play para vinculá-la ao evento.',
+              onConfirm: () => setModalConfig(null),
+            });
+            return;
+          }
+
+          setMatchSettings((current) => ({ ...current, isWatchMode: true, isScoreboardMode: false }));
+          setGameState((current) => current ? {
+            ...current,
+            matchConfig: { ...current.matchConfig, isWatchMode: true, isScoreboardMode: false },
+          } : current);
+          setCurrentScreen('scoreboard');
+        }}
       />
     </main>
   );

@@ -30,7 +30,7 @@ export interface CourtQueuePanelProps {
   onRefreshEventScore?: (matchId: string) => void;
   refreshingMatchId?: string | null;
   isWatchModeEnabled?: boolean;
-  onToggleWatchMode?: () => void;
+  onToggleWatchMode?: (matchId: string) => void;
   /** Título customizado do header (opcional) */
   title?: string;
   /** Subtítulo customizado do header (opcional) */

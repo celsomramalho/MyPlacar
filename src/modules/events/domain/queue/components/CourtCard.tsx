@@ -143,7 +143,7 @@ export interface CourtCardProps {
   refreshingMatchId: string | null;
   saveStatus: 'saved' | 'saving' | 'error';
   isWatchModeEnabled?: boolean;
-  onToggleWatchMode?: () => void;
+  onToggleWatchMode?: (matchId: string) => void;
   getPlayerNick: (p?: { nickname?: string; name?: string; email?: string; pin?: string }) => string;
   parseMatchSets: (
     match: TournamentMatch,
@@ -688,7 +688,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               {isWatch && onToggleWatchMode && (
                 <button
                   type="button"
-                  onClick={onToggleWatchMode}
+                  onClick={() => onToggleWatchMode(activeMatch.id)}
                   aria-label={isWatchModeEnabled ? 'Desativar modo relógio' : 'Ativar modo relógio'}
                   aria-pressed={isWatchModeEnabled}
                   className={`w-10 h-10 rounded-xl border active:scale-95 transition-all flex items-center justify-center ${isWatchModeEnabled ? 'border-emerald-600 bg-emerald-500 text-white' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
