@@ -1,5 +1,6 @@
 import type { EventCategory, TournamentEvent, TournamentMatch, TournamentPair } from '../types';
 import { formatMatchNumber } from './matchGenerator';
+import { getCategoryTieBreakCriteria } from './tieBreakCriteria';
 
 export const exportCategoryMatchesBlankPdf = (
   event: TournamentEvent,
@@ -16,6 +17,9 @@ export const exportCategoryMatchesBlankPdf = (
   );
 
   const totalSets = (event.setsCount || event.config?.sets || 1) as number;
+  const tieBreakCriteria = getCategoryTieBreakCriteria(event, category, totalSets);
+  const tieBreakCriteriaHtml = tieBreakCriteria.map((criterion) => `<li>${criterion}</li>`).join('');
+  const tieBreakLogRows = Array.from({ length: 8 }, () => '<tr><td></td><td></td><td></td><td></td></tr>').join('');
 
   const getCleanPhaseLabel = (phase?: string): string => {
     if (!phase) return '';
@@ -223,6 +227,24 @@ export const exportCategoryMatchesBlankPdf = (
       </div>
     `);
   }
+
+  pagesHtml.push(`
+    <div class="pdf-page">
+      <div class="pdf-page-top">
+        ${renderHeaderHtml(false)}
+        <section class="section-container">
+          <h2 class="section-title">Critérios de desempate</h2>
+          <ol class="tie-break-list">${tieBreakCriteriaHtml}</ol>
+          <div class="tie-break-note"><strong>Como conferir:</strong> na pontuação individual, quando exatamente dois participantes permanecem empatados após vitórias, saldo geral e games pró, compare primeiro as vitórias entre eles; se persistir o empate, compare o saldo de games desses confrontos. Anote a posição final, o critério aplicado e os valores considerados.</div>
+          <table class="tie-break-log">
+            <thead><tr><th>Posição</th><th>Participante / time</th><th>Critério aplicado</th><th>Valor considerado</th></tr></thead>
+            <tbody>${tieBreakLogRows}</tbody>
+          </table>
+        </section>
+      </div>
+      ${renderFooterHtml()}
+    </div>
+  `);
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -566,6 +588,24 @@ export const exportCategoryMatchesBlankPdf = (
           text-decoration: none;
           font-weight: 800;
         }
+
+        .tie-break-list {
+          margin: 10px 0 18px 22px;
+          font-size: 11px;
+          line-height: 1.55;
+        }
+        .tie-break-list li { margin: 3px 0; padding-left: 3px; }
+        .tie-break-note {
+          background: #f1f5f9;
+          border-left: 4px solid #334155;
+          padding: 9px 12px;
+          margin: 10px 0 18px;
+          font-size: 10px;
+          line-height: 1.5;
+        }
+        .tie-break-log { font-size: 10px; }
+        .tie-break-log th { background: #e2e8f0; }
+        .tie-break-log td { height: 25px; }
       </style>
     </head>
     <body>

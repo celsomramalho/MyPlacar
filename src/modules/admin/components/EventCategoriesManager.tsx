@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Tag } from 'lucide-react';
+import { Download, Plus, Tag } from 'lucide-react';
 import {
   minifyPairForStorage,
   getNextRegistrationId,
@@ -115,6 +115,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
   const [gender1, setGender1] = useState<'M' | 'F'>('M');
   const [gender2, setGender2] = useState<'M' | 'F'>('M');
   const [maxPlayers, setMaxPlayers] = useState<number>(8);
+  const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('');
 
   const isSuper8 = isSuper8Event(event);
   const isSuper8Duplas = isSuper8DuplasEvent(event);
@@ -160,6 +162,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setGender1('M');
     setGender2('M');
     setMaxPlayers(8);
+    setStartDate('');
+    setStartTime('');
     setIsAdding(false);
     setEditingId(null);
   };
@@ -213,6 +217,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
     setGender1(cat.gender1 || 'M');
     setGender2(cat.gender2 || 'M');
     setMaxPlayers(cat.maxPlayers ?? 8);
+    setStartDate(cat.startDate ?? '');
+    setStartTime(cat.startTime ?? '');
     setEditingId(cat.id);
     setIsAdding(true);
   };
@@ -251,6 +257,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
               gender1,
               gender2: format === 'Duplas' ? gender2 : undefined,
               maxPlayers: maxPlayers > 0 ? maxPlayers : 8,
+              startDate: startDate || undefined,
+              startTime: startTime || undefined,
               requiresPartner: format === 'Duplas' ? requiresPartner : undefined,
             }
           : c
@@ -272,6 +280,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
         gender1,
         gender2: format === 'Duplas' ? gender2 : undefined,
         maxPlayers: maxPlayers > 0 ? maxPlayers : 8,
+        startDate: startDate || undefined,
+        startTime: startTime || undefined,
         requiresPartner: format === 'Duplas' ? requiresPartner : undefined,
       };
       updated = [...categories, newCategory];
@@ -461,6 +471,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
     handleReopenMatch,
     handleGenerateBlankPdf,
     handleGenerateCalculationPdf,
+    handleGenerateCalculationExcel,
   } = useMatchAdminActions({
     event,
     selectedCategory,
@@ -1134,14 +1145,24 @@ export const EventCategoriesManager: React.FC<Props> = ({
             Defina formato, descrição e prioridade de cada disputa do evento.
           </p>
         </div>
-        {!isAdding && !isReadOnly && (
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <button
-            onClick={handleStartAdd}
-            className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all self-start sm:self-auto cursor-pointer"
+            type="button"
+            onClick={handleGenerateCalculationExcel}
+            className="flex items-center justify-center gap-2 border-2 border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-50 active:scale-95 font-black text-xs px-4 py-3 rounded-2xl shadow-sm transition-all cursor-pointer"
+            title="Gerar planilha Excel com todas as categorias e classificação automática"
           >
-            <Plus size={18} /> Categoria
+            <Download size={16} /> Gerar planilha Excel
           </button>
-        )}
+          {!isAdding && !isReadOnly && (
+            <button
+              onClick={handleStartAdd}
+              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-sm transition-all cursor-pointer"
+            >
+              <Plus size={18} /> Categoria
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Seletor de categorias — mesmo padrão usado na visão do participante */}
@@ -1195,6 +1216,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
           gender1={gender1}
           gender2={gender2}
           maxPlayers={maxPlayers}
+          startDate={startDate}
+          startTime={startTime}
           activeSports={activeSports}
           onNameChange={setName}
           onDescriptionChange={setDescription}
@@ -1215,6 +1238,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
           onGender1Change={setGender1}
           onGender2Change={setGender2}
           onMaxPlayersChange={setMaxPlayers}
+          onStartDateChange={setStartDate}
+          onStartTimeChange={setStartTime}
           onSave={handleSave}
           onCancel={resetForm}
         />
@@ -1277,6 +1302,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     gender1={gender1}
                     gender2={gender2}
                     maxPlayers={maxPlayers}
+                    startDate={startDate}
+                    startTime={startTime}
                     activeSports={activeSports}
                     onNameChange={setName}
                     onDescriptionChange={setDescription}
@@ -1297,6 +1324,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onGender1Change={setGender1}
                     onGender2Change={setGender2}
                     onMaxPlayersChange={setMaxPlayers}
+                    onStartDateChange={setStartDate}
+                    onStartTimeChange={setStartTime}
                     onSave={handleSave}
                     onDelete={handleDelete}
                     onCancel={resetForm}

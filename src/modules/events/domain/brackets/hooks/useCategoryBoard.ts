@@ -151,7 +151,7 @@ export function useCategoryBoard({
       categoryMatches,
       {
         scoringMode: isRanking ? 'rankingPoints' : 'wins',
-        technicalTieBreak: event?.technicalTieBreak || 'Rank Compartilhado',
+        technicalTieBreak: selectedCategory.technicalTieBreak || event?.technicalTieBreak || 'Rank Compartilhado',
         drawWinners,
       }
     );
@@ -162,6 +162,7 @@ export function useCategoryBoard({
     categoryEntries,
     categoryMatches,
     event?.technicalTieBreak,
+    selectedCategory?.technicalTieBreak,
     event?.technicalTieDrawWinners,
   ]);
 

@@ -276,8 +276,14 @@ export interface EventCategory {
   gender1?: 'M' | 'F';
   gender2?: 'M' | 'F';
   maxPlayers?: number;
+  /** Data de início da categoria no formato ISO (AAAA-MM-DD). */
+  startDate?: string;
+  /** Hora inicial da categoria no formato HH:mm. */
+  startTime?: string;
   /** Ordem/ganhadores do sorteio manual para desempate técnico (pins/emails dos inscritos) */
   technicalTieDrawWinners?: string[];
+  /** Critério aplicado após os critérios matemáticos quando há empate técnico. */
+  technicalTieBreak?: TechnicalTieBreakOption;
   /**
    * Exige que o atleta informe o parceiro na inscrição (apenas para categorias com format === 'Duplas').
    * Quando `false`, o bloco de parceiro é ocultado na inscrição. Padrão: `true`.

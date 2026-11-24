@@ -69,8 +69,10 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   const [expandedStatsEmail, setExpandedStatsEmail] = React.useState<string | null>(null);
   const [isDrawModalOpen, setIsDrawModalOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [isClassifiedView, setIsClassifiedView] = React.useState(false);
   const maxPlayers = category.maxPlayers && category.maxPlayers > 0 ? category.maxPlayers : 8;
   const canGenerateMore = entries.length < maxPlayers;
+  const allCategoryMatchesFinished = categoryMatches.length > 0 && categoryMatches.every((match) => match.status === 'finished');
   const today = getTodayDateStr();
   const tournamentActive = isTournamentPeriodActive(event);
 
@@ -95,17 +97,11 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
     return list;
   }, [playerStandingsMap]);
 
-  const hasTechnicalTie = React.useMemo(() => {
-    return allStandings.some(
-      (st) => st.isTechnicalTie || Boolean(st.tieBreakNote && st.tieBreakNote.toLowerCase().includes('sorteio'))
-    );
-  }, [allStandings]);
-
-  const hasAwaitingDraw = React.useMemo(() => {
-    return allStandings.some(
-      (st) => st.isTechnicalTie && Boolean(st.tieBreakNote && st.tieBreakNote.toLowerCase().includes('aguardando sorteio'))
-    );
-  }, [allStandings]);
+  const awaitingDrawStandings = React.useMemo(
+    () => allStandings.filter((st) => st.isTechnicalTie && Boolean(st.tieBreakNote?.toLowerCase().includes('aguardando sorteio'))),
+    [allStandings]
+  );
+  const hasAwaitingDraw = allCategoryMatchesFinished && awaitingDrawStandings.length > 0;
 
   const currentDrawWinners = React.useMemo(() => {
     return (
@@ -171,6 +167,17 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
   const selectableEntries = shouldFilterSuper8MixedPairCandidates && firstSelectedPartner
     ? [firstSelectedPartner, ...partnerCandidates]
     : visibleEntries;
+  const classifiedEntries = React.useMemo(() => [...selectableEntries].sort((a, b) => {
+    const standingFor = (entry: TournamentEntry) => {
+      const key = (entry.email || entry.pin || '').toLowerCase().trim();
+      return playerStandingsMap.get(key) || (entry.registrationId ? playerStandingsMap.get(`reg_${entry.registrationId}`) : undefined);
+    };
+    const rankA = standingFor(a)?.rank ?? Number.MAX_SAFE_INTEGER;
+    const rankB = standingFor(b)?.rank ?? Number.MAX_SAFE_INTEGER;
+    if (rankA !== rankB) return rankA - rankB;
+    return (a.name || a.nickname || '').localeCompare(b.name || b.nickname || '');
+  }), [selectableEntries, playerStandingsMap]);
+  const technicalTieBreak = category.technicalTieBreak || event.technicalTieBreak;
   const pairHighlightColors = [
     'bg-amber-100/80 border-l-4 border-l-amber-400',
     'bg-green-200/80 border-l-4 border-l-green-500',
@@ -244,21 +251,30 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
         )}
 
         {/* Banner de Sorteio de Desempate Técnico */}
-        {event.technicalTieBreak === 'Sorteio' && (hasTechnicalTie || currentDrawWinners.length > 0) && (
-          <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-2xl shadow-2xs space-y-2.5">
+        {technicalTieBreak === 'Sorteio' && (hasAwaitingDraw || currentDrawWinners.length > 0) && (
+          <div className={`p-4 border-2 rounded-2xl shadow-sm space-y-3 ${hasAwaitingDraw ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-200' : 'bg-emerald-50 border-emerald-300'}`}>
             <div className="flex items-start gap-2.5">
               <span className="text-xl shrink-0">🎲</span>
               <div>
-                <p className="text-xs font-black text-amber-900">
-                  Desempate técnico por sorteio
+                <p className={`text-sm font-black ${hasAwaitingDraw ? 'text-amber-950' : 'text-emerald-900'}`}>
+                  {hasAwaitingDraw ? 'Empate técnico — sorteio necessário' : 'Desempate por sorteio aplicado'}
                 </p>
-                <p className="text-[11px] font-bold text-amber-700 leading-tight">
+                <p className={`text-[11px] font-bold leading-tight ${hasAwaitingDraw ? 'text-amber-900' : 'text-emerald-800'}`}>
                   {hasAwaitingDraw
-                    ? 'Há atletas com estatísticas idênticas aguardando a indicação do sorteio manual.'
+                    ? 'Os participantes abaixo seguem empatados nos critérios matemáticos e precisam do sorteio da comissão.'
                     : 'Ganhador do sorteio já definido e aplicado à classificação.'}
                 </p>
               </div>
             </div>
+            {hasAwaitingDraw && (
+              <div className="flex flex-wrap gap-2">
+                {awaitingDrawStandings.map((standing) => (
+                  <span key={standing.entry.pin || standing.entry.email || standing.entry.registrationId} className="rounded-xl border border-amber-300 bg-white/80 px-2.5 py-1.5 text-[10px] font-black text-amber-950">
+                    {standing.entry.nickname || standing.entry.name} · {standing.wins} vitórias · saldo {standing.gamesDiff > 0 ? `+${standing.gamesDiff}` : standing.gamesDiff} · {standing.gamesWon} pró / {standing.gamesLost} contra
+                  </span>
+                ))}
+              </div>
+            )}
             {!isReadOnly && (
               <button
                 type="button"
@@ -288,6 +304,23 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
               {sortBy === 'team' ? 'Time' : 'Participante'} <ArrowUpDown size={12} />
             </button>
           </>
+        )}
+        {isIndividualRanking && categoryMatches.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setIsClassifiedView((current) => !current)}
+            disabled={!allCategoryMatchesFinished && !isClassifiedView}
+            title={allCategoryMatchesFinished ? 'Ordenar participantes pela classificação calculada' : 'Encerre todas as partidas para aplicar a classificação final'}
+            className={`rounded-lg px-3 py-1.5 text-[10px] font-black transition-all ${
+              isClassifiedView
+                ? 'border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer'
+                : allCategoryMatchesFinished
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            {isClassifiedView ? 'Voltar à ordem original' : 'Classificar'}
+          </button>
         )}
       </div>
 
@@ -383,7 +416,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                 ? 'Nenhum parceiro disponível sem time formado nesta categoria.'
                 : 'Nenhum inscrito encontrado.'}
             </div>
-          ) : selectableEntries.map((entry, entryIndex) => {
+          ) : (isClassifiedView ? classifiedEntries : selectableEntries).map((entry, entryIndex) => {
             const standingKey = (entry.email || entry.pin || '').toLowerCase().trim();
             const standing = isIndividualRanking
               ? playerStandingsMap.get(standingKey) || (entry.registrationId ? playerStandingsMap.get(`reg_${entry.registrationId}`) : null)

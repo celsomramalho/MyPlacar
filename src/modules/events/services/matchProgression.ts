@@ -131,6 +131,10 @@ const getDrawWinnerIndex = (entry: TournamentEntry, drawWinners: string[]): numb
   return 999;
 };
 
+const formatSignedStat = (value: number) => value > 0 ? `+${value}` : String(value);
+const formatPlayerTieStats = (standing: PlayerStanding) =>
+  `V ${standing.wins}, SG ${formatSignedStat(standing.gamesDiff)}, GP ${standing.gamesWon}, GC ${standing.gamesLost}`;
+
 const resolveTechnicalTieSubgroup = (
   subgroup: PlayerStanding[],
   technicalTieBreak: TechnicalTieBreakOption = 'Rank compartilhado',
@@ -144,7 +148,7 @@ const resolveTechnicalTieSubgroup = (
     );
     sorted.forEach((st) => {
       st.isTechnicalTie = false;
-      st.tieBreakNote = 'Desempate por ordem alfabética';
+      st.tieBreakNote = `Desempate por ordem alfabética: ${st.entry.name || st.entry.nickname || 'nome'} (${formatPlayerTieStats(st)})`;
     });
     return sorted;
   }
@@ -165,8 +169,8 @@ const resolveTechnicalTieSubgroup = (
         st.isTechnicalTie = false;
         st.tieBreakNote =
           idx === 0
-            ? 'Desempate por sorteio (ganhador do sorteio)'
-            : 'Desempate por sorteio';
+            ? `Desempate por sorteio (ganhador; ordem ${getDrawWinnerIndex(st.entry, drawWinners) + 1}; ${formatPlayerTieStats(st)})`
+            : `Desempate por sorteio (ordem ${getDrawWinnerIndex(st.entry, drawWinners) + 1}; ${formatPlayerTieStats(st)})`;
       });
 
       nonWinners.sort((a, b) => (a.entry.name || '').localeCompare(b.entry.name || ''));
@@ -175,15 +179,15 @@ const resolveTechnicalTieSubgroup = (
         st.isTechnicalTie = nonWinners.length > 1;
         st.tieBreakNote =
           nonWinners.length > 1
-            ? 'Empate técnico (aguardando sorteio)'
-            : 'Desempate por sorteio';
+            ? `Empate técnico (aguardando sorteio; ${formatPlayerTieStats(st)})`
+            : `Desempate por sorteio (${formatPlayerTieStats(st)})`;
       });
 
       return [...winners, ...nonWinners];
     } else {
       subgroup.forEach((st) => {
         st.isTechnicalTie = true;
-        st.tieBreakNote = 'Empate técnico (aguardando sorteio)';
+        st.tieBreakNote = `Empate técnico (aguardando sorteio; ${formatPlayerTieStats(st)})`;
       });
       return [...subgroup].sort((a, b) => (a.entry.name || '').localeCompare(b.entry.name || ''));
     }
@@ -192,18 +196,13 @@ const resolveTechnicalTieSubgroup = (
   // Padrão: Rank compartilhado
   subgroup.forEach((st) => {
     st.isTechnicalTie = true;
-    st.tieBreakNote = 'Empate técnico (critérios matemáticos iguais)';
+    st.tieBreakNote = `Empate técnico (critérios iguais; ${formatPlayerTieStats(st)})`;
   });
   return [...subgroup].sort((a, b) => (a.entry.name || '').localeCompare(b.entry.name || ''));
 };
 
 /**
- * Desempate recursivo de atletas no Super 8:
- * 1º Critério: Saldo de Games (SG = Games Pró - Games Contra) -> Classificação simples/direta
- * 2º Critério: Games Pró (GP) -> Classificação simples/direta
- * 3º Critério: Confronto Direto (apenas quando SG e GP forem rigorosamente iguais entre 2 atletas)
- * 4º Critério: % de Games
- * 5º Critério: Empate Técnico (conforme configuração: Rank Compartilhado / Alfabético / Sorteio)
+ * Desempate recursivo de atletas no Super 8, mantendo cada critério e seu valor visíveis.
  */
 const resolvePlayerTies = (
   group: PlayerStanding[],
@@ -221,21 +220,21 @@ const resolvePlayerTies = (
   if (group.length === 2) {
     const [p1, p2] = group;
 
-    // 1º Critério: Saldo de Games (SG) -> Classificação simples sem nota de desempate
+    // Saldo de games geral
     if (p1.gamesDiff !== p2.gamesDiff) {
       const higher = p1.gamesDiff > p2.gamesDiff ? p1 : p2;
       const lower = p1.gamesDiff > p2.gamesDiff ? p2 : p1;
-      higher.tieBreakNote = undefined;
-      lower.tieBreakNote = undefined;
+      higher.tieBreakNote = `Desempate por saldo geral de games: ${formatSignedStat(higher.gamesDiff)} (${higher.gamesWon}–${higher.gamesLost})`;
+      lower.tieBreakNote = `Desempate por saldo geral de games: ${formatSignedStat(lower.gamesDiff)} (${lower.gamesWon}–${lower.gamesLost})`;
       return [higher, lower];
     }
 
-    // 2º Critério: Games Pró (GP) -> Classificação simples sem nota de desempate
+    // Games pró
     if (p1.gamesWon !== p2.gamesWon) {
       const higher = p1.gamesWon > p2.gamesWon ? p1 : p2;
       const lower = p1.gamesWon > p2.gamesWon ? p2 : p1;
-      higher.tieBreakNote = undefined;
-      lower.tieBreakNote = undefined;
+      higher.tieBreakNote = `Desempate por games pró: ${higher.gamesWon}`;
+      lower.tieBreakNote = `Desempate por games pró: ${lower.gamesWon}`;
       return [higher, lower];
     }
 
@@ -245,15 +244,20 @@ const resolvePlayerTies = (
       if (h2h.p1Wins !== h2h.p2Wins) {
         const winner = h2h.p1Wins > h2h.p2Wins ? p1 : p2;
         const loser = h2h.p1Wins > h2h.p2Wins ? p2 : p1;
-        winner.tieBreakNote = 'Desempate por confronto direto';
-        loser.tieBreakNote = 'Desempate por confronto direto';
+        const winnerDirectWins = winner === p1 ? h2h.p1Wins : h2h.p2Wins;
+        const loserDirectWins = loser === p1 ? h2h.p1Wins : h2h.p2Wins;
+        winner.tieBreakNote = `Desempate por vitórias no confronto direto: ${winnerDirectWins}–${loserDirectWins}`;
+        loser.tieBreakNote = `Desempate por vitórias no confronto direto: ${loserDirectWins}–${winnerDirectWins}`;
         return [winner, loser];
       }
       if (h2h.p1Games !== h2h.p2Games) {
         const winner = h2h.p1Games > h2h.p2Games ? p1 : p2;
         const loser = h2h.p1Games > h2h.p2Games ? p2 : p1;
-        winner.tieBreakNote = 'Desempate por confronto direto (saldo no confronto)';
-        loser.tieBreakNote = 'Desempate por confronto direto (saldo no confronto)';
+        const winnerGames = winner === p1 ? h2h.p1Games : h2h.p2Games;
+        const loserGames = loser === p1 ? h2h.p1Games : h2h.p2Games;
+        const winnerDiff = winnerGames - loserGames;
+        winner.tieBreakNote = `Desempate por saldo de games no confronto direto: vitórias diretas empatadas ${h2h.p1Wins}–${h2h.p2Wins}; saldo +${winnerDiff} (${winnerGames}–${loserGames})`;
+        loser.tieBreakNote = `Desempate por saldo de games no confronto direto: vitórias diretas empatadas ${h2h.p1Wins}–${h2h.p2Wins}; saldo -${winnerDiff} (${loserGames}–${winnerGames})`;
         return [winner, loser];
       }
     }
@@ -264,8 +268,8 @@ const resolvePlayerTies = (
     if (Math.abs(pct1 - pct2) > 0.0001) {
       const higher = pct1 > pct2 ? p1 : p2;
       const lower = pct1 > pct2 ? p2 : p1;
-      higher.tieBreakNote = `Desempate por maior % de games: ${(Math.max(pct1, pct2) * 100).toFixed(1)}%`;
-      lower.tieBreakNote = `Desempate por maior % de games: ${(Math.min(pct1, pct2) * 100).toFixed(1)}%`;
+      higher.tieBreakNote = `Desempate por maior % de games: ${(Math.max(pct1, pct2) * 100).toFixed(1)}% (${higher.gamesWon}/${higher.gamesWon + higher.gamesLost})`;
+      lower.tieBreakNote = `Desempate por maior % de games: ${(Math.min(pct1, pct2) * 100).toFixed(1)}% (${lower.gamesWon}/${lower.gamesWon + lower.gamesLost})`;
       return [higher, lower];
     }
 
@@ -290,7 +294,7 @@ const resolvePlayerTies = (
       const subgroup = gamesDiffMap.get(diff)!;
       if (subgroup.length === 1) {
         const st = subgroup[0];
-        st.tieBreakNote = undefined;
+        st.tieBreakNote = `Desempate por saldo geral de games: ${formatSignedStat(st.gamesDiff)} (${st.gamesWon}–${st.gamesLost})`;
         result.push(st);
       } else {
         const resolved = resolvePlayerTies(subgroup, matches, technicalTieBreak, drawWinners);
@@ -317,7 +321,7 @@ const resolvePlayerTies = (
       const subgroup = gamesWonMap.get(won)!;
       if (subgroup.length === 1) {
         const st = subgroup[0];
-        st.tieBreakNote = undefined;
+        st.tieBreakNote = `Desempate por games pró: ${st.gamesWon}`;
         result.push(st);
       } else {
         const resolved = resolvePlayerTies(subgroup, matches, technicalTieBreak, drawWinners);
@@ -350,7 +354,7 @@ const resolvePlayerTies = (
       const subgroup = pctMap.get(pct)!;
       if (subgroup.length === 1) {
         const st = subgroup[0];
-        st.tieBreakNote = `Desempate por maior % de games: ${(Number(pct) * 100).toFixed(1)}%`;
+        st.tieBreakNote = `Desempate por maior % de games: ${(Number(pct) * 100).toFixed(1)}% (${st.gamesWon}/${st.gamesWon + st.gamesLost})`;
         result.push(st);
       } else {
         const resolved = resolvePlayerTies(subgroup, matches, technicalTieBreak, drawWinners);

@@ -21,6 +21,8 @@ export interface CategoryFormModalProps {
   gender1: 'M' | 'F';
   gender2: 'M' | 'F';
   maxPlayers: number;
+  startDate: string;
+  startTime: string;
   activeSports: FirebaseAdminSportIcon[];
   onNameChange: (val: string) => void;
   onDescriptionChange: (val: string) => void;
@@ -36,6 +38,8 @@ export interface CategoryFormModalProps {
   onGender1Change: (val: 'M' | 'F') => void;
   onGender2Change: (val: 'M' | 'F') => void;
   onMaxPlayersChange: (val: number) => void;
+  onStartDateChange: (val: string) => void;
+  onStartTimeChange: (val: string) => void;
   onSave: (e: React.FormEvent) => void;
   onDelete?: (id: string) => void;
   onCancel: () => void;
@@ -58,6 +62,8 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   gender1,
   gender2,
   maxPlayers,
+  startDate,
+  startTime,
   activeSports,
   onNameChange,
   onDescriptionChange,
@@ -73,6 +79,8 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   onGender1Change,
   onGender2Change,
   onMaxPlayersChange,
+  onStartDateChange,
+  onStartTimeChange,
   onSave,
   onDelete,
   onCancel,
@@ -178,6 +186,74 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           </select>
         </div>
 
+        {/* Linha 7: Prioridade e Gêneros */}
+        <div className="grid grid-cols-3 gap-3 pt-1">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Prioridade</label>
+            <input
+              type="number"
+              min={1}
+              value={priority}
+              onChange={(e) => onPriorityChange(Number(e.target.value))}
+              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 text-center"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 1</label>
+            <button
+              type="button"
+              onClick={() => onGender1Change(gender1 === 'M' ? 'F' : 'M')}
+              className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
+                gender1 === 'M'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-pink-500 text-white border-pink-500'
+              }`}
+              title="Clique para alternar entre M e F"
+            >
+              {gender1 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
+              {gender1 === 'M' ? 'M' : 'F'}
+            </button>
+          </div>
+
+          {format === 'Duplas' ? (
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 2</label>
+              <button
+                type="button"
+                onClick={() => onGender2Change(gender2 === 'M' ? 'F' : 'M')}
+                className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
+                  gender2 === 'M'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-pink-500 text-white border-pink-500'
+                }`}
+                title="Clique para alternar entre M e F"
+              >
+                {gender2 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
+                {gender2 === 'M' ? 'M' : 'F'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1 invisible">
+              <label className="text-[10px]">–</label>
+              <div className="h-11" />
+            </div>
+          )}
+        </div>
+
+        {/* Linha 6: Limite de jogadores */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 ml-1">Limite de jogadores (padrão: 8)</label>
+          <input
+            type="number"
+            min={1}
+            value={maxPlayers || 8}
+            onChange={(e) => onMaxPlayersChange(Math.max(1, Number(e.target.value) || 8))}
+            placeholder="8"
+            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
+          />
+        </div>
+
         {/* Campo: Pontuação */}
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 ml-1">Grupo de categorias</label>
@@ -202,6 +278,18 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           <p className="text-[10px] text-slate-500 ml-1">
             Define se a classificação considera os resultados de cada inscrito ou do time.
           </p>
+        </div>
+
+        {/* Data e hora inicial da categoria */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Data</label>
+            <input type="date" value={startDate} onChange={(e) => onStartDateChange(e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 ml-1">Hora inicial</label>
+            <input type="time" value={startTime} onChange={(e) => onStartTimeChange(e.target.value)} className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500" />
+          </div>
         </div>
 
         {format === 'Duplas' && (
@@ -266,73 +354,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           </div>
         )}
 
-        {/* Linha 6: Limite de jogadores */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black text-slate-400 ml-1">Limite de jogadores (padrão: 8)</label>
-          <input
-            type="number"
-            min={1}
-            value={maxPlayers || 8}
-            onChange={(e) => onMaxPlayersChange(Math.max(1, Number(e.target.value) || 8))}
-            placeholder="8"
-            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500"
-          />
-        </div>
 
-        {/* Linha 7: Prioridade e Gêneros */}
-        <div className="grid grid-cols-3 gap-3 pt-1">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Prioridade</label>
-            <input
-              type="number"
-              min={1}
-              value={priority}
-              onChange={(e) => onPriorityChange(Number(e.target.value))}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 font-bold text-xs outline-none focus:border-emerald-500 text-center"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 1</label>
-            <button
-              type="button"
-              onClick={() => onGender1Change(gender1 === 'M' ? 'F' : 'M')}
-              className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
-                gender1 === 'M'
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'bg-pink-500 text-white border-pink-500'
-              }`}
-              title="Clique para alternar entre M e F"
-            >
-              {gender1 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
-              {gender1 === 'M' ? 'M' : 'F'}
-            </button>
-          </div>
-
-          {format === 'Duplas' ? (
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 ml-1">Gênero 2</label>
-              <button
-                type="button"
-                onClick={() => onGender2Change(gender2 === 'M' ? 'F' : 'M')}
-                className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 border font-black text-xs transition-all active:scale-95 ${
-                  gender2 === 'M'
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-pink-500 text-white border-pink-500'
-                }`}
-                title="Clique para alternar entre M e F"
-              >
-                {gender2 === 'M' ? <MarsIcon size={18} /> : <VenusIcon size={18} />}
-                {gender2 === 'M' ? 'M' : 'F'}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-1 invisible">
-              <label className="text-[10px]">–</label>
-              <div className="h-11" />
-            </div>
-          )}
-        </div>
       </div>
 
       <div className="flex gap-3 pt-3">

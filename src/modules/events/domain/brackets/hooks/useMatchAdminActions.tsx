@@ -26,6 +26,7 @@ import {
 } from '@modules/events/services/matchGenerator';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
 import { exportCategoryCalculationWorksheetPdf } from '@modules/events/services/calculationWorksheetPdf';
+import { exportEventCalculationWorkbook } from '@modules/events/services/calculationWorksheetExcel';
 import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
 
 interface UseMatchAdminActionsOptions {
@@ -803,6 +804,16 @@ export function useMatchAdminActions({
     );
   };
 
+  const handleGenerateCalculationExcel = () => {
+    exportEventCalculationWorkbook(
+      event,
+      event.categories || [],
+      event.entries || [],
+      event.pairs || [],
+      event.matches || []
+    );
+  };
+
   return {
     isSuper8dDrawModalOpen,
     setIsSuper8dDrawModalOpen,
@@ -821,5 +832,6 @@ export function useMatchAdminActions({
     handleReopenMatch,
     handleGenerateBlankPdf,
     handleGenerateCalculationPdf,
+    handleGenerateCalculationExcel,
   };
 }

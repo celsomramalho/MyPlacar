@@ -5,6 +5,7 @@ import type {
   TournamentMatch,
   TournamentPair,
 } from '../types';
+import { getCategoryTieBreakCriteria } from './tieBreakCriteria';
 
 const escapeHtml = (value: unknown): string =>
   String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -50,32 +51,7 @@ export const exportCategoryCalculationWorksheetPdf = (
       .map((match) => match.phase?.match(/^rodada(\d+)$/i)?.[1])
       .filter((round): round is string => Boolean(round))
   ).size;
-  const tieBreakCriteria = isSuper8 && scoreTarget === 'Inscrito'
-    ? [
-        '1. Maior número de vitórias (critério principal).',
-        '2. Maior saldo de games (games pró menos games contra).',
-        '3. Maior número de games pró.',
-        '4. Confronto direto, somente quando restarem dois inscritos empatados em vitórias, saldo e games pró; considerar vitórias e, persistindo, saldo de games no confronto.',
-        '5. Maior percentual de games pró sobre o total de games disputados.',
-        `6. Persistindo igualdade: ${(category as any).technicalTieBreak || event.technicalTieBreak || 'rank compartilhado'} (conforme configuração da categoria).`,
-      ]
-    : isSuper8
-      ? [
-          '1. Maior número de vitórias.',
-          '2. Confronto direto, quando houver exatamente dois times empatados.',
-          ...(sets > 1 ? ['3. Maior saldo de sets.'] : []),
-          `${sets > 1 ? '4' : '3'}. Maior saldo de games.`,
-          `${sets > 1 ? '5' : '4'}. Maior percentual de games pró sobre o total de games disputados.`,
-          `${sets > 1 ? '6' : '5'}. Sorteio da comissão quando os critérios matemáticos permanecerem iguais.`,
-        ]
-      : [
-          '1. Maior número de vitórias na fase de classificação.',
-          '2. Confronto direto, quando aplicável.',
-          ...(sets > 1 ? ['3. Maior saldo de sets.'] : []),
-          `${sets > 1 ? '4' : '3'}. Maior saldo de games.`,
-          `${sets > 1 ? '5' : '4'}. Maior percentual de games pró sobre o total de games disputados.`,
-          `${sets > 1 ? '6' : '5'}. Sorteio/desempate técnico conforme regulamento da categoria.`,
-        ];
+  const tieBreakCriteria = getCategoryTieBreakCriteria(event, category, sets);
   const tieBreakHtml = tieBreakCriteria.map((criterion) => `<li>${escapeHtml(criterion)}</li>`).join('');
   const gamesPerSet = Number(category.gamesPerSet || event.gamesPerSet || event.config?.gamesPerSet || 6);
   const sortedMatches = [...matches].sort((a, b) =>
@@ -104,7 +80,7 @@ export const exportCategoryCalculationWorksheetPdf = (
       : '';
     return `<tr>
       <td>${escapeHtml(item.code)}</td><td>${escapeHtml(item.name)}</td><td>${victoryMarks}</td>
-      <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+      ${Array.from({ length: 9 }, () => '<td></td>').join('')}
     </tr>`;
   }).join('');
 
@@ -114,7 +90,7 @@ export const exportCategoryCalculationWorksheetPdf = (
       @page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font:10px Arial,sans-serif;color:#172033;margin:0}
       h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:0 0 8px}.meta{color:#475569;margin-bottom:12px}
       .page{page-break-after:always}.page:last-child{page-break-after:auto}.instructions{border:1px solid #94a3b8;border-radius:6px;padding:8px;margin:8px 0 12px;line-height:1.5}
-      table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{border:1px solid #64748b;padding:5px;text-align:center;height:30px;overflow:hidden}
+      table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{border:1px solid #64748b;padding:4px;text-align:center;height:27px;overflow:hidden}.standings{font-size:8px}.standings th,.standings td{padding:3px}
       th{background:#e2e8f0;font-size:9px}td:nth-child(2){text-align:left}.matches th:nth-child(1){width:12%}
       .matches th.score-head{width:8%}.match-code{font-weight:bold}.match-code small{display:block;font-weight:normal;color:#475569}
       .score-cell{padding:2px}.score-cell span{display:block;font-size:7px;color:#64748b}.score-cell i{display:inline-block;width:19px;height:16px;border:1px solid #94a3b8;margin:1px}
@@ -136,8 +112,8 @@ export const exportCategoryCalculationWorksheetPdf = (
     <section class="page">
       <h1>Apuração manual da classificação</h1>
       <div class="meta">${escapeHtml(event.name)} · ${escapeHtml(category.name)} · Apuração por <b>${escapeHtml(scoreTarget)}</b></div>
-      <div class="instructions"><b>Como apurar:</b> ${isSuper8 && roundCount > 0 ? `marque um círculo na coluna Vitórias para cada rodada vencida (há ${roundCount} rodadas). Se todos disputarem todas as rodadas, os círculos vazios representam derrotas.` : 'registre o total de vitórias na coluna correspondente.'} Saldo partidas = vitórias menos derrotas; saldos de games e sets = pró menos contra. Em pontuação por inscrito, lance os dados para cada participante; em pontuação por time, lance uma vez para cada dupla fixa. Cada linha corresponde a ${scoreTarget === 'Time' ? 'um time fixo' : 'um inscrito'}.</div>
-      <table class="standings"><thead><tr><th>Código</th><th>${scoreTarget === 'Time' ? 'Time' : 'Inscrito'}</th><th>Vitórias${isSuper8 && roundCount > 0 ? `<br><small>${roundCount} círculos = rodadas</small>` : ''}</th><th>Saldo partidas</th><th>Games pró</th><th>Games contra</th><th>Saldo games</th><th>Sets pró</th><th>Sets contra</th><th>Saldo sets</th></tr></thead><tbody>${standingRows || `<tr><td colspan="10">Nenhum ${scoreTarget === 'Time' ? 'time' : 'inscrito'} encontrado nesta categoria. Acrescente linhas antes da apuração.</td></tr>`}</tbody></table>
+      <div class="instructions"><b>Como apurar:</b> ${isSuper8 && roundCount > 0 ? `marque um círculo na coluna Vitórias para cada rodada vencida (há ${roundCount} rodadas). Se todos disputarem todas as rodadas, os círculos vazios representam derrotas.` : 'registre o total de vitórias na coluna correspondente.'} Saldo de games e sets = pró menos contra. Em pontuação individual, preencha as estatísticas de cada participante; em pontuação por time, uma linha por dupla fixa. As colunas do confronto direto só são usadas quando exatamente dois participantes permanecem empatados nos critérios anteriores.</div>
+      <table class="standings"><thead><tr><th>Código</th><th>${scoreTarget === 'Time' ? 'Time' : 'Inscrito'}</th><th>Vitórias${isSuper8 && roundCount > 0 ? `<br><small>${roundCount} círculos = rodadas</small>` : ''}</th><th>Games pró</th><th>Games contra</th><th>Saldo games</th><th>Vitórias confronto direto</th><th>Saldo games confronto direto</th><th>% games pró</th><th>Sets pró</th><th>Sets contra</th><th>Saldo sets</th></tr></thead><tbody>${standingRows || `<tr><td colspan="12">Nenhum ${scoreTarget === 'Time' ? 'time' : 'inscrito'} encontrado nesta categoria. Acrescente linhas antes da apuração.</td></tr>`}</tbody></table>
       <h2 style="margin-top:12px">Critérios de desempate</h2>
       <ol class="criteria">${tieBreakHtml}</ol>
       <div class="criteria-note"><b>Conferência:</b> anote também a ordem final e o critério aplicado nos empates. Se o regulamento da categoria divergir desta lista, prevalece o regulamento.</div>

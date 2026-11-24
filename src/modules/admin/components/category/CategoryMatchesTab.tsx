@@ -69,6 +69,18 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   const [viewMode, setViewMode] = useState<'status' | 'phase'>('status');
   const [isFinishedOpen, setIsFinishedOpen] = useState(true);
 
+  const hasFinishedSuper8Match = isSuper8 && categoryMatches.some((match) => match.status === 'finished');
+  const getMatchNumber = (match: TournamentMatch) => match.matchNumber || Number(match.matchCode?.match(/\d+/)?.[0]) || 0;
+  const getRoundNumber = (match: TournamentMatch) => Number(match.phase?.match(/rodada(\d+)/i)?.[1]) || 0;
+  const sortSuper8Matches = (items: TournamentMatch[]) => [...items].sort((a, b) => {
+    if (hasFinishedSuper8Match) {
+      const roundOrder = getRoundNumber(b) - getRoundNumber(a);
+      if (roundOrder) return roundOrder;
+      return getMatchNumber(b) - getMatchNumber(a);
+    }
+    return getMatchNumber(a) - getMatchNumber(b);
+  });
+
   const rawFilteredMatches = useMemo(
     () => filterMatchesBySearch(categoryMatches, searchQuery, pairsById),
     [categoryMatches, searchQuery, pairsById]
@@ -88,20 +100,20 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   }, [rawFilteredMatches]);
 
   const waitingMatches = useMemo(() => {
-    return rawFilteredMatches
-      .filter((m) => m.status === 'waiting')
-      .sort((a, b) => {
+    const waiting = rawFilteredMatches.filter((m) => m.status === 'waiting');
+    if (isSuper8) return sortSuper8Matches(waiting);
+    return waiting.sort((a, b) => {
         const posA = queuePosByMatchId?.get(a.id) ?? 9999;
         const posB = queuePosByMatchId?.get(b.id) ?? 9999;
         if (posA !== posB) return posA - posB;
         return (a.matchNumber || 0) - (b.matchNumber || 0);
       });
-  }, [rawFilteredMatches, queuePosByMatchId]);
+  }, [rawFilteredMatches, queuePosByMatchId, isSuper8, hasFinishedSuper8Match]);
 
   const finishedMatches = useMemo(() => {
-    return rawFilteredMatches
-      .filter((m) => m.status === 'finished')
-      .sort((a, b) => {
+    const finished = rawFilteredMatches.filter((m) => m.status === 'finished');
+    if (isSuper8) return sortSuper8Matches(finished);
+    return finished.sort((a, b) => {
         const timeA = a.finishedAt
           ? new Date(a.finishedAt).getTime()
           : a.startedAt
@@ -120,11 +132,11 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
         if (dateA !== dateB) return dateB.localeCompare(dateA);
         return (b.matchNumber || 0) - (a.matchNumber || 0);
       });
-  }, [rawFilteredMatches]);
+  }, [rawFilteredMatches, isSuper8, hasFinishedSuper8Match]);
 
   const sortedCategoryMatches = useMemo(
-    () => sortMatchesByDateDesc(categoryMatches),
-    [categoryMatches]
+    () => isSuper8 ? sortSuper8Matches(categoryMatches) : sortMatchesByDateDesc(categoryMatches),
+    [categoryMatches, isSuper8, hasFinishedSuper8Match]
   );
 
   const b1Matches = useMemo(
@@ -529,7 +541,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
               .sort(([k1], [k2]) => {
                 const n1 = Number(k1.replace(/\D/g, '')) || 0;
                 const n2 = Number(k2.replace(/\D/g, '')) || 0;
-                return n1 - n2;
+                return hasFinishedSuper8Match ? n2 - n1 : n1 - n2;
               })
               .map(([, v]) => v);
 
@@ -540,7 +552,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                   <span className="text-[10px] font-black text-slate-400">{round.matches.length} {round.matches.length === 1 ? 'jogo' : 'jogos'}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2.5">
-                  {sortMatchesByDateDesc(round.matches).map((m, idx) => renderItem(m, idx))}
+                  {sortSuper8Matches(round.matches).map((m, idx) => renderItem(m, idx))}
                 </div>
               </div>
             ));
