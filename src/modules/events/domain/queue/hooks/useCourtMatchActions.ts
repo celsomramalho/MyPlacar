@@ -103,7 +103,11 @@ export function useCourtMatchActions({
 }: UseCourtMatchActionsOptions): UseCourtMatchActionsResult {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saveStatusByMatch, setSaveStatusByMatch] = useState<Record<string, 'saved' | 'saving' | 'error'>>({});
+  const saveAttemptByMatchRef = useRef<Record<string, number>>({});
   const markMatchSaveStatus = useCallback((matchId: string, status: 'saved' | 'saving' | 'error') => {
+    if (status === 'saving') {
+      saveAttemptByMatchRef.current[matchId] = (saveAttemptByMatchRef.current[matchId] || 0) + 1;
+    }
     setSaveStatusByMatch((current) => current[matchId] === status ? current : { ...current, [matchId]: status });
   }, []);
 
@@ -112,7 +116,11 @@ export function useCourtMatchActions({
   const persistToFirestore = useCallback(
     async (payload: Partial<FirebaseTournamentEvent>, matchId?: string) => {
       if (!event.pin) return false;
-      if (matchId) markMatchSaveStatus(matchId, 'saving');
+      let saveAttempt = 0;
+      if (matchId) {
+        markMatchSaveStatus(matchId, 'saving');
+        saveAttempt = saveAttemptByMatchRef.current[matchId];
+      }
       try {
         if (isWatchDevice()) {
           if (!adminEmail || !adminPin) {
@@ -128,17 +136,17 @@ export function useCourtMatchActions({
             const body = await response.json().catch(() => ({}));
             throw new Error(body.error || 'Não foi possível sincronizar a fila do relógio.');
           }
-          if (matchId) markMatchSaveStatus(matchId, 'saved');
+          if (matchId && saveAttemptByMatchRef.current[matchId] === saveAttempt) markMatchSaveStatus(matchId, 'saved');
           return true;
         }
         const db = getDb();
         if (!db) throw new Error('Não foi possível conectar ao Firestore.');
         const { updateEvent } = await import('@infra/firebase/events');
         await updateEvent(db as Firestore, event.pin, payload);
-        if (matchId) markMatchSaveStatus(matchId, 'saved');
+        if (matchId && saveAttemptByMatchRef.current[matchId] === saveAttempt) markMatchSaveStatus(matchId, 'saved');
         return true;
       } catch (err) {
-        if (matchId) markMatchSaveStatus(matchId, 'error');
+        if (matchId && saveAttemptByMatchRef.current[matchId] === saveAttempt) markMatchSaveStatus(matchId, 'error');
         console.error('[useCourtMatchActions] Erro ao persistir no Firestore:', err);
         if (isWatchDevice() && typeof window !== 'undefined') {
           window.alert(err instanceof Error ? err.message : 'Não foi possível sincronizar a fila. Tente novamente.');
