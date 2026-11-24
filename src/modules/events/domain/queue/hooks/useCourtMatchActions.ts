@@ -33,6 +33,7 @@ export interface UseCourtMatchActionsOptions {
   onUpdateEvent?: (updated: TournamentEvent) => void;
   adminEmail?: string;
   adminPin?: string;
+  onSaveError?: (error: Error, matchId?: string) => void;
   /** Debounce em ms para persistência de placar/data. Padrão: 600ms */
   saveDebounceMs?: number;
 }
@@ -99,6 +100,7 @@ export function useCourtMatchActions({
   onUpdateEvent,
   adminEmail,
   adminPin,
+  onSaveError,
   saveDebounceMs = 600,
 }: UseCourtMatchActionsOptions): UseCourtMatchActionsResult {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,13 +150,17 @@ export function useCourtMatchActions({
       } catch (err) {
         if (matchId && saveAttemptByMatchRef.current[matchId] === saveAttempt) markMatchSaveStatus(matchId, 'error');
         console.error('[useCourtMatchActions] Erro ao persistir no Firestore:', err);
-        if (isWatchDevice() && typeof window !== 'undefined') {
-          window.alert(err instanceof Error ? err.message : 'Não foi possível sincronizar a fila. Tente novamente.');
+        const error = err instanceof Error ? err : new Error('Não foi possível sincronizar a fila. Tente novamente.');
+        if (matchId && saveAttemptByMatchRef.current[matchId] === saveAttempt) {
+          onSaveError?.(error, matchId);
+        }
+        if (!onSaveError && isWatchDevice() && typeof window !== 'undefined') {
+          window.alert(error.message);
         }
         return false;
       }
     },
-    [event.pin, adminEmail, adminPin, markMatchSaveStatus]
+    [event.pin, adminEmail, adminPin, markMatchSaveStatus, onSaveError]
   );
 
   const persistEventChanges = useCallback(

@@ -169,6 +169,15 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
     onUpdateEvent,
     adminEmail,
     adminPin,
+    onSaveError: (error, matchId) => {
+      const match = event.matches?.find((item) => item.id === matchId);
+      const matchLabel = match?.matchCode ? `Partida ${match.matchCode}` : 'Placar da partida';
+      setModalConfig({
+        title: 'Falha ao salvar no Firebase',
+        message: `${matchLabel} não foi confirmado no Firebase. Erro: ${error.message}`,
+        onConfirm: () => setModalConfig(null),
+      });
+    },
   });
 
   const handleToggleSelectCourt = (matchId: string) => {
