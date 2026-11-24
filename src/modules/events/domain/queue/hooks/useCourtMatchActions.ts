@@ -124,9 +124,13 @@ export function useCourtMatchActions({
         saveAttempt = saveAttemptByMatchRef.current[matchId];
       }
       try {
-        if (isWatchDevice()) {
+        // O celular e o relógio podem não ter uma sessão Firebase autorizada
+        // para gravar diretamente o documento do evento. Quando há credenciais
+        // do operador, usa a rota que valida admin, co-admin e juiz no servidor.
+        const shouldUseAuthorizedQueueApi = isWatchDevice() || Boolean(adminEmail && adminPin);
+        if (shouldUseAuthorizedQueueApi) {
           if (!adminEmail || !adminPin) {
-            throw new Error('O relógio não tem a identificação necessária para salvar a fila. Saia e entre novamente pelo celular.');
+            throw new Error('Este dispositivo não tem a identificação necessária para salvar a fila. Saia e entre novamente para atualizar suas permissões.');
           }
           const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
           const response = await fetch(`${baseUrl}/api/admin-save-event`, {
@@ -136,7 +140,7 @@ export function useCourtMatchActions({
           });
           if (!response.ok) {
             const body = await response.json().catch(() => ({}));
-            throw new Error(body.error || 'Não foi possível sincronizar a fila do relógio.');
+            throw new Error(body.error || 'Não foi possível sincronizar a fila.');
           }
           if (matchId && saveAttemptByMatchRef.current[matchId] === saveAttempt) markMatchSaveStatus(matchId, 'saved');
           return true;
