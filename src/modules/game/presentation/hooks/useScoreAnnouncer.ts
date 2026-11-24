@@ -227,6 +227,28 @@ const getTieBreakScoreText = (state: GameState): string => {
 const isTennisSport = (state: GameState) =>
   state.matchConfig.sportType === 'tennis' || state.matchConfig.sportType === 'beach-tennis';
 
+const buildFullScoreAnnouncement = (gameState: GameState): string => {
+  const isTB = isTennisTieBreak(gameState);
+  const serverName = getServerName(gameState);
+  const [gamesServ, gamesRecv] = getGamesFromServer(gameState);
+  if (isTB) {
+    return `${TIE_BREAK_TTS}, ${getTieBreakScoreText(gameState)}, saque ${saquePrep(serverName, getServerGender(gameState))}.`;
+  }
+  return `Placar do set ${numToWord(gamesServ)} a ${numToWord(gamesRecv)}, placar do game ${getGameScoreText(gameState)}, saque ${saquePrep(serverName, getServerGender(gameState))}.`;
+};
+
+const getTournamentScoreKey = (gameState: GameState): string => [
+  gameState.p1.score,
+  gameState.p2.score,
+  gameState.p1.games,
+  gameState.p2.games,
+  gameState.p1.sets.join(','),
+  gameState.p2.sets.join(','),
+  gameState.currentSet,
+  gameState.server,
+  gameState.servingOrderOffset,
+].join('|');
+
 const wouldWinSet = (winnerGames: number, loserGames: number, gamesLimit: number): boolean => {
   const wg = winnerGames + 1;
   if (wg >= gamesLimit && wg >= loserGames + 2) return true;
@@ -467,6 +489,7 @@ export const useScoreAnnouncer = (gameState: GameState) => {
   const prevSet            = useRef(gameState.currentSet);
   const prevP1Gender = useRef(gameState.p1?.gender);
   const prevP2Gender = useRef(gameState.p2?.gender);
+  const prevTournamentScoreKey = useRef(getTournamentScoreKey(gameState));
   const announcedStartFor  = useRef<string | null>(null);
   const announcedFinishFor = useRef<string | null>(null);
   const lastAnnouncedText  = useRef<string>('');
@@ -510,22 +533,8 @@ export const useScoreAnnouncer = (gameState: GameState) => {
   // Pickleball usa usePickleballAnnouncer.announceFullScore.
   const announceFullScore = useCallback(() => {
     if (!isTennisSport(gameState)) return;
-    const isTB = isTennisTieBreak(gameState);
-    const serverName = getServerName(gameState);
-    const [gamesServ, gamesRecv] = getGamesFromServer(gameState);
-    let text: string;
-    if (isTB) {
-      const tbScore = getTieBreakScoreText(gameState);
-      text = `${TIE_BREAK_TTS}, ${tbScore}, saque ${saquePrep(serverName, getServerGender(gameState))}.`;
-    } else {
-      const gameScore = getGameScoreText(gameState);
-      text = (
-        `Placar do set ${numToWord(gamesServ)} a ${numToWord(gamesRecv)}, ` +
-        `placar do game ${gameScore}, saque ${saquePrep(serverName, getServerGender(gameState))}.`
-      );
-    }
     lastAnnouncedText.current = '';
-    announce(text);
+    announce(buildFullScoreAnnouncement(gameState));
   }, [gameState, announce]);
 
   // Limpa os timers de debounce se o componente for desmontado
@@ -543,6 +552,7 @@ export const useScoreAnnouncer = (gameState: GameState) => {
 
     const currentPointCount = gameState?.pointHistory?.length ?? 0;
     const currentIsTB = isTennisTieBreak(gameState);
+    const currentTournamentScoreKey = getTournamentScoreKey(gameState);
 
     // Se o gender mudou (usuário alterou na tela de nomes e clicou Play),
     // só reseta o guard se a partida ainda não teve seu início anunciado.
@@ -566,6 +576,13 @@ export const useScoreAnnouncer = (gameState: GameState) => {
       prevIsTB.current = false;
       prevServer.current = gameState.server;
       prevOffset.current = gameState.servingOrderOffset;
+      prevTournamentScoreKey.current = currentTournamentScoreKey;
+      if (gameState.tournamentMatchId) {
+        // Partidas abertas pela fila já têm placar; anuncie o estado atual, sem tratar como 0–0.
+        lastAnnouncedText.current = '';
+        announceRef.current(buildFullScoreAnnouncement(gameState));
+        return;
+      }
       // Captura snapshot do gameState para o texto (evita closure stale)
       const capturedState = gameState;
       const scheduleStart = () => {
@@ -582,8 +599,19 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     }
 
     const pointChanged  = currentPointCount !== prevPointCount.current;
+    const tournamentScoreChanged = !!gameState.tournamentMatchId && currentTournamentScoreKey !== prevTournamentScoreKey.current;
     const serverChanged = gameState.server !== prevServer.current;
-    if (!pointChanged && !serverChanged) return;
+    prevTournamentScoreKey.current = currentTournamentScoreKey;
+    if (!pointChanged && !serverChanged && !tournamentScoreChanged) return;
+
+    if (tournamentScoreChanged && !pointChanged) {
+      announceRef.current(buildFullScoreAnnouncement(gameState));
+      prevTournamentScoreKey.current = currentTournamentScoreKey;
+      prevServer.current = gameState.server;
+      prevOffset.current = gameState.servingOrderOffset;
+      prevSet.current = gameState.currentSet;
+      return;
+    }
 
     // Controle de anúncios em rajada (reconexão / perda de sincronismo)
     const now = Date.now();
@@ -654,6 +682,7 @@ export const useScoreAnnouncer = (gameState: GameState) => {
     // garante que sempre usamos a versão mais recente sem re-executar o effect
     // por mudanças de configuração de voz (que causavam anúncios duplicados no live).
     gameState?.pointHistory?.length,
+    gameState.tournamentMatchId ? getTournamentScoreKey(gameState) : null,
     gameState.isMatchOver,
     gameState.matchId,
     gameState.p1?.gender,
