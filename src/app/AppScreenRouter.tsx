@@ -32,6 +32,7 @@ import { useInstallPwa } from '@pwa/installPrompt';
 import { useGameRules } from '@modules/game/hooks/useGameRules.ts';
 import { useVersionTap } from '@app/hooks/useVersionTap';
 import { GlobalOverlays } from '@app/shell/GlobalOverlays';
+import { fetchEventByPinFromServer, getDb } from '@infra/firebase';
 
 export interface AppScreenRouterProps {
   authReady: boolean;
@@ -372,8 +373,60 @@ export const AppScreenRouter: React.FC<AppScreenRouterProps> = ({
               setActiveTab={setActiveTab}
               setInitialConfirmDeleteJudge={setInitialConfirmDeleteJudge}
               onRegisterReplayTour={(fn) => { replayTourScoreboardRef.current = fn; }}
-              canReturnToQueue={!!activeEvent?.pin && queueOnlyEventPin === activeEvent.pin.toUpperCase() && gameState?.tournamentPin?.toUpperCase() === activeEvent.pin.toUpperCase()}
-              onReturnToQueue={() => setCurrentScreen('event-detail')}
+              canReturnToCategory={!!gameState?.isTournamentReadOnly && !!gameState?.tournamentMatchId && !!gameState?.tournamentPin}
+              onReturnToCategory={async () => {
+                const eventPin = gameState?.tournamentPin;
+                if (!eventPin || !gameState?.tournamentMatchId) return;
+                const normalizedPin = eventPin.toUpperCase();
+                try {
+                  sessionStorage.setItem('myPlacarReturnToEventMatches', JSON.stringify({
+                    pin: normalizedPin,
+                    categoryId: gameState.tournamentReturnCategoryId || '',
+                  }));
+                } catch { /* Navegação segue mesmo sem sessionStorage disponível. */ }
+                setQueueOnlyEventPin(null);
+                if (activeEvent?.pin.toUpperCase() === normalizedPin) {
+                  setCurrentScreen('event-detail');
+                  return;
+                }
+                try {
+                  const db = getDb();
+                  if (!db) throw new Error('Não foi possível conectar ao Firebase.');
+                  const event = await fetchEventByPinFromServer(db, eventPin);
+                  if (!event) throw new Error('O evento vinculado a esta partida não foi encontrado.');
+                  handleSelectEvent(event as unknown as TournamentEvent);
+                } catch (error) {
+                  setModalConfig({
+                    title: 'Não foi possível abrir Partidas',
+                    message: error instanceof Error ? error.message : 'Falha ao carregar o evento vinculado.',
+                    onConfirm: () => setModalConfig(null),
+                  });
+                }
+              }}
+              canReturnToQueue={!gameState?.isTournamentReadOnly && !!gameState?.tournamentQueueReturnToCompact && !!gameState?.tournamentMatchId && !!gameState?.tournamentPin}
+              onReturnToQueue={async () => {
+                const eventPin = gameState?.tournamentPin;
+                if (!eventPin || !gameState?.tournamentMatchId) return;
+                const normalizedPin = eventPin.toUpperCase();
+                setQueueOnlyEventPin(normalizedPin);
+                if (activeEvent?.pin.toUpperCase() === normalizedPin) {
+                  setCurrentScreen('event-detail');
+                  return;
+                }
+                try {
+                  const db = getDb();
+                  if (!db) throw new Error('Não foi possível conectar ao Firebase.');
+                  const event = await fetchEventByPinFromServer(db, eventPin);
+                  if (!event) throw new Error('O evento vinculado a esta partida não foi encontrado.');
+                  handleSelectEvent(event as unknown as TournamentEvent);
+                } catch (error) {
+                  setModalConfig({
+                    title: 'Não foi possível abrir Gerenciar fila',
+                    message: error instanceof Error ? error.message : 'Falha ao carregar o evento vinculado.',
+                    onConfirm: () => setModalConfig(null),
+                  });
+                }
+              }}
             />
           )}
 

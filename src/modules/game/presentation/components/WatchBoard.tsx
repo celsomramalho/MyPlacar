@@ -60,6 +60,8 @@ interface WatchBoardProps {
   onToggleScoreboardMode?: () => void;
   onOpenRules?: () => void;
   onExitOffline?: () => void;
+  canReturnToCategory?: boolean;
+  onReturnToCategory?: () => void;
   canReturnToQueue?: boolean;
   onReturnToQueue?: () => void;
   isQueueMatch?: boolean;
@@ -101,7 +103,7 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
   isAudioLocked, unlockAudio, announceFullScore, handleUndoWithLog,
   isDimmed, setIsDimmed, resetDimTimer, dimProgress = 0, isCommandOwner, onResetMatch, onOpenLiveControl, onSyncScoreboard, remoteActionFeedback,
   p1WonSets, p2WonSets, isOfflineMode, handleScoreCardPointerDown, handlePointerMove, handleScoreCardPointerUp,
-  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline, canReturnToQueue, onReturnToQueue, isQueueMatch = false, queueScoreSaveStatus = 'saved', onRefreshQueueMatch
+  isEmbedded, scorePressProgress, cloudLiveExists, role, fbSyncStatus, lastFirebaseAckAt = Date.now(), onVoiceToggle, isVoiceActive, onToggleWatchMode, onToggleScoreboardMode, onOpenRules, onExitOffline, canReturnToCategory, onReturnToCategory, canReturnToQueue, onReturnToQueue, isQueueMatch = false, queueScoreSaveStatus = 'saved', onRefreshQueueMatch
 }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { setMatchSettings } = useGame();
@@ -901,18 +903,18 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                 );
               })()}
 
-              {/* Regras */}
-              <button
-                onClick={() => { setIsMenuOpen(false); onOpenRules?.(); }}
-                className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
-              >
-                <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl">
-                  <Settings size={18} />
-                </div>
-                <span className="font-black text-sm">Regras</span>
-              </button>
-
-              {canReturnToQueue && onReturnToQueue && (
+              {canReturnToCategory && onReturnToCategory ? (
+                <button
+                  type="button"
+                  onClick={() => { setIsMenuOpen(false); onReturnToCategory(); }}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
+                >
+                  <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-blue-500 rounded-xl">
+                    <ListTodo size={18} />
+                  </div>
+                  <span className="font-black text-sm">Partidas</span>
+                </button>
+              ) : canReturnToQueue && onReturnToQueue ? (
                 <button
                   type="button"
                   onClick={() => { setIsMenuOpen(false); onReturnToQueue(); }}
@@ -922,6 +924,16 @@ export const WatchBoard: React.FC<WatchBoardProps> = ({
                     <ListTodo size={18} />
                   </div>
                   <span className="font-black text-sm">Gerenciar fila</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setIsMenuOpen(false); onOpenRules?.(); }}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/5 active:bg-white/10 text-white transition-colors"
+                >
+                  <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-500 rounded-xl">
+                    <Settings size={18} />
+                  </div>
+                  <span className="font-black text-sm">Regras</span>
                 </button>
               )}
 

@@ -242,12 +242,26 @@ export function useCourtMatchActions({
               courtDurationMinutes: undefined,
               warmupStartedAt: undefined,
               courtStage: 'warmup' as const,
+              // Preserve the current serve rotation when resuming a scored match.
+              ...(() => {
+                const hasStartedScore = (m.scores || []).some((score) =>
+                  Number(score?.p1 || 0) > 0 || Number(score?.p2 || 0) > 0 ||
+                  (score?.gameP1 && score.gameP1 !== '0') || (score?.gameP2 && score.gameP2 !== '0')
+                ) || Boolean(m.result?.trim());
+                return hasStartedScore ? {
+                  servingOrderOffset: m.servingOrderOffset,
+                  initialServingOrderOffset: m.initialServingOrderOffset,
+                  initialServeOrderP1Reversed: m.initialServeOrderP1Reversed,
+                  initialServeOrderP2Reversed: m.initialServeOrderP2Reversed,
+                } : {
+                  servingOrderOffset: undefined,
+                  initialServingOrderOffset: undefined,
+                  initialServeOrderP1Reversed: undefined,
+                  initialServeOrderP2Reversed: undefined,
+                };
+              })(),
               scoreStartedAt: undefined,
               scoreFinishedAt: undefined,
-              servingOrderOffset: undefined,
-              initialServingOrderOffset: undefined,
-              initialServeOrderP1Reversed: undefined,
-              initialServeOrderP2Reversed: undefined,
               matchDate: m.matchDate || todayDate,
             }
       );

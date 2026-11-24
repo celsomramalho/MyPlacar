@@ -522,7 +522,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
   }, [canTapScore, activeMatch, getActiveSetIdx, scores, applySetScore]);
 
   const handleScoreInput = (setIdx: number, player: 'p1' | 'p2', val: string) => {
-    if (!activeMatch) return;
+    if (!activeMatch || isReadOnly || canTapScore) return;
     const existing = latestScoresRef.current[setIdx] || {
       p1: scores[setIdx]?.p1 !== null && scores[setIdx]?.p1 !== undefined ? String(scores[setIdx].p1) : '0',
       p2: scores[setIdx]?.p2 !== null && scores[setIdx]?.p2 !== undefined ? String(scores[setIdx].p2) : '0',
@@ -664,7 +664,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                 {categoryColor && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor.indicatorColor }} />}
                 {activeCat?.abbreviation || activeCat?.name || ''}
                 {activeCat && ' · '}
-                {phaseLabel}
+                {phaseLabel} · #{matchCodeLabel}
               </span>
               {activeMatch.startedAt && (
                 <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
@@ -673,9 +673,6 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-black text-slate-800 whitespace-nowrap">
-                [{matchCodeLabel}] {phaseLabel ? `[${phaseLabel}]` : ''}
-              </span>
               <button
                 type="button"
                 onClick={() => onRefreshEventScore(activeMatch.id)}
@@ -685,7 +682,7 @@ export const CourtCard: React.FC<CourtCardProps> = ({
               >
                 <RefreshCw size={isWatch ? 18 : 14} className={refreshingMatchId === activeMatch.id ? 'animate-spin' : ''} />
               </button>
-              {isWatch && onToggleWatchMode && (
+              {courtStage === 'match' && onToggleWatchMode && (
                 <button
                   type="button"
                   onClick={() => onToggleWatchMode(activeMatch.id)}
@@ -790,8 +787,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={2}
-                    disabled={isReadOnly}
-                    readOnly={isReadOnly}
+                    disabled={isReadOnly || canTapScore}
+                    readOnly={isReadOnly || canTapScore}
                     value={scores[0]?.p1 !== null && scores[0]?.p1 !== undefined ? scores[0].p1 : ''}
                     onChange={(e) => handleScoreInput(0, 'p1', e.target.value)}
                     onBlur={() => onScoreBlur(activeMatch?.id)}
@@ -903,8 +900,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={2}
-                    disabled={isReadOnly}
-                    readOnly={isReadOnly}
+                    disabled={isReadOnly || canTapScore}
+                    readOnly={isReadOnly || canTapScore}
                     value={scores[0]?.p2 !== null && scores[0]?.p2 !== undefined ? scores[0].p2 : ''}
                     onChange={(e) => handleScoreInput(0, 'p2', e.target.value)}
                     onBlur={() => onScoreBlur(activeMatch?.id)}
@@ -976,8 +973,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                         inputMode="numeric"
                         pattern="[0-9]*"
                         maxLength={2}
-                        disabled={isReadOnly}
-                        readOnly={isReadOnly}
+                        disabled={isReadOnly || canTapScore}
+                        readOnly={isReadOnly || canTapScore}
                         value={setScore.p1 !== null && setScore.p1 !== undefined ? setScore.p1 : ''}
                         onChange={(e) => handleScoreInput(setIdx, 'p1', e.target.value)}
                         onBlur={() => onScoreBlur(activeMatch?.id)}
@@ -1108,8 +1105,8 @@ export const CourtCard: React.FC<CourtCardProps> = ({
                         inputMode="numeric"
                         pattern="[0-9]*"
                         maxLength={2}
-                        disabled={isReadOnly}
-                        readOnly={isReadOnly}
+                        disabled={isReadOnly || canTapScore}
+                        readOnly={isReadOnly || canTapScore}
                         value={setScore.p2 !== null && setScore.p2 !== undefined ? setScore.p2 : ''}
                         onChange={(e) => handleScoreInput(setIdx, 'p2', e.target.value)}
                         onBlur={() => onScoreBlur(activeMatch?.id)}

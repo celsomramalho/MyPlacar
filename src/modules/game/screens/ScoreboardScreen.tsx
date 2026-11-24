@@ -114,6 +114,8 @@ interface Props {
   setVoiceLogs?: (logs: any[] | ((prev: any[]) => any[])) => void;
   onToggleScoreboardMode?: () => void;
   onRegisterReplayTour?: (fn: () => void) => void;
+  canReturnToCategory?: boolean;
+  onReturnToCategory?: () => void;
   canReturnToQueue?: boolean;
   onReturnToQueue?: () => void;
   onRefreshQueueMatch?: () => Promise<void>;
@@ -308,7 +310,7 @@ export const MatchTimeline: React.FC<{ history: PointEvent[]; p1Sets: number[]; 
 };
 
 export const ScoreboardScreen: React.FC<Props> = (props) => {
-  const { onScoreUpdate, onUndo, onSwitchServer, onSwapSides, onToggleGender, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode, onRegisterReplayTour, canReturnToQueue, onReturnToQueue, onRefreshQueueMatch } = props;
+  const { onScoreUpdate, onUndo, onSwitchServer, onSwapSides, onToggleGender, onTogglePause, onBack, onHome, onNavigateToTab, isSettingsInicialSaved, isSettingsRegrasSaved, onToggleMirroring, onToggleWatchMode, onCorrectScore, isAdmin, onConfirmMatch, isRecoveryFromMatchOver, currentDeviceId, currentDeviceFullLabel, onOpenLiveControl, onSyncScoreboard, onResetMatch, onOpenMenu, isOfflineMode, onExitOffline, appUrl, judgePinInput, setJudgePinInput, isSearchingJudgePin, judgeNicknameLookup, isSavingJudge, onAddJudge, onDeleteJudge, isJudgeOnline, onSelectJudgeFromPartners, voiceLogs, setVoiceLogs, onDeleteLive, onToggleScoreboardMode, onRegisterReplayTour, canReturnToCategory, onReturnToCategory, canReturnToQueue, onReturnToQueue, onRefreshQueueMatch } = props;
 
   // ── Onboarding / Tour Guiado ─────────────────────────────────────────────
   const {
@@ -414,6 +416,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   const [dimProgress, setDimProgress] = useState(0);
   const dimTimeoutRef = useRef<number | null>(null);
   const dimProgressIntervalRef = useRef<number | null>(null);
+  const isClockDevice = isWatchDevice();
 
   const currentGameStateRef = useRef(effectiveGameState);
   const pendingLogIdRef = useRef<string | null>(null);
@@ -704,10 +707,11 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const isCommandOwner = useMemo(() => {
+    if (effectiveGameState.isTournamentReadOnly) return false;
     if (isOfflineMode) return true;
     if (!effectiveGameState.isMirroringActive) return true;
     return currentDeviceId === effectiveGameState.commandOwnerId;
-  }, [isOfflineMode, effectiveGameState.isMirroringActive, effectiveGameState.commandOwnerId, currentDeviceId]);
+  }, [isOfflineMode, effectiveGameState.isTournamentReadOnly, effectiveGameState.isMirroringActive, effectiveGameState.commandOwnerId, currentDeviceId]);
 
   const isLiveActive = useMemo(() => {
     return !!(effectiveGameState.isMirroringActive && !(effectiveGameState.isMirroringActive && effectiveGameState.isLiveClosed)) || !!effectiveCloudLiveExists;
@@ -734,24 +738,26 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
     if (dimProgressIntervalRef.current) clearInterval(dimProgressIntervalRef.current);
     setDimProgress(0);
-  if (effectiveGameState.matchConfig.isWatchMode) {
-      const timeoutSec = (effectiveGameState.matchConfig.screenDimTimeout || 10);
-      const timeoutMs = timeoutSec * 1000;
-      const startTime = Date.now();
-      // Atualiza a barra de progresso a cada 200ms
-      dimProgressIntervalRef.current = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const pct = Math.min((elapsed / timeoutMs) * 100, 100);
-        setDimProgress(pct);
-        if (pct >= 100 && dimProgressIntervalRef.current !== null) clearInterval(dimProgressIntervalRef.current);
-      }, 200);
-      dimTimeoutRef.current = setTimeout(() => {
-        if (dimProgressIntervalRef.current !== null) clearInterval(dimProgressIntervalRef.current);
-        setDimProgress(0);
-        setIsDimmed(true);
-      }, timeoutMs);
+    if (!isClockDevice || !effectiveGameState.matchConfig.isWatchMode) {
+      setIsDimmed(false);
+      return;
     }
-  }, [effectiveGameState.matchConfig.isWatchMode, effectiveGameState.matchConfig.screenDimTimeout]);
+    const timeoutSec = effectiveGameState.matchConfig.screenDimTimeout || 10;
+    const timeoutMs = timeoutSec * 1000;
+    const startTime = Date.now();
+    // Atualiza a barra de progresso a cada 200ms
+    dimProgressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.min((elapsed / timeoutMs) * 100, 100);
+      setDimProgress(pct);
+      if (pct >= 100 && dimProgressIntervalRef.current !== null) clearInterval(dimProgressIntervalRef.current);
+    }, 200);
+    dimTimeoutRef.current = setTimeout(() => {
+      if (dimProgressIntervalRef.current !== null) clearInterval(dimProgressIntervalRef.current);
+      setDimProgress(0);
+      setIsDimmed(true);
+    }, timeoutMs);
+  }, [isClockDevice, effectiveGameState.matchConfig.isWatchMode, effectiveGameState.matchConfig.screenDimTimeout]);
 
   useEffect(() => {
     resetDimTimer();
@@ -1120,7 +1126,7 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
     if (scoreProgressIntervalRef.current) clearInterval(scoreProgressIntervalRef.current);
     setScorePressProgress(null);
     
-    if (!isLongPressActive.current && !hasDraggedRef.current && correctionMode === 'none' && !currentGameStateRef.current.isConfirmedFinished && !currentGameStateRef.current.isMatchOver && !(currentGameStateRef.current.isMirroringActive && currentGameStateRef.current.isLiveClosed)) {
+    if (!isLongPressActive.current && !hasDraggedRef.current && correctionMode === 'none' && !currentGameStateRef.current.isTournamentReadOnly && isCommandOwner && !currentGameStateRef.current.isConfirmedFinished && !currentGameStateRef.current.isMatchOver && !(currentGameStateRef.current.isMirroringActive && currentGameStateRef.current.isLiveClosed)) {
       if (currentGameStateRef.current.isMirroringActive && !isCommandOwner) return;
       
       // Item 8: Retirar incremento do placar do game nos botões de set (matchSet) e gameSet
@@ -1295,6 +1301,8 @@ export const ScoreboardScreen: React.FC<Props> = (props) => {
           onToggleScoreboardMode={onToggleScoreboardMode}
           onOpenRules={() => onNavigateToTab?.('regras')}
           onExitOffline={onExitOffline}
+          canReturnToCategory={canReturnToCategory}
+          onReturnToCategory={onReturnToCategory}
           canReturnToQueue={canReturnToQueue}
           onReturnToQueue={onReturnToQueue}
           isQueueMatch={canReturnToQueue}

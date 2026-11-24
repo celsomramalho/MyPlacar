@@ -23,6 +23,8 @@ interface ScoreboardRouteProps {
   /** Setter do AppScreenRouter — ativa o LiveControlOverlay em modo "confirmar exclusão de juiz" */
   setInitialConfirmDeleteJudge: React.Dispatch<React.SetStateAction<boolean>>;
   onRegisterReplayTour?: (fn: () => void) => void;
+  canReturnToCategory?: boolean;
+  onReturnToCategory?: () => void;
   canReturnToQueue?: boolean;
   onReturnToQueue?: () => void;
 }
@@ -41,6 +43,8 @@ export function ScoreboardRoute({
   setActiveTab,
   setInitialConfirmDeleteJudge,
   onRegisterReplayTour,
+  canReturnToCategory = false,
+  onReturnToCategory,
   canReturnToQueue = false,
   onReturnToQueue,
 }: ScoreboardRouteProps) {
@@ -255,9 +259,11 @@ export function ScoreboardRoute({
       voiceLogs={voiceLogs}
       setVoiceLogs={setVoiceLogs}
       onRegisterReplayTour={onRegisterReplayTour}
+      canReturnToCategory={canReturnToCategory}
+      onReturnToCategory={onReturnToCategory}
       canReturnToQueue={canReturnToQueue}
       onReturnToQueue={onReturnToQueue}
-      onRefreshQueueMatch={canReturnToQueue ? refreshQueueMatchFromFirebase : undefined}
+      onRefreshQueueMatch={canReturnToQueue && !gameState.isTournamentReadOnly ? refreshQueueMatchFromFirebase : undefined}
     />
   );
 }

@@ -42,6 +42,15 @@ export function EventDetailRoute({
       onStartTournamentMatch={(match, pair1, pair2, ev) =>
         initGameState(true, { match, pair1, pair2, event: ev })
       }
+      onOpenTournamentWatchMode={(match, pair1, pair2, ev) =>
+        initGameState(true, { match, pair1, pair2, event: ev }, {
+          preserveLiveDocument: true,
+          forceWatchMode: true,
+          skipMarkTournamentLive: true,
+          tournamentReadOnly: true,
+          tournamentQueueReturnToCompact: false,
+        })
+      }
       setModalConfig={setModalConfig}
       onOpenCommunications={() => setCurrentScreen('communications')}
       unreadCount={unreadCommsCount}

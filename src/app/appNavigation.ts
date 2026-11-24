@@ -9,13 +9,10 @@ export const getInitialScreen = (): Screen => {
     const _viewMode = new URLSearchParams(window.location.search).get('viewMode');
     const _viewPin = new URLSearchParams(window.location.search).get('viewPin');
     const _viewMatch = new URLSearchParams(window.location.search).get('viewMatch');
-    console.log('[DEBUG currentScreen init] viewMode:', _viewMode, 'viewPin:', _viewPin, 'viewMatch:', _viewMatch);
     if (_viewPin && _viewMode === 'scoreboard') {
-      console.log('[DEBUG] → public-scoreboard');
       return 'public-scoreboard';
     }
     if (_viewMatch || _viewPin) {
-      console.log('[DEBUG] → spectator');
       return 'spectator';
     }
 

@@ -5,8 +5,6 @@ import { EventFormedTeamsView } from '@modules/admin/components/EventFormedTeams
 import { isCoAdminOfEvent, isJudgeOfEvent, isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 import { getDb, subscribeEventByPin } from '@infra/firebase';
 import type { UserProfile } from '@modules/auth/types';
-import { useGame } from '@modules/game';
-import { useUI } from '@modules/ui';
 
 interface QueueOnlyRouteProps {
   event: TournamentEvent;
@@ -15,8 +13,6 @@ interface QueueOnlyRouteProps {
 }
 
 export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRouteProps) {
-  const { matchSettings, setMatchSettings, gameState, setGameState, initGameState } = useGame();
-  const { setCurrentScreen, setModalConfig } = useUI();
   const [currentEvent, setCurrentEvent] = useState(event);
   useEffect(() => {
     setCurrentEvent(event);
@@ -51,34 +47,6 @@ export function QueueOnlyRoute({ event, userProfile, onOpenMenu }: QueueOnlyRout
         adminEmail={userProfile.email}
         adminPin={userProfile.pin}
         compact
-        isWatchModeEnabled={!!matchSettings.isWatchMode}
-        onToggleWatchMode={(matchId) => {
-          const eventPin = currentEvent.pin.toUpperCase();
-          const match = currentEvent.matches?.find((candidate) => candidate.id === matchId);
-          const pair1 = match?.pair1 ?? currentEvent.pairs?.find((pair) => pair.id === match?.pair1Id);
-          const pair2 = match?.pair2 ?? currentEvent.pairs?.find((pair) => pair.id === match?.pair2Id);
-
-          if (!match || !pair1 || !pair2) {
-            setModalConfig({
-              title: 'Não foi possível abrir o placar',
-              message: 'Não encontrei os dados das duas duplas desta partida na fila.',
-              onConfirm: () => setModalConfig(null),
-            });
-            return;
-          }
-
-          setMatchSettings((current) => ({ ...current, isWatchMode: true, isScoreboardMode: false }));
-          if (gameState?.tournamentPin?.toUpperCase() === eventPin && gameState.tournamentMatchId === matchId) {
-            setGameState((current) => current ? {
-              ...current,
-              matchConfig: { ...current.matchConfig, isWatchMode: true, isScoreboardMode: false },
-            } : current);
-            setCurrentScreen('scoreboard');
-            return;
-          }
-
-          void initGameState(true, { match, pair1, pair2, event: currentEvent });
-        }}
       />
     </main>
   );

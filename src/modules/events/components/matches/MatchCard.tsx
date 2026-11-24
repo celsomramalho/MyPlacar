@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw, ArrowRightLeft, CircleDot, Dices, Loader2, RefreshCw } from 'lucide-react';
+import { Trophy, Clock, Trash2, Calendar, Check, Wifi, Play, MapPin, RotateCcw, ArrowRightLeft, CircleDot, Dices, Loader2, RefreshCw, Watch } from 'lucide-react';
 import type { TournamentEvent, TournamentMatch, TournamentPair } from '../../types';
 import { getPhaseLabel, parseMatchSets, isSetScoreComplete } from '../../domain/brackets';
 import { resolveCourtMinutes, resolveMatchRules } from '../../domain/rules/eventMatchRules';
@@ -50,6 +50,7 @@ export interface MatchCardProps {
   onReopenMatch?: (matchId: string) => void;
   onDeleteMatch?: (matchId: string) => void;
   onStartLiveMatch?: (match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair) => void;
+  onOpenWatchMode?: () => void;
 }
 
 const MatchCourtTimer: React.FC<{ startedAt?: string; averageMinutes?: number }> = ({ startedAt, averageMinutes }) => {
@@ -120,6 +121,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   onReopenMatch,
   onDeleteMatch,
   onStartLiveMatch,
+  onOpenWatchMode,
 }) => {
   const getPair = (pairId?: string, embedded?: TournamentPair): TournamentPair | undefined => {
     if (embedded) return embedded;
@@ -561,6 +563,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>
               {statusLabel}
             </span>
+            {isLive && onOpenWatchMode && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onOpenWatchMode(); }}
+                className="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 active:scale-95 transition-all"
+                title="Ver partida no modo relógio"
+                aria-label="Ver partida no modo relógio"
+              >
+                <Watch size={17} />
+              </button>
+            )}
             {isRanking && isWaiting && canSubmitScore && onStartLiveMatch && pair1 && pair2 && (
               <button
                 type="button"
@@ -679,6 +692,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black border ${statusColor}`}>
             {statusLabel}
           </span>
+          {isLive && onOpenWatchMode && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOpenWatchMode(); }}
+              className="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 active:scale-95 transition-all"
+              title="Ver partida no modo relógio"
+              aria-label="Ver partida no modo relógio"
+            >
+              <Watch size={17} />
+            </button>
+          )}
           {isRanking && isWaiting && canSubmitScore && onStartLiveMatch && pair1 && pair2 && (
             <button
               type="button"

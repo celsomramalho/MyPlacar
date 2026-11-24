@@ -147,7 +147,7 @@ export interface GameContextValue {
       pair2: TournamentPair;
       event: TournamentEvent;
     },
-    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean }
+    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean; tournamentReadOnly?: boolean; tournamentScoreUseAdminApi?: boolean; tournamentQueueReturnToCompact?: boolean }
   ) => Promise<void>;
 
   /**

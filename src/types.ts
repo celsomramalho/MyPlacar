@@ -251,6 +251,14 @@ export interface GameState {
   tournamentMatchCode?: string;
   tournamentPhaseLabel?: string;
   tournamentCourt?: string;
+  /** Categoria de origem para o retorno do atleta à aba Partidas. */
+  tournamentReturnCategoryId?: string;
+  /** Impede alterações locais quando atleta abre placar de fila em modo observação. */
+  isTournamentReadOnly?: boolean;
+  /** Usa a API autenticada de equipe do evento para gravar placares da fila. */
+  tournamentScoreUseAdminApi?: boolean;
+  /** Mostra o retorno à fila compacta quando o placar foi aberto por esse fluxo. */
+  tournamentQueueReturnToCompact?: boolean;
   /** @deprecated — usar `judge.pin`. Mantido para retrocompatibilidade com documentos antigos. */
   judgePin?: string;
   /** @deprecated — usar `judge.nickname`. Mantido para retrocompatibilidade com documentos antigos. */

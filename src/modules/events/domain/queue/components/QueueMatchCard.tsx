@@ -50,6 +50,11 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
   const isGreen = queueStatus === 'green';
   const isYellow = queueStatus === 'yellow';
   const isRed = queueStatus === 'red';
+  const savedScores = (match.scores || []).filter((score) =>
+    score.p1 != null || score.p2 != null ||
+    (score.gameP1 && score.gameP1 !== '0') || (score.gameP2 && score.gameP2 !== '0')
+  );
+  const isInterrupted = match.status === 'waiting' && savedScores.length > 0;
 
   return (
     <div
@@ -227,8 +232,9 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
         </div>
       )}
 
-      {/* Nomes dos Times */}
-      <div className="text-xs font-black text-slate-800 space-y-1 w-full">
+      {/* Nomes dos Times e placar retomável */}
+      <div className="flex items-center justify-between gap-2 w-full">
+      <div className="text-xs font-black text-slate-800 space-y-1 min-w-0 flex-1">
         <p className="whitespace-nowrap truncate w-full flex items-center gap-1">
           {match.pair1?.p1 && match.pair1?.p2 ? (
             [match.pair1.p1, match.pair1.p2].map((entry, index) => {
@@ -264,6 +270,39 @@ export const QueueMatchCard: React.FC<QueueMatchCardProps> = ({
           )}
         </p>
       </div>
+
+      {isInterrupted && (() => {
+        const current = savedScores[savedScores.length - 1];
+        const hasGameScore = current?.gameP1 !== undefined || current?.gameP2 !== undefined;
+        return (
+          <div className="shrink-0 grid grid-cols-[auto_auto] gap-x-1.5 gap-y-1 text-center items-center">
+            <span className="text-[9px] font-bold text-slate-400">Set</span>
+            {hasGameScore && <span className="text-[9px] font-bold text-slate-400">Game</span>}
+            <span className="min-w-7 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs font-black text-slate-800">
+              {current?.p1 ?? '–'}
+            </span>
+            {hasGameScore && <span className="min-w-7 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs font-black text-slate-800">{current?.gameP1 || '0'}</span>}
+            <span className="min-w-7 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs font-black text-slate-800">
+              {current?.p2 ?? '–'}
+            </span>
+            {hasGameScore && <span className="min-w-7 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs font-black text-slate-800">{current?.gameP2 || '0'}</span>}
+          </div>
+        );
+      })()}
+      </div>
+
+      {isInterrupted && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 space-y-1">
+          <p className="text-[11px] font-black text-amber-900">
+            Partida interrompida · aguardando retorno à quadra
+          </p>
+          {savedScores.length > 1 && (
+            <p className="text-[10px] font-bold text-amber-800">
+              Sets anteriores: {savedScores.slice(0, -1).map((score, index) => `S${index + 1} ${score.p1 ?? '–'}–${score.p2 ?? '–'}`).join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Alerta de Conflito */}
       {conflictReason && (

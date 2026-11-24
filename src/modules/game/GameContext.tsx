@@ -1087,6 +1087,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   }, [gameState, userProfile.pin, setIsSavingJudge, partners, setPartners, setModalConfig]);
 
   const persistTournamentScore = useCallback((state: GameState) => {
+    if (state.isTournamentReadOnly) return;
     if (!state.tournamentPin || !state.tournamentMatchId) return;
     const tournamentPin = state.tournamentPin;
     const tournamentMatchId = state.tournamentMatchId;
@@ -1100,13 +1101,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({
     const servingOrderOffset = state.servingOrderOffset;
     setTournamentScoreSaveStatus('saving');
     const writeSnapshot = async () => {
-      const watchCredentials = isWatchDevice()
+      const shouldUseAdminQueueApi = isWatchDevice() || state.tournamentScoreUseAdminApi === true;
+      const adminCredentials = shouldUseAdminQueueApi
         ? userProfile.email && userProfile.pin
           ? { adminEmail: userProfile.email, adminPin: userProfile.pin }
           : null
         : undefined;
-      if (isWatchDevice() && !watchCredentials) {
-        throw new Error('O relógio não tem autorização para salvar o placar do evento.');
+      if (shouldUseAdminQueueApi && !adminCredentials) {
+        throw new Error('Este dispositivo não tem autorização para salvar o placar do evento.');
       }
 
       const db = await getDbAsync();
@@ -1118,7 +1120,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
         tournamentMatchId,
         scores,
         servingOrderOffset,
-        watchCredentials || undefined,
+        adminCredentials || undefined,
       );
     };
 
@@ -1187,7 +1189,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   const handleScoreUpdate = useCallback((player: 1 | 2, type: PointType = 'rally', source: string = 'cb') => {
     setGameState(prev => {
-      if (!prev || prev.isConfirmedFinished || prev.isMatchOver || (prev.isMirroringActive && prev.isLiveClosed)) return prev;
+      if (!prev || prev.isTournamentReadOnly || prev.isConfirmedFinished || prev.isMatchOver || (prev.isMirroringActive && prev.isLiveClosed)) return prev;
       if (prev.isMirroringActive && prev.commandOwnerId !== deviceId) return prev;
       if (!prev.isMirroringActive && prev.judgePin && prev.commandOwnerId !== deviceId) return prev;
       
@@ -1211,7 +1213,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   const handleCorrectScore = useCallback((type: 'game' | 'gameSet' | 'matchSet', value: string, options?: { forceLocal?: boolean }) => {
     const forceLocal = options?.forceLocal === true;
-    if (!gameState || gameState.isMatchOver || (!forceLocal && gameState.isMirroringActive && gameState.isLiveClosed)) return;
+    if (!gameState || gameState.isTournamentReadOnly || gameState.isMatchOver || (!forceLocal && gameState.isMirroringActive && gameState.isLiveClosed)) return;
     if (!forceLocal && gameState.isMirroringActive && gameState.commandOwnerId !== deviceId) return;
     
     const match = value.toLowerCase().match(/(\d+|ad)\s*[a-]\s*(\d+|ad)/);
@@ -1248,7 +1250,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   const handleUndo = useCallback(() => {
     const isCommandOwner = !gameState?.isMirroringActive || gameState?.commandOwnerId === deviceId;
-    if (!gameState || !isCommandOwner) return;
+    if (!gameState || gameState.isTournamentReadOnly || !isCommandOwner) return;
     const stack = historyStackRef.current;
     const p = undoPoint(stack);
     if (p) {
@@ -1268,13 +1270,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({
 
   const handleSmartSwitchServer = useCallback(() => {
     const isCommandOwner = !gameState?.isMirroringActive || gameState?.commandOwnerId === deviceId;
-    if (!gameState || !isCommandOwner) return;
+    if (!gameState || gameState.isTournamentReadOnly || !isCommandOwner) return;
     setGameState(prev => prev ? { ...prev, server: prev.server === 1 ? 2 : 1 } : null);
   }, [gameState, deviceId, setGameState]);
 
   const handleTogglePause = useCallback(() => {
     const isCommandOwner = !gameState?.isMirroringActive || gameState?.commandOwnerId === deviceId;
-    if (!gameState || gameState.isConfirmedFinished || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner) return;
+    if (!gameState || gameState.isTournamentReadOnly || gameState.isConfirmedFinished || gameState.isMatchOver || (gameState.isMirroringActive && gameState.isLiveClosed) || !isCommandOwner) return;
     setGameState(p => {
       if (!p) return null;
       const isNowPaused = !p.isPaused;
@@ -1303,7 +1305,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   }, [setGameState, setHistoryStack, setLiveLogs, setVoiceLogs]);
 
   const handleResetMatch = useCallback(() => {
-    if (!gameState) return;
+    if (!gameState || gameState.isTournamentReadOnly) return;
     setModalConfig({
       title: "Zerar partida",
       message: "Deseja zerar a partida? Esta ação não pode ser desfeita.",
@@ -1390,7 +1392,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   const initGameStateInternal = useCallback(async (
     forceNew: boolean,
     tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent },
-    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean },
+    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean; tournamentReadOnly?: boolean; tournamentScoreUseAdminApi?: boolean; tournamentQueueReturnToCompact?: boolean },
   ) => {
     const savedSettings = safeJsonParse('myPlacarSettings', matchSettings);
     let configToUse = { ...savedSettings };
@@ -1437,6 +1439,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
           tournamentMatchCode: getMatchCodeLabel(match),
           tournamentPhaseLabel: getPhaseLabel(match.phase),
           tournamentCourt: match.court,
+          tournamentReturnCategoryId: match.categoryId,
        };
        forceNew = true;
         if (!options?.skipMarkTournamentLive && navigator.onLine) {
@@ -1613,6 +1616,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({
       servingOrderOffset: currentServeOffset,
       pointHistory: [], matchConfig: { ...configToUse, setsToWin: configToUse.sets, isWatchMode: !!configToUse.isWatchMode, isScoreboardMode: isWatchDevice() ? false : !!configToUse.isScoreboardMode }, history: [], currentSet: currentQueueScoreIndex, isMatchOver: false, isConfirmedFinished: false, matchDuration: 0, isPaused: false, 
       isMirroringActive: false, isLiveClosed: false, ownerPin: userProfile.pin, ownerDeviceId: deviceId,
+      isTournamentReadOnly: options?.tournamentReadOnly === true,
+      tournamentScoreUseAdminApi: options?.tournamentScoreUseAdminApi === true,
+      tournamentQueueReturnToCompact: options?.tournamentQueueReturnToCompact === true,
       liveSessionCounter: globalLiveCount, commandOwner: currentFullDeviceName, commandOwnerId: deviceId, 
       controllers: { [deviceId]: { label: currentFullDeviceName, nickname: userProfile.nickname || userProfile.name?.split(' ')[0], lastSeen: Date.now(), isOwner: true, role: 'owner', status: 'controller', deviceType: getDeviceType() } },
       ...tournamentMeta
@@ -1643,7 +1649,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   const initGameState = useCallback(async (
     forceNew: boolean,
     tournamentOverride?: { match: TournamentMatch, pair1: TournamentPair, pair2: TournamentPair, event: TournamentEvent },
-    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean },
+    options?: { preserveLiveDocument?: boolean; forceWatchMode?: boolean; skipMarkTournamentLive?: boolean; tournamentReadOnly?: boolean; tournamentScoreUseAdminApi?: boolean; tournamentQueueReturnToCompact?: boolean },
   ) => {
     if (finalizationTimerRef.current) { clearTimeout(finalizationTimerRef.current); finalizationTimerRef.current = null; }
     if (forceNew && !tournamentOverride && gameState && (gameState.p1.games > 0 || gameState.p2.games > 0 || gameState.p1.sets.length > 0 || gameState.p1.score !== '0' || gameState.p2.score !== '0')) {

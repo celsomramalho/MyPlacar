@@ -122,6 +122,12 @@ interface Props {
     pair2: TournamentPair,
     event: TournamentEvent
   ) => void;
+  onOpenTournamentWatchMode?: (
+    match: TournamentMatch,
+    pair1: TournamentPair,
+    pair2: TournamentPair,
+    event: TournamentEvent
+  ) => void;
   setModalConfig: React.Dispatch<React.SetStateAction<ModalConfig | null>>;
   appUrl: string;
   onOpenCommunications?: () => void;
@@ -278,6 +284,7 @@ export const EventDetailScreen: React.FC<Props> = ({
   userProfile,
   onExitTournament,
   onStartTournamentMatch,
+  onOpenTournamentWatchMode,
   setModalConfig,
   appUrl,
   onOpenCommunications,
@@ -331,15 +338,27 @@ export const EventDetailScreen: React.FC<Props> = ({
     !isSuper8 &&
     (canManageEvent || hasActiveRegistration);
 
+  const [watchReturnTarget] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('myPlacarReturnToEventMatches');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { pin?: string; categoryId?: string };
+      if (parsed.pin?.toUpperCase() !== initialEvent.pin.toUpperCase()) return null;
+      sessionStorage.removeItem('myPlacarReturnToEventMatches');
+      return parsed;
+    } catch {
+      return null;
+    }
+  });
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [participantSearch, setParticipantSearch] = useState('');
   const [teamSearch, setTeamSearch] = useState('');
   const [matchSearch, setMatchSearch] = useState('');
   const [expandedRankingEntryKey, setExpandedRankingEntryKey] = useState<string | null>(null);
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set());
-  const [userSelectedCategoryId, setUserSelectedCategoryId] = useState<string | null>(null);
+  const [userSelectedCategoryId, setUserSelectedCategoryId] = useState<string | null>(watchReturnTarget?.categoryId || null);
   const [userCategoryView, setUserCategoryView] = useState<'entries' | 'teams' | 'matches'>(
-    isChaveEvent ? 'teams' : 'entries'
+    watchReturnTarget ? 'matches' : isChaveEvent ? 'teams' : 'entries'
   );
   const [isFinishedMatchesOpen, setIsFinishedMatchesOpen] = useState(true);
   const [showMyRegistrationModal, setShowMyRegistrationModal] = useState(false);
@@ -3007,6 +3026,8 @@ export const EventDetailScreen: React.FC<Props> = ({
                                   ? orderedQueue.findIndex((item) => item.match.id === match.id) + 1
                                   : 0;
                               const live = liveScores[match.id];
+                              const pair1 = match.pair1 ?? (match.pair1Id ? pairsById.get(match.pair1Id) : undefined);
+                              const pair2 = match.pair2 ?? (match.pair2Id ? pairsById.get(match.pair2Id) : undefined);
                               const isCurrentUserMatchParticipant = isCurrentUserInMatch(match);
                               const canUseRankingMatchActions =
                                 isRanking && canSubmitScore && isCurrentUserMatchParticipant && !isCurrentPlayerCancelled;
@@ -3034,6 +3055,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                                   isTotalGamesSet={isTotalGamesSet}
                                   sportId={sportId}
                                   sportRules={event.sportRules}
+                                  onOpenWatchMode={match.status === 'live' && pair1 && pair2 && onOpenTournamentWatchMode
+                                    ? () => onOpenTournamentWatchMode(match, pair1, pair2, event)
+                                    : undefined}
                                   tieBreak={rules.tieBreak}
                                   tieBreakAt={rules.tieBreakAt}
                                   liveScore={

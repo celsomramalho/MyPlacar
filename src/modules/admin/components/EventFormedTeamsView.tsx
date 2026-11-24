@@ -4,11 +4,12 @@ import type { TournamentEvent, TournamentMatch } from '@modules/events/types';
 import { CourtQueuePanel } from '@modules/events/domain/queue';
 import { useGame } from '@modules/game';
 import { useUI } from '@modules/ui';
-import { getDb } from '@infra/firebase';
+import { getDb, fetchEventByPinFromServer } from '@infra/firebase';
 import type { Firestore } from 'firebase/firestore';
 import { getCourtColors } from '../../../constants.ts';
 import { guessPartnerGender } from '@modules/partners/services/guessPartnerGender';
 import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
+import { isCoAdminOfEvent, isJudgeOfEvent, isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 
 interface Props {
   event: TournamentEvent;
@@ -18,8 +19,6 @@ interface Props {
   adminEmail?: string;
   adminPin?: string;
   compact?: boolean;
-  isWatchModeEnabled?: boolean;
-  onToggleWatchMode?: (matchId: string) => void;
 }
 
 const getPhaseLabel = (phase?: string) => {
@@ -28,10 +27,49 @@ const getPhaseLabel = (phase?: string) => {
   return phase || 'Jogo';
 };
 
-export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false, canCheckInParticipants = false, adminEmail, adminPin, compact = false, isWatchModeEnabled = false, onToggleWatchMode }) => {
+export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, isReadOnly = false, canCheckInParticipants = false, adminEmail, adminPin, compact = false }) => {
   const [refreshingMatchId, setRefreshingMatchId] = useState<string | null>(null);
-  const { setMatchSettings } = useGame();
+  const { setMatchSettings, matchSettings, initGameState } = useGame();
   const { setCurrentScreen, setModalConfig } = useUI();
+  const canEditTournamentScore = !isReadOnly && (
+    isPrimaryAdminEmail(adminEmail)
+    || isCoAdminOfEvent(event, adminPin)
+    || isJudgeOfEvent(event, adminPin)
+  );
+
+  const handleOpenWatchMode = async (matchId: string) => {
+    setRefreshingMatchId(matchId);
+    try {
+      const db = getDb();
+      if (!db) throw new Error('Não foi possível conectar ao Firebase.');
+      const freshEventRecord = await fetchEventByPinFromServer(db, event.pin);
+      if (!freshEventRecord) throw new Error('Não foi possível carregar o evento do Firebase.');
+      const latestEvent = { ...event, ...freshEventRecord } as TournamentEvent;
+      onUpdateEvent?.(latestEvent);
+      const match = latestEvent.matches?.find((candidate) => candidate.id === matchId);
+      const pair1 = match?.pair1 ?? latestEvent.pairs?.find((pair) => pair.id === match?.pair1Id);
+      const pair2 = match?.pair2 ?? latestEvent.pairs?.find((pair) => pair.id === match?.pair2Id);
+      if (!match || !pair1 || !pair2) throw new Error('Não encontrei os dados atualizados das duas duplas desta partida na fila.');
+
+      setMatchSettings((current) => ({ ...current, isWatchMode: true, isScoreboardMode: false }));
+      await initGameState(true, { match, pair1, pair2, event: latestEvent }, {
+        preserveLiveDocument: true,
+        forceWatchMode: true,
+        skipMarkTournamentLive: true,
+        tournamentReadOnly: !canEditTournamentScore,
+        tournamentScoreUseAdminApi: canEditTournamentScore,
+        tournamentQueueReturnToCompact: true,
+      });
+    } catch (error) {
+      setModalConfig({
+        title: 'Não foi possível abrir o placar',
+        message: error instanceof Error ? error.message : 'Ocorreu um erro ao carregar os dados da partida.',
+        onConfirm: () => setModalConfig(null),
+      });
+    } finally {
+      setRefreshingMatchId(null);
+    }
+  };
 
   // Lookups para resolução de apelidos e gêneros ao abrir regras do jogo
   const entries = event.entries || [];
@@ -275,8 +313,8 @@ export const EventFormedTeamsView: React.FC<Props> = ({ event, onUpdateEvent, is
         adminEmail={adminEmail}
         adminPin={adminPin}
         compact={compact}
-        isWatchModeEnabled={isWatchModeEnabled}
-        onToggleWatchMode={onToggleWatchMode}
+        isWatchModeEnabled={!!matchSettings.isWatchMode}
+        onToggleWatchMode={handleOpenWatchMode}
       />
     </div>
   );

@@ -588,24 +588,26 @@ export const NewGameScreen: React.FC<Props> = ({ onSportChange, onPlayShortcut, 
                       <span className="text-xs font-black text-gray-600 min-w-[35px] text-right">{settings.volume}%</span>
                     </div>
                   </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Moon size={16} className="text-indigo-400 shrink-0" />
-                      <span className="text-sm font-black text-black">Escurecer tela</span>
+                  {isWatchDevice() && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Moon size={16} className="text-indigo-400 shrink-0" />
+                        <span className="text-sm font-black text-black">Escurecer tela</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {([10, 15, 20] as const).map(sec => (
+                          <button
+                            key={sec}
+                            onClick={() => setSettings({...settings, screenDimTimeout: sec})}
+                            className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${(settings.screenDimTimeout || 10) === sec ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-500'}`}
+                          >
+                            {sec}s
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] font-bold text-gray-400 leading-tight">Tempo sem interação até a tela escurecer no modo relógio.</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {([10, 15, 20] as const).map(sec => (
-                        <button
-                          key={sec}
-                          onClick={() => setSettings({...settings, screenDimTimeout: sec})}
-                          className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${(settings.screenDimTimeout || 10) === sec ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-500'}`}
-                        >
-                          {sec}s
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[11px] font-bold text-gray-400 leading-tight">Tempo sem interação até a tela escurecer no modo relógio.</p>
-                  </div>
+                  )}
                 </div>
 
                 <div className="bg-white/50 rounded-[2rem] p-5 shadow-xs border border-white space-y-4">
