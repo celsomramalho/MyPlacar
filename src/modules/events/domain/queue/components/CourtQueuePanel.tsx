@@ -142,9 +142,7 @@ export const CourtQueuePanel: React.FC<CourtQueuePanelProps> = ({
       ...entry,
       checkedIn,
       checkInDate: checkedIn ? today : undefined,
-      checkInDates: checkedIn
-        ? Array.from(new Set([...(entry.checkInDates || []), today]))
-        : (entry.checkInDates || []).filter((date) => date !== today),
+      checkInDates: [],
     };
     setSavingCheckInKeys((current) => new Set(current).add(key));
     try {

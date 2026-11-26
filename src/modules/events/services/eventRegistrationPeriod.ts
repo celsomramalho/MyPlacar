@@ -65,13 +65,14 @@ export const isRegistrationPeriodOpen = (
 };
 
 /**
- * Retorna a data atual no formato YYYY-MM-DD no fuso horário local.
+ * Retorna a data atual no formato YYYY-MM-DD no fuso horário de São Paulo.
  */
 export const getTodayDateStr = (now = new Date()): string => {
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 };
 
 /**
@@ -80,26 +81,14 @@ export const getTodayDateStr = (now = new Date()): string => {
  * Caso não estejam preenchidas, recorre ao status do evento.
  */
 export const isTournamentPeriodActive = (
-  event: Pick<TournamentEvent, 'tournamentStartDate' | 'tournamentEndDate' | 'eventStatus' | 'active'>,
+  event: Pick<TournamentEvent, 'tournamentStartDate' | 'tournamentEndDate'>,
   now = new Date()
 ): boolean => {
-  if (event.active === false) return false;
-
   const todayStr = getTodayDateStr(now);
-
-  if (event.tournamentStartDate && todayStr < event.tournamentStartDate) {
-    return false;
-  }
-  if (event.tournamentEndDate && todayStr > event.tournamentEndDate) {
-    return false;
-  }
-
-  if (event.tournamentStartDate || event.tournamentEndDate) {
-    return true;
-  }
-
-  // Fallback se não configurado período de torneio
-  return event.eventStatus === 'Pronto para check-in' || event.eventStatus === 'Em andamento';
+  const startDate = event.tournamentStartDate;
+  const endDate = event.tournamentEndDate;
+  if (!startDate || !endDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false;
+  return todayStr >= startDate && todayStr <= endDate;
 };
 
 /**
@@ -216,17 +205,6 @@ export const isEntryCheckedInToday = (
     if (entry.checkInDate) {
       return entry.checkInDate === targetDate;
     }
-    if (entry.checkInDates && Array.isArray(entry.checkInDates)) {
-      return entry.checkInDates.includes(targetDate);
-    }
-    // Para entradas antigas sem checkInDate registrado:
-    // Aceita apenas se não tiver data divergente gravada
-    return true;
-  }
-
-  // 3. Checagem em histórico de checkInDates
-  if (entry.checkInDates && Array.isArray(entry.checkInDates) && entry.checkInDates.includes(targetDate)) {
-    return true;
   }
 
   return false;

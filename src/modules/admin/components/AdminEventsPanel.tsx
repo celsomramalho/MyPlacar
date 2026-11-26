@@ -200,6 +200,7 @@ export const AdminEventsPanel: React.FC<AdminEventsPanelProps> = ({
           joinedAt: fe.joinedAt,
           gender: fe.gender,
           checkedIn: fe.checkedIn,
+          checkInDate: fe.checkInDate,
           categoryIds: fe.categoryIds || [],
           phone: fe.phone || '',
           shirtSize: fe.shirtSize || 'M',

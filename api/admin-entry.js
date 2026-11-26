@@ -97,6 +97,31 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Acesso negado: usuário não é administrador deste evento" });
     }
 
+    if (action === "clear-checkin-history") {
+      const eventRef = db.collection("events").doc(eventPin);
+      const migrationRef = eventRef.collection("maintenance_migrations").doc("checkin_history_v1");
+      const migrationSnap = await migrationRef.get();
+      if (migrationSnap.exists) return res.status(200).json({ success: true, cleaned: 0, alreadyDone: true });
+
+      const entriesSnap = await eventRef.collection("entries").get();
+      const entriesWithHistory = entriesSnap.docs.filter((doc) => Array.isArray(doc.data()?.checkInDates));
+      for (let offset = 0; offset < entriesWithHistory.length; offset += 450) {
+        const batch = db.batch();
+        entriesWithHistory.slice(offset, offset + 450).forEach((doc) => {
+          batch.update(doc.ref, { checkInDates: admin.firestore.FieldValue.delete() });
+        });
+        await batch.commit();
+      }
+
+      const eventSnap = await eventRef.get();
+      const eventData = eventSnap.data();
+      if (Array.isArray(eventData?.entries)) {
+        await eventRef.update({ entries: eventData.entries.map(({ checkInDates, ...entry }) => entry) });
+      }
+      await migrationRef.set({ completedAt: admin.firestore.FieldValue.serverTimestamp(), cleaned: entriesWithHistory.length });
+      return res.status(200).json({ success: true, cleaned: entriesWithHistory.length });
+    }
+
     if (action === "check-in") {
       const entry = body.entry || {};
       const cleanEmail = String(entry.email || "").toLowerCase().trim();
@@ -112,10 +137,9 @@ export default async function handler(req, res) {
       const today = `${datePart("year")}-${datePart("month")}-${datePart("day")}`;
       const startDate = eventData?.tournamentStartDate;
       const endDate = eventData?.tournamentEndDate;
-      const isWithinTournamentDates = startDate || endDate
-        ? (!startDate || today >= startDate) && (!endDate || today <= endDate)
-        : eventData?.eventStatus === "Pronto para check-in" || eventData?.eventStatus === "Em andamento";
-      if (!eventData || eventData.active === false || !isWithinTournamentDates) {
+      const validDate = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+      const isWithinTournamentDates = validDate(startDate) && validDate(endDate) && today >= startDate && today <= endDate;
+      if (!eventData || !isWithinTournamentDates) {
         return res.status(403).json({ error: "Check-in indisponível fora do período do torneio" });
       }
       const entryRef = db.collection("events").doc(eventPin).collection("entries").doc(cleanEmail);
@@ -128,14 +152,10 @@ export default async function handler(req, res) {
           return;
         }
         const data = existingEntry.data();
-        const previousDates = Array.isArray(data.checkInDates) ? data.checkInDates : [];
-        const checkInDates = entry.checkedIn
-          ? Array.from(new Set([...previousDates.filter((date) => typeof date === "string"), today])).slice(-40)
-          : previousDates.filter((date) => typeof date === "string" && date !== today).slice(-40);
         transaction.set(entryRef, {
           checkedIn: entry.checkedIn,
           checkInDate: entry.checkedIn ? today : null,
-          checkInDates,
+          checkInDates: admin.firestore.FieldValue.delete(),
         }, { merge: true });
         transaction.set(auditRef, {
           id: auditRef.id,

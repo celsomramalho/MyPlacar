@@ -833,9 +833,7 @@ export const EventDetailScreen: React.FC<Props> = ({
         ...currentUserEntry,
         checkedIn: nextChecked,
         checkInDate: nextChecked ? todayStr : undefined,
-        checkInDates: nextChecked
-          ? Array.from(new Set([...(currentUserEntry.checkInDates || []), todayStr]))
-          : (currentUserEntry.checkInDates || []).filter((d) => d !== todayStr),
+        checkInDates: [],
       };
 
       const db = getDb();
@@ -2264,11 +2262,12 @@ export const EventDetailScreen: React.FC<Props> = ({
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Check-in no período do torneio para participante com inscrição válida */}
-                    {isConfirmed && isTournamentActive && (
+                    {isConfirmed && (
                       <CheckInStatusButton
                         athleteName={currentUserEntry.nickname || currentUserEntry.name}
                         checked={isCheckedIn}
                         loading={isCheckingIn}
+                        disabled={!isTournamentActive || isCancelled || (isCheckedIn && hasFinishedToday)}
                         onClick={() => void handleParticipantCheckIn()}
                       />
                     )}

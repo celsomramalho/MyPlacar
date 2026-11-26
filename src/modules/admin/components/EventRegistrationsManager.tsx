@@ -164,9 +164,7 @@ export const EventRegistrationsManager: React.FC<Props> = ({
       ...entry,
       checkedIn: nextChecked,
       checkInDate: nextChecked ? todayStr : undefined,
-      checkInDates: nextChecked
-        ? Array.from(new Set([...(entry.checkInDates || []), todayStr]))
-        : (entry.checkInDates || []).filter((d) => d !== todayStr),
+      checkInDates: [],
     };
 
     const db = getDb();
@@ -1739,19 +1737,17 @@ export const EventRegistrationsManager: React.FC<Props> = ({
 
                     {/* Lado Direito: Check-in + Inscrição_ID + Botão de Ação / Chevron */}
                     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                      {/* Check-in só aparece nos dias do torneio */}
-                      {isTournamentActive && (
-                        <CheckInStatusButton
+                      {/* Check-in habilitado apenas durante o período do torneio */}
+                      <CheckInStatusButton
                           athleteName={entry.nickname || entry.name}
                           checked={isCheckedIn}
-                          disabled={isReadOnly}
+                          disabled={isReadOnly || !isTournamentActive || !entry.email || (isCheckedIn && hasFinishedToday)}
                           compactOnMobile
                           onClick={(e) => {
                             e.stopPropagation();
                             if (!isReadOnly) void handleToggleCheckIn(entry);
                           }}
-                        />
-                      )}
+                      />
 
                       <span className="font-mono font-black text-emerald-600 text-sm tracking-wider">
                         {formatRegistrationId(entry.registrationId)}

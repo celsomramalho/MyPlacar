@@ -86,7 +86,7 @@ export const EventCategoriesManager: React.FC<Props> = ({
       ...entry,
       checkedIn: !checked,
       checkInDate: checked ? undefined : today,
-      checkInDates: checked ? (entry.checkInDates || []).filter((date) => date !== today) : Array.from(new Set([...(entry.checkInDates || []), today])),
+      checkInDates: [],
     };
     try {
       const effectiveEmail = adminEmail || getAuthInstance()?.currentUser?.email || '';

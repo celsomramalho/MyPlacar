@@ -26,9 +26,10 @@ import { calculateQueueState } from '@modules/events/domain/queue';
 import { isCoAdminOfEvent, isEventHelper, isJudgeOfEvent, isPrimaryAdminEmail } from '@modules/events/services/eventAdminAccess';
 import { entryHasFinishedMatchOnDate, getTodayDateStr, isEntryCheckedInToday, isTournamentPeriodActive } from '@modules/events/services/eventRegistrationPeriod';
 import { getEventPaymentStats } from '@modules/events/services/eventPaymentStats';
-import { saveAdminEventCheckIn } from '@infra/firebase/events';
+import { clearEventCheckInHistory, saveAdminEventCheckIn } from '@infra/firebase/events';
 import { getSearchInputStyles } from '@shared/utils/searchInputStyle';
 import { CheckInStatusButton } from '@shared/components/CheckInStatusButton';
+import { useUI } from '@modules/ui';
 
 export type EventDashboardTab =
   | 'categories'
@@ -57,12 +58,20 @@ export const EventDashboardView: React.FC<Props> = ({
   onEditEventConfig,
   onUpdateEvent,
 }) => {
+  const { setModalConfig } = useUI();
   const blockMenuRef = React.useRef<HTMLDivElement>(null);
   const [isBlockMenuOpen, setIsBlockMenuOpen] = useState(false);
   const [savingCheckInEmail, setSavingCheckInEmail] = useState<string | null>(null);
   const [checkInSearchQuery, setCheckInSearchQuery] = useState('');
   const [isArrivedCheckInsExpanded, setIsArrivedCheckInsExpanded] = useState(false);
   const [isPendingCheckInsExpanded, setIsPendingCheckInsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!event.pin || !adminEmail || !(isPrimaryAdminEmail(adminEmail) || isCoAdminOfEvent(event, adminPin))) return;
+    void clearEventCheckInHistory(event.pin, adminEmail, adminPin || '').catch((error) => {
+      console.error('Erro ao limpar histórico de check-in:', error);
+    });
+  }, [event.pin, adminEmail, adminPin]);
 
 
   // Fecha menu de blocos ao clicar fora
@@ -180,7 +189,7 @@ export const EventDashboardView: React.FC<Props> = ({
   }, [isHelper, activeTab]);
   const isReadOnly = event.active !== true && !isPrimary;
   const canManageParticipantCheckIns = !isReadOnly && (isPrimary || isCoAdmin || isHelper || isJudge);
-  const canChangeCheckInNow = canManageParticipantCheckIns && event.active === true && isTournamentPeriodActive(event);
+  const canChangeCheckInNow = canManageParticipantCheckIns && isTournamentPeriodActive(event);
 
   useEffect(() => {
     if (isJudge && activeTab !== 'formed-teams' && activeTab !== 'checkins') setActiveTab('formed-teams');
@@ -191,9 +200,22 @@ export const EventDashboardView: React.FC<Props> = ({
     if (!checkedIn && entryHasFinishedMatchOnDate(entry, event.matches, pairsById, todayStr)) return;
     setSavingCheckInEmail(entry.email);
     try {
-      await saveAdminEventCheckIn(event.pin, adminEmail, adminPin || '', { ...entry, checkedIn });
+      const today = getTodayDateStr();
+      const updatedEntry = { ...entry, checkedIn, checkInDate: checkedIn ? today : undefined, checkInDates: [] };
+      await saveAdminEventCheckIn(event.pin, adminEmail, adminPin || '', updatedEntry);
+      const updatedEntries = entries.map((current) =>
+        current.email?.toLowerCase().trim() === entry.email?.toLowerCase().trim()
+          ? updatedEntry
+          : current
+      );
+      onUpdateEvent({ ...event, entries: updatedEntries });
     } catch (error) {
       console.error('Erro ao atualizar check-in pelo juiz:', error);
+      setModalConfig({
+        title: 'Erro no check-in',
+        message: error instanceof Error ? error.message : 'Não foi possível salvar o check-in. Tente novamente.',
+        onConfirm: () => setModalConfig(null),
+      });
     } finally {
       setSavingCheckInEmail(null);
     }

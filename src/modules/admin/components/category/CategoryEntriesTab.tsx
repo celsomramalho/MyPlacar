@@ -383,7 +383,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                     onToggleSelect={onToggleEntrySelection}
                     onToggleExpanded={() => setExpandedStatsEmail(isStatsExpanded ? null : (entry.email || entry.pin))}
                     onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
-                    checkInStatus={canCheckInParticipants && tournamentActive ? { checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: false, onToggle: onToggleCheckIn } : undefined}
+                    checkInStatus={canCheckInParticipants ? { checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: !tournamentActive, onToggle: onToggleCheckIn } : undefined}
                   />
                   {isExpanded && (
                     <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">
@@ -459,7 +459,7 @@ export const CategoryEntriesTab: React.FC<CategoryEntriesTabProps> = ({
                   onToggleSelect={onToggleEntrySelection}
                   onToggleExpanded={() => setExpandedStatsEmail(isStatsExpanded ? null : (entry.email || entry.pin))}
                   onEdit={() => onToggleExpandedRegistration(isExpanded ? null : entry.email)}
-                  checkInStatus={canCheckInParticipants && tournamentActive ? { checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: false, onToggle: onToggleCheckIn } : undefined}
+                  checkInStatus={canCheckInParticipants ? { checked: isEntryCheckedInToday(entry, event.matches, pairsById, today), disabled: !tournamentActive, onToggle: onToggleCheckIn } : undefined}
                 />
                 {isExpanded && (
                   <div className="bg-white px-3.5 sm:px-4 pb-4 pt-1">

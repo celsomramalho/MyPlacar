@@ -540,6 +540,19 @@ export const saveAdminEventCheckIn = async (
   }
 };
 
+export const clearEventCheckInHistory = async (eventPin: string, adminEmail: string, adminPin: string) => {
+  const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://myplacar.app.br';
+  const response = await fetch(`${baseUrl}/api/admin-entry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'clear-checkin-history', eventPin, adminEmail, adminPin }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Não foi possível limpar o histórico de check-in.');
+  }
+};
+
 /** Juízes podem atualizar somente os dados operacionais da fila do evento. */
 export const saveJudgeEventQueue = async (
   eventPin: string,
