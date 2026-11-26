@@ -86,7 +86,6 @@ export interface CategoryBoardPanelProps {
   onDeleteMatch: (matchId: string) => void;
   onGenerateMatches: () => Promise<void>;
   onGenerateBlankPdf: () => void;
-  onGenerateCalculationPdf: () => void;
   onDeleteAllCategoryMatches: () => void;
   onImportMatches: (pairs: TournamentPair[], matches: TournamentMatch[]) => Promise<void>;
 }
@@ -155,7 +154,6 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
   onDeleteMatch,
   onGenerateMatches,
   onGenerateBlankPdf,
-  onGenerateCalculationPdf,
   onDeleteAllCategoryMatches,
   onImportMatches,
 }) => {
@@ -273,7 +271,6 @@ export const CategoryBoardPanel: React.FC<CategoryBoardPanelProps> = ({
           onDeleteMatch={onDeleteMatch}
           onGenerateMatches={onGenerateMatches}
           onGenerateBlankPdf={onGenerateBlankPdf}
-          onGenerateCalculationPdf={onGenerateCalculationPdf}
           onDeleteAllCategoryMatches={onDeleteAllCategoryMatches}
           onImportMatches={onImportMatches}
         />

@@ -319,7 +319,8 @@ export const EventCategoriesManager: React.FC<Props> = ({
     ? isIndividualScoreCategory(selectedCategory, event)
     : isIndividualScoreEvent(event);
   const isManualMatchDraw = event.matchDrawType === 'Manual';
-  const isSystemDraw = event.matchDrawType === 'Sistema' || !event.matchDrawType;
+  const isSystemDraw = event.bracketDrawType === 'Sistema' ||
+    (!event.bracketDrawType && (!event.matchDrawType || event.matchDrawType === 'Sistema'));
   const totalSets = (event.setsCount || event.config?.sets || 1) as number;
 
   const openCategoryPanel = (categoryId: string, view: CategoryPanelView) => {
@@ -470,7 +471,6 @@ export const EventCategoriesManager: React.FC<Props> = ({
     handleFinishMatchWithValidation,
     handleReopenMatch,
     handleGenerateBlankPdf,
-    handleGenerateCalculationPdf,
     handleGenerateCalculationExcel,
   } = useMatchAdminActions({
     event,
@@ -1401,7 +1401,6 @@ export const EventCategoriesManager: React.FC<Props> = ({
                     onDeleteMatch={handleDeleteMatch}
                     onGenerateMatches={handleGenerateSystemMatches}
                     onGenerateBlankPdf={handleGenerateBlankPdf}
-                    onGenerateCalculationPdf={handleGenerateCalculationPdf}
                     onDeleteAllCategoryMatches={handleDeleteAllCategoryMatches}
                     onImportMatches={handleImportMatches}
                   />

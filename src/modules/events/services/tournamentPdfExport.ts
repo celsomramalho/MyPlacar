@@ -1,12 +1,15 @@
-import type { EventCategory, TournamentEvent, TournamentMatch, TournamentPair } from '../types';
+import type { EventCategory, TournamentEntry, TournamentEvent, TournamentMatch, TournamentPair } from '../types';
 import { formatMatchNumber } from './matchGenerator';
 import { getCategoryTieBreakCriteria } from './tieBreakCriteria';
+import { renderCategoryCalculationPagesHtml } from './calculationWorksheetPdf';
 
 export const exportCategoryMatchesBlankPdf = (
   event: TournamentEvent,
   category: EventCategory,
   categoryMatches: TournamentMatch[],
-  pairsById: Record<string, TournamentPair>
+  pairsById: Record<string, TournamentPair>,
+  categoryEntries: TournamentEntry[] = [],
+  categoryPairs: TournamentPair[] = []
 ) => {
   const b1Matches = categoryMatches.filter((m) => m.phase === 'chave1');
   const b2Matches = categoryMatches.filter((m) => m.phase === 'chave2');
@@ -113,14 +116,8 @@ export const exportCategoryMatchesBlankPdf = (
     `;
   };
 
-  const renderHeaderHtml = (showBanner = false) => `
+  const renderHeaderHtml = () => `
     <div class="page-header-wrapper">
-      ${showBanner && event.bannerUrl ? `
-        <div class="event-banner-container">
-          <img src="${event.bannerUrl}" class="event-banner-img" alt="Banner do evento" />
-        </div>
-      ` : ''}
-
       <div class="header-bar">
         <div class="header-info">
           <h1>${event.name}</h1>
@@ -179,7 +176,7 @@ export const exportCategoryMatchesBlankPdf = (
     pagesHtml.push(`
       <div class="pdf-page">
         <div class="pdf-page-top">
-          ${renderHeaderHtml(true)}
+          ${renderHeaderHtml()}
           ${renderSectionHtml('Primeira fase — chave 1', b1Matches)}
         </div>
         ${renderFooterHtml()}
@@ -192,7 +189,7 @@ export const exportCategoryMatchesBlankPdf = (
     pagesHtml.push(`
       <div class="pdf-page">
         <div class="pdf-page-top">
-          ${renderHeaderHtml(false)}
+          ${renderHeaderHtml()}
           ${renderSectionHtml('Primeira fase — chave 2', b2Matches)}
         </div>
         ${renderFooterHtml()}
@@ -205,7 +202,7 @@ export const exportCategoryMatchesBlankPdf = (
     pagesHtml.push(`
       <div class="pdf-page">
         <div class="pdf-page-top">
-          ${renderHeaderHtml(false)}
+          ${renderHeaderHtml()}
           ${renderSectionHtml('Semifinais', semiMatches)}
           ${renderSectionHtml('Finais & 3º lugar', finalMatches)}
           ${renderSectionHtml('Outras partidas', otherMatches)}
@@ -220,7 +217,7 @@ export const exportCategoryMatchesBlankPdf = (
     pagesHtml.push(`
       <div class="pdf-page">
         <div class="pdf-page-top">
-          ${renderHeaderHtml(true)}
+          ${renderHeaderHtml()}
           ${renderSectionHtml('Partidas', categoryMatches)}
         </div>
         ${renderFooterHtml()}
@@ -228,10 +225,29 @@ export const exportCategoryMatchesBlankPdf = (
     `);
   }
 
+  const calculationPages = renderCategoryCalculationPagesHtml(
+    event,
+    category,
+    categoryEntries,
+    categoryPairs,
+    categoryMatches
+  );
+  calculationPages.forEach((calculationPage, index) => {
+    pagesHtml.push(`
+      <div class="pdf-page calculation-pdf-page">
+        <div class="pdf-page-top">
+        ${renderHeaderHtml()}
+          ${calculationPage}
+        </div>
+        ${renderFooterHtml()}
+      </div>
+    `);
+  });
+
   pagesHtml.push(`
     <div class="pdf-page">
       <div class="pdf-page-top">
-        ${renderHeaderHtml(false)}
+        ${renderHeaderHtml()}
         <section class="section-container">
           <h2 class="section-title">Critérios de desempate</h2>
           <ol class="tie-break-list">${tieBreakCriteriaHtml}</ol>
@@ -254,7 +270,7 @@ export const exportCategoryMatchesBlankPdf = (
       <title>Súmula de Partidas - ${category.name} - ${event.name}</title>
       <style>
         @page {
-          size: A4 portrait;
+          size: A4 landscape;
           margin: 8mm 10mm 8mm 10mm;
         }
 
@@ -285,8 +301,8 @@ export const exportCategoryMatchesBlankPdf = (
             box-shadow: none !important;
             padding: 0 !important;
             margin: 0 !important;
-            min-height: 280mm !important;
-            max-height: 280mm !important;
+            min-height: 190mm !important;
+            max-height: 190mm !important;
             page-break-after: always !important;
             break-after: page !important;
           }
@@ -300,9 +316,9 @@ export const exportCategoryMatchesBlankPdf = (
           display: flex;
           flex-direction: column;
           justify-content: space-between;
-          min-height: 275mm;
+          min-height: 185mm;
           width: 100%;
-          max-width: 190mm;
+          max-width: 277mm;
           margin: 0 auto 30px auto;
           background: #ffffff;
           padding: 12px;
@@ -322,6 +338,56 @@ export const exportCategoryMatchesBlankPdf = (
           flex: 1;
         }
 
+        .calculation-sheet h2 {
+          font-size: 15px;
+          font-weight: 900;
+          margin: 0 0 4px;
+        }
+        .calculation-meta {
+          font-size: 9px;
+          color: #475569;
+          margin-bottom: 8px;
+        }
+        .calculation-instructions {
+          border: 1px solid #94a3b8;
+          border-radius: 6px;
+          padding: 7px 9px;
+          margin-bottom: 10px;
+          font-size: 8.5px;
+          line-height: 1.4;
+        }
+        .calculation-standings {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          font-size: 8px;
+        }
+        .calculation-standings th,
+        .calculation-standings td {
+          border: 1px solid #64748b;
+          padding: 3px;
+          height: 25px;
+          text-align: center;
+          overflow: hidden;
+        }
+        .calculation-standings th {
+          background: #e2e8f0;
+          font-size: 7.5px;
+        }
+        .calculation-standings th:nth-child(1) { width: 7%; }
+        .calculation-standings th:nth-child(2) { width: 19%; }
+        .calculation-standings th:nth-child(3) { width: 12%; }
+        .calculation-standings td:nth-child(2) { text-align: left; }
+        .win-circles { display: flex; justify-content: center; gap: 3px; flex-wrap: wrap; }
+        .calc-circle {
+          display: inline-block;
+          flex: 0 0 12px;
+          width: 12px;
+          height: 12px;
+          border: 1px solid #334155;
+          border-radius: 50%;
+        }
+
         .top-action-bar {
           background: #1e293b;
           color: #ffffff;
@@ -332,7 +398,7 @@ export const exportCategoryMatchesBlankPdf = (
           justify-content: space-between;
           align-items: center;
           box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          max-width: 190mm;
+          max-width: 277mm;
           margin-left: auto;
           margin-right: auto;
         }

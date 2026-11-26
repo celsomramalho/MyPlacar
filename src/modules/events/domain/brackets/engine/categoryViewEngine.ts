@@ -106,8 +106,15 @@ export const filterMatchesBySearch = (
   query: string,
   pairsById?: Record<string, TournamentPair> | Map<string, TournamentPair>
 ): TournamentMatch[] => {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const normalize = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const normalizedQuery = normalize(query);
   if (!normalizedQuery) return matches;
+  const compactQuery = normalizedQuery.replace(/\s/g, '');
   const getPair = (id?: string): TournamentPair | undefined => {
     if (!id || !pairsById) return undefined;
     if (pairsById instanceof Map) return pairsById.get(id);
@@ -118,9 +125,26 @@ export const filterMatchesBySearch = (
     const p2 = match.pair2 || getPair(match.pair2Id);
     const p1Text = `${p1?.p1?.name || ''} ${p1?.p1?.nickname || ''} ${p1?.p2?.name || ''} ${p1?.p2?.nickname || ''} ${p1?.p1?.pin || ''} ${p1?.p2?.pin || ''}`.toLocaleLowerCase();
     const p2Text = `${p2?.p1?.name || ''} ${p2?.p1?.nickname || ''} ${p2?.p2?.name || ''} ${p2?.p2?.nickname || ''} ${p2?.p1?.pin || ''} ${p2?.p2?.pin || ''}`.toLocaleLowerCase();
-    return p1Text.includes(normalizedQuery) || p2Text.includes(normalizedQuery);
+    const matchCode = match.matchCode || String(match.matchNumber || '');
+    const numericMatchNumber = Number(match.matchNumber || matchCode.match(/\d+/)?.[0] || 0);
+    const phase = match.phase || '';
+    const readablePhase = phase.replace(/^rodada(\d+)$/i, 'rodada $1');
+    const searchText = normalize([
+      p1Text,
+      p2Text,
+      matchCode,
+      numericMatchNumber ? String(numericMatchNumber) : '',
+      matchNumberSearchLabel(matchCode),
+      matchNumberSearchLabel(String(numericMatchNumber || '')),
+      phase,
+      readablePhase,
+    ].join(' '));
+    return searchText.includes(normalizedQuery) || searchText.replace(/\s/g, '').includes(compactQuery);
   });
 };
+
+const matchNumberSearchLabel = (number: string) =>
+  number ? `partida ${number} jogo ${number} ${number.replace(/^0+(?=\d)/, '')}` : '';
 
 export const getMatchDateKey = (m: TournamentMatch): string => {
   if (m.matchDate && /^\d{4}-\d{2}-\d{2}$/.test(m.matchDate)) {

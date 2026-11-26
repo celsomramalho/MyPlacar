@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Sparkles, FileText, Calculator, Trash2, Upload, Clock, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, FileText, Trash2, Upload, Clock, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import type { EventCategory, TournamentEvent, TournamentMatch, TournamentPair } from '@modules/events/types';
 import { MatchCard } from '@modules/events/components/matches/MatchCard';
 import { RankingMatchImportModal } from './RankingMatchImportModal';
@@ -31,7 +31,6 @@ export interface CategoryMatchesTabProps {
   onDeleteMatch: (matchId: string) => void;
   onGenerateMatches: () => void;
   onGenerateBlankPdf: () => void;
-  onGenerateCalculationPdf: () => void;
   onDeleteAllCategoryMatches: () => void;
   onImportMatches: (pairs: TournamentPair[], matches: TournamentMatch[]) => Promise<void>;
 }
@@ -60,7 +59,6 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   onDeleteMatch,
   onGenerateMatches,
   onGenerateBlankPdf,
-  onGenerateCalculationPdf,
   onDeleteAllCategoryMatches,
   onImportMatches,
 }) => {
@@ -333,17 +331,6 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
         {/* Botões de Ação */}
         <div className="flex flex-wrap items-center gap-2">
           {isRanking && !isReadOnly && <button type="button" onClick={() => setIsImportOpen(true)} className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black"><Upload size={16}/><span>Importar partidas</span></button>}
-          {!isRanking && !isReadOnly && categoryMatches.length > 0 && (
-            <button
-              type="button"
-              onClick={onGenerateMatches}
-              className="flex items-center justify-center gap-2 border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
-              title="Regerar partidas da categoria"
-            >
-              <Sparkles size={16} className="text-emerald-500" />
-              <span>Regerar partidas</span>
-            </button>
-          )}
           <button
             type="button"
             onClick={onGenerateBlankPdf}
@@ -353,15 +340,6 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
             <FileText size={16} className="text-orange-500" />
             <span>Gerar súmula PDF</span>
           </button>
-          <button
-            type="button"
-            onClick={onGenerateCalculationPdf}
-            className="flex items-center justify-center gap-2 border-2 border-sky-500 text-sky-700 bg-white hover:bg-sky-50 px-4 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
-            title="Gerar folha para registrar placares e apurar a classificação manualmente"
-          >
-            <Calculator size={16} className="text-sky-600" />
-            <span>Gerar cálculos PDF</span>
-          </button>
           {!isReadOnly && categoryMatches.length > 0 && (
             <button
               type="button"
@@ -370,28 +348,27 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
               title="Deletar todas as partidas geradas desta categoria"
             >
               <Trash2 size={16} className="text-red-500" />
-              <span>Deletar</span>
+              <span>Deletar partidas</span>
             </button>
           )}
         </div>
 
         {/* Toggle de visualização e Campo de pesquisa */}
         {categoryMatches.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex-1">
-              <ParticipantSearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                resultCount={rawFilteredMatches.length}
-                placeholder="Pesquisar partida por nome..."
-              />
-            </div>
+          <div className="flex flex-col gap-2.5">
+            <ParticipantSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              resultCount={rawFilteredMatches.length}
+              placeholder="Pesquisar partida por nome..."
+              className="w-full"
+            />
             {!isRanking && (
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl shrink-0 self-start sm:self-auto">
+              <div className="flex w-full sm:w-fit items-center gap-1 bg-slate-100 p-1 rounded-2xl self-start border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setViewMode('status')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
                     viewMode === 'status'
                       ? 'bg-white text-slate-800 shadow-xs'
                       : 'text-slate-500 hover:text-slate-800'
@@ -402,7 +379,7 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setViewMode('phase')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
                     viewMode === 'phase'
                       ? 'bg-white text-slate-800 shadow-xs'
                       : 'text-slate-500 hover:text-slate-800'

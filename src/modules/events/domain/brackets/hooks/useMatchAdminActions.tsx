@@ -25,9 +25,9 @@ import {
   generateSuper8DuplasMatchesForCategory,
 } from '@modules/events/services/matchGenerator';
 import { exportCategoryMatchesBlankPdf } from '@modules/events/services/tournamentPdfExport';
-import { exportCategoryCalculationWorksheetPdf } from '@modules/events/services/calculationWorksheetPdf';
 import { exportEventCalculationWorkbook } from '@modules/events/services/calculationWorksheetExcel';
 import { resolveMatchRules } from '@modules/events/domain/rules/eventMatchRules';
+import { isIndividualScoreCategory } from '@modules/events/services/eventTypeHelpers';
 
 interface UseMatchAdminActionsOptions {
   event: TournamentEvent;
@@ -82,6 +82,15 @@ export function useMatchAdminActions({
   const isTotalGamesSet = (phase?: string) => {
     const rules = getRulesForPhase(phase);
     return (event.sportId || event.config?.sportType || selectedCategory?.sportId) === 'beach-tennis' && rules.gamesPerSet === 7;
+  };
+
+  const shuffle = <T,>(items: T[]): T[] => {
+    const result = [...items];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
   };
 
   const persistPatch = async (
@@ -163,19 +172,60 @@ export function useMatchAdminActions({
 
     let newCategoryMatches: TournamentMatch[] = [];
     let newCategoryPairs: TournamentPair[] = [];
+    let nextPairs = pairs;
+    const systemMatchDraw = event.matchDrawType === 'Sistema';
+    const systemBracketDraw = event.bracketDrawType === 'Sistema';
+    const scoreByParticipant = isIndividualScoreCategory(selectedCategory, event);
     if (isSuper8) {
+      const drawEntries = (systemMatchDraw || systemBracketDraw) &&
+        (scoreByParticipant || (!scoreByParticipant && categoryPairs.length < 2))
+        ? shuffle(categoryEntries)
+        : categoryEntries;
+      const drawPairs = (systemMatchDraw || systemBracketDraw) && !scoreByParticipant
+        ? shuffle(categoryPairs)
+        : categoryPairs;
+      const drawAllPairs = (systemMatchDraw || systemBracketDraw) && !scoreByParticipant
+        ? [...pairs.filter((pair) => pair.categoryId !== selectedCategory.id), ...drawPairs]
+        : pairs;
       const result = generateSuper8MatchesForCategory(
         selectedCategory,
-        categoryEntries,
+        drawEntries,
         matches,
-        pairs
+        drawAllPairs
       );
       newCategoryMatches = result.matches;
       newCategoryPairs = result.pairs;
+      if ((systemMatchDraw || systemBracketDraw) && !scoreByParticipant && drawPairs.length > 0) {
+        nextPairs = drawAllPairs;
+      }
     } else {
+      let drawCategoryPairs = categoryPairs;
+      if (systemBracketDraw || systemMatchDraw) {
+        let pairsForDraw = categoryPairs;
+        if (systemBracketDraw && categoryPairs.length > 1) {
+          const shuffledPairs = shuffle(categoryPairs);
+          const bracketOneCount = Math.ceil(shuffledPairs.length / 2);
+          pairsForDraw = shuffledPairs.map((pair, index) => ({
+            ...pair,
+            bracket: (index < bracketOneCount ? 1 : 2) as 1 | 2,
+            bracketOrder: index < bracketOneCount
+              ? index + 1
+              : index - bracketOneCount + 1,
+          }));
+        }
+        const shuffledByBracket = [1, 2].flatMap((bracket) =>
+          (systemMatchDraw
+            ? shuffle(pairsForDraw.filter((pair) => (pair.bracket ?? 1) === bracket))
+            : pairsForDraw.filter((pair) => (pair.bracket ?? 1) === bracket)
+          ).map((pair, index) => ({ ...pair, bracketOrder: index + 1 }))
+        );
+        const drawnById = new Map(shuffledByBracket.map((pair) => [pair.id, pair]));
+        drawCategoryPairs = pairsForDraw.map((pair) => drawnById.get(pair.id) || pair);
+        nextPairs = pairs.map((pair) => drawnById.get(pair.id) || pair);
+      }
       newCategoryMatches = generateSystemMatchesForCategory(
         selectedCategory,
-        categoryPairs,
+        drawCategoryPairs,
         matches
       );
     }
@@ -203,9 +253,12 @@ export function useMatchAdminActions({
         )
     );
 
-    const nextMatches = [...otherMatches, ...newCategoryMatches];
+    const scheduledCategoryMatches = newCategoryMatches.map((match) => ({
+      ...match,
+      matchDate: selectedCategory.startDate || match.matchDate,
+    }));
+    const nextMatches = [...otherMatches, ...scheduledCategoryMatches];
 
-    let nextPairs = pairs;
     if (newCategoryPairs && newCategoryPairs.length > 0) {
       const otherPairs = pairs.filter((p) => p.categoryId !== selectedCategory.id);
       nextPairs = [...otherPairs, ...newCategoryPairs];
@@ -240,7 +293,11 @@ export function useMatchAdminActions({
         )
     );
 
-    const nextMatches = [...otherMatches, ...newCategoryMatches];
+    const scheduledCategoryMatches = newCategoryMatches.map((match) => ({
+      ...match,
+      matchDate: selectedCategory.startDate || match.matchDate,
+    }));
+    const nextMatches = [...otherMatches, ...scheduledCategoryMatches];
     onUpdateEvent({ ...event, matches: nextMatches });
     setIsSuper8dDrawModalOpen(false);
     await persistPatch(
@@ -788,19 +845,9 @@ export function useMatchAdminActions({
       event,
       selectedCategory,
       categoryMatches,
-      pairsById
-    );
-  };
-
-  const handleGenerateCalculationPdf = () => {
-    if (!selectedCategory) return;
-    exportCategoryCalculationWorksheetPdf(
-      event,
-      selectedCategory,
+      pairsById,
       categoryEntries,
-      categoryPairs,
-      categoryMatches,
-      pairsById
+      categoryPairs
     );
   };
 
@@ -831,7 +878,6 @@ export function useMatchAdminActions({
     handleFinishMatchWithValidation,
     handleReopenMatch,
     handleGenerateBlankPdf,
-    handleGenerateCalculationPdf,
     handleGenerateCalculationExcel,
   };
 }
