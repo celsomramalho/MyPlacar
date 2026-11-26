@@ -118,8 +118,8 @@ describe('S8-T01 - Confronto Direto entre 2 atletas empatados em vitórias', () 
 
     // Ana deve estar à frente de Bruno por ter vencido o confronto direto
     expect(aS.rank).toBeLessThan(bS.rank!);
-    expect(aS.tieBreakNote).toBe('Desempate por confronto direto');
-    expect(bS.tieBreakNote).toBe('Desempate por confronto direto');
+    expect(aS.tieBreakNote).toBe('Desempate por vitórias no confronto direto: 1–0');
+    expect(bS.tieBreakNote).toBe('Desempate por vitórias no confronto direto: 0–1');
     expect(aS.isTechnicalTie).toBe(false);
     expect(bS.isTechnicalTie).toBe(false);
   });
@@ -178,8 +178,8 @@ describe('S8-T02 - Empate Técnico entre 2 atletas com números 100% idênticos'
     expect(bS.rank).toBe(2);
 
     // Nota de desempate deve explicitar o Empate Técnico
-    expect(aS.tieBreakNote).toBe('Empate técnico (critérios matemáticos iguais)');
-    expect(bS.tieBreakNote).toBe('Empate técnico (critérios matemáticos iguais)');
+    expect(aS.tieBreakNote).toBe('Empate técnico (critérios iguais; V 1, SG -2, GP 14, GC 16)');
+    expect(bS.tieBreakNote).toBe('Empate técnico (critérios iguais; V 1, SG -2, GP 14, GC 16)');
   });
 
   it('NÃO gera empate técnico quando saldo de games é diferente', () => {
@@ -216,8 +216,8 @@ describe('S8-T02 - Empate Técnico entre 2 atletas com números 100% idênticos'
     expect(aS.rank).toBeLessThan(bS.rank!);
     expect(aS.isTechnicalTie).toBeFalsy();
     expect(bS.isTechnicalTie).toBeFalsy();
-    expect(aS.tieBreakNote).toBeUndefined();
-    expect(bS.tieBreakNote).toBeUndefined();
+    expect(aS.tieBreakNote).toBe('Desempate por saldo geral de games: +3 (10–7)');
+    expect(bS.tieBreakNote).toBe('Desempate por saldo geral de games: -3 (7–10)');
   });
 });
 
@@ -256,9 +256,9 @@ describe('S8-T03 - Desempate em grupo de 3 atletas por Saldo de Games', () => {
     expect(bS.rank).toBe(3);
 
     // Como os saldos são diferentes (+5, -1, -4), a classificação é simples e direta
-    expect(aS.tieBreakNote).toBeUndefined();
-    expect(cS.tieBreakNote).toBeUndefined();
-    expect(bS.tieBreakNote).toBeUndefined();
+    expect(aS.tieBreakNote).toBe('Desempate por saldo geral de games: +5 (12–7)');
+    expect(cS.tieBreakNote).toBe('Desempate por saldo geral de games: -1 (10–11)');
+    expect(bS.tieBreakNote).toBe('Desempate por saldo geral de games: -4 (7–11)');
   });
 });
 
@@ -333,7 +333,7 @@ describe('S8-T04 - Regressão: Cenário do Bug do Usuário (2 atletas empatados 
     // BetterSaldo tem saldo superior e fica à frente com classificação simples (sem nota de desempate)
     expect(sBetter.gamesDiff).toBeGreaterThan(s1.gamesDiff);
     expect(sBetter.rank).toBeLessThan(s1.rank!);
-    expect(sBetter.tieBreakNote).toBeUndefined();
+    expect(sBetter.tieBreakNote).toBe('Desempate por saldo geral de games: +6 (14–8)');
 
     // p1 e p2 têm números idênticos
     expect(s1.gamesDiff).toBe(s2.gamesDiff);
@@ -343,8 +343,8 @@ describe('S8-T04 - Regressão: Cenário do Bug do Usuário (2 atletas empatados 
     // p1 e p2 NÃO devem dizer que desempataram um contra o outro por Saldo de Games
     expect(s1.isTechnicalTie).toBe(true);
     expect(s2.isTechnicalTie).toBe(true);
-    expect(s1.tieBreakNote).toBe('Empate técnico (critérios matemáticos iguais)');
-    expect(s2.tieBreakNote).toBe('Empate técnico (critérios matemáticos iguais)');
+    expect(s1.tieBreakNote).toBe('Empate técnico (critérios iguais; V 2, SG 0, GP 17, GC 17)');
+    expect(s2.tieBreakNote).toBe('Empate técnico (critérios iguais; V 2, SG 0, GP 17, GC 17)');
 
     // Ambos devem compartilhar a mesma posição (mesmo rank)
     expect(s1.rank).toBe(s2.rank);
@@ -387,8 +387,8 @@ describe('S8-T04 - Regressão: Cenário do Bug do Usuário (2 atletas empatados 
     // Classificação simples sem nota de desempate
     expect(s2.rank).toBe(1);
     expect(s3.rank).toBe(2);
-    expect(s2.tieBreakNote).toBeUndefined();
-    expect(s3.tieBreakNote).toBeUndefined();
+    expect(s2.tieBreakNote).toBe('Desempate por saldo geral de games: +9 (12–3)');
+    expect(s3.tieBreakNote).toBe('Desempate por saldo geral de games: +5 (12–7)');
     expect(s2.isTechnicalTie).toBeFalsy();
     expect(s3.isTechnicalTie).toBeFalsy();
   });
@@ -431,8 +431,8 @@ describe('S8-T06 - Opções de Desempate Técnico: Alfabético, Sorteio e Rank C
     expect(aliceS.rank).toBe(2);
     expect(betoS.isTechnicalTie).toBe(true);
     expect(aliceS.isTechnicalTie).toBe(true);
-    expect(betoS.tieBreakNote).toBe('Empate técnico (critérios matemáticos iguais)');
-    expect(aliceS.tieBreakNote).toBe('Empate técnico (critérios matemáticos iguais)');
+    expect(betoS.tieBreakNote).toBe('Empate técnico (critérios iguais; V 1, SG -3, GP 13, GC 16)');
+    expect(aliceS.tieBreakNote).toBe('Empate técnico (critérios iguais; V 1, SG -3, GP 13, GC 16)');
   });
 
   it('quando technicalTieBreak é "Alfabético", desempata pelo nome e atribui ranks sequenciais', () => {
@@ -451,8 +451,8 @@ describe('S8-T06 - Opções de Desempate Técnico: Alfabético, Sorteio e Rank C
     expect(betoS.rank).toBe(3);
     expect(aliceS.isTechnicalTie).toBe(false);
     expect(betoS.isTechnicalTie).toBe(false);
-    expect(aliceS.tieBreakNote).toBe('Desempate por ordem alfabética');
-    expect(betoS.tieBreakNote).toBe('Desempate por ordem alfabética');
+    expect(aliceS.tieBreakNote).toBe('Desempate por ordem alfabética: Alice Silva (V 1, SG -3, GP 13, GC 16)');
+    expect(betoS.tieBreakNote).toBe('Desempate por ordem alfabética: Beto Costa (V 1, SG -3, GP 13, GC 16)');
   });
 
   it('quando technicalTieBreak é "Sorteio" sem indicação de ganhador, aguarda sorteio com rank compartilhado', () => {
@@ -471,8 +471,8 @@ describe('S8-T06 - Opções de Desempate Técnico: Alfabético, Sorteio e Rank C
     expect(aliceS.rank).toBe(2);
     expect(betoS.isTechnicalTie).toBe(true);
     expect(aliceS.isTechnicalTie).toBe(true);
-    expect(betoS.tieBreakNote).toBe('Empate técnico (aguardando sorteio)');
-    expect(aliceS.tieBreakNote).toBe('Empate técnico (aguardando sorteio)');
+    expect(betoS.tieBreakNote).toBe('Empate técnico (aguardando sorteio; V 1, SG -3, GP 13, GC 16)');
+    expect(aliceS.tieBreakNote).toBe('Empate técnico (aguardando sorteio; V 1, SG -3, GP 13, GC 16)');
   });
 
   it('quando technicalTieBreak é "Sorteio" e o ganhador é apontado, atualiza a classificação com ranks distintos', () => {
@@ -494,8 +494,8 @@ describe('S8-T06 - Opções de Desempate Técnico: Alfabético, Sorteio e Rank C
     expect(aliceS.rank).toBe(3);
     expect(betoS.isTechnicalTie).toBe(false);
     expect(aliceS.isTechnicalTie).toBe(false);
-    expect(betoS.tieBreakNote).toBe('Desempate por sorteio (ganhador do sorteio)');
-    expect(aliceS.tieBreakNote).toBe('Desempate por sorteio');
+    expect(betoS.tieBreakNote).toBe('Desempate por sorteio (ganhador; ordem 1; V 1, SG -3, GP 13, GC 16)');
+    expect(aliceS.tieBreakNote).toBe('Desempate por sorteio (V 1, SG -3, GP 13, GC 16)');
   });
 
   it('suporta múltiplos grupos de empate técnico na mesma categoria (ex: 2 atletas em 1º e 3 em 3º)', () => {
@@ -547,15 +547,15 @@ describe('S8-T06 - Opções de Desempate Técnico: Alfabético, Sorteio e Rank C
     // Grupo do 1º lugar:
     expect(s1B.rank).toBe(1);
     expect(s1A.rank).toBe(2);
-    expect(s1B.tieBreakNote).toBe('Desempate por sorteio (ganhador do sorteio)');
-    expect(s1A.tieBreakNote).toBe('Desempate por sorteio');
+    expect(s1B.tieBreakNote).toBe('Desempate por sorteio (ganhador; ordem 1; V 3, SG +12, GP 22, GC 10)');
+    expect(s1A.tieBreakNote).toBe('Desempate por sorteio (V 3, SG +12, GP 22, GC 10)');
 
     // Grupo do 3º lugar:
     expect(s3C.rank).toBe(3);
     expect(s3A.rank).toBe(4);
     expect(s3B.rank).toBe(5);
-    expect(s3C.tieBreakNote).toBe('Desempate por sorteio (ganhador do sorteio)');
-    expect(s3A.tieBreakNote).toBe('Desempate por sorteio');
-    expect(s3B.tieBreakNote).toBe('Desempate por sorteio');
+    expect(s3C.tieBreakNote).toBe('Desempate por sorteio (ganhador; ordem 2; V 2, SG 0, GP 20, GC 20)');
+    expect(s3A.tieBreakNote).toBe('Desempate por sorteio (ordem 3; V 2, SG 0, GP 20, GC 20)');
+    expect(s3B.tieBreakNote).toBe('Desempate por sorteio (V 2, SG 0, GP 20, GC 20)');
   });
 });
