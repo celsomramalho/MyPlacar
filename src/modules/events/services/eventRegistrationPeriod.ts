@@ -205,6 +205,9 @@ export const isEntryCheckedInToday = (
     if (entry.checkInDate) {
       return entry.checkInDate === targetDate;
     }
+    // Compatibilidade com registros antigos que têm a data somente no array.
+    // Datas anteriores continuam inválidas para o check-in de hoje.
+    return Array.isArray(entry.checkInDates) && entry.checkInDates.includes(targetDate);
   }
 
   return false;

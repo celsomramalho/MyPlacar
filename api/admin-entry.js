@@ -103,12 +103,22 @@ export default async function handler(req, res) {
       const migrationSnap = await migrationRef.get();
       if (migrationSnap.exists) return res.status(200).json({ success: true, cleaned: 0, alreadyDone: true });
 
+      const dateParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(new Date());
+      const datePart = (type) => dateParts.find((part) => part.type === type)?.value || "";
+      const today = `${datePart("year")}-${datePart("month")}-${datePart("day")}`;
       const entriesSnap = await eventRef.collection("entries").get();
       const entriesWithHistory = entriesSnap.docs.filter((doc) => Array.isArray(doc.data()?.checkInDates));
       for (let offset = 0; offset < entriesWithHistory.length; offset += 450) {
         const batch = db.batch();
         entriesWithHistory.slice(offset, offset + 450).forEach((doc) => {
-          batch.update(doc.ref, { checkInDates: admin.firestore.FieldValue.delete() });
+          const data = doc.data();
+          const preserveToday = data.checkedIn === true && !data.checkInDate && data.checkInDates.includes(today);
+          batch.update(doc.ref, {
+            checkInDates: admin.firestore.FieldValue.delete(),
+            ...(preserveToday ? { checkInDate: today } : {}),
+          });
         });
         await batch.commit();
       }
@@ -116,7 +126,11 @@ export default async function handler(req, res) {
       const eventSnap = await eventRef.get();
       const eventData = eventSnap.data();
       if (Array.isArray(eventData?.entries)) {
-        await eventRef.update({ entries: eventData.entries.map(({ checkInDates, ...entry }) => entry) });
+        await eventRef.update({ entries: eventData.entries.map((entry) => {
+          const preserveToday = entry.checkedIn === true && !entry.checkInDate && Array.isArray(entry.checkInDates) && entry.checkInDates.includes(today);
+          const { checkInDates, ...cleanEntry } = entry;
+          return preserveToday ? { ...cleanEntry, checkInDate: today } : cleanEntry;
+        }) });
       }
       await migrationRef.set({ completedAt: admin.firestore.FieldValue.serverTimestamp(), cleaned: entriesWithHistory.length });
       return res.status(200).json({ success: true, cleaned: entriesWithHistory.length });
