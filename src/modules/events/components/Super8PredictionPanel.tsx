@@ -163,6 +163,9 @@ export const Super8PredictionPanel: React.FC<Props> = ({
     );
   };
 
+  const correctWinnerCount = result.matchReview.filter((review) => review.winnerCorrect).length;
+  const exactScoreCount = result.matchReview.filter((review) => review.scoreCorrect).length;
+
   return (
     <section className="overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-sm">
       <div className="bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-4 text-white">
@@ -222,37 +225,113 @@ export const Super8PredictionPanel: React.FC<Props> = ({
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <h5 className="text-xs font-black text-slate-800">
-              {result.currentRound ? `Previsões da Rodada ${result.currentRound}` : 'Classificação projetada'}
+              {result.currentRound
+                ? `Previsões da Rodada ${result.currentRound}`
+                : result.matchReview.length > 0 ? 'Conferência das previsões' : 'Classificação projetada'}
             </h5>
             {result.currentRound > 0 && <span className="text-[10px] font-bold text-slate-400">antes dos próximos jogos</span>}
           </div>
 
           {result.nextMatches.length === 0 ? (
-            <p className="rounded-2xl bg-emerald-50 px-3 py-3 text-center text-xs font-bold text-emerald-700">
-              Torneio concluído. As chances refletem a classificação final.
-            </p>
+            result.matchReview.length > 0 ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+                    <span className="block text-[9px] font-bold text-emerald-700">Vencedores corretos</span>
+                    <span className="text-sm font-black text-emerald-800">{correctWinnerCount}/{result.matchReview.length}</span>
+                  </div>
+                  <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
+                    <span className="block text-[9px] font-bold text-sky-700">Placar exato</span>
+                    <span className="text-sm font-black text-sky-800">{exactScoreCount}/{result.matchReview.length}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {result.matchReview.map((review) => (
+                    <article key={review.matchId} className="space-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">
+                          Rodada {review.round} · Jogo {review.matchNumber}
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          <span className={`rounded-full px-2 py-0.5 text-[8px] font-black ${review.winnerCorrect ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {review.winnerCorrect ? '✓ Vencedor' : '× Vencedor'}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-[8px] font-black ${review.scoreCorrect ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {review.scoreCorrect ? '✓ Placar exato' : 'Placar diferente'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_3rem] items-center gap-x-2 gap-y-1.5">
+                        <span className="col-start-2 text-center text-[8px] font-black uppercase text-slate-400">Real</span>
+                        <span className="col-start-3 text-center text-[8px] font-black text-slate-400">Estimado</span>
+                        <div className="col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-x-1 text-[10px] leading-relaxed">
+                          <RankName entry={review.pair1.p1} ranks={ranks} premiumAthleteEmail={premiumAthleteEmail} premiumAthletePin={premiumAthletePin} />
+                          <span className="text-slate-400">/</span>
+                          <RankName entry={review.pair1.p2} ranks={ranks} premiumAthleteEmail={premiumAthleteEmail} premiumAthletePin={premiumAthletePin} />
+                        </div>
+                        <span className={`col-start-2 row-start-2 rounded-lg border border-slate-200 bg-white px-1 py-1 text-center text-xs font-black ${review.actualGames1 > review.actualGames2 ? 'text-green-700' : 'text-red-600'}`}>
+                          {review.actualGames1}
+                        </span>
+                        <span className={`col-start-3 row-start-2 rounded-lg border border-slate-200 bg-white px-1 py-1 text-center text-xs font-black ${review.estimatedGames1 > review.estimatedGames2 ? 'text-green-700' : 'text-red-600'}`}>
+                          {review.estimatedGames1}
+                        </span>
+                        <div className="col-start-1 row-start-3 flex min-w-0 flex-wrap items-center gap-x-1 text-[10px] leading-relaxed">
+                          <RankName entry={review.pair2.p1} ranks={ranks} premiumAthleteEmail={premiumAthleteEmail} premiumAthletePin={premiumAthletePin} />
+                          <span className="text-slate-400">/</span>
+                          <RankName entry={review.pair2.p2} ranks={ranks} premiumAthleteEmail={premiumAthleteEmail} premiumAthletePin={premiumAthletePin} />
+                        </div>
+                        <span className={`col-start-2 row-start-3 rounded-lg border border-slate-200 bg-white px-1 py-1 text-center text-xs font-black ${review.actualGames2 > review.actualGames1 ? 'text-green-700' : 'text-red-600'}`}>
+                          {review.actualGames2}
+                        </span>
+                        <span className={`col-start-3 row-start-3 rounded-lg border border-slate-200 bg-white px-1 py-1 text-center text-xs font-black ${review.estimatedGames2 > review.estimatedGames1 ? 'text-green-700' : 'text-red-600'}`}>
+                          {review.estimatedGames2}
+                        </span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="rounded-2xl bg-emerald-50 px-3 py-3 text-center text-xs font-bold text-emerald-700">
+                Torneio concluído. As chances refletem a classificação final.
+              </p>
+            )
           ) : (
             <div className="space-y-2.5">
               {result.nextMatches.map((prediction, index) => {
                 const pair1Players = [prediction.pair1.p1, prediction.pair1.p2];
                 const pair2Players = [prediction.pair2.p1, prediction.pair2.p2];
+                const pair1IsFavorite = prediction.chance1 >= prediction.chance2;
+                const pair1OutcomeClass = pair1IsFavorite ? 'text-green-700' : 'text-red-600';
+                const pair2OutcomeClass = pair1IsFavorite ? 'text-red-600' : 'text-green-700';
+                const pair1BarClass = pair1IsFavorite ? 'bg-green-600' : 'bg-red-500';
+                const pair2BarClass = pair1IsFavorite ? 'bg-red-500' : 'bg-green-600';
                 return (
                   <article key={prediction.match.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
-                    <p className="mb-2 text-[9px] font-black uppercase tracking-wide text-slate-400">
-                      Jogo {prediction.match.matchNumber || index + 1}
+                    <p className="mb-2 flex items-center justify-between text-[9px] font-black uppercase tracking-wide text-slate-400">
+                      <span>Jogo {prediction.match.matchNumber || index + 1}</span>
+                      {!prediction.completed && <span className="w-11 text-center">Est.</span>}
                     </p>
-                    <div className="space-y-1.5 text-[11px] leading-relaxed">
-                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                    <div className={`grid gap-x-2 gap-y-1.5 ${prediction.completed ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_2.75rem]'}`}>
+                      <div className="col-start-1 row-start-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-relaxed">
                         <RankName entry={prediction.pair1.p1} ranks={ranks} premiumAthleteEmail={premiumAthleteEmail} premiumAthletePin={premiumAthletePin} />
                         <span className="text-slate-400">/</span>
                         <RankName entry={prediction.pair1.p2} ranks={ranks} premiumAthleteEmail={premiumAthleteEmail} premiumAthletePin={premiumAthletePin} />
                       </div>
-                      <p className="text-[9px] font-black uppercase tracking-wide text-slate-300">contra</p>
-                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                      <p className="col-start-1 row-start-2 text-[9px] font-black uppercase tracking-wide text-slate-300">contra</p>
+                      <div className="col-start-1 row-start-3 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-relaxed">
                         <RankName entry={prediction.pair2.p1} ranks={ranks} premiumAthleteEmail={premiumAthleteEmail} premiumAthletePin={premiumAthletePin} />
                         <span className="text-slate-400">/</span>
                         <RankName entry={prediction.pair2.p2} ranks={ranks} premiumAthleteEmail={premiumAthleteEmail} premiumAthletePin={premiumAthletePin} />
                       </div>
+                      {!prediction.completed && (
+                        <div className="col-start-2 row-span-3 row-start-1 flex w-11 flex-col justify-between overflow-hidden rounded-xl border border-slate-200 bg-white py-0.5 text-center">
+                          <span className={`text-xs font-black leading-5 ${pair1OutcomeClass}`}>{prediction.estimatedGames1}</span>
+                          <span className={`text-xs font-black leading-5 ${pair2OutcomeClass}`}>{prediction.estimatedGames2}</span>
+                        </div>
+                      )}
                     </div>
 
                     {prediction.completed ? (
@@ -262,21 +341,15 @@ export const Super8PredictionPanel: React.FC<Props> = ({
                       </div>
                     ) : (
                       <>
-                        <div className="mt-3 flex items-center justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-1 flex justify-between text-[10px] font-black">
-                              <span className="text-sky-700">{prediction.chance1.toFixed(1)}%</span>
+                        <div className="mt-3">
+                          <div className="mb-1 flex justify-between text-[10px] font-black">
+                              <span className={pair1OutcomeClass}>{prediction.chance1.toFixed(1)}%</span>
                               <span className="text-slate-400">Chance de vitória</span>
-                              <span className="text-indigo-700">{prediction.chance2.toFixed(1)}%</span>
-                            </div>
-                            <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-200">
-                              <div className="bg-sky-500" style={{ width: `${prediction.chance1}%` }} />
-                              <div className="bg-indigo-500" style={{ width: `${prediction.chance2}%` }} />
-                            </div>
+                              <span className={pair2OutcomeClass}>{prediction.chance2.toFixed(1)}%</span>
                           </div>
-                          <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-center">
-                            <span className="block text-[8px] font-black uppercase text-slate-400">Est.</span>
-                            <span className="text-xs font-black text-slate-800">{prediction.estimatedGames1}×{prediction.estimatedGames2}</span>
+                          <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-200">
+                            <div className={pair1BarClass} style={{ width: `${prediction.chance1}%` }} />
+                            <div className={pair2BarClass} style={{ width: `${prediction.chance2}%` }} />
                           </div>
                         </div>
 

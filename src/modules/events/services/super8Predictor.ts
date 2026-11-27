@@ -60,6 +60,21 @@ export interface Super8Prediction {
   nextMatches: Super8MatchPrediction[];
   podiumChanceByEntry: Map<string, number>;
   skillByEntry: Map<string, number>;
+  matchReview: Super8MatchReview[];
+}
+
+export interface Super8MatchReview {
+  matchId: string;
+  round: number;
+  matchNumber: number;
+  pair1: TournamentPair;
+  pair2: TournamentPair;
+  actualGames1: number;
+  actualGames2: number;
+  estimatedGames1: number;
+  estimatedGames2: number;
+  winnerCorrect: boolean;
+  scoreCorrect: boolean;
 }
 
 interface PredictorInput {
@@ -69,6 +84,7 @@ interface PredictorInput {
   standingsOptions: Super8StandingsOptions;
   isSevenGamesFormat: boolean;
   seedKey: string;
+  runPodiumSimulations?: boolean;
 }
 
 const normalize = (value?: string | number) => String(value ?? '').trim().toLowerCase();
@@ -215,6 +231,7 @@ const makeIneligibleResult = (): Super8Prediction => ({
   nextMatches: [],
   podiumChanceByEntry: new Map(),
   skillByEntry: new Map(),
+  matchReview: [],
 });
 
 export const calculateSuper8Prediction = ({
@@ -224,6 +241,7 @@ export const calculateSuper8Prediction = ({
   standingsOptions,
   isSevenGamesFormat,
   seedKey,
+  runPodiumSimulations = true,
 }: PredictorInput): Super8Prediction => {
   if (!isSevenGamesFormat || entries.length !== 8 || matches.length !== 14) return makeIneligibleResult();
 
@@ -290,7 +308,7 @@ export const calculateSuper8Prediction = ({
   const random = seededRandom(seed);
   const podiumCounts = new Map<string, number>(entryKeys.map((key) => [key, 0] as const));
 
-  for (let simulation = 0; simulation < SIMULATIONS; simulation += 1) {
+  for (let simulation = 0; runPodiumSimulations && simulation < SIMULATIONS; simulation += 1) {
     const simulatedRatings = new Map<string, Rating>(
       entryKeys.map((key) => [key, { ...ratings.get(key)! }] as const)
     );
@@ -349,6 +367,45 @@ export const calculateSuper8Prediction = ({
     };
   };
 
+  const matchReview: Super8MatchReview[] = [];
+  if (completed.length === 14) {
+    for (let round = 1; round <= 7; round += 1) {
+      const matchesBeforeRound = matchups.map(({ match, round: matchRound }) => ({
+        ...match,
+        status: matchRound < round ? 'finished' as const : 'waiting' as const,
+      }));
+      const beforeRoundPrediction = calculateSuper8Prediction({
+        entries,
+        matches: matchesBeforeRound,
+        pairsById,
+        standingsOptions,
+        isSevenGamesFormat,
+        seedKey: `${seedKey}|review|${round}`,
+        runPodiumSimulations: false,
+      });
+
+      beforeRoundPrediction.nextMatches.forEach((prediction) => {
+        const actualMatch = matchups.find(({ match }) => match.id === prediction.match.id)?.match;
+        if (!actualMatch) return;
+        const actual = parseScoresFromMatch(actualMatch);
+        const predictedWinner: 1 | 2 = prediction.estimatedGames1 > prediction.estimatedGames2 ? 1 : 2;
+        matchReview.push({
+          matchId: actualMatch.id,
+          round,
+          matchNumber: actualMatch.matchNumber || matchReview.length + 1,
+          pair1: prediction.pair1,
+          pair2: prediction.pair2,
+          actualGames1: actual.g1,
+          actualGames2: actual.g2,
+          estimatedGames1: prediction.estimatedGames1,
+          estimatedGames2: prediction.estimatedGames2,
+          winnerCorrect: scoreWinner(actualMatch) === predictedWinner,
+          scoreCorrect: prediction.estimatedGames1 === actual.g1 && prediction.estimatedGames2 === actual.g2,
+        });
+      });
+    }
+  }
+
   return {
     eligible: true,
     currentRound: nextRound,
@@ -357,6 +414,7 @@ export const calculateSuper8Prediction = ({
     nextMatches: nextMatches.map(predictMatch),
     podiumChanceByEntry,
     skillByEntry,
+    matchReview: matchReview.sort((a, b) => a.round - b.round || a.matchNumber - b.matchNumber),
   };
 };
 
