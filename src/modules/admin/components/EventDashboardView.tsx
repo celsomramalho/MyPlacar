@@ -173,6 +173,47 @@ export const EventDashboardView: React.FC<Props> = ({
   }, [checkInSearchQuery, prioritizedCheckInEntries]);
   const arrivedCheckInEntries = filteredCheckInEntries.filter(({ checkedIn }) => checkedIn);
   const pendingCheckInEntries = filteredCheckInEntries.filter(({ checkedIn }) => !checkedIn);
+  const groupCheckInEntriesByCategory = (items: typeof filteredCheckInEntries) => {
+    const groups = new Map<string, { category: EventCategory | null; entries: typeof filteredCheckInEntries }>();
+    items.forEach((item) => {
+      const categoriesForEntry = item.entryCategories.length ? item.entryCategories : [null];
+      const seenCategoryIds = new Set<string>();
+      categoriesForEntry.forEach((category) => {
+        const key = category?.id || '__uncategorized__';
+        if (seenCategoryIds.has(key)) return;
+        seenCategoryIds.add(key);
+        if (!groups.has(key)) groups.set(key, { category, entries: [] });
+        groups.get(key)!.entries.push(item);
+      });
+    });
+    return Array.from(groups.entries())
+      .map(([key, group]) => {
+        const categoryEntries = entries.filter((entry) => {
+          const categoryIds = entry.categoryIds || [];
+          return group.category
+            ? categoryIds.includes(group.category.id)
+            : !categoryIds.some((id) => categories.some((category) => category.id === id));
+        });
+        const checkedInCount = categoryEntries.filter((entry) =>
+          isEntryCheckedInToday(entry, event.matches, pairsById, todayStr)
+        ).length;
+        return {
+          key,
+          category: group.category,
+          categoryName: group.category?.name || 'Sem categoria',
+          priority: group.category?.priority ?? 9999,
+          totalCount: categoryEntries.length,
+          checkedInCount,
+          pendingCount: categoryEntries.length - checkedInCount,
+          entries: group.entries.sort((a, b) =>
+            (a.entry.nickname || a.entry.name).localeCompare(b.entry.nickname || b.entry.name, 'pt-BR')
+          ),
+        };
+      })
+      .sort((a, b) => a.priority - b.priority || a.categoryName.localeCompare(b.categoryName, 'pt-BR'));
+  };
+  const arrivedCheckInGroups = groupCheckInEntriesByCategory(arrivedCheckInEntries);
+  const pendingCheckInGroups = groupCheckInEntriesByCategory(pendingCheckInEntries);
 
   useEffect(() => {
     if (!checkInSearchQuery.trim()) return;
@@ -221,7 +262,7 @@ export const EventDashboardView: React.FC<Props> = ({
     }
   };
 
-  const renderCheckInEntry = ({ entry, entryCategories, primaryCategory, priority, checkedIn }: (typeof filteredCheckInEntries)[number]) => (
+  const renderCheckInEntry = ({ entry, entryCategories, primaryCategory, priority, checkedIn }: Omit<(typeof filteredCheckInEntries)[number], 'primaryCategory'> & { primaryCategory?: EventCategory }) => (
     <div key={entry.email || entry.pin || entry.name} className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="min-w-0">
         <p className="truncate text-sm font-black text-slate-800">{entry.nickname || entry.name}</p>
@@ -839,8 +880,21 @@ export const EventDashboardView: React.FC<Props> = ({
                 </button>
                 {isArrivedCheckInsExpanded && (
                   <div className="animate-in fade-in divide-y divide-slate-100 border-t border-slate-100">
-                    {arrivedCheckInEntries.length > 0
-                      ? arrivedCheckInEntries.map(renderCheckInEntry)
+                    {arrivedCheckInGroups.length > 0
+                      ? arrivedCheckInGroups.map((group) => (
+                        <div key={group.key}>
+                          <div className="flex items-center justify-between gap-2 bg-emerald-50/70 px-4 py-2 text-xs font-black text-emerald-800">
+                            <span className="min-w-0 truncate">{group.categoryName}</span>
+                            <span className="shrink-0 rounded-full bg-white/80 px-2 py-1 text-[10px]">{group.checkedInCount} presentes / {group.totalCount} inscritos</span>
+                          </div>
+                          {group.entries.map((item) => renderCheckInEntry({
+                            ...item,
+                            entryCategories: group.category ? [group.category] : [],
+                            primaryCategory: group.category || undefined,
+                            priority: group.priority,
+                          }))}
+                        </div>
+                      ))
                       : <p className="px-4 py-5 text-center text-xs font-bold text-slate-400">Ninguém chegou ainda nesta pesquisa.</p>}
                   </div>
                 )}
@@ -859,8 +913,21 @@ export const EventDashboardView: React.FC<Props> = ({
                 </button>
                 {isPendingCheckInsExpanded && (
                   <div className="animate-in fade-in divide-y divide-slate-100 border-t border-slate-100">
-                    {pendingCheckInEntries.length > 0
-                      ? pendingCheckInEntries.map(renderCheckInEntry)
+                    {pendingCheckInGroups.length > 0
+                      ? pendingCheckInGroups.map((group) => (
+                        <div key={group.key}>
+                          <div className="flex items-center justify-between gap-2 bg-amber-50/70 px-4 py-2 text-xs font-black text-amber-800">
+                            <span className="min-w-0 truncate">{group.categoryName}</span>
+                            <span className="shrink-0 rounded-full bg-white/80 px-2 py-1 text-[10px]">{group.pendingCount} pendentes / {group.totalCount} inscritos</span>
+                          </div>
+                          {group.entries.map((item) => renderCheckInEntry({
+                            ...item,
+                            entryCategories: group.category ? [group.category] : [],
+                            primaryCategory: group.category || undefined,
+                            priority: group.priority,
+                          }))}
+                        </div>
+                      ))
                       : <p className="px-4 py-5 text-center text-xs font-bold text-emerald-600">Todos os atletas encontrados já chegaram.</p>}
                   </div>
                 )}

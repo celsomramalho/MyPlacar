@@ -30,7 +30,7 @@ const AppContent: React.FC = () => {
   const deviceId = getDeviceId();
 
   const { setModalConfig, playerQueue, currentScreen } = useUI();
-  const { userProfile, partners, matchSettings } = useGame();
+  const { userProfile, setUserProfile, partners, matchSettings } = useGame();
 
   // ── Hooks com estado (cada um instanciado UMA única vez aqui) ─────────────
   const { authReady } = useAppAuth();
@@ -70,7 +70,7 @@ const AppContent: React.FC = () => {
   const currentFullDeviceName = useAppDeviceName(matchSettings.deviceLabel, userProfile.nickname);
 
   // ── Hooks de side-effect (listeners / wake-lock / startup) ───────────────
-  useAppStartup({ partners, playerQueue, userProfile, matchSettings, setModalConfig });
+  useAppStartup({ partners, playerQueue, userProfile, setUserProfile, authReady, matchSettings, setModalConfig });
 
 
 

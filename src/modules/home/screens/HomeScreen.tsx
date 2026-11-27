@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight, Menu, BookOpen, Download, Smartphone } from 'lucide-react';
+import { Users, Play, Settings, UserCheck, History, Trophy, HelpCircle, LogOut, RotateCw, Bell, Loader2, ChevronRight, Menu, BookOpen, Download, Smartphone, Star } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import type { UserProfile } from '@modules/auth/types';
 import { APP_VERSION } from '../../../constants';
@@ -231,7 +231,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {initials}
           </div>
           <div className="flex flex-col text-left flex-1">
-            <span className="text-[21px] font-black text-slate-800 leading-tight">Olá, {greetingName}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[21px] font-black text-slate-800 leading-tight">Olá, {greetingName}</span>
+              {userProfile.planType === 'premium' && (
+                <span
+                  aria-label="Premium"
+                  title="Premium"
+                  className="inline-flex h-[18px] w-[18px] items-center justify-center text-blue-600 drop-shadow-sm"
+                >
+                  <svg viewBox="0 0 24 24" className="h-full w-full" aria-hidden="true">
+                    <path
+                      fill="currentColor"
+                      d="M12 1.5 14.6 3l3-.2 1.2 2.7 2.7 1.5-.6 3 .6 3-2.7 1.5-1.2 2.7-3-.2L12 18.5l-2.6-1.5-3 .2-1.2-2.7-2.7-1.5.6-3-.6-3 2.7-1.5 1.2-2.7 3 .2L12 1.5Z"
+                    />
+                    <path
+                      fill="white"
+                      d="m12 5.8 1.42 2.88 3.18.46-2.3 2.24.54 3.17L12 13.05l-2.84 1.5.54-3.17-2.3-2.24 3.18-.46L12 5.8Z"
+                    />
+                  </svg>
+                </span>
+              )}
+            </div>
             <span className="text-[16.5px] font-bold text-slate-400 lowercase">{userProfile.email}</span>
           </div>
           <ChevronRight size={16} className="text-slate-300" />

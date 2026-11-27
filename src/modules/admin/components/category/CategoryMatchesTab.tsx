@@ -67,16 +67,11 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
   const [viewMode, setViewMode] = useState<'status' | 'phase'>('status');
   const [isFinishedOpen, setIsFinishedOpen] = useState(true);
 
-  const hasFinishedSuper8Match = isSuper8 && categoryMatches.some((match) => match.status === 'finished');
   const getMatchNumber = (match: TournamentMatch) => match.matchNumber || Number(match.matchCode?.match(/\d+/)?.[0]) || 0;
   const getRoundNumber = (match: TournamentMatch) => Number(match.phase?.match(/rodada(\d+)/i)?.[1]) || 0;
   const sortSuper8Matches = (items: TournamentMatch[]) => [...items].sort((a, b) => {
-    if (hasFinishedSuper8Match) {
-      const roundOrder = getRoundNumber(b) - getRoundNumber(a);
-      if (roundOrder) return roundOrder;
-      return getMatchNumber(b) - getMatchNumber(a);
-    }
-    return getMatchNumber(a) - getMatchNumber(b);
+    const roundOrder = getRoundNumber(a) - getRoundNumber(b);
+    return roundOrder || getMatchNumber(a) - getMatchNumber(b);
   });
 
   const rawFilteredMatches = useMemo(
@@ -99,14 +94,19 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
 
   const waitingMatches = useMemo(() => {
     const waiting = rawFilteredMatches.filter((m) => m.status === 'waiting');
-    if (isSuper8) return sortSuper8Matches(waiting);
     return waiting.sort((a, b) => {
-        const posA = queuePosByMatchId?.get(a.id) ?? 9999;
-        const posB = queuePosByMatchId?.get(b.id) ?? 9999;
-        if (posA !== posB) return posA - posB;
-        return (a.matchNumber || 0) - (b.matchNumber || 0);
-      });
-  }, [rawFilteredMatches, queuePosByMatchId, isSuper8, hasFinishedSuper8Match]);
+      const posA = queuePosByMatchId?.get(a.id);
+      const posB = queuePosByMatchId?.get(b.id);
+      if (posA !== undefined && posB !== undefined && posA !== posB) return posA - posB;
+      if (posA !== undefined) return -1;
+      if (posB !== undefined) return 1;
+      if (isSuper8) {
+        const roundOrder = getRoundNumber(a) - getRoundNumber(b);
+        if (roundOrder) return roundOrder;
+      }
+      return getMatchNumber(a) - getMatchNumber(b);
+    });
+  }, [rawFilteredMatches, queuePosByMatchId, isSuper8]);
 
   const finishedMatches = useMemo(() => {
     const finished = rawFilteredMatches.filter((m) => m.status === 'finished');
@@ -130,11 +130,13 @@ export const CategoryMatchesTab: React.FC<CategoryMatchesTabProps> = ({
         if (dateA !== dateB) return dateB.localeCompare(dateA);
         return (b.matchNumber || 0) - (a.matchNumber || 0);
       });
-  }, [rawFilteredMatches, isSuper8, hasFinishedSuper8Match]);
+  }, [rawFilteredMatches, isSuper8]);
+
+  const hasFinishedSuper8Match = isSuper8 && categoryMatches.some((match) => match.status === 'finished');
 
   const sortedCategoryMatches = useMemo(
     () => isSuper8 ? sortSuper8Matches(categoryMatches) : sortMatchesByDateDesc(categoryMatches),
-    [categoryMatches, isSuper8, hasFinishedSuper8Match]
+    [categoryMatches, isSuper8]
   );
 
   const b1Matches = useMemo(

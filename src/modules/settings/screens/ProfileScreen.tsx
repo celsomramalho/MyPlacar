@@ -388,7 +388,7 @@ export const ProfileScreen: React.FC<Props> = ({ profile, setProfile, onSave, on
               <h3 className="text-xl font-black text-black truncate">{profile.nickname || profile.name || 'Usuário'}</h3>
               {isPremium && (
                 <div className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                  <Star size={8} fill="currentColor" /> PREMIUM
+                  <Star size={8} fill="currentColor" /> Premium
                 </div>
               )}
             </div>

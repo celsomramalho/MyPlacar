@@ -224,8 +224,8 @@ const resolvePlayerTies = (
     if (p1.gamesDiff !== p2.gamesDiff) {
       const higher = p1.gamesDiff > p2.gamesDiff ? p1 : p2;
       const lower = p1.gamesDiff > p2.gamesDiff ? p2 : p1;
-      higher.tieBreakNote = `Desempate por saldo geral de games: ${formatSignedStat(higher.gamesDiff)} (${higher.gamesWon}–${higher.gamesLost})`;
-      lower.tieBreakNote = `Desempate por saldo geral de games: ${formatSignedStat(lower.gamesDiff)} (${lower.gamesWon}–${lower.gamesLost})`;
+      higher.tieBreakNote = `Posição definida pelo saldo geral de games: ${formatSignedStat(higher.gamesDiff)} (${higher.gamesWon}–${higher.gamesLost})`;
+      lower.tieBreakNote = `Posição definida pelo saldo geral de games: ${formatSignedStat(lower.gamesDiff)} (${lower.gamesWon}–${lower.gamesLost})`;
       return [higher, lower];
     }
 
@@ -294,7 +294,7 @@ const resolvePlayerTies = (
       const subgroup = gamesDiffMap.get(diff)!;
       if (subgroup.length === 1) {
         const st = subgroup[0];
-        st.tieBreakNote = `Desempate por saldo geral de games: ${formatSignedStat(st.gamesDiff)} (${st.gamesWon}–${st.gamesLost})`;
+        st.tieBreakNote = `Posição definida pelo saldo geral de games: ${formatSignedStat(st.gamesDiff)} (${st.gamesWon}–${st.gamesLost})`;
         result.push(st);
       } else {
         const resolved = resolvePlayerTies(subgroup, matches, technicalTieBreak, drawWinners);

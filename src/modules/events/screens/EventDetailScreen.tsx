@@ -43,6 +43,7 @@ import type {
   TournamentMatch,
   MatchSetScore,
   EventCategory,
+  Super8StandingsOptions,
 } from '../types';
 import { minifyPairForStorage, resolveCategoryDuplaType, resolveTeamFormationMode } from '../types';
 import type { UserProfile } from '@modules/auth/types';
@@ -64,6 +65,7 @@ import type { ModalConfig } from '@modules/ui/types';
 import { EventRegistrationForm, hasAvailableVacanciesForAthlete } from '../domain/registration';
 import { RankingStandingStatsBlock } from '../components/RankingStandingStatsBlock';
 import { Super8StandingStatsBlock } from '../components/Super8StandingStatsBlock';
+import { Super8PredictionPanel } from '../components/Super8PredictionPanel';
 import { TechnicalTieDrawModal } from '../components/TechnicalTieDrawModal';
 import { MatchCard } from '../components/matches/MatchCard';
 import { TeamCard } from '../components/teams/TeamCard';
@@ -1830,6 +1832,13 @@ export const EventDetailScreen: React.FC<Props> = ({
     [entries, activeCategory]
   );
 
+  const hasCategoryParticipation = categoryEntries.some(
+    (entry) =>
+      isCurrentUserEntry(entry) &&
+      !entry.disabled &&
+      entry.paymentStatus !== 'Cancelado'
+  );
+
   // Classificações calculadas para a categoria ativa (Super 8 e Ranking possuem ranking individual por atleta)
   const isIndividualRanking = isIndividualScoreCategory(activeCategory, event);
 
@@ -1917,6 +1926,40 @@ export const EventDetailScreen: React.FC<Props> = ({
       []
     );
   }, [activeCategory, event.technicalTieDrawWinners]);
+
+  const predictorSportId = event.sportId || event.config?.sportType || activeCategory?.sportId || '';
+  const predictorGamesPerSet = Number(
+    activeCategory?.gamesPerSet || event.gamesPerSet || event.config?.gamesPerSet || (isSuper8 ? 4 : 6)
+  );
+  const predictorRules = resolveMatchRules(
+    event.sportRules,
+    undefined,
+    (event.setsCount || event.config?.sets || 1) as 1 | 3 | 5,
+    predictorGamesPerSet,
+    predictorSportId
+  );
+  const isSevenGamesPredictorFormat = predictorGamesPerSet === 7 || predictorRules.gamesPerSet === 7;
+  const predictorStandingsOptions = useMemo<Super8StandingsOptions>(
+    () => ({
+      scoringMode: isRanking ? 'rankingPoints' as const : 'wins' as const,
+      technicalTieBreak: event.technicalTieBreak || 'Rank Compartilhado',
+      drawWinners: currentCategoryDrawWinners,
+    }),
+    [isRanking, event.technicalTieBreak, currentCategoryDrawWinners]
+  );
+  const canViewSuper8Predictions = Boolean(
+    userProfile.planType === 'premium' &&
+    hasCategoryParticipation &&
+    isSuper8 &&
+    isIndividualRanking &&
+    activeCategory
+  );
+  const showSuper8PredictionPanel = Boolean(isSuper8 && isIndividualRanking && activeCategory);
+  const predictionAccessMessage = userProfile.planType !== 'premium'
+    ? 'Este recurso é exclusivo para contas Premium. O app não reconheceu o Premium nesta sessão; atualize seu perfil e tente novamente.'
+    : !hasCategoryParticipation
+      ? 'Inscreva-se nesta categoria com sua conta Premium para liberar as previsões.'
+      : undefined;
 
   const handleConfirmDrawWinners = useCallback(
     async (winners: string[]) => {
@@ -2853,6 +2896,23 @@ export const EventDetailScreen: React.FC<Props> = ({
                           />
                         )}
 
+                        {showSuper8PredictionPanel && activeCategory && (
+                          <Super8PredictionPanel
+                            event={event}
+                            category={activeCategory}
+                            entries={categoryEntries}
+                            matches={categoryMatches}
+                            pairsById={pairsMap}
+                            standings={standingsData.playerStandings}
+                            standingsOptions={predictorStandingsOptions}
+                            isSevenGamesFormat={isSevenGamesPredictorFormat}
+                            enabled={canViewSuper8Predictions}
+                            accessMessage={predictionAccessMessage}
+                            premiumAthleteEmail={userProfile.planType === 'premium' ? userProfile.email : undefined}
+                            premiumAthletePin={userProfile.planType === 'premium' ? userProfile.pin : undefined}
+                          />
+                        )}
+
                         {visibleCategoryEntries.length === 0 ? (
                           <div className="py-8 text-center text-slate-400 font-bold text-xs">
                             {participantSearch.trim() ? 'Nenhum participante encontrado.' : 'Nenhum inscrito nesta categoria ainda.'}
@@ -2901,9 +2961,9 @@ export const EventDetailScreen: React.FC<Props> = ({
                                 isExpanded={expandedRankingEntryKey === standingKey}
                                 canSelect={canAthleteSelectEntry}
                                 hasCategoryMatches={categoryMatches.length > 0}
-                                matches={event.matches || []}
+                                matches={categoryMatches}
                                 pairsById={pairsMap}
-                                allPairs={event.pairs}
+                                allPairs={categoryPairs}
                                 orderedQueue={orderedQueue}
                                 onToggleSelect={toggleEntrySelection}
                                 onToggleExpanded={standing

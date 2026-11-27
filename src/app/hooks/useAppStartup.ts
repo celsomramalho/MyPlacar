@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 
 import { APP_VERSION as LOCAL_CODE_VERSION } from '../../constants.ts';
 import type { Partner, MatchSettings } from '../../types.ts';
@@ -12,6 +13,8 @@ interface UseAppStartupParams {
   partners: Partner[];
   playerQueue: QueuePlayer[];
   userProfile: UserProfile;
+  setUserProfile: Dispatch<SetStateAction<UserProfile>>;
+  authReady: boolean;
   matchSettings: MatchSettings;
   setModalConfig: (config: ModalConfig | null) => void;
 }
@@ -27,9 +30,49 @@ export function useAppStartup({
   partners,
   playerQueue,
   userProfile,
+  setUserProfile,
+  authReady,
   matchSettings,
   setModalConfig,
 }: UseAppStartupParams): void {
+
+  // Keep the locally cached profile plan in sync across browser origins/dev servers.
+  useEffect(() => {
+    if (!authReady || !userProfile.email || !navigator.onLine) return;
+    let cancelled = false;
+
+    void Promise.all([
+      import('@infra/firebase/client'),
+      import('@infra/firebase/userProfiles'),
+    ])
+      .then(async ([{ getDb }, { fetchUserProfileFromServer }]) => {
+        const db = getDb();
+        if (!db) return null;
+        return fetchUserProfileFromServer(db, userProfile.email);
+      })
+      .then((cloudProfile) => {
+        if (cancelled || !cloudProfile) return;
+        setUserProfile((current) => {
+          if (current.email.toLowerCase().trim() !== userProfile.email.toLowerCase().trim()) return current;
+          const updated = {
+            ...current,
+            planType: cloudProfile.planType === 'premium' ? 'premium' as const : 'free' as const,
+            premiumUntil: cloudProfile.premiumUntil,
+          };
+          try {
+            localStorage.setItem('myPlacarUserProfile', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      })
+      .catch((error) => {
+        console.warn('MyPlacar: não foi possível sincronizar o plano do perfil:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, userProfile.email, setUserProfile]);
 
   // 1. Startup / migration
   useEffect(() => {
