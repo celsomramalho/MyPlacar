@@ -111,7 +111,10 @@ export const saveAdminEvent = async (
       const response = await fetch(`${baseUrl}/api/admin-save-event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event, adminEmail, adminPin }),
+        // `entries` lives in events/{pin}/entries and can make the request exceed
+        // the serverless body limit. Send the same compact payload used by the
+        // direct Firestore write instead of the original event object.
+        body: JSON.stringify({ event: sanitized, adminEmail, adminPin }),
       });
 
       if (!response.ok) {
