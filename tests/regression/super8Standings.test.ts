@@ -212,12 +212,12 @@ describe('S8-T02 - Empate Técnico entre 2 atletas com números 100% idênticos'
     expect(aS.gamesDiff).toBe(3);
     expect(bS.gamesDiff).toBe(-3);
 
-    // Classificação simples por Saldo de Games (sem nota de desempate pois o saldo é diferente)
+    // Classificação definida pelo saldo de games, sem empate técnico.
     expect(aS.rank).toBeLessThan(bS.rank!);
     expect(aS.isTechnicalTie).toBeFalsy();
     expect(bS.isTechnicalTie).toBeFalsy();
-    expect(aS.tieBreakNote).toBe('Desempate por saldo geral de games: +3 (10–7)');
-    expect(bS.tieBreakNote).toBe('Desempate por saldo geral de games: -3 (7–10)');
+    expect(aS.tieBreakNote).toBe('Posição definida pelo saldo geral de games: +3 (10–7)');
+    expect(bS.tieBreakNote).toBe('Posição definida pelo saldo geral de games: -3 (7–10)');
   });
 });
 
@@ -256,9 +256,9 @@ describe('S8-T03 - Desempate em grupo de 3 atletas por Saldo de Games', () => {
     expect(bS.rank).toBe(3);
 
     // Como os saldos são diferentes (+5, -1, -4), a classificação é simples e direta
-    expect(aS.tieBreakNote).toBe('Desempate por saldo geral de games: +5 (12–7)');
-    expect(cS.tieBreakNote).toBe('Desempate por saldo geral de games: -1 (10–11)');
-    expect(bS.tieBreakNote).toBe('Desempate por saldo geral de games: -4 (7–11)');
+    expect(aS.tieBreakNote).toBe('Posição definida pelo saldo geral de games: +5 (12–7)');
+    expect(cS.tieBreakNote).toBe('Posição definida pelo saldo geral de games: -1 (10–11)');
+    expect(bS.tieBreakNote).toBe('Posição definida pelo saldo geral de games: -4 (7–11)');
   });
 });
 
@@ -330,10 +330,10 @@ describe('S8-T04 - Regressão: Cenário do Bug do Usuário (2 atletas empatados 
     expect(s1.wins).toBe(2);
     expect(s2.wins).toBe(2);
 
-    // BetterSaldo tem saldo superior e fica à frente com classificação simples (sem nota de desempate)
+    // BetterSaldo tem saldo superior e fica à frente, sem empate técnico.
     expect(sBetter.gamesDiff).toBeGreaterThan(s1.gamesDiff);
     expect(sBetter.rank).toBeLessThan(s1.rank!);
-    expect(sBetter.tieBreakNote).toBe('Desempate por saldo geral de games: +6 (14–8)');
+    expect(sBetter.tieBreakNote).toBe('Posição definida pelo saldo geral de games: +6 (14–8)');
 
     // p1 e p2 têm números idênticos
     expect(s1.gamesDiff).toBe(s2.gamesDiff);
@@ -350,7 +350,7 @@ describe('S8-T04 - Regressão: Cenário do Bug do Usuário (2 atletas empatados 
     expect(s1.rank).toBe(s2.rank);
   });
 
-  it('quando o saldo de games é diferente entre atletas com mesmas vitórias, classifica diretamente sem nota de desempate', () => {
+  it('quando o saldo de games é diferente entre atletas com mesmas vitórias, define a posição sem empate técnico', () => {
     // Cenário das imagens enviadas pelo usuário:
     // Sup8F_D_002 e Sup8F_D_003 têm 5 vitórias, mas saldos +11 e +7
     // Sup8F_D_001 e Sup8F_D_004 têm 4 vitórias, mas saldos +5 e +1
@@ -384,11 +384,11 @@ describe('S8-T04 - Regressão: Cenário do Bug do Usuário (2 atletas empatados 
     expect(s3.wins).toBe(2);
     expect(s2.gamesDiff).toBeGreaterThan(s3.gamesDiff);
 
-    // Classificação simples sem nota de desempate
+    // A posição é definida pelo saldo de games, sem empate técnico.
     expect(s2.rank).toBe(1);
     expect(s3.rank).toBe(2);
-    expect(s2.tieBreakNote).toBe('Desempate por saldo geral de games: +9 (12–3)');
-    expect(s3.tieBreakNote).toBe('Desempate por saldo geral de games: +5 (12–7)');
+    expect(s2.tieBreakNote).toBe('Posição definida pelo saldo geral de games: +9 (12–3)');
+    expect(s3.tieBreakNote).toBe('Posição definida pelo saldo geral de games: +5 (12–7)');
     expect(s2.isTechnicalTie).toBeFalsy();
     expect(s3.isTechnicalTie).toBeFalsy();
   });
